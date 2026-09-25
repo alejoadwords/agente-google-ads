@@ -46,6 +46,24 @@ console.log('\nLa ventana de reservas no depende de la hora\n');
       /d\.dia <= topeDia/.test(codigo) && !/new Date\(d\.dia\)/.test(codigo));
 }
 
+console.log('\nLa tarea del móvil también pide hora\n');
+{
+  const guion = leer('public/movil-app.js');
+  // El servidor exige hora Y zona. Un `type="date"` daría un día suelto, el
+  // servidor no lo reconocería y la tarea NO se crearía — en silencio.
+  chk('el campo es datetime-local, no date',
+      /id="sh-cuando" type="datetime-local"/.test(guion),
+      (guion.match(/id="sh-cuando" type="[a-z-]+"/) || [''])[0]);
+  // Los atajos —«Mañana 9:00»— se escriben en hora LOCAL. Con toISOString()
+  // el campo saldría en UTC y la tarea quedaría cinco horas corrida.
+  chk('los atajos rellenan el campo en hora local',
+      /function paraInput\(d\)[\s\S]{0,260}getFullYear\(\)/.test(guion));
+  chk('y no con toISOString, que lo pasaría a UTC',
+      !/paraInput[\s\S]{0,200}toISOString/.test(guion));
+  // Pero al ENVIARLA sí va en UTC, que es lo que el servidor espera.
+  chk('al enviarla sí va en UTC', /due_at: fecha\.toISOString\(\)/.test(guion));
+}
+
 console.log('\nLos sitios que ya lo hacían bien siguen así\n');
 {
   const app = leer('public/app.js');

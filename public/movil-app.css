@@ -537,3 +537,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .cifra b.chico{font-size:var(--fs-md);letter-spacing:-.2px}
 /* Los días sin tocar, en el círculo del contacto */
 .ini.urge{background:var(--danger-bg);color:var(--danger);font-size:var(--fs-sm)}
+
+/* El «+ Tarea» que vive en el título de la caja: a la derecha, del tamaño del
+   dedo aunque el texto sea pequeño. */
+.secc h2{display:flex;align-items:center;justify-content:space-between}
+.mas-h2{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);background:var(--bg-card);
+  color:var(--blue);font:inherit;font-size:10px;font-weight:700;text-transform:none;letter-spacing:0;
+  padding:5px 10px;border-radius:999px;margin-left:8px}
+.mas-h2:active{background:var(--blue-lt)}
+.mas-h2 svg{width:13px;height:13px}

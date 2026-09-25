@@ -235,6 +235,78 @@ console.log('\nEl mensaje no se borra de la caja hasta que sale\n');
       e.chicharras.some((x) => /ventana de 24/.test(x.txt)), JSON.stringify(e.chicharras.map((c) => c.txt)));
 }
 
+console.log('\nProgramar un seguimiento desde el teléfono\n');
+{
+  const e = montar({ responde: { ok: true, datos: { activity: { id: 'a9' } } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.abrirLead(unLead({ id: 'L7', nom: 'Hellen' }));
+  const txt = e.plantar('#sh-tarea');  txt.value = 'Llamar a Hellen';
+  const cnd = e.plantar('#sh-cuando'); cnd.value = '2026-09-30T09:00';
+  await g.M.crearTarea();
+  await esperar();
+
+  // Dos llamadas y EN ESTE ORDEN. `activities` es el sistema que dispara los
+  // recordatorios; `lead_activities` es solo el historial. Escribir la línea
+  // del historial sin la tarea deja constancia de un seguimiento que nadie va
+  // a recordar.
+  chk('primero la tarea de verdad, en la agenda',
+      (e.llamadas[0] || {}).ruta === '/api/agenda', (e.llamadas[0] || {}).ruta);
+  chk('y después la línea del historial',
+      (e.llamadas[1] || {}).ruta === '/api/lead-activities', (e.llamadas[1] || {}).ruta);
+  const t = (e.llamadas[0] || {}).cuerpo || {};
+  chk('la tarea va con su tipo y su contacto',
+      t.type === 'task' && t.lead_id === 'L7', JSON.stringify(t));
+  chk('y con el texto escrito', t.title === 'Llamar a Hellen', t.title);
+  // El servidor exige hora y zona: un día suelto hacía que la tarea NO se
+  // creara, y el aviso de eso ya nos costó una vez.
+  chk('la fecha viaja completa, con hora', /T\d\d:\d\d/.test(String(t.due_at)), String(t.due_at));
+  chk('en UTC, que es lo que espera el servidor', /Z$/.test(String(t.due_at)), String(t.due_at));
+
+  // El historial guarda la fecha para poder leerla y el id de la tarea real.
+  const h = (e.llamadas[1] || {}).cuerpo || {};
+  chk('el historial apunta a la tarea creada',
+      h.metadata && h.metadata.activity_id === 'a9', JSON.stringify(h.metadata));
+}
+{
+  // Si la agenda falla, NO puede quedar la línea del historial: diría que hay
+  // un seguimiento programado que no existe.
+  const e = montar({ responde: { ok: false, error: 'fecha inválida' } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.abrirLead(unLead({ id: 'L7' }));
+  e.plantar('#sh-tarea').value = 'Llamar';
+  e.plantar('#sh-cuando').value = '2026-09-30T09:00';
+  await g.M.crearTarea();
+  await esperar();
+  chk('si la tarea no se crea, no se escribe el historial',
+      e.llamadas.length === 1, e.llamadas.map((x) => x.ruta).join(','));
+  // Y el corte tiene que ser EXPLÍCITO. Sin el `return`, el código sigue y
+  // revienta por su cuenta al leer `d.activity` de un null — dentro de un
+  // `try` que se traga el error. El resultado acaba bien por accidente, y
+  // una prueba que solo cuenta llamadas no lo distingue de hacerlo a
+  // propósito. Lo que se protege aquí es la intención, no la casualidad.
+  const fuenteCrear = fuente.slice(fuente.indexOf('async function crearTarea'),
+                                  fuente.indexOf('/api/lead-activities'));
+  chk('y el corte es explícito, no un accidente',
+      /if \(!d\) return;/.test(fuenteCrear), fuenteCrear.slice(-160));
+  chk('y se dice el motivo del servidor',
+      e.chicharras.some((x) => /fecha inválida/.test(x.txt)), JSON.stringify(e.chicharras.map((c) => c.txt)));
+}
+{
+  // Sin texto o sin fecha no se llama a nadie: es más barato decirlo aquí que
+  // que el servidor lo rechace.
+  const e = montar();
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.abrirLead(unLead());
+  e.plantar('#sh-tarea').value = '';
+  e.plantar('#sh-cuando').value = '2026-09-30T09:00';
+  await g.M.crearTarea();
+  chk('sin texto no se llama a nadie', e.llamadas.length === 0);
+  chk('y se dice qué falta', e.chicharras.some((x) => /qué hay que hacer/i.test(x.txt)));
+}
+
 console.log('\nLas rutas son las mismas que usa la web\n');
 {
   // Un segundo camino para lo mismo se separa del primero en un mes. Aquí solo

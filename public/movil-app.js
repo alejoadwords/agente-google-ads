@@ -447,6 +447,79 @@ async function ponerEtiqueta(t){
   if (d) { l.hace = 'ahora'; l.tocado = Date.now(); pintarLeads(); }
 }
 
+// Programar el seguimiento desde el teléfono, que es donde uno cuelga la
+// llamada. Hasta ahora obligaba a abrir el computador justo cuando se acaba
+// de hablar con el cliente, que es cuando se sabe qué hay que hacer.
+var CUANDOS = [
+  ['Mañana 9:00',      function(){ var d = new Date(); d.setDate(d.getDate()+1); d.setHours(9,0,0,0); return d; }],
+  ['Pasado 9:00',      function(){ var d = new Date(); d.setDate(d.getDate()+2); d.setHours(9,0,0,0); return d; }],
+  ['En una semana',    function(){ var d = new Date(); d.setDate(d.getDate()+7); d.setHours(9,0,0,0); return d; }],
+];
+// `datetime-local` quiere 'aaaa-mm-ddThh:mm' en hora LOCAL. Con toISOString()
+// se enviaría en UTC y la tarea saldría cinco horas corrida.
+function paraInput(d){
+  var p = function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());
+}
+function abrirTarea(){
+  var l = leadAbierto; if (!l) return;
+  var def = CUANDOS[0][1]();
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Tarea de seguimiento</div>'
+    + '<input id="sh-tarea" type="text" placeholder="Qué hay que hacer" value="Llamar a '+esc(l.nom)+'">'
+    + '<div class="rapidas" style="margin-top:10px">'
+      + CUANDOS.map(function(c, i){
+          return '<button class="rapida" onclick="M.cuandoTarea('+i+')">'+esc(c[0])+'</button>';
+        }).join('')
+    + '</div>'
+    // La fecha lleva HORA a propósito: el servidor la exige con zona, y un
+    // campo de solo fecha hacía que la tarea NO se creara.
+    + '<input id="sh-cuando" type="datetime-local" style="margin-top:8px" value="'+paraInput(def)+'">'
+    + '<button class="bbtn" onclick="M.crearTarea()">Programar</button>');
+}
+function cuandoTarea(i){
+  var e = $('#sh-cuando'); if (!e || !CUANDOS[i]) return;
+  e.value = paraInput(CUANDOS[i][1]());
+  toque();
+}
+async function crearTarea(){
+  var l = leadAbierto, ti = $('#sh-tarea'), ci = $('#sh-cuando');
+  if (!l || !ti || !ci) return;
+  var texto = String(ti.value || '').trim();
+  var cuando = String(ci.value || '').trim();
+  if (!texto) { chicharra('Escribe qué hay que hacer.', 'mal'); return; }
+  if (!cuando) { chicharra('Ponle fecha y hora.', 'mal'); return; }
+  var fecha = new Date(cuando);
+  if (isNaN(fecha.getTime())) { chicharra('Esa fecha no se entiende.', 'mal'); return; }
+
+  // Primero la tarea DE VERDAD. `activities` es el sistema que dispara los
+  // recordatorios y el Pulso; `lead_activities` es solo el historial. Crear
+  // la línea del historial sin la tarea dejaría constancia de un seguimiento
+  // que nadie va a recordar.
+  var d = await guardar('/api/agenda', {
+    type: 'task', title: texto, due_at: fecha.toISOString(), lead_id: l.id,
+  }, 'POST');
+  if (!d) return;   // `guardar` ya dijo por qué; el texto se queda en la hoja
+
+  // Y la línea del historial, con la fecha para poder leerla.
+  try {
+    await fetchAuth('/api/lead-activities', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: l.id, type: 'tarea', content: texto,
+        metadata: { due_date: cuando, activity_id: (d.activity && d.activity.id) || null } }),
+    });
+  } catch (e) { console.warn('[movil] historial de la tarea', e); }
+
+  cerrarSheet();
+  // Se vuelve a pedir en vez de meterla a mano: así la fecha y el estado son
+  // los que guardó el servidor, no los que uno creyó guardar.
+  delete FICHA_CACHE[l.id];
+  pedirFicha();
+  // Y el lead queda tocado: toda la inactividad del CRM cuelga de updated_at.
+  l.hace = 'ahora'; l.tocado = Date.now();
+  pintarLeads(); pintarPulso(); pintarSubtitulos();
+  cargarReales();
+}
+
 async function guardarNota(){
   var ta = $('#sh-nota'), l = leadAbierto;
   var texto = ta ? ta.value.trim() : '';
@@ -1964,8 +2037,8 @@ function fichaPasado(l){
 }
 // Las mismas cajas que la tercera columna de la web.
 function fichaFalta(l){
-  var caja = function(tit, filas, vacio){
-    return '<h2>'+esc(tit)+'</h2><div class="caja">'
+  var caja = function(tit, filas, vacio, accion){
+    return '<h2>'+esc(tit)+(accion || '')+'</h2><div class="caja">'
       + (filas.length ? filas.map(function(f){
           return '<div class="hito"><span class="cuando">'+esc(f[0])+'</span><span>'+esc(f[1])+'</span></div>';
         }).join('') : '<div style="color:var(--muted);font-size:var(--fs-sm)">'+esc(vacio)+'</div>')
@@ -1994,8 +2067,11 @@ function fichaFalta(l){
     })) : null;
 
   return '<div class="secc">'
-    + de('Tareas', d.tareas, function(t){ return [t.cuando === 'vencida' ? 'vencida' : t.s, t.t]; },
-         'Ninguna tarea pendiente.')
+    + (d.tareas === null || d.tareas === undefined
+        ? de('Tareas', null, null, '')
+        : caja('Tareas', d.tareas.map(function(t){ return [t.cuando === 'vencida' ? 'vencida' : t.s, t.t]; }),
+               'Ninguna tarea pendiente.',
+               '<button class="mas-h2" onclick="M.abrirTarea()">'+icn('plus',14)+' Tarea</button>'))
     + de('Citas', d.citas, function(c){ return [c.h, c.t]; }, 'Ninguna cita agendada.')
     + (filasAutos === null
         ? de('Automatizaciones', null, null, '')
@@ -2568,6 +2644,7 @@ function movilMontar(opciones){
     abrirClientes: abrirClientes, elegirCliente: elegirCliente,
     verVideo: verVideo, verPestana: verPestana,
     abrirEtiquetas: abrirEtiquetas, ponerEtiqueta: ponerEtiqueta,
+    abrirTarea: abrirTarea, cuandoTarea: cuandoTarea, crearTarea: crearTarea,
     alternarAuto: alternarAuto,
     toque: toque,
     verMod: verMod,
