@@ -507,3 +507,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .aviso-fila .at{font-weight:700;font-size:var(--fs-sm)}
 .aviso-fila .ab{color:var(--text);font-size:var(--fs-sm);margin-top:4px;line-height:1.5}
 .aviso-fila .ac{color:var(--muted);font-size:var(--fs-xs);margin-top:6px}
+
+/* ── Satisfacción (NPS) ── */
+.nps-cab{text-align:center;padding:24px 16px 10px}
+.nps-num{font-size:46px;font-weight:800;letter-spacing:-.04em;line-height:1;color:var(--success)}
+.nps-num.tibio{color:var(--warning)}
+.nps-num.malo{color:var(--danger)}
+.nps-sub{color:var(--muted);font-size:var(--fs-xs);margin-top:6px;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+/* Las tres partes en una barra: se ve de un vistazo si los detractores pesan */
+.nps-barra{display:flex;height:10px;border-radius:999px;overflow:hidden;margin:6px 16px 4px;background:var(--bg-muted)}
+.nps-seg.prom{background:var(--success)}
+.nps-seg.neu{background:var(--warning)}
+.nps-seg.det{background:var(--danger)}
+.nps-fila{display:flex;justify-content:space-between;align-items:center;padding:9px 0;
+  border-bottom:1px solid var(--border);font-size:var(--fs-sm)}
+.nps-fila:last-child{border-bottom:0}
+.nps-fila b{font-weight:700}

@@ -163,7 +163,14 @@ console.log('\nLas rutas y las claves son las que usa la web\n');
   // Y que el caso del arreglo pelado esté de verdad contemplado, no sea que
   // alguien ponga null por descuido y se lea como «no se pudo mirar».
   const datos = readFileSync(new URL('../public/movil-datos.js', import.meta.url), 'utf8');
-  chk('el cargador entiende el arreglo pelado', /def\.clave === null \? d :/.test(datos));
+  // La ruta con puntos: sin ella cada endpoint que envuelve su lista —el
+  // studio devuelve {data:{parrillas:[…]}}— necesitaría su caso especial, y el
+  // que se olvide se lee como «no se pudo mirar» sobre una respuesta buena.
+  chk('y las rutas con punto, para los que envuelven su lista',
+      /split\('\.'\)\.reduce/.test(datos));
+  // El filtro: en Aperturas solo tienen sentido las de correo que ya salieron.
+  chk('y el filtro por módulo', /def\.filtro \? lista\.filter/.test(datos));
+  chk('el cargador entiende el arreglo pelado', /def\.clave === null\s*\?\s*d\s*$/m.test(datos) || /def\.clave === null \? d :/.test(datos));
 }
 
 console.log('\nLos ejemplos no se cuelan en una cuenta real\n');
@@ -186,6 +193,121 @@ console.log('\nLos ejemplos no se cuelan en una cuenta real\n');
   // Un módulo sin fuente propia tampoco puede enseñar ejemplos como si nada.
   chk('un módulo sin API lo dice en vez de inventar',
       /todavía no trae tus datos/i.test(fn), fn.slice(-200));
+}
+
+console.log('\nAperturas y parrillas, con sus números\n');
+{
+  const c = (o) => ({ ok: true, json: async () => o });
+  // La base son los ENTREGADOS, no los enviados: medir sobre lo que rebotó
+  // castiga a la campaña por un correo que nunca llegó.
+  const ap = await cargarModulo(async () => c({ campaigns: [
+    { name: 'Salió', channel: 'email', status: 'sent',
+      stats: { sent: 100, delivered: 98, opened: 41, clicked: 12 } },
+  ] }), 'aperturas');
+  chk('el porcentaje se mide sobre los entregados', ap[0].n === 42, String(ap[0].n));
+  chk('y la unidad lo dice, no «contactos»', ap[0].nu === undefined || ap[0].nu !== 'contactos');
+  chk('se ve sobre cuántos', /41 de 98 entregados/.test(ap[0].sub), ap[0].sub);
+
+  // Solo las de correo que YA salieron: en un borrador no hay nada que abrir,
+  // y en WhatsApp no hay apertura que medir.
+  const mezcla = await cargarModulo(async () => c({ campaigns: [
+    { name: 'Salió', channel: 'email', status: 'sent', stats: { sent: 10, delivered: 10, opened: 5 } },
+    { name: 'Borrador', channel: 'email', status: 'draft' },
+    { name: 'WhatsApp', channel: 'whatsapp', status: 'sent', stats: { sent: 50 } },
+    { name: 'Sin envíos', channel: 'email', status: 'sent', stats: { sent: 0 } },
+  ] }), 'aperturas');
+  chk('solo entran las de correo que ya salieron',
+      mezcla.length === 1 && mezcla[0].nom === 'Salió', mezcla.map((x) => x.nom).join(','));
+
+  // Una parrilla cuyos posts no vinieron no tiene «0 publicaciones».
+  const par = await cargarModulo(async () => c({ data: { parrillas: [
+    { name: 'Octubre', posts: [1, 2, 3] },
+    { name: 'Sin cargar' },
+  ] } }), 'studio');
+  chk('la parrilla cuenta sus publicaciones', /3 publicaciones/.test(par[0].sub), par[0].sub);
+  chk('y sin ellas NO dice cero', !/0 publicaciones/.test(par[1].sub), par[1].sub);
+
+  // El equipo, para la pantalla de Configuración.
+  const eq = await cargarModulo(async () => c({ members: [
+    { member_name: 'Maira', role: 'vendedor', status: 'active' },
+    { member_email: 'x@y.co', role: 'admin', status: 'invited' },
+  ] }), 'ajustes');
+  chk('el equipo sale con su perfil', /vendedor/.test(eq[0].sub), eq[0].sub);
+  chk('quien cae al correo no queda «sin nombre»', eq[1].nom === 'x@y.co', eq[1].nom);
+  chk('y un estado que no es activo se dice', /invited/.test(eq[1].sub), eq[1].sub);
+}
+
+console.log('\nEl NPS, ejecutado con respuestas de verdad\n');
+{
+  const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+  const CIERRE = '})();';
+  const conAsidero = guion.trimEnd().slice(0, -CIERRE.length) + `
+    window.__nps = function(d){ MODULO_CACHE.nps = d; MODO = 'real'; return PINTORES.nps(); };
+  ` + CIERRE;
+  const g = { addEventListener(){}, matchMedia: () => ({matches:true}) };
+  const el = () => ({ innerHTML:'', className:'', id:'', style:{}, dataset:{}, hidden:false,
+    classList:{add(){},remove(){},toggle(){},contains(){return false}}, setAttribute(){},
+    appendChild(){}, remove(){}, addEventListener(){}, querySelector:()=>el(),
+    querySelectorAll:()=>[], getBoundingClientRect:()=>({width:0}) });
+  const ent = { window: new Proxy(g,{has:()=>true,get:(t,k)=>t[k],set:(t,k,v)=>(t[k]=v,true)}),
+    document:{querySelector:()=>el(),querySelectorAll:()=>[],getElementById:()=>el(),
+      createElement:()=>el(),addEventListener(){},body:el(),head:el(),readyState:'complete'},
+    navigator:{}, history:{pushState(){}}, setTimeout:()=>1, clearTimeout:()=>{},
+    setInterval:()=>1, console:{warn(){},error(){},log(){}} };
+  const n = Object.keys(ent);
+  new Function(...n, conAsidero)(...n.map((k) => ent[k]));
+
+  // Sin encuestas enviadas no es un NPS de cero: es que no hay nada que medir.
+  chk('sin encuestas lo dice', /Todavía no has enviado/.test(g.__nps({ sent: 0, answered: 0 })));
+  // Enviadas pero sin responder tampoco: un 0 ahí se lee «te califican regular».
+  const mudo = g.__nps({ sent: 12, answered: 0, nps: null, promoters: 0, passives: 0, detractors: 0 });
+  chk('enviadas y sin responder se distingue de un cero', /nadie ha respondido/.test(mudo), mudo.slice(0, 120));
+  chk('y dice cuántas se enviaron', /Enviaste 12 encuestas/.test(mudo));
+
+  const bueno = g.__nps({ sent: 20, answered: 10, nps: 60, promoters: 7, passives: 2, detractors: 1, comments: [] });
+  chk('pinta el número', /nps-num[^>]*>60</.test(bueno), bueno.slice(0, 160));
+  chk('y sobre cuántas respuestas', /10 de 20 respondieron/.test(bueno));
+  chk('un NPS alto va en verde', /class="nps-num ">/.test(bueno), bueno.slice(0, 120));
+
+  const tibio = g.__nps({ sent: 9, answered: 9, nps: 20, promoters: 4, passives: 3, detractors: 2 });
+  chk('uno mediano va en ámbar', /nps-num tibio/.test(tibio));
+  const malo = g.__nps({ sent: 9, answered: 9, nps: -30, promoters: 1, passives: 2, detractors: 6 });
+  chk('y uno negativo en rojo', /nps-num malo/.test(malo));
+  // Un NPS negativo es un número válido: no puede caer al «—» de «no se sabe».
+  chk('el negativo se pinta, no se esconde', /nps-num malo">-30</.test(malo), malo.slice(0, 160));
+  // El CERO es el que muerde: `d.nps || null` lo convierte en «no se sabe», y
+  // un NPS de 0 es un dato real —tantos promotores como detractores—.
+  const cero = g.__nps({ sent: 8, answered: 8, nps: 0, promoters: 3, passives: 2, detractors: 3 });
+  chk('un NPS de cero es un dato, no un «no se sabe»',
+      /nps-num tibio">0</.test(cero) && !/>—</.test(cero), cero.slice(0, 160));
+
+  chk('null es «no se pudo», con reintento',
+      /No se pudo traer/.test(g.__nps(null)) && /reintentarModulo/.test(g.__nps(null)));
+  chk('y mientras llega lo dice', /Trayendo tus respuestas/.test(g.__nps(undefined)));
+  // Sin sesión no hay nada que pedir: quedarse en «Trayendo…» para siempre se
+  // lee como que la pantalla se colgó.
+  const guionTxt = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+  chk('sin sesión no se queda colgado en «Trayendo…»',
+      /Entra con tu cuenta para ver tu satisfacción/.test(guionTxt)
+      && /Entra con tu cuenta para ver los videos/.test(guionTxt));
+
+  const conComentarios = g.__nps({ sent: 5, answered: 3, nps: 33, promoters: 2, passives: 0, detractors: 1,
+    comments: [{ score: 9, comment: 'Muy bien atendido', name: 'Ana' }] });
+  chk('los comentarios salen con quién y qué nota', /Ana · 9\/10/.test(conComentarios));
+  chk('y su texto', /Muy bien atendido/.test(conComentarios));
+}
+
+console.log('\nSEO dice POR QUÉ no se trae sola\n');
+{
+  const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+  const codigo = guion.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  // `/api/seo-rank` es solo POST: leer una posición dispara una consulta que se
+  // paga. Abrirla en el bolsillo gastaría dinero sin que nadie lo pidiera.
+  const i = codigo.indexOf('seo: function');
+  const fn = codigo.slice(i, codigo.indexOf('\n  }', i));
+  chk('explica el motivo, no dice «no disponible»', /cuesta una consulta cada vez/.test(fn), fn.slice(0, 120));
+  chk('y dice dónde se pide', /desde el computador/.test(fn));
+  chk('no llama al endpoint por su cuenta', !/seo-rank/.test(codigo));
 }
 
 console.log('\nUna cabecera que afirma un número tiene que contarlo\n');

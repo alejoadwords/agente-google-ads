@@ -304,6 +304,40 @@ export function aVideo(v) {
   };
 }
 
+/** Una campaña de correo YA enviada, vista desde las aperturas. */
+export function aApertura(c) {
+  const s = c.stats || {};
+  const base = s.delivered != null ? s.delivered : s.sent;
+  const pct = base > 0 ? Math.round(((s.opened || 0) / base) * 100) : null;
+  return {
+    nom: c.name || 'Sin nombre',
+    // Sin base no hay porcentaje. Un «0 %» sobre cero entregados se lee como
+    // una campaña que nadie abrió, cuando lo que pasa es que no salió.
+    n: pct === null ? undefined : pct,
+    sub: (s.opened || 0) + ' de ' + (base || 0) + ' entregados'
+      + (s.clicked ? ' · ' + s.clicked + ' clics' : ''),
+  };
+}
+/** Solo las de correo que ya salieron: en las demás no hay nada que abrir. */
+export const esAperturaVisible = (c) =>
+  c.channel === 'email' && c.status === 'sent' && ((c.stats || {}).sent || 0) > 0;
+
+export function aParrilla(p) {
+  const n = Array.isArray(p.posts) ? p.posts.length : null;
+  return {
+    nom: p.name || 'Sin nombre',
+    sub: n === null ? 'Sin publicaciones cargadas'
+      : n === 1 ? '1 publicación' : n + ' publicaciones',
+  };
+}
+
+export function aMiembro(m) {
+  return {
+    nom: m.member_name || m.member_email || 'Sin nombre',
+    sub: (m.role || 'sin perfil') + (m.status && m.status !== 'active' ? ' · ' + m.status : ''),
+  };
+}
+
 export function aAgente(a) {
   const on = a.is_active != null ? !!a.is_active : !!a.active;
   return {
@@ -336,6 +370,11 @@ export const MODULOS_API = {
   // La academia es del catálogo, no de la cuenta: ni lleva alcance de cliente
   // ni devuelve un objeto con clave — el cuerpo ES la lista.
   academia: { ruta: '/api/academia-admin', clave: null, mapa: aVideo, sinCliente: true },
+  aperturas:{ ruta: '/api/campaigns',    clave: 'campaigns',   mapa: aApertura, filtro: esAperturaVisible },
+  // La parrilla viene anidada: {data:{parrillas:[…]}}. La ruta con punto evita
+  // un caso especial por cada endpoint que envuelve su lista.
+  studio:   { ruta: '/api/social-studio', clave: 'data.parrillas', mapa: aParrilla },
+  ajustes:  { ruta: '/api/team',         clave: 'members',     mapa: aMiembro, sinCliente: true },
 };
 
 export async function cargarModulo(fetchAuth, id, { clientId } = {}) {
@@ -348,11 +387,13 @@ export async function cargarModulo(fetchAuth, id, { clientId } = {}) {
     const d = await r.json();
     // `clave: null` significa que el cuerpo ES la lista. Sin esto, un endpoint
     // que devuelve el arreglo pelado se leía como «no se pudo mirar».
-    const lista = def.clave === null ? d : d[def.clave];
+    // La clave puede ser una RUTA con puntos, para los que envuelven su lista.
+    const lista = def.clave === null ? d
+      : String(def.clave).split('.').reduce((o, k) => (o == null ? o : o[k]), d);
     // Si la clave no viene, es que la respuesta no tiene la forma esperada. Eso
     // es «no se pudo mirar», no «no hay nada».
     if (!Array.isArray(lista)) return null;
-    return lista.map(def.mapa);
+    return (def.filtro ? lista.filter(def.filtro) : lista).map(def.mapa);
   } catch { return null; }
 }
 

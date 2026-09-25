@@ -860,7 +860,9 @@ function filaItem(x){
       + '<span class="is">'+esc(x.sub)+'</span>'
       + (x.est ? '<span class="estado-chip '+x.est+'">'+esc(x.est)+'</span>' : '')
       + res + '</span>'
-    + (x.n !== undefined ? '<span class="num"><b>'+x.n+'</b><span>contactos</span></span>' : '')
+    // La unidad viene con el dato. Estaba escrita a mano —«contactos»— y en la
+    // pantalla de Aperturas eso convertía un 42% en «42 contactos».
+    + (x.n !== undefined ? '<span class="num"><b>'+x.n+'</b><span>'+esc(x.nu || 'contactos')+'</span></span>' : '')
     + (x.on !== undefined ? '<span class="interruptor"></span>' : '')
     + '</button>';
 }
@@ -877,6 +879,10 @@ function FICHA_MODULO(id){
     fuentes: {t:'Fuentes',  datos:FUENTES, escritorio:
       'Conectar una fuente nueva implica copiar un código a tu web o a otra herramienta, que es cosa del computador. Aquí ves cuántos leads trae cada una y cuándo entró el último.'},
     props:   {t:'Propuestas', datos:PROPS},
+    aperturas:{t:'Aperturas', datos:[], escritorio:
+      'Aquí ves qué tanto se abre cada correo que ya salió. El detalle de quién abrió y cuándo se revisa en el computador.'},
+    studio:  {t:'Social Studio', datos:[], escritorio:
+      'Armar una parrilla es escribir, elegir imágenes y fechas: eso pide pantalla. Aquí ves las que ya tienes y cuántas publicaciones lleva cada una.'},
     reservas:{t:'Reservas', datos:RESERVAS, escritorio:
       'Los servicios, los horarios y la disponibilidad se configuran en el computador. Aquí ves las reservas que van entrando.'},
     plant:   {t:'Plantillas', escritorio:
@@ -893,14 +899,15 @@ function FICHA_MODULO(id){
 
 // Los ids que tienen fuente propia en la API. Los que no están aquí lo dicen,
 // en vez de enseñar los ejemplos como si fueran de la cuenta.
-var MODULOS_API_IDS = { chatbots:1, campanas:1, listas:1, autos:1, fuentes:1, props:1, reservas:1, plant:1, paginas:1 };
+var MODULOS_API_IDS = { chatbots:1, campanas:1, listas:1, autos:1, fuentes:1, props:1, reservas:1,
+  plant:1, paginas:1, aperturas:1, studio:1, ajustes:1 };
 // Pintores propios que SÍ trabajan con datos reales: los sacan de lo que ya
 // está en memoria, sin pedir nada. Los que no estén aquí lo dicen en vez de
 // enseñar ejemplos.
-var PINTORES_REALES = { analisis:1, clientes:1, academia:1 };
+var PINTORES_REALES = { analisis:1, clientes:1, academia:1, nps:1, seo:1 };
 // De esos, los que además tienen que PEDIR sus datos. `analisis` y `clientes`
 // salen de lo que ya está en memoria; la academia no.
-var MODULOS_API_IDS_PROPIOS = { academia:1 };
+var MODULOS_API_IDS_PROPIOS = { academia:1, nps:1 };
 
 // «No hay nada» dicho con las palabras de cada módulo: un «sin resultados»
 // genérico no distingue una cuenta nueva de una pantalla rota.
@@ -914,6 +921,9 @@ var VACIO_MODULO = {
   chatbots: 'Todavía no tienes agentes de conversación.',
   plant:    'Todavía no tienes plantillas de correo.',
   paginas:  'Todavía no tienes páginas de aterrizaje.',
+  aperturas:'Todavía no ha salido ninguna campaña de correo.',
+  studio:   'Todavía no tienes parrillas de contenido.',
+  ajustes:  'Trabajas solo: todavía no hay nadie más en el equipo.',
 };
 
 function abrirModulo(id){
@@ -1310,6 +1320,11 @@ function subtituloModulo(id, deEjemplo){
     var n = clientesDeLaWeb().length;
     return n === 1 ? '1 cliente' : n + ' clientes';
   }
+  if (id === 'ajustes') {
+    var q = MODULO_CACHE.ajustes;
+    if (!Array.isArray(q)) return '';
+    return q.length === 1 ? '1 persona en el equipo' : q.length + ' personas en el equipo';
+  }
   if (id === 'academia') {
     var vs = MODULO_CACHE.academia;
     if (!Array.isArray(vs)) return '';   // aún no llegan: no se afirma nada
@@ -1329,7 +1344,16 @@ async function cargarModuloReal(id){
   try {
     var mod = TRADUCTOR || await import('./movil-datos.js');
     TRADUCTOR = mod;
-    return await mod.cargarModulo(fetchAuth, id);
+    // El NPS no es una lista: viene agregado. Pasarlo por el cargador de
+    // listas devolvería null —«no se pudo mirar»— sobre una respuesta buena.
+    if (id === 'nps') {
+      var c = alcanceCliente();
+      var r = await fetchAuth('/api/nps' + (c ? '?client_id=' + encodeURIComponent(c) : ''));
+      if (!r || !r.ok) return null;
+      var d = await r.json();
+      return (d && !d.error && typeof d.sent === 'number') ? d : null;
+    }
+    return await mod.cargarModulo(fetchAuth, id, { clientId: alcanceCliente() });
   } catch (e) {
     console.warn('[movil] módulo ' + id, e);
     return null;
@@ -1356,27 +1380,11 @@ MODULOS.push(
   {id:'ajustes',  nom:'Configuración',sub:'Cuenta, equipo y plan',    icono:'gear',     grupo:'Cuenta'}
 );
 
-var NPS_DATOS = {valor:42, promotores:11, neutros:5, detractores:3, respuestas:19};
-var APERTURAS = [
-  {nom:'Arriendos Envigado · septiembre', ab:41, sub:'1.240 enviados · 508 abiertos'},
-  {nom:'Recordatorio de visitas',         ab:64, sub:'86 enviados · 55 abiertos'},
-  {nom:'Novedades de agosto',             ab:28, sub:'1.190 enviados · 333 abiertos'}
-];
-var PARRILLA = [
-  {t:'3 razones para arrendar en Envigado antes de fin de año', s:'Instagram · jueves 24, 18:00 · programado'},
-  {t:'Recorrido por Altos del Esmeraldal',                      s:'Instagram · viernes 25, 12:00 · falta la imagen'},
-  {t:'¿Cuánto necesitas ganar para arrendar en Laureles?',      s:'Facebook · lunes 28, 09:00 · borrador'}
-];
 var SEO = [
   {kw:'arriendo apartamentos envigado', pos:3,  d:+2, vol:'1.300 búsquedas/mes'},
   {kw:'apartamentos zúñiga envigado',   pos:7,  d:-1, vol:'480 búsquedas/mes'},
   {kw:'inmobiliaria envigado',          pos:12, d:0,  vol:'2.100 búsquedas/mes'},
   {kw:'proyectos vis sabaneta',         pos:18, d:+5, vol:'890 búsquedas/mes'}
-];
-var ACADEMIA = [
-  {t:'Cómo armar tu proceso de venta', s:'4 videos · 18 min'},
-  {t:'Campañas que sí se leen',        s:'3 videos · 12 min'},
-  {t:'Automatiza el seguimiento',      s:'5 videos · 22 min'}
 ];
 
 // Cada informe se pinta a su manera: forzarlos a la lista genérica los
@@ -1435,31 +1443,47 @@ var PINTORES = {
           : '');
   },
   nps: function(){
-    var d = NPS_DATOS, tot = d.promotores + d.neutros + d.detractores;
-    var clase = d.valor >= 50 ? '' : d.valor >= 0 ? 'tibio' : 'malo';
-    return '<div class="nps"><div class="val '+clase+'">'+d.valor+'</div>'
-      + '<div class="et">de -100 a 100 &middot; '+d.respuestas+' respuestas</div></div>'
-      + '<div class="nps-barras">'
-        + '<i class="p" style="width:'+(d.promotores/tot*100)+'%"></i>'
-        + '<i class="n" style="width:'+(d.neutros/tot*100)+'%"></i>'
-        + '<i class="d" style="width:'+(d.detractores/tot*100)+'%"></i></div>'
-      + '<div class="nps-ley"><span><b>'+d.promotores+'</b> promotores</span>'
-        + '<span><b>'+d.neutros+'</b> neutros</span>'
-        + '<span><b>'+d.detractores+'</b> detractores</span></div>'
-      + '<div class="secc"><h2>Lo último que dijeron</h2><div class="caja">'
-        + '<div class="hito"><span class="cuando">9</span><span>«Muy atentos, respondieron rápido.»</span></div>'
-        + '<div class="hito"><span class="cuando">6</span><span>«La visita se movió dos veces.»</span></div>'
-      + '</div></div>';
+    // El NPS de la cuenta, no una nota fija. Viene AGREGADO —no es una lista—
+    // así que lo trae su propio cargador.
+    // Sin sesión no hay nada que pedir: quedarse en «Trayendo…» para siempre
+    // no miente, pero tampoco resuelve, y se lee como que se colgó.
+    if (MODO !== 'real') return '<div class="vacio">Entra con tu cuenta para ver tu satisfacción.</div>';
+    var d = MODULO_CACHE.nps;
+    if (d === undefined) return '<div class="vacio">Trayendo tus respuestas…</div>';
+    if (d === null) return '<div class="vacio">No se pudo traer tu satisfacción.<br>'
+      + '<button class="rapida" style="margin-top:10px" onclick="M.reintentarModulo(\'nps\')">Reintentar</button></div>';
+    if (!d.sent) return '<div class="vacio">Todavía no has enviado ninguna encuesta.</div>';
+    if (!d.answered) return '<div class="vacio">Enviaste ' + d.sent
+      + (d.sent === 1 ? ' encuesta' : ' encuestas') + ', pero nadie ha respondido todavía.</div>';
+
+    // El NPS va de -100 a 100. Sin respuestas NO es cero: es que no se sabe, y
+    // un cero ahí se lee como «te califican regular».
+    var v = (d.nps === null || d.nps === undefined) ? null : d.nps;
+    var clase = v === null ? '' : v >= 50 ? '' : v >= 0 ? 'tibio' : 'malo';
+    var seg = function(n, c, t){
+      return '<div class="nps-seg '+c+'" style="flex:'+Math.max(n, 0.001)+'" title="'+esc(t)+'"></div>';
+    };
+    return '<div class="nps-cab"><div class="nps-num '+clase+'">'+(v === null ? '—' : v)+'</div>'
+      + '<div class="nps-sub">NPS · '+d.answered+' de '+d.sent+' respondieron</div></div>'
+      + '<div class="nps-barra">'
+        + seg(d.promoters, 'prom', 'Promotores')
+        + seg(d.passives, 'neu', 'Neutros')
+        + seg(d.detractors, 'det', 'Detractores')
+      + '</div>'
+      + '<div class="secc"><div class="caja">'
+        + '<div class="nps-fila"><span>Promotores</span><b>'+d.promoters+'</b></div>'
+        + '<div class="nps-fila"><span>Neutros</span><b>'+d.passives+'</b></div>'
+        + '<div class="nps-fila"><span>Detractores</span><b>'+d.detractors+'</b></div>'
+      + '</div></div>'
+      + ((d.comments && d.comments.length)
+          ? '<div class="secc"><h2>Lo que escribieron</h2></div><div class="lista">'
+            + d.comments.slice(0, 10).map(function(c){
+                return '<div class="aviso-fila"><div class="at">'+esc(c.name || 'Anónimo')
+                  + ' · '+c.score+'/10</div><div class="ab">'+esc(c.comment || '')+'</div></div>';
+              }).join('') + '</div>'
+          : '');
   },
-  aperturas: function(){
-    return '<div class="lista">' + APERTURAS.map(function(x){
-      return '<div class="item"><span class="cuerpo"><span class="it">'+esc(x.nom)+'</span>'
-        + '<span class="is">'+esc(x.sub)+'</span>'
-        + '<span class="barras"><span class="barra"><span class="bt">Abiertos</span>'
-          + '<span class="bv">'+x.ab+'%</span>'
-          + '<span class="bl"><i style="width:'+x.ab+'%"></i></span></span></span></span></div>';
-    }).join('') + '</div>';
-  },
+
   clientes: function(){
     // La cartera que ya cargó la aplicación. NO se inventan contadores por
     // cliente: los leads en memoria son solo los del cliente activo, así que
@@ -1479,30 +1503,22 @@ var PINTORES = {
         + '</span></button>';
     }).join('') + '</div>';
   },
-  studio: function(){
-    return '<div class="solo-escritorio"><b>Se arma desde el computador</b>'
-      + 'Escribir los textos, generar las imágenes y ordenar la parrilla se hace mejor con pantalla grande. '
-      + 'Aquí ves qué sale y cuándo, y qué le falta a cada publicación.</div>'
-      + '<div class="lista">' + PARRILLA.map(function(x){
-      return '<div class="post"><span class="lam">'+icn('sparkles',22)+'</span>'
-        + '<span class="txt"><span class="pt">'+esc(x.t)+'</span>'
-        + '<span class="ps">'+esc(x.s)+'</span></span></div>';
-    }).join('') + '</div>';
-  },
+
   seo: function(){
-    return '<div class="lista">' + SEO.map(function(x){
-      var cl = x.d > 0 ? 'sube' : x.d < 0 ? 'baja' : 'igual';
-      // El signo va explícito: «+2» y «−1» se leen sin pensar; un «2» suelto
-      // no dice si subió o bajó.
-      var txt = x.d > 0 ? '+'+x.d : x.d < 0 ? '−'+Math.abs(x.d) : '=';
-      return '<div class="kw"><span class="txt"><span class="kt">'+esc(x.kw)+'</span>'
-        + '<span class="ks">'+esc(x.vol)+'</span></span>'
-        + '<span class="pos"><b>'+x.pos+'</b><span class="delta '+cl+'">'+txt+'</span></span></div>';
-    }).join('') + '</div>';
+    // La única que NO se puede traer sola: `/api/seo-rank` es solo POST, y leer
+    // una posición dispara una consulta que se paga. Abrir esta pantalla en el
+    // bolsillo gastaría dinero sin que nadie lo pidiera.
+    //
+    // Se dice el motivo. Un «no disponible» a secas se lee como que algo está
+    // roto; con el porqué, se entiende que es a propósito.
+    return '<div class="vacio">Consultar tus posiciones en Google cuesta una consulta cada vez, '
+      + 'así que no se hace sola al abrir esta pantalla.<br><br>'
+      + 'El reporte se pide desde el computador, y ahí queda guardado.</div>';
   },
   academia: function(){
     // Los videos del catálogo, no una lista fija. Y cada fila ABRE el video:
     // antes había un botón de reproducir que solo vibraba.
+    if (MODO !== 'real') return '<div class="vacio">Entra con tu cuenta para ver los videos.</div>';
     var vs = MODULO_CACHE.academia;
     if (vs === undefined) return '<div class="vacio">Trayendo los videos…</div>';
     if (vs === null) return '<div class="vacio">No se pudieron traer los videos.<br>'
@@ -1517,9 +1533,9 @@ var PINTORES = {
   }
 };
 var TITULOS = {
-  analisis:['Análisis','Todos los tableros'], nps:['Satisfacción','19 respuestas'],
-  aperturas:['Aperturas','3 campañas'], clientes:['Panel de clientes','3 clientes'],
-  studio:['Social Studio','3 publicaciones esta semana'], seo:['Proyecto SEO','4 palabras vigiladas'],
+  analisis:['Análisis','Todos los tableros'], nps:['Satisfacción',''],
+  aperturas:['Aperturas',''], clientes:['Panel de clientes',''],
+  studio:['Social Studio',''], seo:['Proyecto SEO',''],
   academia:['Academia','']
 };
 
