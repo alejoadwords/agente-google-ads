@@ -147,14 +147,23 @@ console.log('\nLas rutas y las claves son las que usa la web\n');
 {
   const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const ids = Object.keys(MODULOS_API);
-  chk('están los siete módulos', ids.length === 7, ids.join(','));
+  chk('no se quedó ninguno por el camino', ids.length >= 10, ids.join(','));
   for (const id of ids) {
     const { ruta, clave } = MODULOS_API[id];
     // Que la ruta exista no basta: la clave del JSON tiene que ser la misma que
     // lee app.js, o la lista viene vacía sin que nadie se entere.
+    //
+    // `clave: null` es el caso del endpoint que devuelve el arreglo pelado
+    // —la academia—: ahí no hay clave que comparar, y exigir una haría que la
+    // prueba pidiera inventarse uno.
+    const claveOk = clave === null || new RegExp('\\.' + clave + '\\b').test(app);
     chk(id + ' usa la ruta y la clave de la web',
-        app.includes(ruta) && new RegExp('\\.' + clave + '\\b').test(app), ruta + ' / ' + clave);
+        app.includes(ruta) && claveOk, ruta + ' / ' + clave);
   }
+  // Y que el caso del arreglo pelado esté de verdad contemplado, no sea que
+  // alguien ponga null por descuido y se lea como «no se pudo mirar».
+  const datos = readFileSync(new URL('../public/movil-datos.js', import.meta.url), 'utf8');
+  chk('el cargador entiende el arreglo pelado', /def\.clave === null \? d :/.test(datos));
 }
 
 console.log('\nLos ejemplos no se cuelan en una cuenta real\n');

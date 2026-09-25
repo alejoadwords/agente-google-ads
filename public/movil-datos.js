@@ -274,6 +274,36 @@ export function aServicio(s) {
   };
 }
 
+export function aPlantilla(t) {
+  return {
+    nom: t.nombre || 'Sin nombre',
+    sub: (t.categoria ? t.categoria + ' · ' : '')
+      + (t.asunto ? '«' + t.asunto + '»' : 'Sin asunto')
+      + (t.updated_at ? ' · ' + hace(t.updated_at) : ''),
+  };
+}
+
+export function aPagina(p) {
+  // `visits` puede venir sin definir: un 0 diría «no la visita nadie», que no
+  // es lo mismo que «no sé cuántas visitas tiene».
+  const v = Number.isFinite(Number(p.visits)) ? Number(p.visits) : null;
+  return {
+    nom: p.title || p.slug || 'Sin título',
+    est: p.published ? 'activa' : 'borrador',
+    sub: (v === null ? 'Sin datos de visitas' : v === 1 ? '1 visita' : v + ' visitas')
+      + (p.slug ? ' · /' + p.slug : ''),
+  };
+}
+
+export function aVideo(v) {
+  return {
+    id: v.id,
+    nom: v.title || 'Sin título',
+    sub: (v.category || 'Sin categoría') + (v.duration ? ' · ' + v.duration : ''),
+    url: v.url || '',
+  };
+}
+
 export function aAgente(a) {
   const on = a.is_active != null ? !!a.is_active : !!a.active;
   return {
@@ -301,17 +331,24 @@ export const MODULOS_API = {
   fuentes:  { ruta: '/api/lead-sources', clave: 'sources',     mapa: aFuente },
   props:    { ruta: '/api/proposals',    clave: 'proposals',   mapa: aPropuesta },
   reservas: { ruta: '/api/bookings',     clave: 'servicios',   mapa: aServicio },
+  plant:    { ruta: '/api/email-templates', clave: 'plantillas', mapa: aPlantilla },
+  paginas:  { ruta: '/api/landings',     clave: 'paginas',     mapa: aPagina },
+  // La academia es del catálogo, no de la cuenta: ni lleva alcance de cliente
+  // ni devuelve un objeto con clave — el cuerpo ES la lista.
+  academia: { ruta: '/api/academia-admin', clave: null, mapa: aVideo, sinCliente: true },
 };
 
 export async function cargarModulo(fetchAuth, id, { clientId } = {}) {
   const def = MODULOS_API[id];
   if (!def) return null;
   try {
-    const q = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const q = (clientId && !def.sinCliente) ? '?client_id=' + encodeURIComponent(clientId) : '';
     const r = await fetchAuth(def.ruta + q);
     if (!r || !r.ok) return null;
     const d = await r.json();
-    const lista = d[def.clave];
+    // `clave: null` significa que el cuerpo ES la lista. Sin esto, un endpoint
+    // que devuelve el arreglo pelado se leía como «no se pudo mirar».
+    const lista = def.clave === null ? d : d[def.clave];
     // Si la clave no viene, es que la respuesta no tiene la forma esperada. Eso
     // es «no se pudo mirar», no «no hay nada».
     if (!Array.isArray(lista)) return null;

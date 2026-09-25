@@ -893,11 +893,14 @@ function FICHA_MODULO(id){
 
 // Los ids que tienen fuente propia en la API. Los que no están aquí lo dicen,
 // en vez de enseñar los ejemplos como si fueran de la cuenta.
-var MODULOS_API_IDS = { chatbots:1, campanas:1, listas:1, autos:1, fuentes:1, props:1, reservas:1 };
+var MODULOS_API_IDS = { chatbots:1, campanas:1, listas:1, autos:1, fuentes:1, props:1, reservas:1, plant:1, paginas:1 };
 // Pintores propios que SÍ trabajan con datos reales: los sacan de lo que ya
 // está en memoria, sin pedir nada. Los que no estén aquí lo dicen en vez de
 // enseñar ejemplos.
-var PINTORES_REALES = { analisis:1, clientes:1 };
+var PINTORES_REALES = { analisis:1, clientes:1, academia:1 };
+// De esos, los que además tienen que PEDIR sus datos. `analisis` y `clientes`
+// salen de lo que ya está en memoria; la academia no.
+var MODULOS_API_IDS_PROPIOS = { academia:1 };
 
 // «No hay nada» dicho con las palabras de cada módulo: un «sin resultados»
 // genérico no distingue una cuenta nueva de una pantalla rota.
@@ -909,6 +912,8 @@ var VACIO_MODULO = {
   props:    'Todavía no has enviado ninguna propuesta.',
   reservas: 'Todavía no tienes servicios para reservar.',
   chatbots: 'Todavía no tienes agentes de conversación.',
+  plant:    'Todavía no tienes plantillas de correo.',
+  paginas:  'Todavía no tienes páginas de aterrizaje.',
 };
 
 function abrirModulo(id){
@@ -929,11 +934,27 @@ function abrirModulo(id){
       : '<div class="vacio">Esta pantalla todavía no trae tus datos.<br>'
         + 'Por ahora se consulta desde el computador.</div>';
     hp.innerHTML = '<div class="cab"><button class="volver" onclick="M.cerrarModulo()">'+icn('arrow',24)+'</button>'
-      + '<div><h1>'+esc(t[0])+'</h1><div class="sub">'
+      + '<div><h1>'+esc(t[0])+'</h1><div class="sub" id="mod-sub">'
       + esc(subtituloModulo(id, t[1])) + '</div></div></div>'
-      + cuerpo;
+      + '<div id="mod-propio">' + cuerpo + '</div>';
     movilRaiz().appendChild(hp);
     history.pushState({hoja:1},'');
+    // Los que además necesitan pedir sus datos —la academia— los piden al
+    // abrirse y se repintan cuando llegan. Sin esto el pintor se quedaba
+    // enseñando «Trayendo…» para siempre, que es peor que un error.
+    if (MODO === 'real' && PINTORES_REALES[id] && MODULOS_API_IDS_PROPIOS[id]
+        && MODULO_CACHE[id] === undefined) {
+      var caja = $('#mod-propio');
+      cargarModuloReal(id).then(function(datos){
+        if (datos !== null) MODULO_CACHE[id] = datos; else MODULO_CACHE[id] = null;
+        // La hoja pudo cerrarse o abrirse otra mientras tanto: pintar sin
+        // comprobarlo metería los videos en la cabecera de otra pantalla.
+        if ($('#mod-propio') !== caja) return;
+        caja.innerHTML = PINTORES[id]();
+        var sub = $('#mod-sub');
+        if (sub) sub.textContent = subtituloModulo(id, t[1]);
+      });
+    }
     return;
   }
   if (!M) return;
@@ -1184,6 +1205,17 @@ function abrirPerfil(){
   hojaConCab('hoja-perfil', 'Tu cuenta', '', cuerpo);
 }
 
+// Abre el video en YouTube. Sin enlace se dice: un botón que no lleva a
+// ninguna parte se toca dos veces y se da por roto.
+function verVideo(id){
+  var vs = MODULO_CACHE.academia || [];
+  var v = null;
+  for (var i=0;i<vs.length;i++) if (String(vs[i].id) === String(id)) v = vs[i];
+  if (!v || !v.url) { chicharra('Ese video todavía no tiene enlace.', 'mal'); return; }
+  toque();
+  window.open(v.url, '_blank');
+}
+
 function volverEscritorio(){
   try {
     if (window.movilEnganche && typeof window.movilEnganche.apagar === 'function') {
@@ -1277,6 +1309,11 @@ function subtituloModulo(id, deEjemplo){
   if (id === 'clientes') {
     var n = clientesDeLaWeb().length;
     return n === 1 ? '1 cliente' : n + ' clientes';
+  }
+  if (id === 'academia') {
+    var vs = MODULO_CACHE.academia;
+    if (!Array.isArray(vs)) return '';   // aún no llegan: no se afirma nada
+    return vs.length === 1 ? '1 video' : vs.length + ' videos';
   }
   return '';
 }
@@ -1464,18 +1501,26 @@ var PINTORES = {
     }).join('') + '</div>';
   },
   academia: function(){
-    return '<div class="lista">' + ACADEMIA.map(function(x){
-      return '<button class="video" onclick="M.toque()"><span class="play">'+icn('arrow',20)+'</span>'
-        + '<span class="txt"><span class="vt">'+esc(x.t)+'</span>'
-        + '<span class="vs">'+esc(x.s)+'</span></span></button>';
-    }).join('') + '</div>';
+    // Los videos del catálogo, no una lista fija. Y cada fila ABRE el video:
+    // antes había un botón de reproducir que solo vibraba.
+    var vs = MODULO_CACHE.academia;
+    if (vs === undefined) return '<div class="vacio">Trayendo los videos…</div>';
+    if (vs === null) return '<div class="vacio">No se pudieron traer los videos.<br>'
+      + '<button class="rapida" style="margin-top:10px" onclick="M.reintentarModulo(\'academia\')">Reintentar</button></div>';
+    if (!vs.length) return '<div class="vacio">Todavía no hay videos publicados.</div>';
+    return '<div class="lista">' + vs.map(function(v){
+      return '<button class="video" onclick="M.verVideo(\''+esc(String(v.id))+'\')">'
+        + '<span class="play">'+icn('arrow',20)+'</span>'
+        + '<span class="cuerpo"><span class="it">'+esc(v.nom)+'</span>'
+        + '<span class="is">'+esc(v.sub)+'</span></span></button>';
+    }).join('') + '</div>'
   }
 };
 var TITULOS = {
   analisis:['Análisis','Todos los tableros'], nps:['Satisfacción','19 respuestas'],
   aperturas:['Aperturas','3 campañas'], clientes:['Panel de clientes','3 clientes'],
   studio:['Social Studio','3 publicaciones esta semana'], seo:['Proyecto SEO','4 palabras vigiladas'],
-  academia:['Academia','3 cursos']
+  academia:['Academia','']
 };
 
 // ── Navegación: los mismos módulos que la web ───────────────────────────────
@@ -2305,6 +2350,7 @@ function movilMontar(opciones){
     abrirMenu: abrirMenu, abrirAvisos: abrirAvisos, abrirPerfil: abrirPerfil,
     cerrarBarra: cerrarBarra, volverEscritorio: volverEscritorio, cerrarSesion: cerrarSesion,
     abrirClientes: abrirClientes, elegirCliente: elegirCliente,
+    verVideo: verVideo,
     abrirEtiquetas: abrirEtiquetas, ponerEtiqueta: ponerEtiqueta,
     alternarAuto: alternarAuto,
     toque: toque,
