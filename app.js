@@ -20157,6 +20157,16 @@ async function closeOpenModal(lead, stageKey, prevStage, onCancel) {
         '<input class="auto-input" id="close-search" placeholder="Buscar o escribir un motivo nuevo…" oninput="closeFilter()" autocomplete="off">' +
         '<div id="close-list" style="max-height:190px;overflow-y:auto;margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>' +
       '</div>' +
+      // Las notas van DESPUÉS del motivo y antes de la fecha: el motivo es de
+      // catálogo y sirve para contar; esto es lo que no cabe en una etiqueta.
+      '<div class="auto-field">' +
+        '<label class="auto-label" for="close-nota">Notas <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted2)">(opcional)</span></label>' +
+        '<textarea class="auto-input" id="close-nota" rows="3" ' +
+          'placeholder="' + (won
+            ? 'Cerró con el descuento del 5%. Pide factura a nombre de la empresa y entrega la primera semana de octubre.'
+            : 'Se fue con la competencia por precio. Vuelve a buscar en enero, cuando le renueven el presupuesto.') +
+          '"></textarea>' +
+      '</div>' +
       '<div class="auto-field"><label class="auto-label">Fecha de cierre</label>' +
         '<input class="auto-input" id="close-date" type="date" value="' + today + '"></div>' +
       '<div id="close-msg" style="font-size:12px;color:#B91C1C"></div>' +
@@ -20257,9 +20267,40 @@ async function closeConfirm() {
     try { localStorage.setItem('crm_last_currency', cur); } catch (e) {}
   }
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+  // La nota va PRIMERO, antes de cerrar. Es lo único de esta ventana que no se
+  // puede rehacer: el motivo está en un catálogo y el importe en la ficha, pero
+  // lo que el asesor acaba de escribir no lo recuerda nadie. Si se guardara al
+  // final y fallara, el negocio quedaría cerrado y la nota perdida sin rastro.
+  // Cerrar se puede reintentar; escribir otra vez lo mismo, no.
+  //
+  // Y se recuerda que ya se guardó: si el cierre falla y el asesor vuelve a
+  // pulsar Confirmar —que es lo que va a hacer—, la nota se guardaría otra vez
+  // y el historial tendría la misma frase repetida.
+  const nota = (document.getElementById('close-nota')?.value || '').trim();
+  if (nota && !_closeCtx.notaGuardada) {
+    try {
+      const rn = await fetchAuth('/api/lead-activities', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lead_id: _closeCtx.leadId, type: 'nota', content: nota,
+          metadata: { al_cerrar: _closeCtx.kind, close_reason: label },
+        }),
+      });
+      if (!rn.ok) throw new Error('HTTP ' + rn.status);
+      _closeCtx.notaGuardada = true;
+    } catch (e) {
+      if (msg) msg.textContent = 'No se pudo guardar la nota, así que no se cerró la oportunidad. Vuelve a intentarlo.';
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirmar'; }
+      return;
+    }
+  }
+
   try {
     const r = await fetchAuth('/api/leads', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (!r.ok) throw new Error('No se pudo guardar el cierre');
+    if (!r.ok) throw new Error(nota
+      ? 'La nota quedó guardada, pero no se pudo cerrar la oportunidad. Vuelve a intentarlo.'
+      : 'No se pudo guardar el cierre');
     // si el motivo se escribió a mano y no existía en el catálogo, se guarda para la próxima
     const list = _closeReasons[_closeCtx.kind] || [];
     if (!list.some(x => (x.label || '').toLowerCase() === label.toLowerCase())) {
@@ -20278,9 +20319,15 @@ async function closeConfirm() {
     }).catch(() => {});
     const idx = crmLeads.findIndex(l => l.id === _closeCtx.leadId);
     if (idx >= 0) Object.assign(crmLeads[idx], payload);
+    // Si la ficha de ese lead está abierta, se refresca su historial: una nota
+    // guardada que no aparece hasta recargar parece una nota perdida.
+    const eraLead = _closeCtx.leadId;
     document.getElementById('close-modal')?.remove();
     _closeCtx = null;
     crmRender();
+    if (nota && typeof crmDetailLead !== 'undefined' && crmDetailLead && crmDetailLead.id === eraLead) {
+      try { await crmTraerActividades(eraLead); lfPintar(); } catch (e) {}
+    }
     if (typeof showToast === 'function') showToast(payload.stage === 'ganado' ? '🎉 Oportunidad ganada' : 'Oportunidad marcada como perdida', 'success');
   } catch (e) {
     if (msg) msg.textContent = e.message;

@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-25-nota-al-cerrar",
+      "fecha": "2026-09-25",
+      "tipo": "nuevo",
+      "titulo": "Ahora puedes dejar notas al cerrar una oportunidad",
+      "texto": "Al marcar un negocio como ganado o perdido aparece un campo de notas, opcional, donde el asesor escribe lo que no cabe en el motivo: con qué descuento cerró, a nombre de quién va la factura, o por qué se fue con la competencia y cuándo vuelve a buscar. La nota queda en el historial del contacto, así que la ve cualquiera que abra su ficha. Se guarda antes de cerrar el negocio: si algo falla, no se pierde lo que acabas de escribir."
+    },
+    {
       "id": "2026-09-25-submenus-color",
       "fecha": "2026-09-25",
       "tipo": "mejora",
