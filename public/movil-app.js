@@ -894,6 +894,10 @@ function FICHA_MODULO(id){
 // Los ids que tienen fuente propia en la API. Los que no están aquí lo dicen,
 // en vez de enseñar los ejemplos como si fueran de la cuenta.
 var MODULOS_API_IDS = { chatbots:1, campanas:1, listas:1, autos:1, fuentes:1, props:1, reservas:1 };
+// Pintores propios que SÍ trabajan con datos reales: los sacan de lo que ya
+// está en memoria, sin pedir nada. Los que no estén aquí lo dicen en vez de
+// enseñar ejemplos.
+var PINTORES_REALES = { analisis:1, clientes:1 };
 
 // «No hay nada» dicho con las palabras de cada módulo: un «sin resultados»
 // genérico no distingue una cuenta nueva de una pantalla rota.
@@ -920,13 +924,13 @@ function abrirModulo(id){
     // embudos, notas de NPS y posiciones de SEO inventadas. Mientras no
     // tengan su fuente, se dice — que es lo que hay que hacer siempre que
     // no se puede enseñar lo de verdad.
-    var cuerpo = (MODO === 'real')
-      ? '<div class="vacio">Esta pantalla todavía no trae tus datos.<br>'
-        + 'Por ahora se consulta desde el computador.</div>'
-      : PINTORES[id]();
+    var cuerpo = (MODO !== 'real' || PINTORES_REALES[id])
+      ? PINTORES[id]()
+      : '<div class="vacio">Esta pantalla todavía no trae tus datos.<br>'
+        + 'Por ahora se consulta desde el computador.</div>';
     hp.innerHTML = '<div class="cab"><button class="volver" onclick="M.cerrarModulo()">'+icn('arrow',24)+'</button>'
       + '<div><h1>'+esc(t[0])+'</h1><div class="sub">'
-      + esc(MODO === 'real' ? '' : t[1]) + '</div></div></div>'
+      + esc(subtituloModulo(id, t[1])) + '</div></div></div>'
       + cuerpo;
     movilRaiz().appendChild(hp);
     history.pushState({hoja:1},'');
@@ -1261,6 +1265,22 @@ async function elegirCliente(id){
   cargarReales();
 }
 
+// El subtítulo de estas pantallas venía escrito a mano y AFIRMABA cosas:
+// «Últimos 30 días» en un embudo que no filtra por fecha, «3 clientes» en una
+// cartera de cualquier tamaño. Una cabecera que afirma un número tiene que
+// contarlo, y si no puede contarlo se calla.
+function subtituloModulo(id, deEjemplo){
+  if (MODO !== 'real') return deEjemplo || '';
+  if (id === 'analisis') {
+    return pipelineActual ? nombreTablero() : 'Todos los tableros';
+  }
+  if (id === 'clientes') {
+    var n = clientesDeLaWeb().length;
+    return n === 1 ? '1 cliente' : n + ' clientes';
+  }
+  return '';
+}
+
 function reintentarModulo(id){
   delete MODULO_CACHE[id];
   var M = FICHA_MODULO(id);
@@ -1299,24 +1319,11 @@ MODULOS.push(
   {id:'ajustes',  nom:'Configuración',sub:'Cuenta, equipo y plan',    icono:'gear',     grupo:'Cuenta'}
 );
 
-var EMBUDO = [
-  {e:'Nuevo',       n:190, clase:''},
-  {e:'Contactado',  n:74,  clase:''},
-  {e:'Calificado',  n:61,  clase:''},
-  {e:'Propuesta',   n:22,  clase:''},
-  {e:'Ganado',      n:17,  clase:'ganada'},
-  {e:'Perdido',     n:209, clase:'perdida'}
-];
 var NPS_DATOS = {valor:42, promotores:11, neutros:5, detractores:3, respuestas:19};
 var APERTURAS = [
   {nom:'Arriendos Envigado · septiembre', ab:41, sub:'1.240 enviados · 508 abiertos'},
   {nom:'Recordatorio de visitas',         ab:64, sub:'86 enviados · 55 abiertos'},
   {nom:'Novedades de agosto',             ab:28, sub:'1.190 enviados · 333 abiertos'}
-];
-var CARTERA = [
-  {nom:'Certain & Pezzano', sub:'Inmobiliaria · 328 leads · 9 del equipo', est:'activa'},
-  {nom:'Forest Living',     sub:'Inmobiliaria · sin actividad 30 días',    est:'pausada'},
-  {nom:'Iluminata',         sub:'Retail · 12 leads este mes',              est:'activa'}
 ];
 var PARRILLA = [
   {t:'3 razones para arrendar en Envigado antes de fin de año', s:'Instagram · jueves 24, 18:00 · programado'},
@@ -1339,22 +1346,56 @@ var ACADEMIA = [
 // convertiría en tablas encogidas, que es justo lo que no queremos.
 var PINTORES = {
   analisis: function(){
-    var tope = Math.max.apply(null, EMBUDO.map(function(x){ return x.n; }));
+    // Se calcula de los leads que YA están en memoria: ni una petición más, y
+    // el mismo alcance de cliente y de tablero que la pantalla de CRM. Si
+    // dijera otro número que el CRM de al lado, no se podría creer a ninguno.
+    if (LEADS === null) return '<div class="vacio">No se pudieron traer tus contactos.</div>';
+    var ls = LEADS.filter(function(l){ return !pipelineActual || l.pipeline === pipelineActual; });
+    if (!ls.length) return '<div class="vacio">Todavía no hay contactos en este tablero.</div>';
+
+    // Las etapas que de VERDAD tiene esta cuenta, en el orden del catálogo y
+    // con las propias al final. Una etapa que el cliente inventó no puede
+    // desaparecer del informe solo por no estar en nuestra lista.
+    var cuenta = {};
+    ls.forEach(function(l){ cuenta[l.etapa] = (cuenta[l.etapa] || 0) + 1; });
+    var orden = ETAPAS.map(function(e){ return e.k; });
+    var claves = Object.keys(cuenta).sort(function(a, b){
+      var ia = orden.indexOf(a), ib = orden.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    var filas = claves.map(function(k){
+      var t = k; for (var i=0;i<ETAPAS.length;i++) if (ETAPAS[i].k === k) t = ETAPAS[i].t;
+      return { e: t, n: cuenta[k], clase: k === 'ganado' ? 'ganada' : k === 'perdido' ? 'perdida' : '' };
+    });
+    var tope = Math.max.apply(null, filas.map(function(x){ return x.n; }));
+
+    var ganados = cuenta['ganado'] || 0;
+    var perdidos = cuenta['perdido'] || 0;
+    var sinContactar = cuenta['nuevo'] || 0;
+    // El porcentaje se mide sobre lo CERRADO, no sobre el total: contar los
+    // abiertos como fracasos hace que toda cuenta joven parezca un desastre.
+    var cerrados = ganados + perdidos;
+    var tasa = cerrados ? Math.round(ganados / cerrados * 100) : null;
+
     return '<div class="cifras" style="padding-top:14px">'
-      + '<div class="cifra"><b>573</b><span>leads en total</span></div>'
-      + '<div class="cifra"><b>3%</b><span>se ganan</span></div>'
-      + '<div class="cifra urge"><b>190</b><span>sin contactar</span></div></div>'
+      + '<div class="cifra"><b>'+ls.length+'</b><span>contactos</span></div>'
+      + '<div class="cifra"><b>'+(tasa === null ? '—' : tasa + '%')+'</b><span>'
+        + (tasa === null ? 'nada cerrado aún' : 'de lo cerrado se gana')+'</span></div>'
+      + '<div class="cifra'+(sinContactar ? ' urge' : '')+'"><b>'+sinContactar+'</b><span>sin contactar</span></div></div>'
       + '<div class="secc"><h2>Embudo</h2></div><div class="embudo">'
-      + EMBUDO.map(function(x){
+      + filas.map(function(x){
           return '<div class="etapa-f '+x.clase+'"><div class="ef"><b>'+esc(x.e)+'</b>'
             + '<span>'+x.n+'</span></div>'
             + '<div class="eb"><i style="width:'+Math.round(x.n/tope*100)+'%"></i></div></div>';
         }).join('')
       + '</div>'
-      // El dato incómodo se dice, no se esconde: es la única razón de mirar
-      // un informe.
-      + '<div class="aviso" style="background:#FFF3E0;color:#B26A00">Se pierden más leads de los que se ganan, '
-      + 'y el cuello está en el primer contacto: 190 esperan a que alguien los llame.</div>';
+      // El dato incómodo se dice, pero SOLO si es cierto. Antes estaba escrito
+      // a mano y acusaba de un cuello de botella a cuentas que no lo tenían.
+      + (sinContactar > ganados && sinContactar > 0
+          ? '<div class="aviso" style="background:#FFF3E0;color:#B26A00">El cuello está en el primer contacto: '
+            + sinContactar + (sinContactar === 1 ? ' contacto espera' : ' contactos esperan')
+            + ' a que alguien los llame.</div>'
+          : '');
   },
   nps: function(){
     var d = NPS_DATOS, tot = d.promotores + d.neutros + d.detractores;
@@ -1383,10 +1424,22 @@ var PINTORES = {
     }).join('') + '</div>';
   },
   clientes: function(){
-    return '<div class="lista">' + CARTERA.map(function(x){
-      return '<button class="item" onclick="M.toque()"><span class="cuerpo">'
-        + '<span class="it">'+esc(x.nom)+'</span><span class="is">'+esc(x.sub)+'</span>'
-        + '<span class="estado-chip '+x.est+'">'+esc(x.est)+'</span></span></button>';
+    // La cartera que ya cargó la aplicación. NO se inventan contadores por
+    // cliente: los leads en memoria son solo los del cliente activo, así que
+    // cualquier número al lado de los demás sería un número sacado del aire.
+    var cs = clientesDeLaWeb();
+    if (!cs.length) return '<div class="vacio">Todavía no tienes clientes en tu cartera.<br>'
+      + 'Se agregan desde el computador.</div>';
+    var act = alcanceCliente();
+    return '<div class="lista">' + cs.map(function(c){
+      var nom = c.client_name || c.name || 'Sin nombre';
+      var sub = c.client_industry || c.industria || c.business || 'Sin industria';
+      var activo = String(c.id) === String(act);
+      return '<button class="item" onclick="M.elegirCliente(\''+esc(String(c.id))+'\')">'
+        + '<span class="cuerpo"><span class="it">'+esc(nom)+'</span>'
+        + '<span class="is">'+esc(sub)+'</span>'
+        + (activo ? '<span class="estado-chip activa">viendo ahora</span>' : '')
+        + '</span></button>';
     }).join('') + '</div>';
   },
   studio: function(){
@@ -1419,7 +1472,7 @@ var PINTORES = {
   }
 };
 var TITULOS = {
-  analisis:['Análisis','Últimos 30 días'], nps:['Satisfacción','19 respuestas'],
+  analisis:['Análisis','Todos los tableros'], nps:['Satisfacción','19 respuestas'],
   aperturas:['Aperturas','3 campañas'], clientes:['Panel de clientes','3 clientes'],
   studio:['Social Studio','3 publicaciones esta semana'], seo:['Proyecto SEO','4 palabras vigiladas'],
   academia:['Academia','3 cursos']

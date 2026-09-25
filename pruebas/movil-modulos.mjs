@@ -179,6 +179,152 @@ console.log('\nLos ejemplos no se cuelan en una cuenta real\n');
       /todavía no trae tus datos/i.test(fn), fn.slice(-200));
 }
 
+console.log('\nUna cabecera que afirma un número tiene que contarlo\n');
+{
+  const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+  const codigo = guion.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  // El subtítulo decía «Últimos 30 días» sobre un embudo que no filtra por
+  // fecha, y «3 clientes» sobre una cartera de cualquier tamaño. Nadie lo mira
+  // dos veces, y por eso una cabecera es el mejor sitio para una mentira.
+  chk('el subtítulo pasa por una función, no por la lista fija',
+      /esc\(subtituloModulo\(id, t\[1\]\)\)/.test(codigo));
+  const i = codigo.indexOf('function subtituloModulo');
+  const fn = codigo.slice(i, codigo.indexOf('\n}', i));
+  chk('en modo real no usa el texto de ejemplo', /MODO !== 'real'/.test(fn));
+  chk('el del embudo no promete un plazo que no filtra', !/30 días/.test(fn));
+  // Lo que no se puede contar se calla, en vez de arrastrar el número viejo.
+  chk('lo que no sabe contar queda en blanco', /return '';\n\}/.test(codigo.slice(i)));
+  chk('y ya no queda el plazo falso en el catálogo', !/Últimos 30 días/.test(codigo));
+}
+
+console.log('\nEl embudo, ejecutado con leads de verdad\n');
+{
+  // Mirar el código no basta: un cálculo puede existir y dar el número
+  // equivocado. Aquí se EJECUTA el pintor contra leads inventados por la
+  // prueba y se comprueban las cifras una a una.
+  const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+  const CIERRE = '})();';
+  const conAsidero = guion.trimEnd().slice(0, -CIERRE.length) + `
+    window.__pintar = function(leads, tablero){
+      LEADS = leads; pipelineActual = tablero || null; MODO = 'real';
+      return PINTORES.analisis();
+    };
+    window.__sub = function(id, clientes, tablero){
+      MODO = 'real';
+      // A pelo, no por window: clientesDeLaWeb() lee el nombre suelto, y en este
+      // banco window es un PARÁMETRO, no el objeto global. Ponerlo ahí no lo
+      // hace visible: es la misma trampa del let que ya nos costó una.
+      globalThis.agencyClients = clientes || [];
+      pipelineActual = tablero || null;
+      PIPELINES = tablero ? [{ id: tablero, nom: 'Arriendo' }] : null;
+      return subtituloModulo(id, 'TEXTO DE EJEMPLO');
+    };
+  ` + CIERRE;
+  const g = { addEventListener(){}, matchMedia: () => ({matches:true}) };
+  const el = () => ({ innerHTML:'', className:'', id:'', style:{}, dataset:{}, hidden:false,
+    classList:{add(){},remove(){},toggle(){},contains(){return false}},
+    setAttribute(){}, appendChild(){}, remove(){}, addEventListener(){},
+    querySelector:()=>el(), querySelectorAll:()=>[], getBoundingClientRect:()=>({width:0}) });
+  const ent = { window: new Proxy(g,{has:()=>true,get:(t,k)=>t[k],set:(t,k,v)=>(t[k]=v,true)}),
+    document:{querySelector:()=>el(),querySelectorAll:()=>[],getElementById:()=>el(),
+      createElement:()=>el(),addEventListener(){},body:el(),head:el(),readyState:'complete'},
+    navigator:{}, history:{pushState(){}}, setTimeout:()=>1, clearTimeout:()=>{},
+    setInterval:()=>1, console:{warn(){},error(){},log(){}} };
+  const nombres = Object.keys(ent);
+  new Function(...nombres, conAsidero)(...nombres.map((n) => ent[n]));
+
+  const L = (etapa, pipeline) => ({ id: Math.random(), etapa, pipeline: pipeline || 'p1', tags: [] });
+  const html = g.__pintar([
+    L('nuevo'), L('nuevo'), L('nuevo'),
+    L('contactado'),
+    L('ganado'),
+    L('perdido'), L('perdido'), L('perdido'),
+  ]);
+  chk('cuenta todos los contactos', /<b>8<\/b><span>contactos<\/span>/.test(html), html.slice(0, 200));
+  // 1 ganado de 4 cerrados = 25%. Sobre el total serían 12%, que es el número
+  // que hace parecer un desastre a una cuenta que apenas empieza.
+  chk('la tasa es sobre lo cerrado: 1 de 4 = 25%', /<b>25%<\/b>/.test(html), html.slice(0, 300));
+  chk('los sin contactar son los de etapa nuevo', /<b>3<\/b><span>sin contactar<\/span>/.test(html));
+  chk('y como son más que los ganados, sale el aviso', /El cuello está en el primer contacto: 3 contactos/.test(html));
+
+  // Una cuenta joven: nada cerrado todavía.
+  const joven = g.__pintar([L('nuevo'), L('contactado')]);
+  chk('sin nada cerrado se pinta — y no 0%', /<b>—<\/b>/.test(joven), joven.slice(0, 260));
+  chk('y lo explica', /nada cerrado aún/.test(joven));
+
+  // Una cuenta sana: no se le acusa de un cuello que no tiene.
+  const sana = g.__pintar([L('ganado'), L('ganado'), L('nuevo')]);
+  chk('a una cuenta sana no se le inventa un cuello de botella',
+      !/El cuello está/.test(sana));
+
+  // El alcance: si el informe contara los de otro tablero, diría un número
+  // distinto que el CRM de al lado.
+  const dos = [L('nuevo','p1'), L('nuevo','p1'), L('ganado','p2')];
+  chk('con un tablero elegido solo cuenta los suyos',
+      /<b>2<\/b><span>contactos<\/span>/.test(g.__pintar(dos, 'p1')));
+  chk('y sin tablero los cuenta todos',
+      /<b>3<\/b><span>contactos<\/span>/.test(g.__pintar(dos, null)));
+
+  // Una etapa que no está en nuestro catálogo no puede desaparecer.
+  const rara = g.__pintar([L('nuevo'), L('en-veremos'), L('en-veremos')]);
+  chk('una etapa propia de la cuenta aparece en el embudo', /en-veremos/.test(rara), rara.slice(0, 400));
+
+  chk('sin leads lo dice, no pinta un embudo vacío',
+      /Todavía no hay contactos/.test(g.__pintar([])));
+  chk('y null es «no se pudo traer»',
+      /No se pudieron traer/.test(g.__pintar(null)));
+
+  // Los subtítulos, contados de verdad. Mirar que la línea del conteo exista
+  // no basta: se puede dejar la línea y devolver otra cosa —lo comprobé—.
+  const C = (n) => Array.from({ length: n }, (_, i) => ({ id: 'c' + i, name: 'Cliente ' + i }));
+  chk('la cartera cuenta los clientes que hay', g.__sub('clientes', C(2)) === '2 clientes', g.__sub('clientes', C(2)));
+  chk('y con uno lo dice en singular', g.__sub('clientes', C(1)) === '1 cliente', g.__sub('clientes', C(1)));
+  chk('sin clientes dice cero, no un número viejo', g.__sub('clientes', C(0)) === '0 clientes', g.__sub('clientes', C(0)));
+  chk('el embudo dice el tablero que estás viendo',
+      g.__sub('analisis', C(0), 'p1') === 'Arriendo', g.__sub('analisis', C(0), 'p1'));
+  chk('y sin tablero elegido lo dice también',
+      g.__sub('analisis', C(0), null) === 'Todos los tableros', g.__sub('analisis', C(0), null));
+  // Una pantalla que no sabe contar se calla, en vez de arrastrar el ejemplo.
+  chk('la que no sabe contar no enseña el texto de ejemplo',
+      g.__sub('seo', C(0)) === '', g.__sub('seo', C(0)));
+}
+
+console.log('\nEl embudo y la cartera salen de datos, no de una lista fija\n');
+{
+  const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+  const codigo = guion.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  // Antes el informe decía 573 leads, 3% y 190 sin contactar a CUALQUIER
+  // cuenta, y remataba acusando de un cuello de botella que quizá no tenía.
+  chk('las listas de ejemplo del informe ya no existen',
+      !/var EMBUDO = \[/.test(codigo) && !/var CARTERA = \[/.test(codigo));
+  const i = codigo.indexOf('analisis: function');
+  const fn = codigo.slice(i, codigo.indexOf('\n  },', i));
+  chk('el embudo se calcula de LEADS', /LEADS\.filter/.test(fn), fn.slice(0, 100));
+  // Mismo alcance que la pantalla de CRM: si dijera otro número que el CRM de
+  // al lado, no se podría creer a ninguno de los dos.
+  chk('y respeta el tablero elegido', /!pipelineActual \|\| l\.pipeline === pipelineActual/.test(fn));
+  chk('null es «no se pudo», no cero', /LEADS === null/.test(fn));
+  // Contar los negocios ABIERTOS como fracasos hace que toda cuenta joven
+  // parezca un desastre.
+  chk('la tasa se mide sobre lo cerrado, no sobre el total',
+      /var cerrados = ganados \+ perdidos/.test(fn) && /ganados \/ cerrados/.test(fn));
+  chk('sin nada cerrado no inventa un porcentaje', /tasa === null/.test(fn));
+  // Una etapa que el cliente inventó no puede desaparecer del informe.
+  chk('las etapas propias de la cuenta también salen', /Object\.keys\(cuenta\)/.test(fn));
+  // El aviso incómodo solo si es cierto.
+  chk('el aviso del cuello de botella es condicional',
+      /sinContactar > ganados && sinContactar > 0/.test(fn));
+
+  const j = codigo.indexOf('clientes: function');
+  const fc = codigo.slice(j, codigo.indexOf('\n  },', j));
+  chk('la cartera sale de la lista real', /clientesDeLaWeb\(\)/.test(fc));
+  // Los leads en memoria son solo los del cliente ACTIVO: un contador al lado
+  // de los demás sería un número sacado del aire.
+  chk('y NO inventa contadores por cliente', !/leads|LEADS/.test(fc), 'cuenta leads que no tiene');
+  chk('se ve cuál estás mirando', /viendo ahora/.test(fc));
+  chk('y tocar otro cambia de cliente', /M\.elegirCliente/.test(fc));
+}
+
 console.log('\nLos módulos con pintor propio tampoco enseñan ejemplos\n');
 {
   const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
@@ -188,10 +334,23 @@ console.log('\nLos módulos con pintor propio tampoco enseñan ejemplos\n');
   // posiciones de SEO inventadas. Siete pantallas más diciendo lo que no es.
   const i = codigo.indexOf('if (!M && PINTORES[id])');
   const rama = i < 0 ? '' : codigo.slice(i, codigo.indexOf('return;', i));
+  // La forma de la condición cambió —ahora hay pintores que SÍ traen datos—,
+  // pero lo que no puede faltar es que la rama mire el modo antes de pintar.
   chk('la rama de pintor propio mira el modo antes de pintar',
-      /MODO === 'real'/.test(rama), rama.slice(0, 120));
-  chk('y en modo real NO llama al pintor de ejemplos',
-      rama.indexOf("MODO === 'real'") < rama.indexOf('PINTORES[id]()'), 'el ejemplo se pinta antes de comprobar');
+      /\bMODO\b/.test(rama), rama.slice(0, 120));
+  // Ya no vale «en modo real no se pinta ninguno»: `analisis` y `clientes`
+  // trabajan con datos de verdad. Lo que sigue sin poder pasar es que se pinte
+  // uno que NO los tiene.
+  chk('en modo real solo se pintan los que traen datos reales',
+      /PINTORES_REALES\[id\]/.test(rama), rama.slice(0, 160));
+  const reales = (codigo.match(/var PINTORES_REALES = \{([^}]*)\}/) || [, ''])[1].match(/[a-z]+(?=:)/g) || [];
+  chk('y la lista de los que sí los traen no está vacía', reales.length > 0, reales.join(','));
+  // Cada uno de esa lista tiene que existir como pintor, o la puerta dejaría
+  // pasar un nombre que no pinta nada.
+  const pintores = ((codigo.match(/var PINTORES = \{[\s\S]*?\n\};/) || [''])[0]
+    .match(/^  ([a-z]+): function/gm) || []).map((x) => x.trim().split(':')[0]);
+  const fantasma = reales.filter((r) => !pintores.includes(r));
+  chk('todos los marcados como reales existen', fantasma.length === 0, fantasma.join(','));
 }
 
 console.log('\nNingún botón vibra y ya\n');
