@@ -114,5 +114,56 @@ console.log('\nLa pantalla distingue los tres casos\n');
   chk('no se pinta sobre otro contacto', /leadAbierto\.id === quien/.test(codigo));
 }
 
+console.log('\nEl hilo de una conversación se lee entero\n');
+{
+  const { cargarHilo } = await import('../public/movil-datos.js');
+  const ok = (o) => ({ ok: true, json: async () => o });
+
+  // El móvil enseñaba UN mensaje —el último— porque buscaba el hilo en una
+  // lista de ejemplo con ids inventados, y con un id de verdad no casaba
+  // nunca. Enviar ya funcionaba: se respondía a ciegas.
+  const h = await cargarHilo(async () => ok({
+    messages: [
+      { role: 'user', content: 'Hola', created_at: '2026-09-25T10:00:00Z' },
+      { role: 'assistant', content: 'Buenas', created_at: '2026-09-25T10:05:00Z' },
+    ],
+    notas: [{ texto: 'Ojo con este', author_name: 'Marilia', created_at: '2026-09-25T10:02:00Z' }],
+  }), 'c1');
+  chk('llegan todos los mensajes, no solo el último', h.length === 3, String(h.length));
+  // Una nota escrita ENTRE dos mensajes explica justo lo que pasó ahí; puesta
+  // al final no se entiende.
+  chk('la nota interna queda en su momento del hilo',
+      h.map((x) => x.de).join(',') === 'ellos,nota,nos', h.map((x) => x.de).join(','));
+  chk('«user» es el contacto y el resto somos nosotros',
+      h[0].de === 'ellos' && h[2].de === 'nos');
+  chk('y la nota dice quién la escribió', h[1].autor === 'Marilia');
+
+  chk('si falla viene null, no un hilo vacío',
+      (await cargarHilo(async () => ({ ok: false, json: async () => ({}) }), 'c1')) === null);
+  // Un 200 con otra forma —el catch-all devuelve el shell— no puede leerse
+  // como una conversación sin mensajes.
+  chk('una respuesta con otra forma también es null',
+      (await cargarHilo(async () => ok({ otra: 1 }), 'c1')) === null);
+  chk('y sin red no lanza',
+      (await cargarHilo(async () => { throw new Error('x'); }, 'c1')) === null);
+  chk('una conversación de verdad vacía sí es una lista',
+      Array.isArray(await cargarHilo(async () => ok({ messages: [] }), 'c1')));
+
+  // Y la pantalla
+  chk('el hilo se pide al abrir', /pedirHilo\(c\);/.test(codigo));
+  chk('con sesión no se usa la lista de ejemplo',
+      /\(MODO === 'real'\) \? null : \(MENSAJES\[id\]/.test(codigo), 'sigue mirando MENSAJES');
+  const ph = codigo.slice(codigo.indexOf('function pedirHilo'), codigo.indexOf('\n}', codigo.indexOf('function pedirHilo')));
+  chk('no se pinta sobre otra conversación',
+      /convAbierta\.id\) !== String\(quien\)/.test(ph), ph.slice(0, 200));
+  chk('mientras llega lo dice', /Trayendo la conversación/.test(codigo));
+  chk('si no se pudo, lo dice', /No se pudo traer la conversación/.test(codigo));
+  chk('y una vacía de verdad también', /Todavía no hay mensajes/.test(codigo));
+  // Lo enviado se pinta al instante, pero es una copia optimista: el servidor
+  // puede darle otra hora o meter algo en medio.
+  chk('tras enviar se vuelve a pedir',
+      /toque\(\);[\s\S]{0,200}pedirHilo\(c\);/.test(codigo));
+}
+
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');
 process.exit(fallos ? 1 : 0);

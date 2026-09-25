@@ -400,6 +400,43 @@ export async function cargarModulo(fetchAuth, id, { clientId } = {}) {
   } catch { return null; }
 }
 
+// ── El hilo de una conversación ─────────────────────────────────────────────
+// El móvil enseñaba UN mensaje —el último— porque buscaba el hilo en una lista
+// de ejemplo con ids inventados, y con un id de verdad nunca casaba. Enviar ya
+// funcionaba, así que se respondía a ciegas.
+
+/**
+ * Los mensajes y las notas internas, mezclados en orden. Vienen por separado
+ * del servidor y se leen juntos: una nota escrita entre dos mensajes explica
+ * justo lo que pasó ahí, y puesta al final no se entiende.
+ */
+export async function cargarHilo(fetchAuth, convId) {
+  try {
+    const r = await fetchAuth('/api/chat-conversations?messages=' + encodeURIComponent(convId));
+    if (!r || !r.ok) return null;
+    const d = await r.json();
+    if (!Array.isArray(d.messages)) return null;
+    const hora = (t) => t
+      ? new Date(t).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+      : '';
+    const items = (d.messages || []).map((m) => ({
+      // 'user' es el contacto; todo lo demás sale de nuestro lado, sea el
+      // agente o una persona. Al que lee le da igual quién de los dos.
+      de: m.role === 'user' ? 'ellos' : 'nos',
+      t: String(m.content || ''),
+      h: hora(m.created_at),
+      marca: Date.parse(m.created_at) || 0,
+    })).concat((d.notas || []).map((n) => ({
+      de: 'nota',
+      t: String(n.texto || ''),
+      autor: n.author_name || 'Tu equipo',
+      h: hora(n.created_at),
+      marca: Date.parse(n.created_at) || 0,
+    })));
+    return items.sort((a, b) => a.marca - b.marca);
+  } catch { return null; }
+}
+
 // ── La ficha de un contacto ─────────────────────────────────────────────────
 // Las pestañas «Qué ha pasado» y «Qué falta» estaban ESCRITAS A MANO, y encima
 // metían el nombre real del contacto en hechos falsos: «Llamar a Isla Chen ·

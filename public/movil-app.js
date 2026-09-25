@@ -585,7 +585,11 @@ function abrirConv(id){
   for (var i=0;i<CONVS.length;i++) if (String(CONVS[i].id) === String(id)) c = CONVS[i];
   if (!c) return;
   convAbierta = c; c.nolei = 0;
-  var ms = MENSAJES[id] || [{de:'ellos', t:c.prev, h:c.cuando}];
+  // Con sesión, el hilo se pide; sin ella se usa el de ejemplo para poder
+  // revisar el diseño. Antes se buscaba SIEMPRE en la lista de ejemplo, y con
+  // un id de verdad no casaba nunca: se veía un solo mensaje —el último— y se
+  // respondía a ciegas.
+  var ms = (MODO === 'real') ? null : (MENSAJES[id] || [{de:'ellos', t:c.prev, h:c.cuando}]);
   // La ventana de 24 h es de WhatsApp, Messenger e Instagram. El chat de la
   // web no la tiene: avisar ahí de algo que no aplica enseña a ignorar avisos.
   var tieneVentana = ['whatsapp','messenger','instagram'].indexOf(c.canal) >= 0;
@@ -605,11 +609,7 @@ function abrirConv(id){
          + '</div>'
        : '')
     + '<div class="hilo" style="padding-bottom:150px">'
-      + ms.map(function(m){
-          if (m.de==='nota') return '<div class="nota-int"><b>Nota interna · solo la ve el equipo</b>'+esc(m.t)+'</div>';
-          return '<div class="burbuja '+(m.de==='nos'?'mia':'suya')+'">'+esc(m.t)
-               + '<span class="h">'+esc(m.h)+'</span></div>';
-        }).join('')
+      + (ms === null ? '<div class="vacio">Trayendo la conversación…</div>' : burbujas(ms))
     + '</div>'
     + '<div class="compositor">'
       + '<div class="modo">'
@@ -630,7 +630,42 @@ function abrirConv(id){
   pintarConvs();
   var hilo = h.querySelector('.hilo');
   if (hilo) h.scrollTop = h.scrollHeight;
+  pedirHilo(c);
 }
+// Las burbujas del hilo, en un sitio: las pinta el primer dibujado y también
+// el repintado cuando llegan los mensajes de verdad.
+function burbujas(ms){
+  if (!ms.length) return '<div class="vacio">Todavía no hay mensajes en esta conversación.</div>';
+  return ms.map(function(m){
+    if (m.de === 'nota') {
+      return '<div class="nota-int"><b>Nota interna · '+esc(m.autor || 'tu equipo')+'</b>'+esc(m.t)+'</div>';
+    }
+    return '<div class="burbuja '+(m.de==='nos'?'mia':'suya')+'">'+esc(m.t)
+         + '<span class="h">'+esc(m.h)+'</span></div>';
+  }).join('');
+}
+
+// Se pide al abrir. Si la conversación se cierra —o se abre otra— mientras los
+// mensajes viajan, no se pintan encima de la que esté delante.
+function pedirHilo(conv){
+  if (MODO !== 'real' || typeof fetchAuth !== 'function') return;
+  var quien = conv.id;
+  (async function(){
+    var ms = null;
+    try {
+      var mod = TRADUCTOR || await import('./movil-datos.js');
+      TRADUCTOR = mod;
+      ms = await mod.cargarHilo(fetchAuth, quien);
+    } catch (e) { console.warn('[movil] hilo', e); }
+    var hilo = $('#hoja-conv .hilo');
+    if (!hilo || !convAbierta || String(convAbierta.id) !== String(quien)) return;
+    hilo.innerHTML = ms === null
+      ? '<div class="vacio">No se pudo traer la conversación.</div>'
+      : burbujas(ms);
+    var h = $('#hoja-conv'); if (h) h.scrollTop = h.scrollHeight;
+  })();
+}
+
 function cerrarConv(){
   var h = $('#hoja-conv'); if (!h) return;
   h.classList.add('saliendo');
@@ -676,6 +711,9 @@ async function enviarMsg(){
   ta.value = '';
   toque();
   var h = $('#hoja-conv'); if (h) h.scrollTop = h.scrollHeight;
+  // Y se vuelve a pedir: lo que se acaba de pintar es una copia optimista, y
+  // el servidor puede haberle puesto otra hora o haber metido algo en medio.
+  pedirHilo(c);
 }
 function abrirPlantillas(){
   abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Plantillas aprobadas</div>'
