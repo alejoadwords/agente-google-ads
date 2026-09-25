@@ -25,7 +25,12 @@ globalThis.esc = (t) => String(t == null ? '' : t)
 globalThis.crmDetailLead = { id: 'l1' };
 globalThis.puedoGestionar = () => true;
 
-const codigo = trozo('const lfEsCita = ', 'async function crmCargarTareasLead') +
+// `crmFechaLocal` se trae de app.js, no se simula: la línea que decide si una
+// tarea está vencida compara DÍA contra día, y una versión de mentira dejaría
+// de probar justo eso. Faltaba, y la prueba llevaba en rojo desde que el
+// pintado pasó a usarla.
+const codigo = trozo('function crmFechaLocal(d)', '\nfunction crmDiaDe') +
+  trozo('const lfEsCita = ', 'async function crmCargarTareasLead') +
   trozo('function crmPintarTareasLead()', '\nasync function crmTareaHecha');
 globalThis._crmTareasFallo = false;
 const crmPintarTareasLead = new Function(codigo + '\nreturn crmPintarTareasLead;')();

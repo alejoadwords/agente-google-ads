@@ -1039,6 +1039,17 @@ textarea.seop-input{resize:vertical;min-height:70px}
    Leads se queda: ese lleva al CRM, que es justo a donde queremos llevar. */
 body.sin-agentes .agency-agent-btn:not(.leads){display:none}
 
+/* La barra de pestañas se quedó vacía: las píldoras de vista se mudaron al
+   submenú del sidebar (ver navApplyModule) y su único hijo restante es el chip
+   del agente, que con los agentes apagados no se muestra. Eran 41 px muertos
+   —40 de alto más el borde— en TODAS las pantallas, encima del contenido.
+   Va por clase y no borrando el div: reencender los agentes devuelve la barra
+   con su chip, sin tocar nada más. */
+body.sin-agentes .nav{display:none}
+/* Las columnas del tablero restaban esos 41 px al alto de la ventana. Sin la
+   barra sobran, y sin esto el tablero cortaría antes de llegar al borde. */
+body.sin-agentes .crm-col{max-height:calc(100vh - 115px)}
+
 /* ── Filtros de la lista de tareas ──────────────────────────────────────────
    Solo para quien ve el trabajo de todo el equipo. */
 .tar-filtros{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rlg);padding:12px 14px;margin-bottom:18px;max-width:820px}
@@ -3525,7 +3536,11 @@ body.modo-movil{overflow:hidden}
 <!-- Vercel Web Analytics — páginas vistas por ruta (el router SPA reporta cada pushState) -->
 <script defer src="/_vercel/insights/script.js"></script>
 </head>
-<body>
+<!-- La clase nace puesta y el interruptor de más abajo la quita si los agentes
+     vuelven. Antes la ponía `ocultarAgentes()` al estar listo el DOM, y hasta
+     ese momento se pintaba la barra de pestañas vacía: 41 px que aparecían y
+     se iban de un salto en cada carga. -->
+<body class="sin-agentes">
 <!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PX26PNPJ"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
@@ -5511,6 +5526,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <script>
 window.AGENTES_ACTIVOS = false;
 if (window.AGENTES_ACTIVOS) {
+  // El <body> nace con `sin-agentes` para no pintar la barra de pestañas vacía.
+  // Este es el mismo interruptor: si se reenciende, hay que devolverla.
+  document.body.classList.remove('sin-agentes');
   // document.write y no createElement porque estos prompts definen constantes
   // globales que app.js espera ya declaradas: hay que respetar el orden de
   // ejecución del parser, y una inyección asíncrona no lo garantiza.
