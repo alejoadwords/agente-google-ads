@@ -899,9 +899,7 @@ function abrirConv(id){
         + '<button aria-pressed="'+dentro+'" onclick="M.ponerModo(false)"'+(dentro?'':' disabled')+'>Responder</button>'
         + '<button class="es-nota" aria-pressed="'+(!dentro)+'" onclick="M.ponerModo(true)">Nota interna</button></div>'
       + (dentro
-         ? '<div class="rapidas">'+RAPIDAS.map(function(r){
-             return '<button class="rapida" onclick="M.meter(this.textContent)">'+esc(r)+'</button>';
-           }).join('')+'</div>'
+         ? '<div class="rapidas" id="rapidas"></div>'
          : '<button class="bbtn" style="margin:0 0 8px" onclick="M.abrirPlantillas()">Enviar una plantilla aprobada</button>')
       + '<div class="escribir"><textarea id="redactar" rows="1" placeholder="'
         + (dentro ? 'Escribe un mensaje' : 'Nota interna: el cliente no la ve') + '"></textarea>'
@@ -914,6 +912,7 @@ function abrirConv(id){
   var hilo = h.querySelector('.hilo');
   if (hilo) h.scrollTop = h.scrollHeight;
   pedirHilo(c);
+  pedirRapidas();
 }
 // Las burbujas del hilo, en un sitio: las pinta el primer dibujado y también
 // el repintado cuando llegan los mensajes de verdad.
@@ -964,6 +963,64 @@ function ponerModo(esNota){
   if (ta) ta.placeholder = esNota ? 'Nota interna: el cliente no la ve' : 'Escribe un mensaje';
   toque();
 }
+// Lo que se escribe todos los días, a un toque. Eran cuatro frases escritas a
+// mano —«¡Hola! ¿En qué te ayudo?»— iguales para todas las cuentas: las de la
+// cuenta están en la web y en el teléfono no llegaban.
+var RESPUESTAS = null;   // null = todavía no se pidieron
+
+function pintarRapidas(){
+  var caja = $('#rapidas'); if (!caja) return;
+  if (MODO !== 'real') {
+    // Sin sesión se usan las de ejemplo, para poder revisar la pantalla.
+    caja.innerHTML = RAPIDAS.map(function(r){
+      return '<button class="rapida" onclick="M.meter(this.textContent)">'+esc(r)+'</button>';
+    }).join('');
+    return;
+  }
+  // Sin respuestas guardadas NO se ocupa sitio ni se inventan unas genéricas:
+  // la fila vacía quita espacio al teclado, que es lo que importa aquí.
+  if (!RESPUESTAS || !RESPUESTAS.length) { caja.innerHTML = ''; return; }
+  caja.innerHTML = RESPUESTAS.map(function(r){
+    // El título si lo tiene —cabe en un chip— y el texto entero al tocarlo.
+    return '<button class="rapida" onclick="M.usarRapida(\''+esc(String(r.id))+'\')">'
+      + esc(r.titulo || String(r.texto || '').slice(0, 28)) + '</button>';
+  }).join('');
+}
+
+async function pedirRapidas(){
+  if (MODO !== 'real' || typeof fetchAuth !== 'function') { pintarRapidas(); return; }
+  if (RESPUESTAS !== null) { pintarRapidas(); return; }
+  try {
+    var c = alcanceCliente();
+    var r = await fetchAuth('/api/quick-replies' + (c ? '?client_id=' + encodeURIComponent(c) : ''));
+    var d = r && r.ok ? await r.json() : null;
+    RESPUESTAS = (d && Array.isArray(d.respuestas)) ? d.respuestas : [];
+  } catch (e) { RESPUESTAS = []; }
+  pintarRapidas();
+}
+
+function usarRapida(id){
+  var r = null;
+  for (var i=0;i<(RESPUESTAS||[]).length;i++) if (String(RESPUESTAS[i].id) === String(id)) r = RESPUESTAS[i];
+  if (!r) return;
+  var ta = $('#redactar');
+  if (ta) {
+    // Se AÑADE a lo que ya hay, no lo reemplaza: quien escribió media frase y
+    // toca un atajo no espera perder lo escrito.
+    ta.value = ta.value ? ta.value.replace(/\s+$/, '') + '\n' + r.texto : r.texto;
+    ta.focus();
+  }
+  toque();
+  // Contar el uso es de paso: si falla, ni se dice. Lo que importaba —pegar el
+  // texto— ya pasó.
+  try {
+    fetchAuth('/api/quick-replies', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: r.id, usar: true }),
+    }).catch(function(){});
+  } catch (e) {}
+}
+
 function meter(t){ var ta = $('#redactar'); if (ta){ ta.value = t; ta.focus(); } toque(); }
 async function enviarMsg(){
   var ta = $('#redactar'); if (!ta || !ta.value.trim()) return;
@@ -2854,7 +2911,7 @@ function movilMontar(opciones){
     abrirMenu: abrirMenu, abrirAvisos: abrirAvisos, abrirPerfil: abrirPerfil,
     cerrarBarra: cerrarBarra, volverEscritorio: volverEscritorio, cerrarSesion: cerrarSesion,
     abrirClientes: abrirClientes, elegirCliente: elegirCliente,
-    verVideo: verVideo, verPestana: verPestana,
+    verVideo: verVideo, verPestana: verPestana, usarRapida: usarRapida,
     abrirEtiquetas: abrirEtiquetas, ponerEtiqueta: ponerEtiqueta,
     abrirTarea: abrirTarea, cuandoTarea: cuandoTarea, crearTarea: crearTarea,
     abrirCierre: abrirCierre, ponerMotivo: ponerMotivo, guardarCierre: guardarCierre,

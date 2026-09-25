@@ -34,6 +34,7 @@ const conAsidero = fuente.trimEnd().slice(0, -CIERRE.length) + `
     abrirConv: function(c){ convAbierta = c; },
     caja: function(){ return $('#redactar'); },
     ponerCaja: function(el){ CAJA_PRUEBA = el; },
+    pedirRapidas: function(){ return pedirRapidas(); },
   };
 ` + CIERRE;
 
@@ -65,7 +66,7 @@ function montar({ responde = { ok: true, datos: {} } } = {}) {
         contains(c) { return e.classList._c.has(c); },
       },
       setAttribute() {}, appendChild(h) { h.parentNode = e; return h; },
-      remove() { e._quitado = true; }, addEventListener() {},
+      remove() { e._quitado = true; }, addEventListener() {}, focus() {}, blur() {},
       querySelector: (sel) => registro[sel] || elemento(sel),
       querySelectorAll: () => [],
       getBoundingClientRect: () => ({ width: 0 }),
@@ -233,6 +234,70 @@ console.log('\nEl mensaje no se borra de la caja hasta que sale\n');
   chk('si no salió, el texto SIGUE en la caja', caja.value === 'Voy para allá', caja.value);
   chk('y se dice el motivo del servidor',
       e.chicharras.some((x) => /ventana de 24/.test(x.txt)), JSON.stringify(e.chicharras.map((c) => c.txt)));
+}
+
+console.log('\nLas respuestas rápidas son las de la cuenta\n');
+{
+  // Eran cuatro frases escritas a mano —«¡Hola! ¿En qué te ayudo?»— iguales
+  // para todas las cuentas. Las de verdad viven en la web y al teléfono no
+  // llegaban, así que el atajo no ahorraba nada: había que escribirlo todo.
+  const e = montar({ responde: { ok: true, datos: { respuestas: [
+    { id: 'r1', titulo: 'Saludo', texto: 'Hola, ¿en qué te ayudo?' },
+    { id: 'r2', texto: 'Te comparto la ficha del inmueble' },
+  ] } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  const caja = e.plantar('#rapidas');
+  await g.M.abrirConv && 0;
+  g.__pruebas.modoReal();
+  await g.__pruebas.pedirRapidas();
+  await esperar();
+  chk('se piden a la cuenta',
+      e.llamadas.some((x) => x.ruta.startsWith('/api/quick-replies')),
+      e.llamadas.map((x) => x.ruta).join(','));
+  chk('y se pintan las que tiene', /Saludo/.test(caja.innerHTML), caja.innerHTML.slice(0, 120));
+  // Sin título se usa el principio del texto: un chip vacío no se puede tocar.
+  chk('la que no tiene título usa su texto', /Te comparto/.test(caja.innerHTML));
+
+  // Al usarla se AÑADE a lo escrito, no lo reemplaza: quien escribió media
+  // frase y toca un atajo no espera perder lo suyo.
+  const ta = e.plantar('#redactar'); ta.value = 'Buenas tardes';
+  g.M.usarRapida('r1');
+  chk('se añade a lo ya escrito, no lo pisa',
+      ta.value === 'Buenas tardes\nHola, ¿en qué te ayudo?', JSON.stringify(ta.value));
+  // Y con la caja vacía no deja un salto de línea al principio.
+  ta.value = '';
+  g.M.usarRapida('r2');
+  chk('y con la caja vacía no mete un salto de más',
+      ta.value === 'Te comparto la ficha del inmueble', JSON.stringify(ta.value));
+  chk('se cuenta el uso, de paso',
+      e.llamadas.some((x) => x.ruta === '/api/quick-replies' && x.metodo === 'PUT'),
+      e.llamadas.map((x) => x.ruta + ':' + x.metodo).join(','));
+}
+{
+  // Sin respuestas guardadas NO se inventan unas genéricas ni se deja la fila
+  // ocupando sitio: en un teléfono esa franja se la come el teclado.
+  const e = montar({ responde: { ok: true, datos: { respuestas: [] } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  const caja = e.plantar('#rapidas');
+  g.__pruebas.modoReal();
+  await g.__pruebas.pedirRapidas();
+  await esperar();
+  chk('sin respuestas, la fila queda vacía', caja.innerHTML === '', caja.innerHTML);
+}
+{
+  // Y si la consulta falla, tampoco se cae a las de ejemplo: serían frases de
+  // otra persona en la conversación de un cliente.
+  const e = montar({ responde: { ok: false } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  const caja = e.plantar('#rapidas');
+  g.__pruebas.modoReal();
+  await g.__pruebas.pedirRapidas();
+  await esperar();
+  chk('si falla no se cae a las de ejemplo',
+      !/En qué te ayudo/.test(caja.innerHTML), caja.innerHTML.slice(0, 120));
 }
 
 console.log('\nLa nota puede avisar al responsable\n');
