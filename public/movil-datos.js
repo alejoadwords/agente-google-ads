@@ -144,6 +144,9 @@ export function aCita(a) {
   const mins = ini && fin ? Math.round((fin - ini) / 60000) : null;
   return {
     id: a.id,
+    // Para poder abrir el contacto desde la agenda: una fila de cita que no
+    // lleva a ninguna parte es un botón que no hace nada.
+    lead: a.lead_id || null,
     h: ini ? ini.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '—',
     dur: mins ? (mins >= 60 ? (mins / 60) + ' h' : mins + ' min') : '',
     t: a.title || 'Cita',

@@ -179,6 +179,51 @@ console.log('\nLos ejemplos no se cuelan en una cuenta real\n');
       /todavía no trae tus datos/i.test(fn), fn.slice(-200));
 }
 
+console.log('\nLos módulos con pintor propio tampoco enseñan ejemplos\n');
+{
+  const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+  const codigo = guion.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  // Esta rama se escapó al enchufar los otros: pintaba los EJEMPLOS sin mirar
+  // el modo, así que a una cuenta real le enseñaba embudos, notas de NPS y
+  // posiciones de SEO inventadas. Siete pantallas más diciendo lo que no es.
+  const i = codigo.indexOf('if (!M && PINTORES[id])');
+  const rama = i < 0 ? '' : codigo.slice(i, codigo.indexOf('return;', i));
+  chk('la rama de pintor propio mira el modo antes de pintar',
+      /MODO === 'real'/.test(rama), rama.slice(0, 120));
+  chk('y en modo real NO llama al pintor de ejemplos',
+      rama.indexOf("MODO === 'real'") < rama.indexOf('PINTORES[id]()'), 'el ejemplo se pinta antes de comprobar');
+}
+
+console.log('\nNingún botón vibra y ya\n');
+{
+  const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+  // `onclick="M.toque()"` es la firma de un botón decorativo: promete una
+  // acción y solo vibra. «Llamar» era uno, y llamar es LA razón por la que
+  // alguien saca el teléfono.
+  chk('llamar marca de verdad', /location\.href = 'tel:' \+ t;/.test(guion));
+  chk('whatsapp abre la conversación', /wa\.me\/' \+ t/.test(guion));
+  // Sin número no se abre un enlace roto: se dice.
+  chk('sin teléfono se avisa en vez de abrir nada',
+      (guion.match(/no tiene teléfono guardado/g) || []).length >= 2);
+  // Los que quedan viven detrás de la puerta del modo, así que una cuenta
+  // real no los ve nunca.
+  const quedan = (guion.match(/M\.toque\(\)"/g) || []).length;
+  chk('no quedan botones muertos en pantallas con datos reales', quedan <= 2, String(quedan));
+  // Una fila de cita sin contacto asociado no se pinta como botón.
+  chk('la cita abre su contacto', /M\.abrirLead\(\\''\+esc\(String\(c\.lead\)\)/.test(guion));
+  chk('y sin contacto no finge ser un botón', /: '<div class="cita">'\)/.test(guion));
+  chk('«+ etiqueta» abre el catálogo de la cuenta', /M\.abrirEtiquetas\(\)/.test(guion));
+}
+
+console.log('\nEl lápiz solo donde de verdad se edita\n');
+{
+  const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+  // Ponerlo en la fuente o en el responsable prometía algo que al tocarlo se
+  // niega: un adorno que dice «puedes» y responde «no».
+  chk('el lápiz depende de si el campo es editable',
+      /var editable = !!CAMPOS_FICHA\[c\[0\]\];/.test(guion) && /editable \? '<span class="lapiz">/.test(guion));
+}
+
 console.log('\nEl interruptor de una automatización no es un adorno\n');
 {
   const guion = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');

@@ -38,6 +38,7 @@ const ICN_PATHS = {
   tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
   // El mismo trazo que ya usaba el botón de enlace del panel, ahora con nombre
   // para que la ficha no tenga que repetir el SVG.
+  phone:    '<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/>',
   link:     '<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>',
 };
 
@@ -263,9 +264,15 @@ function pintarAgenda(){
     // La línea de «ahora» va justo antes de la primera cita que no ha pasado:
     // es lo que hace que se lea de un vistazo qué queda por delante.
     if (!c.pasada && (i===0 || CITAS[i-1].pasada)) html += '<div class="ahora">AHORA</div>';
-    html += '<button class="cita" onclick="M.toque()">'
+    html += (c.lead
+      ? '<button class="cita" onclick="M.abrirLead(\''+esc(String(c.lead))+'\')">'
+      // Sin contacto asociado no hay adónde ir: se pinta como fila, no como
+      // botón. Un botón que no lleva a ninguna parte se toca dos veces y se
+      // da por roto.
+      : '<div class="cita">')
       + '<span class="hora">'+esc(c.h)+'<span class="dur">'+esc(c.dur)+'</span></span>'
-      + '<span><span class="qt">'+esc(c.t)+'</span><span class="qs">'+esc(c.s)+'</span></span></button>';
+      + '<span><span class="qt">'+esc(c.t)+'</span><span class="qs">'+esc(c.s)+'</span></span>'
+      + (c.lead ? '</button>' : '</div>');
   }
   $('#agenda .lista').innerHTML = html || '<div class="vacio">Nada agendado para hoy.</div>';
 }
@@ -306,8 +313,10 @@ function abrirLead(id){
     '<div class="cab"><button class="volver" onclick="M.cerrarLead()">'+icn('arrow',24)+'</button>'
     + '<div><h1>'+esc(l.nom)+'</h1><div class="sub">'+esc(l.origen)+' · '+esc(l.hace)+'</div></div></div>'
     + '<div class="acciones">'
-    + '<button class="acc pri" onclick="M.toque()">'+icn('chat',22)+'Llamar</button>'
-    + '<button class="acc" onclick="M.toque()">'+icn('chat',22)+'WhatsApp</button>'
+    // Estos dos vibraban y nada más. Un botón de llamar que no marca es la
+    // razón por la que uno saca el teléfono: es LA acción del módulo.
+    + '<button class="acc pri" onclick="M.llamar()">'+icn('phone',22)+'Llamar</button>'
+    + '<button class="acc" onclick="M.whatsapp()">'+icn('chat',22)+'WhatsApp</button>'
     + '<button class="acc" onclick="M.abrirNota()">'+icn('edit',22)+'Anotar</button></div>'
     + '<div class="secc" id="ficha-cuerpo"></div>';
   movilRaiz().appendChild(h);
@@ -345,6 +354,71 @@ function abrirNota(){
   abrirSheet('<textarea id="sh-nota" placeholder="¿Qué pasó en la llamada?"></textarea>'
     + '<button class="bbtn" onclick="M.guardarNota()">Guardar nota</button>');
 }
+// Llamar y escribir por WhatsApp. Sin número no se abre nada roto: se dice.
+function telLimpio(){
+  var l = leadAbierto;
+  return l ? String(l.tel || '').replace(/[^\d+]/g, '') : '';
+}
+function llamar(){
+  var t = telLimpio();
+  if (!t) { chicharra('Este contacto no tiene teléfono guardado.', 'mal'); return; }
+  toque();
+  location.href = 'tel:' + t;
+}
+function whatsapp(){
+  var t = telLimpio().replace(/^\+/, '');
+  if (!t) { chicharra('Este contacto no tiene teléfono guardado.', 'mal'); return; }
+  toque();
+  // wa.me quiere el número sin el «+» y sin espacios. Abre la aplicación si
+  // está instalada y la web si no, así que sirve en los dos casos.
+  window.open('https://wa.me/' + t, '_blank');
+}
+
+// Las etiquetas de la cuenta, para ponerle una al contacto. El catálogo lo
+// gestiona quien administra —desde el computador—; aquí solo se aplican.
+var CATALOGO_TAGS = null;
+async function abrirEtiquetas(){
+  var l = leadAbierto; if (!l) return;
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Etiquetas</div>'
+    + '<div id="sh-tags"><div class="vacio" style="padding:20px">Trayendo las etiquetas…</div></div>');
+  if (CATALOGO_TAGS === null && MODO === 'real' && typeof fetchAuth === 'function') {
+    try {
+      var r = await fetchAuth('/api/lead-tags');
+      var d = r && r.ok ? await r.json() : null;
+      CATALOGO_TAGS = d && Array.isArray(d.tags) ? d.tags.map(function(t){ return t.name || t; }) : null;
+    } catch (e) { CATALOGO_TAGS = null; }
+  }
+  var caja = $('#sh-tags'); if (!caja) return;   // la hoja pudo cerrarse
+  if (MODO !== 'real') {
+    caja.innerHTML = '<div class="vacio" style="padding:20px">Entra con tu cuenta para ver tus etiquetas.</div>';
+    return;
+  }
+  if (CATALOGO_TAGS === null) {
+    caja.innerHTML = '<div class="vacio" style="padding:20px">No se pudieron traer tus etiquetas.</div>';
+    return;
+  }
+  var puestas = l.tags || [];
+  var libres = CATALOGO_TAGS.filter(function(t){ return puestas.indexOf(t) < 0; });
+  caja.innerHTML = libres.length
+    ? '<div class="tags">' + libres.map(function(t){
+        return '<button class="tag" onclick="M.ponerEtiqueta(\''+esc(t)+'\')">'+esc(t)+'</button>';
+      }).join('') + '</div>'
+    : '<div class="vacio" style="padding:20px">Ya tiene todas tus etiquetas. El catálogo se edita desde el computador.</div>';
+}
+async function ponerEtiqueta(t){
+  var l = leadAbierto; if (!l) return;
+  var antes = (l.tags || []).slice();
+  if (antes.indexOf(t) >= 0) { cerrarSheet(); return; }
+  var nuevas = antes.concat([t]);
+  l.tags = nuevas;
+  cerrarSheet(); pintarFicha();
+  var d = await guardar('/api/leads', { id: l.id, tags: nuevas }, 'PUT', function(){
+    l.tags = antes;
+    pintarFicha();
+  });
+  if (d) { l.hace = 'ahora'; l.tocado = Date.now(); pintarLeads(); }
+}
+
 async function guardarNota(){
   var ta = $('#sh-nota'), l = leadAbierto;
   var texto = ta ? ta.value.trim() : '';
@@ -811,9 +885,19 @@ function abrirModulo(id){
     var t = TITULOS[id] || [id, ''];
     var hp = document.createElement('div');
     hp.className = 'hoja'; hp.id = 'hoja-mod';
+    // Esta rama se me escapó al enchufar los otros módulos: pintaba los
+    // EJEMPLOS sin mirar el modo, así que a una cuenta real le enseñaba
+    // embudos, notas de NPS y posiciones de SEO inventadas. Mientras no
+    // tengan su fuente, se dice — que es lo que hay que hacer siempre que
+    // no se puede enseñar lo de verdad.
+    var cuerpo = (MODO === 'real')
+      ? '<div class="vacio">Esta pantalla todavía no trae tus datos.<br>'
+        + 'Por ahora se consulta desde el computador.</div>'
+      : PINTORES[id]();
     hp.innerHTML = '<div class="cab"><button class="volver" onclick="M.cerrarModulo()">'+icn('arrow',24)+'</button>'
-      + '<div><h1>'+esc(t[0])+'</h1><div class="sub">'+esc(t[1])+'</div></div></div>'
-      + PINTORES[id]();
+      + '<div><h1>'+esc(t[0])+'</h1><div class="sub">'
+      + esc(MODO === 'real' ? '' : t[1]) + '</div></div></div>'
+      + cuerpo;
     movilRaiz().appendChild(hp);
     history.pushState({hoja:1},'');
     return;
@@ -1267,15 +1351,19 @@ function fichaQuien(l){
   return '<div class="secc"><h2>Quién es</h2><div class="caja">'
     + campos.map(function(c){
         var vacio = !c[1];
+        // El lápiz solo en lo que de verdad se edita aquí. Ponerlo en la
+        // fuente o en el responsable prometía algo que al tocarlo se niega:
+        // un adorno que dice «puedes» y responde «no».
+        var editable = !!CAMPOS_FICHA[c[0]];
         return '<div class="fcampo" onclick="M.editarCampo(\''+esc(c[0])+'\')">'
           + '<span class="k">'+esc(c[0])+'</span>'
           + '<span class="v'+(vacio?' sindato':'')+'">'+esc(vacio ? 'Sin dato' : c[1])+'</span>'
-          + '<span class="lapiz">'+icn('edit',14)+'</span></div>';
+          + (editable ? '<span class="lapiz">'+icn('edit',14)+'</span>' : '')+'</div>';
       }).join('')
     + '</div>'
     + '<h2>Etiquetas</h2><div class="caja"><div class="tags">'
       + (l.tags || []).map(function(t){ return '<span class="tag">'+esc(t)+'</span>'; }).join('')
-      + '<button class="tag" onclick="M.toque()" style="border-style:dashed;color:var(--blue)">+ etiqueta</button>'
+      + '<button class="tag" onclick="M.abrirEtiquetas()" style="border-style:dashed;color:var(--blue)">+ etiqueta</button>'
     + '</div></div>'
     + '<h2>Qué busca</h2><div class="caja">'+esc(l.interes)+'</div></div>';
 }
@@ -1821,6 +1909,8 @@ function movilMontar(opciones){
     pulsoIr: pulsoIr,
     guardarNota: guardarNota, guardarCampo: guardarCampo, crearLead: crearLead,
     reintentarModulo: reintentarModulo,
+    llamar: llamar, whatsapp: whatsapp,
+    abrirEtiquetas: abrirEtiquetas, ponerEtiqueta: ponerEtiqueta,
     alternarAuto: alternarAuto,
     toque: toque,
     verMod: verMod,

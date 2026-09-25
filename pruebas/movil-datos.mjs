@@ -99,6 +99,14 @@ console.log('\nVencida, hoy o próxima\n');
       aTarea({ id: 'x', title: 'T' }, AHORA).s === 'Sin fecha');
 }
 
+{
+  // Una fila de agenda que no lleva a su contacto es un botón que no hace nada.
+  chk('una cita lleva el contacto al que pertenece',
+      aCita({ id: 'c1', lead_id: 'L7', due_at: '2026-09-24T15:00:00Z' }).lead === 'L7');
+  chk('y sin contacto lo dice con null, no con undefined',
+      aCita({ id: 'c2' }).lead === null);
+}
+
 console.log('\nLa ventana de 24 h se cuenta desde el cliente\n');
 {
   const c = aConversacion({
