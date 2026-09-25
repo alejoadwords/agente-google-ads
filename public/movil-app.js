@@ -702,7 +702,7 @@ async function ponerQuien(q){
   toque(12); cerrarSheet(); cerrarConv(); pintarConvs();
 }
 
-// ── Chatbots ────────────────────────────────────────────────────────────────
+// ── Agentes IA ────────────────────────────────────────────────────────────────
 function pintarBots(){
   var host = $('#chatbots .lista'); if (!host) return;
   // null es «no se pudieron traer», que no es lo mismo que no tener ninguno.
@@ -747,7 +747,7 @@ function abrirBots_viejo(){
   h.className = 'hoja'; h.id = 'hoja-conv';
   h.innerHTML =
     '<div class="cab"><button class="volver" onclick="M.cerrarConv()">'+icn('arrow',24)+'</button>'
-    + '<div><h1>Chatbots</h1><div class="sub">Quién contesta en cada canal</div></div></div>'
+    + '<div><h1>Agentes IA</h1><div class="sub">Quién contesta en cada canal</div></div></div>'
     + '<div class="lista" id="bots-lista"></div>';
   movilRaiz().appendChild(h);
   $('#bots-lista').innerHTML = BOTS.map(function(b){
@@ -1190,7 +1190,7 @@ var TITULOS = {
 var MODS = [
   {id:'inicio',     t:'Pulso',     icono:'sparkles'},
   {id:'crm',        t:'CRM',       icono:'users',  tabs:[['leads','Contactos'],['tareas','Tareas'],['agenda','Agenda']]},
-  {id:'chats',      t:'Chats',     icono:'chat',   tabs:[['bandeja','Bandeja'],['chatbots','Chatbots']]},
+  {id:'chats',      t:'Chats',     icono:'chat',   tabs:[['bandeja','Bandeja'],['chatbots','Agentes IA']]},
   {id:'marketing',  t:'Marketing', icono:'sparkles'},
   {id:'mas',        t:'Más',       icono:'split'}
 ];

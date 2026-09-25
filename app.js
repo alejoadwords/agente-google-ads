@@ -3031,7 +3031,7 @@ var TOUR_STEPS = [
   },
   {
     title: 'Conversaciones',
-    desc: 'El inbox unificado de WhatsApp, Messenger e Instagram. Los chatbots con IA responden, capturan el contacto de forma natural y crean el lead solos. El punto rojo te avisa de mensajes sin leer.',
+    desc: 'El inbox unificado de WhatsApp, Messenger e Instagram. Los agentes de IA responden, capturan el contacto de forma natural y crean el lead solos. El punto rojo te avisa de mensajes sin leer.',
     target: 'navm-conversaciones',
     position: 'right',
     onEnter: function() { tourSidebar(true); }
@@ -9978,7 +9978,7 @@ const AC_SECTION_META = {
   'contenido':      { title: 'Contenido para Redes',      sub: 'Studio de contenido, parrilla editorial y generación de imágenes con IA', icon: '<path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>' },
   'crm':            { title: 'CRM',                       sub: 'Tablero, fichas de lead, etiquetas y agenda: tu base de contactos viva',  icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>' },
   'marketing':      { title: 'Marketing y automatización', sub: 'Campañas, flujos automáticos, fuentes de leads, propuestas y NPS',       icon: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>' },
-  'conversaciones': { title: 'Conversaciones',            sub: 'Inbox unificado y chatbots que atienden y califican solos',              icon: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>' },
+  'conversaciones': { title: 'Conversaciones',            sub: 'Inbox unificado y agentes de IA que atienden y califican solos',              icon: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>' },
   'analisis':       { title: 'Análisis',                  sub: 'Embudo, campañas, reportes por comercial y satisfacción del cliente',    icon: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' },
   'agencia':        { title: 'Panel de Agencia',          sub: 'Gestiona múltiples clientes, reportes y configuraciones avanzadas',       icon: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>' },
 };
@@ -22044,15 +22044,15 @@ async function agBorrar(id, nombre, canalesActivos) {
   const aviso = canalesActivos
     ? '«' + nombre + '» atiende ' + canalesActivos + (canalesActivos === 1 ? ' canal' : ' canales') +
       '.\n\nSi lo eliminas, esos canales pasan a atenderse a mano desde el inbox. Las conversaciones no se pierden.\n\n¿Eliminarlo?'
-    : '¿Eliminar el chatbot «' + nombre + '»?\n\nLas conversaciones que atendió no se pierden.';
+    : '¿Eliminar el agente «' + nombre + '»?\n\nLas conversaciones que atendió no se pierden.';
   if (!confirm(aviso)) return;
   try {
     const r = await fetchAuth('/api/chat-agents?id=' + encodeURIComponent(id), { method: 'DELETE' });
     if (!r.ok) throw new Error();
     await crmLoadAgents();
     crmRenderAgents();
-    showToast('Chatbot eliminado', 'success');
-  } catch (e) { showToast('No se pudo eliminar el chatbot', 'error'); }
+    showToast('Agente eliminado', 'success');
+  } catch (e) { showToast('No se pudo eliminar el agente', 'error'); }
 }
 
 function crmRenderAgents() {
@@ -22076,7 +22076,7 @@ function crmRenderAgents() {
         </div>
       </div>
       <div class="crm-agent-status ${ag.is_active ? 'active' : 'inactive'}"></div>
-      <button class="mot-borrar" title="Eliminar chatbot"
+      <button class="mot-borrar" title="Eliminar agente"
         onclick="event.stopPropagation();agBorrar('${esc(ag.id)}','${esc(ag.name)}',${activeConns.length})">${ICONO_PAPELERA}</button>
     </div>`;
   }).join('');
@@ -24996,7 +24996,7 @@ function cmdkCommands() {
     { group: 'Ir a', icon: '📥', label: 'Marketing · Fuentes y formularios', kw: 'fuentes formularios webhook hotmart importar', run: () => { navGo('marketing'); setTimeout(() => crmSetView('sources'), 100); } },
     { group: 'Ir a', icon: '📄', label: 'Marketing · Propuestas',          kw: 'propuestas cotizacion comercial', run: () => { navGo('marketing'); setTimeout(() => crmSetView('proposals'), 100); } },
     { group: 'Ir a', icon: '💬', label: 'Conversaciones · Inbox',          kw: 'inbox whatsapp mensajes chat messenger instagram', run: () => navGo('conversaciones') },
-    { group: 'Ir a', icon: '🤖', label: 'Conversaciones · Chatbots',       kw: 'chatbots agentes ia canales bots', run: () => { navGo('conversaciones'); setTimeout(() => crmSetView('agents'), 100); } },
+    { group: 'Ir a', icon: '🤖', label: 'Conversaciones · Agentes IA',     kw: 'agentes ia chatbots canales bots', run: () => { navGo('conversaciones'); setTimeout(() => crmSetView('agents'), 100); } },
     { group: 'Ir a', icon: '📊', label: 'Análisis',                        kw: 'analisis metricas embudo reportes', run: () => navGo('analisis') },
     { group: 'Ir a', icon: '⭐', label: 'Análisis · Satisfacción (NPS)',   kw: 'nps satisfaccion encuestas detractores', run: () => { navGo('analisis'); setTimeout(() => crmSetView('nps'), 100); } },
     { group: 'Ir a', icon: '🎨', label: 'Social Media Studio',             kw: 'studio imagenes parrilla calendario', run: () => showView('social-studio') },
@@ -27855,7 +27855,7 @@ function agnScheduleForLead() {
     '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
   };
   const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
-  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Chatbots', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', paginas: 'Páginas', listas: 'Listas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas', reservas: 'Reservas', lead: 'Lead' };
+  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Agentes IA', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', paginas: 'Páginas', listas: 'Listas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas', reservas: 'Reservas', lead: 'Lead' };
 
   let currentView = 'home';
   let applying = false;   // evita pushState mientras una URL dirige la navegación
@@ -31738,7 +31738,7 @@ const NAV_TAB_LABELS = {
   kanban: 'Pipeline', list: 'Contactos', tareas: 'Tareas', agenda: 'Agenda',
   campaigns: 'Campañas', plantillas: 'Plantillas', paginas: 'Páginas', listas: 'Listas', autos: 'Automatizaciones', sources: 'Fuentes',
   proposals: 'Propuestas', studio: 'Studio Social', seoproj: 'Proyecto SEO',
-  inbox: 'Inbox', agents: 'Chatbots',
+  inbox: 'Inbox', agents: 'Agentes IA',
   sales: 'Ventas', prod: 'Productividad', equipo: 'Por comercial', mk: 'Marketing', cv: 'Conversaciones',
   analytics: 'Resumen', nps: 'Satisfacción', campstats: 'Aperturas',
 };
@@ -32073,7 +32073,7 @@ async function cvRender() {
       '<div style="border:1px dashed var(--border);border-radius:16px;padding:34px;text-align:center;max-width:640px;margin:0 auto">' +
         '<div style="font-size:15px;font-weight:800;margin-bottom:6px">Aún no hay conversaciones que medir</div>' +
         '<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:16px">' +
-          'Conecta WhatsApp, Messenger o Instagram en <b>Conversaciones → Chatbots</b> y aquí verás el volumen por canal, ' +
+          'Conecta WhatsApp, Messenger o Instagram en <b>Conversaciones → Agentes IA</b> y aquí verás el volumen por canal, ' +
           'el estado de cada conversación y cuánto tardas en responder.</div>' +
         '<button class="btn-pri sm" onclick="navGo(\'conversaciones\')">Ir a Conversaciones</button>' +
       '</div>';
@@ -33520,7 +33520,7 @@ let calCriterios = [];
 
 async function calLoad(agentId) {
   calCriterios = [];
-  // El editor se abre desde Chatbots, donde puede que aún no haya etapas
+  // El editor se abre desde Agentes IA, donde puede que aún no haya etapas
   if (typeof crmStages === 'undefined' || !crmStages.length) {
     try { await crmLoadStages(); } catch {}
   }

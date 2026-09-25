@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-25-agentes-ia",
+      "fecha": "2026-09-25",
+      "tipo": "mejora",
+      "titulo": "«Chatbots» ahora se llama «Agentes IA»",
+      "texto": "La pantalla donde decides quién contesta en cada canal se llamaba «Chatbots» en el menú, pero el resto de la aplicación ya la nombraba «Agentes IA»: si no tenías canales conectados, el mensaje te mandaba a «Agentes IA» y esa pestaña no existía por ningún lado. Ya se llama igual en todas partes, también en el teléfono. La dirección de siempre sigue funcionando, así que los enlaces que tengas guardados no se rompen, y el buscador ⌘K la sigue encontrando si escribes «chatbots»."
+    },
+    {
       "id": "2026-09-25-pulso-tareas-vencidas",
       "fecha": "2026-09-25",
       "tipo": "mejora",

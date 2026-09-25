@@ -180,7 +180,7 @@ export function aConversacion(c, ahora = Date.now()) {
 }
 
 // ── Módulos ─────────────────────────────────────────────────────────────────
-// Las siete pantallas de módulo —chatbots, campañas, listas, automatizaciones,
+// Las siete pantallas de módulo —agentes IA, campañas, listas, automatizaciones,
 // fuentes, propuestas y reservas— enseñaban los datos de EJEMPLO a cuentas
 // reales: «3 campañas este mes» y «Arriendos Envigado · 412 visitas» eran
 // inventados. Un cliente no tiene forma de saber que lo que lee no es suyo.
