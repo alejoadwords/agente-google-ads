@@ -153,7 +153,7 @@ console.log('\n«No hay» y «no se pudo mirar» son distintos\n');
       r.leads === null && r.tareas === null && r.convs === null,
       JSON.stringify(r));
 
-  const vacio = async () => ({ ok: true, json: async () => ({ leads: [], actividades: [], conversations: [] }) });
+  const vacio = async () => ({ ok: true, json: async () => ({ leads: [], activities: [], conversations: [] }) });
   const v = await cargarTodo(vacio);
   chk('si de verdad no hay, viene lista vacía',
       Array.isArray(v.leads) && v.leads.length === 0 && Array.isArray(v.tareas),
@@ -168,7 +168,7 @@ console.log('\n«No hay» y «no se pudo mirar» son distintos\n');
   // Que una consulta falle no puede apagar las que sí funcionaron.
   const mixto = async (ruta) => ruta.startsWith('/api/leads')
     ? { ok: false, json: async () => ({}) }
-    : { ok: true, json: async () => ({ actividades: [], conversations: [] }) };
+    : { ok: true, json: async () => ({ activities: [], conversations: [] }) };
   const r = await cargarTodo(mixto);
   chk('lo que sí llegó se conserva aunque otra falle',
       r.leads === null && Array.isArray(r.tareas), JSON.stringify(r));
@@ -193,6 +193,36 @@ console.log('\nDetalles que se leen de un vistazo\n');
   chk('una etapa propia de la cuenta gana',
       etiquetaEtapa('nuevo', [{ key: 'nuevo', label: 'Cliente recibido' }]) === 'Cliente recibido');
   chk('una etapa desconocida se muestra tal cual', etiquetaEtapa('rarita') === 'rarita');
+}
+
+// ── La clave, contra el SERVIDOR y no contra nosotros mismos ───────────────
+//
+// El móvil leía `d.actividades` y `/api/agenda` devuelve `activities`. Siempre
+// venía vacío, y como `[]` es una lista válida la pantalla decía «nada
+// pendiente hoy» en vez de «no se pudieron traer»: cero tareas y cero citas
+// para todo el mundo, sin un solo error a la vista.
+//
+// Lo que dejó pasar el fallo fue esta misma prueba: sus simulacros devolvían
+// `actividades`, la clave que el código esperaba. Un simulacro que le da la
+// razón al código en vez de al servidor no prueba nada. Por eso ahora la clave
+// se lee de `api/agenda.js`.
+console.log('\nLa clave de la respuesta es la que manda el servidor\n');
+{
+  const { readFileSync } = await import('node:fs');
+  const api = readFileSync(new URL('../api/agenda.js', import.meta.url), 'utf8');
+  const movil = readFileSync(new URL('../public/movil-datos.js', import.meta.url), 'utf8');
+
+  // Solo ESA llamada: hasta el siguiente `uno(`, que ya es otro endpoint. Con
+  // una ventana de tantos caracteres se colaban las claves del de al lado.
+  const desde = movil.indexOf("'/api/agenda?proximos=1'");
+  const hasta = movil.indexOf('uno(', desde);
+  const rama = movil.slice(desde, hasta > desde ? hasta : desde + 300);
+  const leidas = [...rama.matchAll(/\bd\.([A-Za-z_]+)/g)].map((m) => m[1]);
+  chk('el móvil lee alguna clave de esa respuesta', leidas.length > 0, JSON.stringify(leidas));
+  for (const k of leidas) {
+    chk(`«${k}» es una clave que api/agenda.js devuelve de verdad`,
+        new RegExp('jsonResp\\(\\{[^}]*\\b' + k + '\\b').test(api), 'no la manda el servidor');
+  }
 }
 
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');

@@ -19472,6 +19472,11 @@ function crmCardHTML(lead, now) {
 // con /api/leads. Se pide aparte y repinta cuando llega, igual que los avisos:
 // el tablero no espera por el.
 let crmTareasPorLead = {};
+// Los tres montones tal como los reparte el servidor. `crmTareasPorLead` se
+// queda solo con una fecha por lead, que es lo que necesita la tarjeta del
+// tablero, pero el Pulso tiene que nombrar las tareas vencidas una por una.
+// `null` significa «no se pudieron cargar», que no es lo mismo que «ninguna».
+let crmTareasCrudas = null;
 
 async function crmTareasCargar() {
   try {
@@ -19480,6 +19485,7 @@ async function crmTareasCargar() {
     // 90 dias es el tope del endpoint. Sin `mias=1`: en la tarjeta interesa la
     // proxima tarea del lead, la lleve quien la lleve.
     const d = await fetchAuth('/api/agenda?tareas=1&dias=90' + cid).then(r => r.json());
+    crmTareasCrudas = d;
     const mapa = {};
     ['vencidas', 'hoy', 'proximas'].forEach(k => (d[k] || []).forEach(t => {
       if (!t.lead_id || !t.due_at) return;   // sin fecha no hay nada que enseñar
@@ -19488,7 +19494,7 @@ async function crmTareasCargar() {
     }));
     crmTareasPorLead = mapa;
     return true;
-  } catch { crmTareasPorLead = {}; return false; }
+  } catch { crmTareasPorLead = {}; crmTareasCrudas = null; return false; }
 }
 
 function crmChipTarea(lead) {
@@ -25458,7 +25464,50 @@ async function pulsoCrmCards() {
     // Las tareas hacen falta para no llamar «abandonado» a quien tiene una
     // visita agendada el jueves. Se piden aquí porque el Pulso vive en el
     // inicio y puede abrirse sin haber entrado nunca al CRM.
-    try { await crmTareasCargar(); } catch {}
+    let tareasOk = false;
+    try { tareasOk = await crmTareasCargar(); } catch {}
+
+    // ── Tareas vencidas ──────────────────────────────────────────────────
+    // Va PRIMERA: un pendiente que ya se pasó de fecha es lo más urgente del
+    // Pulso, por delante de un lead frío o de uno nuevo.
+    //
+    // El servidor ya reparte en vencidas/hoy/próximas cortando por DÍA (no por
+    // hora) y deja fuera las de leads ganados o perdidos, que es justo lo que
+    // le inflaba el panel a Certain. Aquí no se vuelve a calcular nada: hacerlo
+    // con otro criterio era garantizar que el Pulso y la lista de Tareas dieran
+    // números distintos.
+    if (!tareasOk) {
+      // No se sabe si hay vencidas o no. Decir «ninguna» sería mentir y callarse
+      // deja al usuario creyendo que está al día.
+      cards.push({
+        tone: 'warn',
+        title: 'CRM · No se pudieron cargar las tareas',
+        body: 'No podemos decirte si tienes pendientes vencidos. Vuelve a cargar el Pulso o abre Tareas.',
+        actLabel: 'Abrir Tareas →',
+        act: () => pulsoIrATareas(''),
+      });
+    } else {
+      const vencidas = (crmTareasCrudas && crmTareasCrudas.vencidas) || [];
+      if (vencidas.length) {
+        // Vienen ordenadas por fecha ascendente: la primera es la más atrasada.
+        const peor = vencidas[0];
+        const quien = peor.lead && peor.lead.name ? peor.lead.name : null;
+        const dias = peor.due_at
+          ? Math.round((new Date(new Date().toDateString()) - new Date(new Date(peor.due_at).toDateString())) / 864e5)
+          : 0;
+        const atraso = dias >= 1 ? (dias === 1 ? ' hace 1 día' : ' hace ' + dias + ' días') : '';
+        cards.push({
+          tone: 'warn',
+          title: 'CRM · ' + vencidas.length +
+                 (vencidas.length === 1 ? ' tarea vencida' : ' tareas vencidas'),
+          body: 'La más atrasada' + atraso + ': "' +
+                (peor.title || 'Sin título') + '"' + (quien ? ' — ' + quien : '') + '.',
+          actLabel: 'Ver cuáles →',
+          act: () => pulsoIrATareas('vencidas'),
+        });
+      }
+    }
+
     const stale = leads.filter(l =>
       !leadCerrado(l) &&
       !tieneSeguimientoProgramado(l) &&
@@ -25575,6 +25624,23 @@ function pulsoRenderLista() {
 
 // Se pasa el lead entero, no solo el id: puede pertenecer a otro proceso de
 // venta y no estar entre los que el tablero tiene cargados.
+// Abre la lista de Tareas con el rango ya puesto. Un aviso que dice «12 tareas
+// vencidas» y te deja en la lista entera te obliga a buscarlas a mano, que es
+// justo el trabajo que el Pulso venía a ahorrar.
+//
+// El filtro se escribe ANTES de cambiar de vista: `crmSetView('tareas')` llama
+// a `tarRender()`, que lee `tarFiltro`. Al revés pintaría la lista sin filtrar
+// y luego habría que repintarla.
+function pulsoIrATareas(cuando) {
+  document.getElementById('pul-overlay')?.remove();
+  // `tarFiltro` es un `let` que se declara más abajo en el fichero. Al pulsar
+  // ya está inicializado, pero no se usa `typeof` para comprobarlo: sobre un
+  // `let` sin inicializar `typeof` LANZA en vez de decir 'undefined'.
+  try { tarFiltro.cuando = cuando || ''; } catch {}
+  if (typeof navGo === 'function') navGo('crm');
+  setTimeout(() => { try { crmSetView('tareas'); } catch {} }, 150);
+}
+
 function pulsoIrALead(id) {
   const lead = _pulsoLista.find(l => l.id === id);
   document.getElementById('pul-overlay')?.remove();

@@ -1483,9 +1483,9 @@ function leerAvisos(){
 }
 
 // El Pulso calculado de los datos de verdad. Las mismas reglas que la web:
-// leads sin tocar hace más de 3 días, y los que entraron hoy.
+// tareas vencidas, leads sin tocar hace más de 3 días, y los que entraron hoy.
 function pulsoDeDatos(){
-  // Las MISMAS dos reglas que `pulsoCrmCards` en app.js. Antes el móvil
+  // Las MISMAS tres reglas que `pulsoCrmCards` en app.js. Antes el móvil
   // inventaba las suyas —tareas vencidas, leads en etapa «nuevo»— y por eso
   // no decía lo mismo que la web sobre la misma cuenta, que es peor que no
   // decir nada: dos números distintos y ninguno de fiar.
@@ -1501,6 +1501,36 @@ function pulsoDeDatos(){
   var conTarea = {};
   if (typeof TAREAS !== 'undefined' && TAREAS) {
     TAREAS.forEach(function(t){ if (t.lead && !t.hecha) conTarea[t.lead] = true; });
+  }
+
+  // Tareas vencidas, lo primero. Misma regla que la web, y el mismo montón que
+  // enseña la pantalla de Tareas a la que lleva el botón: si el aviso dijera un
+  // número y la lista otro, no se podría creer a ninguno de los dos.
+  //
+  // `TAREAS === null` es «no se pudieron traer», que no es «ninguna». Decir
+  // cero aquí sería dejar al asesor creyendo que está al día.
+  if (typeof TAREAS !== 'undefined' && TAREAS === null) {
+    cards.push({tono:'warn',
+      t: 'CRM · No se pudieron cargar las tareas',
+      b: 'No podemos decirte si tienes pendientes vencidos.',
+      cta:'Abrir Tareas', ir:function(){ verMod('crm'); verSub('crm','tareas'); }});
+  } else {
+    var venc = (typeof TAREAS !== 'undefined' && TAREAS)
+      ? TAREAS.filter(function(t){ return t.cuando === 'vencida' && !t.hecha; }) : [];
+    if (venc.length) {
+      // Llegan ordenadas por fecha de la API, así que la primera es la peor.
+      var peor = venc[0];
+      var deQuien = null;
+      if (peor.lead && typeof LEADS !== 'undefined' && LEADS) {
+        var dl = LEADS.filter(function(l){ return l.id === peor.lead; })[0];
+        if (dl) deQuien = dl.nom;
+      }
+      cards.push({tono:'warn',
+        t: 'CRM · ' + venc.length + (venc.length === 1 ? ' tarea vencida' : ' tareas vencidas'),
+        b: 'La más atrasada: «' + peor.t + '»' + (deQuien ? ' — ' + deQuien : '')
+           + (peor.s && peor.s !== 'Sin fecha' ? ' (' + peor.s + ')' : '') + '.',
+        cta:'Ver cuáles', ir:function(){ verMod('crm'); verSub('crm','tareas'); }});
+    }
   }
 
   var stale = leads.filter(function(l){

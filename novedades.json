@@ -2,6 +2,20 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-25-pulso-tareas-vencidas",
+      "fecha": "2026-09-25",
+      "tipo": "mejora",
+      "titulo": "El Pulso ahora te avisa de las tareas vencidas",
+      "texto": "Al entrar, lo primero que ves si tienes pendientes pasados de fecha es cuántos son y cuál es el más atrasado, con el nombre del contacto. El botón te lleva a la lista de Tareas ya filtrada por vencidas, no a la lista completa. El número es el mismo que verás en esa lista: sale del servidor, que cuenta por día y deja fuera las tareas de negocios ya ganados o perdidos. Y si en ese momento no se pueden cargar las tareas, se te dice en vez de dar por hecho que no tienes ninguna."
+    },
+    {
+      "id": "2026-09-25-movil-tareas-vacias",
+      "fecha": "2026-09-25",
+      "tipo": "arreglo",
+      "titulo": "En el teléfono, Tareas y Agenda aparecían siempre vacías",
+      "texto": "En la versión móvil, las pantallas de Tareas y de Agenda no mostraban nada aunque hubiera trabajo pendiente, y encima decían «nada pendiente hoy», así que no había manera de notar que faltaba algo. Ya se ven tus tareas y tus citas. Si alguna vez no se pueden traer, la pantalla lo dice en lugar de mostrarse vacía."
+    },
+    {
       "id": "2026-09-25-franja-vacia",
       "fecha": "2026-09-25",
       "tipo": "mejora",

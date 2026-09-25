@@ -339,7 +339,11 @@ export async function cargarTodo(fetchAuth, { clientId } = {}) {
   const q = clientId ? '&client_id=' + encodeURIComponent(clientId) : '';
   const [leads, actividades, convs, pipelines] = await Promise.all([
     uno('/api/leads?limit=200' + q, (d) => (d.leads || []).map((l) => aLead(l))),
-    uno('/api/agenda?proximos=1' + q, (d) => d.actividades || d.items || []),
+    // `activities`, en inglés y como lo escribe el servidor. Se leía
+    // `d.actividades`, que no existe: el móvil se quedaba SIEMPRE sin tareas ni
+    // citas, y como `[]` es una lista válida no decía «no se pudieron traer»
+    // sino «nada pendiente hoy». Un cero inventado es peor que un error.
+    uno('/api/agenda?proximos=1' + q, (d) => d.activities || []),
     uno('/api/chat-conversations?' + q.slice(1), (d) => (d.conversations || d.convs || []).map(aConversacion)),
     // Una cuenta puede tener varios tableros —Certain tiene cuatro, y sus
     // leads viven en «Arriendo», no en el principal—. Sin poder elegir, el
