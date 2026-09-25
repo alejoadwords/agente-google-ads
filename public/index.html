@@ -3533,8 +3533,14 @@ body.modo-movil{overflow:hidden}
 #movil-oferta button:active{transform:scale(.97)}
 @media (min-width:769px){#movil-oferta{display:none}}
 </style>
-<!-- Vercel Web Analytics — páginas vistas por ruta (el router SPA reporta cada pushState) -->
-<script defer src="/_vercel/insights/script.js"></script>
+<!-- Aquí vivía el guion de Vercel Web Analytics. Se quita porque nunca llegó a
+     existir: la función no está activa en la cuenta —los tres proyectos tienen
+     su id, ninguno sirve el guion— así que devolvía 404 en cada carga de cada
+     usuario, con su error rojo en consola, y no recogió jamás un dato.
+     Las páginas vistas y las conversiones las mide GTM (GTM-PX26PNPJ) con GA4,
+     que sí funciona y no se cobra por evento. Si algún día se quiere el panel
+     de Vercel, hay que habilitarlo en el proyecto ANTES de volver a poner esto:
+     el guion solo lo sirve el edge cuando la función está activa. -->
 </head>
 <!-- La clase nace puesta y el interruptor de más abajo la quita si los agentes
      vuelven. Antes la ponía `ocultarAgentes()` al estar listo el DOM, y hasta
