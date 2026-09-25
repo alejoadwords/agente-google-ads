@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mente Sana, Corazón Contento® — Reto de 21 días para líderes | Marlen Tu Coach</title>
+<meta name="description" content="El reto de 21 días para líderes agotados que quieren dejar de liderar en modo supervivencia. Acceso inmediato, 15 minutos al día y garantía de 7 días.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: oklch(97.4% 0.012 85);
+    --paper-2: oklch(94.2% 0.02 82);
+    --line: oklch(87% 0.022 82);
+    --ink: oklch(24% 0.055 262);
+    --ink-2: oklch(40% 0.04 262);
+    --ink-3: oklch(52% 0.03 262);
+    --sage: oklch(64% 0.055 162);
+    --sage-deep: oklch(45% 0.06 165);
+    --sage-tint: oklch(92.5% 0.028 160);
+    --gold: oklch(80% 0.125 82);
+    --gold-hi: oklch(85% 0.11 88);
+    --gold-deep: oklch(58% 0.11 70);
+    --on-ink: oklch(95% 0.012 85);
+    --on-ink-2: oklch(80% 0.02 262);
+
+    --f-display: "Fraunces", Georgia, serif;
+    --f-body: "Hanken Grotesk", system-ui, sans-serif;
+    --step--1: clamp(0.86rem, 0.83rem + 0.12vw, 0.94rem);
+    --step-0: clamp(1.02rem, 0.98rem + 0.2vw, 1.14rem);
+    --step-1: clamp(1.22rem, 1.13rem + 0.42vw, 1.48rem);
+    --step-2: clamp(1.5rem, 1.3rem + 0.9vw, 2.05rem);
+    --step-3: clamp(1.9rem, 1.5rem + 1.8vw, 3rem);
+    --step-4: clamp(2.35rem, 1.7rem + 3vw, 4.3rem);
+    --gutter: clamp(1rem, 0.6rem + 2vw, 2.5rem);
+    --section: clamp(4.5rem, 3rem + 6vw, 8.5rem);
+    --radius: 14px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--f-body); font-size: var(--step-0); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  img { max-width: 100%; display: block; height: auto; }
+  a { color: inherit; }
+  h1, h2, h3 { font-family: var(--f-display); font-weight: 500; line-height: 1.08; letter-spacing: -0.015em; margin: 0; font-variation-settings: "opsz" 120; text-wrap: balance; }
+  p { margin: 0; text-wrap: pretty; }
+  .wrap { width: min(1180px, 100% - 2 * var(--gutter)); margin-inline: auto; }
+  .eyebrow { font-size: var(--step--1); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sage-deep); }
+  .muted { color: var(--ink-2); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  /* Botón de compra: el único elemento dorado de la página */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.6em; font: 700 var(--step-0)/1.2 var(--f-body); text-decoration: none; border-radius: 999px; padding: 1.05em 1.7em; transition: transform 0.25s var(--ease), background-color 0.25s var(--ease), box-shadow 0.25s var(--ease); }
+  .btn-buy { background: var(--gold); color: var(--ink); box-shadow: 0 1px 0 var(--gold-deep), 0 10px 26px -12px oklch(58% 0.11 70 / 0.7); }
+  .btn-buy:hover { background: var(--gold-hi); transform: translateY(-2px); }
+  .btn-buy:focus-visible, .btn-ghost:focus-visible, summary:focus-visible, .video button:focus-visible { outline: 3px solid var(--sage-deep); outline-offset: 3px; }
+  .btn-buy svg { transition: transform 0.25s var(--ease); }
+  .btn-buy:hover svg { transform: translateX(3px); }
+  .btn-ghost { color: var(--ink); border: 1.5px solid var(--ink); background: transparent; padding: 0.8em 1.3em; font-size: var(--step--1); }
+  .btn-ghost:hover { background: var(--ink); color: var(--on-ink); }
+
+  /* Cabecera */
+  .top { padding-block: 1.1rem; }
+  .top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .logo img { height: 104px; width: auto; filter: brightness(0); opacity: 0.86; margin-block: -26px; margin-left: -14px; }
+  .top-cta { display: flex; align-items: center; gap: 1rem; font-size: var(--step--1); }
+  .top-cta .price { color: var(--ink-2); }
+  .top-cta .price b { color: var(--ink); }
+
+  /* Portada */
+  .hero { padding-block: clamp(1.5rem, 1rem + 3vw, 4rem) clamp(3rem, 2rem + 4vw, 6rem); }
+  .hero .wrap { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: clamp(2rem, 1rem + 4vw, 5rem); align-items: center; }
+  .hero h1 { font-size: var(--step-4); margin: 1rem 0 1.25rem; }
+  .hero h1 em { font-style: italic; color: var(--sage-deep); }
+  .hero .lead { font-size: var(--step-1); color: var(--ink-2); max-width: 36ch; }
+  .hero .lead strong { color: var(--ink); font-weight: 600; }
+  .buy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.5rem; margin-top: 2rem; }
+  .price-tag { display: flex; align-items: baseline; gap: 0.5rem; }
+  .price-tag .now { font-family: var(--f-display); font-size: var(--step-2); font-weight: 600; }
+  .price-tag s { color: var(--ink-3); }
+  .assure { display: flex; flex-wrap: wrap; gap: 0.4rem 1.4rem; margin-top: 1.5rem; padding: 0; list-style: none; font-size: var(--step--1); color: var(--ink-2); }
+  .assure li { display: flex; align-items: center; gap: 0.45rem; }
+  .assure svg { color: var(--sage-deep); flex: none; }
+
+  .hero-visual { position: relative; }
+  .hero-visual .slab { position: absolute; inset: 8% -6% -4% 14%; background: var(--sage-tint); border-radius: 28px; }
+  .hero-visual .cover { position: relative; width: 78%; margin-inline: auto; border-radius: 6px; box-shadow: 0 30px 60px -28px oklch(24% 0.055 262 / 0.55), 0 2px 6px oklch(24% 0.055 262 / 0.15); transform: rotate(-2.5deg); }
+  .coach-chip { position: absolute; left: -4%; bottom: -5%; display: flex; align-items: center; gap: 0.75rem; background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 0.45rem 1.1rem 0.45rem 0.45rem; font-size: var(--step--1); line-height: 1.3; box-shadow: 0 12px 30px -18px oklch(24% 0.055 262 / 0.5); }
+  .coach-chip img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; object-position: top; background: var(--sage-tint); }
+  .coach-chip b { display: block; }
+
+  /* 21 puntos: el reto a la vista */
+  .days { display: flex; gap: clamp(0.6rem, 0.3rem + 1vw, 1.1rem); }
+  .days .week { display: flex; gap: 5px; }
+  .days i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--sage); display: block; }
+  .days .week.on i { background: var(--sage); }
+  .hero .days { margin-top: 2.2rem; align-items: center; flex-wrap: wrap; row-gap: 0.5rem; }
+  .hero .days small { font-size: var(--step--1); color: var(--ink-3); margin-left: 0.4rem; }
+
+  /* Cita editorial */
+  .quote { border-block: 1px solid var(--line); padding-block: clamp(2.5rem, 2rem + 3vw, 4.5rem); }
+  .quote p { font-family: var(--f-display); font-style: italic; font-weight: 400; font-size: var(--step-3); line-height: 1.2; max-width: 22ch; letter-spacing: -0.01em; }
+  .quote p span { color: var(--sage-deep); }
+
+  section { padding-block: var(--section); }
+  .split { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: clamp(2rem, 1rem + 5vw, 6rem); align-items: start; }
+  .split h2 { font-size: var(--step-3); }
+  .sticky-col { position: sticky; top: 2rem; }
+
+  /* Identificación */
+  .signals { list-style: none; margin: 0; padding: 0; }
+  .signals li { display: grid; grid-template-columns: auto 1fr; gap: 1.1rem; padding-block: 1.4rem; border-bottom: 1px solid var(--line); font-size: var(--step-1); }
+  .signals li:first-child { border-top: 1px solid var(--line); }
+  .signals .n { font-family: var(--f-display); color: var(--sage-deep); font-size: var(--step-0); padding-top: 0.25rem; }
+  .note { margin-top: 1.8rem; color: var(--ink-2); max-width: 46ch; }
+
+  /* Video */
+  .video-sec { background: var(--paper-2); }
+  .video-sec .head { display: flex; justify-content: space-between; align-items: end; gap: 2rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .video-sec h2 { font-size: var(--step-3); max-width: 16ch; }
+  .video { position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden; background: var(--ink); }
+  .video img { width: 100%; height: 100%; object-fit: cover; opacity: 0.82; }
+  .video button { position: absolute; inset: 0; margin: auto; width: 88px; height: 88px; border-radius: 50%; border: 0; background: var(--paper); color: var(--ink); cursor: pointer; display: grid; place-items: center; box-shadow: 0 14px 40px -12px oklch(0% 0 0 / 0.5); transition: transform 0.3s var(--ease); }
+  .video button:hover { transform: scale(1.06); }
+  .video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+  /* Las 4 fases */
+  .phases { list-style: none; margin: 0; padding: 0; counter-reset: fase; }
+  .phases li { display: grid; grid-template-columns: 4.2rem 1fr; gap: 0.5rem 1.2rem; padding-block: 1.9rem; border-bottom: 1px solid var(--line); }
+  .phases li:first-child { padding-top: 0; }
+  .phases .num { font-family: var(--f-display); font-size: var(--step-3); line-height: 1; color: var(--sage); font-weight: 400; grid-row: span 2; }
+  .phases h3 { font-size: var(--step-2); }
+  .phases p { color: var(--ink-2); max-width: 52ch; }
+
+  /* Reto de 21 días */
+  .challenge { background: var(--ink); color: var(--on-ink); }
+  .challenge .eyebrow { color: var(--sage); }
+  .challenge h2 { font-size: var(--step-3); max-width: 20ch; margin-top: 0.8rem; }
+  .weeks { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(1rem, 0.5rem + 2vw, 2.5rem); margin-top: clamp(2.5rem, 2rem + 2vw, 4rem); }
+  .wk .days i { width: 13px; height: 13px; border-color: var(--sage); }
+  .wk .days .week { gap: 7px; }
+  .wk .days .week i { background: transparent; transition: background-color 0.4s var(--ease); transition-delay: calc(var(--d) * 45ms); }
+  .challenge.seen .wk .days .week i { background: var(--sage); }
+  .wk .lbl { margin-top: 1.4rem; font-size: var(--step--1); letter-spacing: 0.1em; text-transform: uppercase; color: var(--on-ink-2); }
+  .wk h3 { font-size: var(--step-2); margin: 0.35rem 0 0.8rem; }
+  .wk p { color: var(--on-ink-2); }
+  .wk p + p { margin-top: 0.4rem; }
+  .challenge .foot { margin-top: clamp(2.5rem, 2rem + 2vw, 3.5rem); display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: center; }
+  .challenge .foot span { color: var(--on-ink-2); font-size: var(--step--1); }
+
+  /* Marlen */
+  .coach .wrap { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: clamp(2rem, 1rem + 5vw, 6rem); align-items: center; }
+  .coach-photo { position: relative; background: var(--sage-tint); border-radius: 28px 28px 28px 120px; overflow: hidden; aspect-ratio: 4 / 4.6; }
+  .coach-photo img { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 108%; max-width: none; }
+  .coach h2 { font-size: var(--step-3); margin: 0.8rem 0 0.6rem; }
+  .coach .role { font-size: var(--step-1); color: var(--sage-deep); font-family: var(--f-display); font-style: italic; }
+  .coach .bio { margin-top: 1.4rem; color: var(--ink-2); }
+  .certs { margin: 1.8rem 0 0; padding: 0; list-style: none; display: grid; gap: 0.6rem; font-size: var(--step--1); }
+  .certs li { display: grid; grid-template-columns: auto 1fr; gap: 0.7rem; }
+  .certs li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--sage); margin-top: 0.55em; }
+  .coach .sign { margin-top: 1.6rem; font-family: var(--f-display); font-style: italic; font-size: var(--step-1); }
+
+  /* Qué incluye */
+  .includes { background: var(--paper-2); }
+  .includes h2 { font-size: var(--step-3); }
+  .inc-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 clamp(1.5rem, 1rem + 3vw, 4rem); }
+  .inc-list li { padding-block: 1.3rem; border-bottom: 1px solid var(--line); }
+  .inc-list b { display: block; font-size: var(--step-1); font-family: var(--f-display); font-weight: 500; margin-bottom: 0.25rem; }
+  .inc-list span { color: var(--ink-2); font-size: var(--step--1); }
+  .bonus-head { display: flex; justify-content: space-between; align-items: end; gap: 1.5rem; flex-wrap: wrap; margin: clamp(4rem, 3rem + 3vw, 6rem) 0 2rem; }
+  .bonus-head h2 { font-size: var(--step-3); }
+  .bonus-head h2 em { font-style: italic; color: var(--sage-deep); }
+  .bonuses { display: grid; grid-template-columns: repeat(6, 1fr); gap: clamp(0.8rem, 0.4rem + 1.2vw, 1.5rem); }
+  .bonus img { border-radius: 8px; box-shadow: 0 16px 30px -20px oklch(24% 0.055 262 / 0.55); aspect-ratio: 1131 / 1600; object-fit: cover; }
+  .bonus .tag { margin-top: 1rem; font-size: var(--step--1); font-weight: 700; color: var(--sage-deep); letter-spacing: 0.06em; text-transform: uppercase; }
+  .bonus h3 { font-size: var(--step-0); font-family: var(--f-body); font-weight: 700; line-height: 1.3; margin: 0.25rem 0 0.4rem; letter-spacing: 0; }
+  .bonus p { font-size: var(--step--1); color: var(--ink-2); line-height: 1.5; }
+
+  /* Testimonios */
+  .voices h2 { font-size: var(--step-3); }
+  .voices-grid { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: clamp(1rem, 0.5rem + 2vw, 2.5rem); margin-top: clamp(2rem, 1.5rem + 2vw, 3.5rem); align-items: start; }
+  .voice blockquote { margin: 0; font-size: var(--step-0); }
+  .voice figcaption { margin-top: 1rem; font-size: var(--step--1); color: var(--ink-2); display: flex; align-items: center; gap: 0.7rem; }
+  .voice figcaption b { color: var(--ink); display: block; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--sage-tint); color: var(--sage-deep); display: grid; place-items: center; font-weight: 700; font-size: 0.85rem; flex: none; }
+  .voice.feature { grid-row: span 2; background: var(--sage-tint); border-radius: var(--radius); padding: clamp(1.5rem, 1rem + 2vw, 2.5rem); }
+  .voice.feature blockquote { font-family: var(--f-display); font-size: var(--step-1); line-height: 1.35; }
+  .voice.feature .avatar { background: var(--paper); }
+  .voice:not(.feature) { padding-block: 0.4rem 1.6rem; border-bottom: 1px solid var(--line); }
+
+  /* Oferta */
+  .offer { background: var(--ink); color: var(--on-ink); }
+  .offer .wrap { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: clamp(2rem, 1rem + 5vw, 6rem); align-items: center; }
+  .offer .cover { border-radius: 6px; transform: rotate(-2deg); box-shadow: 0 40px 70px -30px oklch(0% 0 0 / 0.7); max-width: 380px; margin-inline: auto; }
+  .offer .eyebrow { color: var(--sage); }
+  .offer h2 { font-size: var(--step-3); margin: 0.8rem 0 0.5rem; }
+  .offer .sub { color: var(--on-ink-2); font-size: var(--step-1); font-family: var(--f-display); font-style: italic; }
+  .stack { list-style: none; padding: 0; margin: 2rem 0; display: grid; gap: 0.7rem; }
+  .stack li { display: grid; grid-template-columns: auto 1fr; gap: 0.8rem; align-items: start; }
+  .stack svg { color: var(--sage); margin-top: 0.3rem; }
+  .stack li.bon { color: var(--on-ink-2); }
+  .offer .price-tag { margin-bottom: 1.3rem; }
+  .offer .price-tag .now { font-size: var(--step-4); line-height: 1; color: var(--on-ink); }
+  .offer .price-tag s { color: var(--on-ink-2); font-size: var(--step-1); }
+  .offer .price-tag small { color: var(--on-ink-2); font-size: var(--step--1); margin-left: 0.3rem; }
+  .offer .btn-buy { width: 100%; max-width: 440px; font-size: var(--step-1); }
+  .pay { margin-top: 1.2rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; font-size: var(--step--1); color: var(--on-ink-2); }
+  .pay img { height: 58px; width: auto; border-radius: 4px; background: var(--on-ink); padding: 3px 6px; }
+  .guarantee { margin-top: 2.2rem; padding-top: 2rem; border-top: 1px solid oklch(40% 0.04 262); display: grid; grid-template-columns: 76px 1fr; gap: 1.2rem; align-items: center; }
+  .guarantee img { width: 76px; }
+  .guarantee b { display: block; font-family: var(--f-display); font-weight: 500; font-size: var(--step-1); margin-bottom: 0.25rem; }
+  .guarantee p { color: var(--on-ink-2); font-size: var(--step--1); }
+
+  /* Preguntas frecuentes */
+  .faq h2 { font-size: var(--step-3); }
+  .faq .help { margin-top: 1.2rem; color: var(--ink-2); }
+  .faq .help a { color: var(--sage-deep); font-weight: 600; }
+  details { border-bottom: 1px solid var(--line); }
+  details:first-of-type { border-top: 1px solid var(--line); }
+  summary { list-style: none; cursor: pointer; padding: 1.3rem 2.5rem 1.3rem 0; position: relative; font-weight: 600; font-size: var(--step-0); }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: ""; position: absolute; right: 0.3rem; top: 50%; width: 12px; height: 12px; border-right: 2px solid var(--sage-deep); border-bottom: 2px solid var(--sage-deep); transform: translateY(-70%) rotate(45deg); transition: transform 0.3s var(--ease); }
+  details[open] summary::after { transform: translateY(-30%) rotate(225deg); }
+  details p { padding-bottom: 1.4rem; color: var(--ink-2); max-width: 60ch; }
+
+  /* Cierre */
+  .close { text-align: left; padding-block: var(--section); border-top: 1px solid var(--line); }
+  .close .wrap { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 2rem 4rem; align-items: end; }
+  .close h2 { font-size: var(--step-4); }
+  .close h2 em { font-style: italic; color: var(--sage-deep); }
+  .close .days { margin-bottom: 1.5rem; }
+  .close .side p { color: var(--ink-2); margin-bottom: 1.4rem; }
+
+  footer { background: var(--paper-2); padding-block: 3rem 6rem; font-size: var(--step--1); color: var(--ink-2); }
+  footer .wrap { display: grid; grid-template-columns: 1fr auto; gap: 1.5rem 3rem; align-items: start; }
+  footer .contact { display: flex; flex-wrap: wrap; gap: 0.6rem 1.8rem; }
+  footer a { text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  footer .legal { display: flex; gap: 1.5rem; }
+  footer .fine { grid-column: 1 / -1; font-size: 0.78rem; color: var(--ink-3); border-top: 1px solid var(--line); padding-top: 1.4rem; }
+
+  /* Barra de compra fija (celular) */
+  .buybar { position: fixed; inset: auto 0 0 0; z-index: 30; background: var(--paper); border-top: 1px solid var(--line); padding: 0.7rem var(--gutter) calc(0.7rem + env(safe-area-inset-bottom)); display: none; align-items: center; justify-content: space-between; gap: 1rem; transform: translateY(110%); transition: transform 0.35s var(--ease); box-shadow: 0 -10px 30px -20px oklch(24% 0.055 262 / 0.5); }
+  .buybar.show { transform: none; }
+  .buybar .p { line-height: 1.15; font-size: var(--step--1); color: var(--ink-2); }
+  .buybar .p b { display: block; font-family: var(--f-display); font-size: 1.35rem; color: var(--ink); font-weight: 600; }
+  .buybar .btn { padding: 0.85em 1.3em; font-size: 0.98rem; }
+
+  .wa { position: fixed; right: 1.2rem; bottom: 1.2rem; z-index: 25; width: 54px; height: 54px; border-radius: 50%; background: oklch(70% 0.17 150); display: grid; place-items: center; color: var(--paper); box-shadow: 0 10px 26px -10px oklch(0% 0 0 / 0.45); }
+
+  /* Entrada suave de la portada */
+  @media (prefers-reduced-motion: no-preference) {
+    .rise { opacity: 0; transform: translateY(14px); animation: rise 0.9s var(--ease) forwards; animation-delay: calc(var(--i, 0) * 90ms + 80ms); }
+    @keyframes rise { to { opacity: 1; transform: none; } }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .challenge .wk .days .week i { background: var(--sage); transition: none; }
+    .btn, .buybar, .video button { transition: none; }
+  }
+
+  @media (max-width: 960px) {
+    .hero .wrap, .split, .coach .wrap, .offer .wrap, .close .wrap { grid-template-columns: 1fr; }
+    .hero-visual { max-width: 460px; margin-inline: auto; width: 100%; }
+    .sticky-col { position: static; }
+    .bonuses { grid-template-columns: repeat(3, 1fr); row-gap: 2.2rem; }
+    .voices-grid { grid-template-columns: 1fr 1fr; }
+    .voice.feature { grid-column: 1 / -1; grid-row: auto; }
+    .coach-photo { max-width: 460px; }
+    .offer .cover { max-width: 260px; }
+  }
+  @media (max-width: 720px) {
+    .top-cta .price, .top-cta .btn { display: none; }
+    .weeks { grid-template-columns: 1fr; gap: 2.2rem; }
+    .inc-list { grid-template-columns: 1fr; }
+    .bonuses { grid-template-columns: repeat(2, 1fr); }
+    .voices-grid { grid-template-columns: 1fr; }
+    .buybar { display: flex; }
+    .wa { display: none; }
+    footer .wrap { grid-template-columns: 1fr; }
+    .coach-chip { left: 0; }
+    .logo img { height: 84px; margin-block: -20px; margin-left: -10px; }
+    .hero .days small { flex-basis: 100%; margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="https://marlentucoach.com/" aria-label="Marlen Tu Coach — inicio"><img src="https://marlentucoach.com/wp-content/uploads/2025/12/POST_LOGOS_Marlene-removebg-preview.png" alt="Marlen Tu Coach"></a>
+    <div class="top-cta">
+      <span class="price"><b>47 USD</b> · acceso inmediato</span>
+      <a class="btn btn-ghost" href="https://pay.hotmart.com/N102929415G?checkoutMode=10">Entrar al reto</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero" aria-labelledby="titulo">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow rise" style="--i:0">Mente Sana, Corazón Contento® · Reto de 21 días</p>
+        <h1 id="titulo" class="rise" style="--i:1">Recupera la calma mental y el equilibrio emocional para <em>liderar sin colapsar</em></h1>
+        <p class="lead rise" style="--i:2">El reto de 21 días para <strong>líderes agotados</strong> que quieren dejar de liderar en modo supervivencia. Curso 100% digital, con herramientas prácticas de implementación.</p>
+        <div class="buy-row rise" style="--i:3">
+          <a class="btn btn-buy" href="https://pay.hotmart.com/N102929415G?checkoutMode=10">Entrar al reto de 21 días
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <div class="price-tag"><span class="now">47 USD</span><s>97 USD</s></div>
+        </div>
+        <ul class="assure rise" style="--i:4">
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Acceso inmediato</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Unos 15 minutos al día</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Garantía de 7 días</li>
+        </ul>
+        <div class="days rise" style="--i:5" aria-label="21 días en 3 semanas">
+          <span class="week on"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="week"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="week"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <small>Reconocer · Regular · Integrar</small>
+        </div>
+      </div>
+      <div class="hero-visual rise" style="--i:2">
+        <div class="slab"></div>
+        <img class="cover" src="https://marlentucoach.com/wp-content/uploads/2026/07/icon-img-marco-mente-sana-e1784841330370.webp" alt="Portada del curso Mente Sana, Corazón Contento: 21 días para liderar con serenidad, bienestar y salud emocional" width="899" height="1274">
+        <div class="coach-chip">
+          <img src="https://marlentucoach.com/wp-content/uploads/2026/01/Marlen-home.png" alt="">
+          <span><b>Con Marlen Fernández Barrera</b>16 años formando líderes en Iberoamérica</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="quote">
+    <div class="wrap"><p>La salud emocional no se trata de soportar la carga, <span>sino de vivir en equilibrio.</span></p></div>
+  </div>
+
+  <section aria-labelledby="t-senales">
+    <div class="wrap split">
+      <div class="sticky-col">
+        <p class="eyebrow">¿Es para ti?</p>
+        <h2 id="t-senales" style="margin-top:.8rem">¿Te sientes en modo supervivencia todos los días?</h2>
+      </div>
+      <div>
+        <ul class="signals">
+          <li><span class="n">01</span><span>Te cuesta parar, aunque sabes que lo necesitas.</span></li>
+          <li><span class="n">02</span><span>Duermes con la mente acelerada.</span></li>
+          <li><span class="n">03</span><span>Decides desde la urgencia y no desde la claridad.</span></li>
+          <li><span class="n">04</span><span>Sientes desgaste mental o emocional, pero no puedes detener tu vida profesional.</span></li>
+        </ul>
+        <p class="note">No hace falta llegar a una crisis: el reto también es para prevenir el desgaste antes de llegar al límite, con prácticas simples para recuperar calma y claridad.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="video-sec" aria-labelledby="t-video">
+    <div class="wrap">
+      <div class="head">
+        <h2 id="t-video">Resumen del contenido</h2>
+        <p class="muted" style="max-width:38ch">Mira qué vas a trabajar durante el reto antes de decidir.</p>
+      </div>
+      <div class="video" id="video">
+        <img src="https://i.ytimg.com/vi/8JMcN-I0OrE/hqdefault.jpg" alt="" loading="lazy">
+        <button type="button" aria-label="Reproducir el video resumen del curso">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t-fases">
+    <div class="wrap split">
+      <div class="sticky-col">
+        <p class="eyebrow">El método</p>
+        <h2 id="t-fases" style="margin-top:.8rem">Proceso de las 4 fases que transforman tu bienestar</h2>
+      </div>
+      <ol class="phases">
+        <li><span class="num">01</span><h3>El punto de quiebre</h3><p>Llegas al límite: el desgaste emocional ya no se puede seguir ignorando ni disfrazando. Es el momento en que tu cuerpo, tu mente y tu liderazgo dicen basta.</p></li>
+        <li><span class="num">02</span><h3>Regulación emocional</h3><p>Aprenderás a reconocer, interpretar y gestionar lo que sientes en vez de reprimirlo o reaccionar desde la urgencia. Aquí dejas de decidir desde el agotamiento.</p></li>
+        <li><span class="num">03</span><h3>Reto de 21 días</h3><p>Sigues una estrategia de implementación paso a paso: micro-hábitos diarios que construyen una estructura sostenible de energía, enfoque y estabilidad emocional.</p></li>
+        <li><span class="num">04</span><h3>Sanar para sostener</h3><p>Tendrás claridad y autocontrol integrados en tu liderazgo y comunicación hasta que la regulación emocional se vuelva tu forma normal de liderar.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="challenge" id="reto" aria-labelledby="t-reto">
+    <div class="wrap">
+      <p class="eyebrow">Reto de implementación</p>
+      <h2 id="t-reto">¿En qué consiste el reto de 21 días?</h2>
+      <div class="weeks">
+        <div class="wk">
+          <div class="days"><span class="week"><i style="--d:0"></i><i style="--d:1"></i><i style="--d:2"></i><i style="--d:3"></i><i style="--d:4"></i><i style="--d:5"></i><i style="--d:6"></i></span></div>
+          <p class="lbl">Semana 1 · días 1–7</p>
+          <h3>Reconocer</h3>
+          <p>Micro-hábitos diarios de bienestar.</p>
+          <p>Acciones concretas y manejables.</p>
+        </div>
+        <div class="wk">
+          <div class="days"><span class="week"><i style="--d:7"></i><i style="--d:8"></i><i style="--d:9"></i><i style="--d:10"></i><i style="--d:11"></i><i style="--d:12"></i><i style="--d:13"></i></span></div>
+          <p class="lbl">Semana 2 · días 8–14</p>
+          <h3>Regular</h3>
+          <p>Implementación progresiva, paso a paso.</p>
+          <p>Rutinas conscientes para favorecer energía, enfoque y estabilidad emocional.</p>
+        </div>
+        <div class="wk">
+          <div class="days"><span class="week"><i style="--d:14"></i><i style="--d:15"></i><i style="--d:16"></i><i style="--d:17"></i><i style="--d:18"></i><i style="--d:19"></i><i style="--d:20"></i></span></div>
+          <p class="lbl">Semana 3 · días 15–21</p>
+          <h3>Integrar</h3>
+          <p>Seguimiento de la práctica para convertir pequeñas acciones en una estructura sostenible.</p>
+        </div>
+      </div>
+      <div class="foot">
+        <a class="btn btn-buy" href="https://pay.hotmart.com/N102929415G?checkoutMode=10">Quiero comenzar el reto</a>
+        <span>47 USD · acceso de por vida</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="coach" aria-labelledby="t-coach">
+    <div class="wrap">
+      <div class="coach-photo"><img src="https://marlentucoach.com/wp-content/uploads/2026/01/Marlen-home.png" alt="Marlen Fernández Barrera" loading="lazy"></div>
+      <div>
+        <p class="eyebrow">Quién te acompaña</p>
+        <h2 id="t-coach">Marlen Fernández Barrera</h2>
+        <p class="role">Consultora empresarial, coach de emprendedores y formadora en liderazgo consciente.</p>
+        <p class="bio">Con más de 16 años de experiencia impulsando a emprendedores, empresarios y líderes en Iberoamérica, he desarrollado programas que combinan estrategia de negocios, liderazgo híbrido (presencial y remoto) y bienestar emocional para lograr equipos más productivos y líderes más plenos.</p>
+        <p class="bio">Esta experiencia me ha permitido ayudarles a lograr resultados extraordinarios y sostenibles, sin sacrificar su bienestar, claridad mental y equilibrio personal, enfrentando de forma consciente los desafíos reales del liderazgo moderno.</p>
+        <ul class="certs">
+          <li>Coach Facilitador certificado por Coaching Ontológico S.C.</li>
+          <li>Acreditación de Licencia Coach – Ville Spain & IAC.</li>
+          <li>Certificación en Coaching e Inteligencia Emocional en grado por la Universidad Complutense de Madrid, España.</li>
+          <li>Certificación en Coaching Personal en la Escuela de Inteligencia Emocional de Madrid, España.</li>
+          <li>Curso Superior en Coaching Presencial en la Universidad del Rey Juan Carlos y Escuela Inteligencia de Madrid, España.</li>
+        </ul>
+        <p class="sign">Disfruta el camino.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="includes" aria-labelledby="t-incluye">
+    <div class="wrap">
+      <div class="split" style="align-items:start">
+        <div class="sticky-col">
+          <p class="eyebrow">Tu inscripción</p>
+          <h2 id="t-incluye" style="margin-top:.8rem">¿Qué incluye?</h2>
+        </div>
+        <ul class="inc-list">
+          <li><b>Master Class grabadas</b><span>Contenido práctico, directo y enfocado en ayudarte a liderar desde la serenidad y el bienestar emocional.</span></li>
+          <li><b>Libro digital</b><span>Conceptos clave, ejemplos cotidianos, ejercicios paso a paso y reflexiones guiadas.</span></li>
+          <li><b>Plantilla del reto de 21 días</b><span>Un mapa claro y sencillo para aplicar hábitos de bienestar emocional sin frustración.</span></li>
+          <li><b>Acceso de por vida</b><span>Desde cualquier dispositivo, 24/7, para volver a las prácticas cada vez que sientas estrés.</span></li>
+        </ul>
+      </div>
+
+      <div class="bonus-head">
+        <h2>Y además, <em>6 bonos exclusivos</em></h2>
+        <p class="muted" style="max-width:40ch">Herramientas para aplicar el proceso paso a paso.</p>
+      </div>
+      <div class="bonuses">
+        <article class="bonus"><img src="https://marlentucoach.com/wp-content/uploads/2026/01/mente-card-01.jpeg" alt="Portada del bono Test de salud y bienestar del líder" loading="lazy"><p class="tag">Bono 1</p><h3>Test de salud y bienestar del líder</h3><p>Un diagnóstico personal para medir tu nivel de bienestar integral y prevenir desgaste emocional.</p></article>
+        <article class="bonus"><img src="https://marlentucoach.com/wp-content/uploads/2026/01/mente-card-02.jpeg" alt="Portada del bono Test de lenguaje emocional" loading="lazy"><p class="tag">Bono 2</p><h3>Test de lenguaje emocional</h3><p>Te ayuda a reconocer cómo expresas, interpretas y gestionas tus emociones en el día a día.</p></article>
+        <article class="bonus"><img src="https://marlentucoach.com/wp-content/uploads/2026/08/mente-card-03-actualizado.webp" alt="Portada del bono Botiquín emocional del líder" loading="lazy"><p class="tag">Bono 3</p><h3>Botiquín emocional del líder</h3><p>Herramientas prácticas de implementación para regular tu sistema emocional ante desafíos y decisiones.</p></article>
+        <article class="bonus"><img src="https://marlentucoach.com/wp-content/uploads/2026/06/mente-card-04-01.webp" alt="Portada del bono 21 micro-hábitos claves" loading="lazy"><p class="tag">Bono 4</p><h3>21 micro-hábitos claves</h3><p>La guía de micro-hábitos ayuda a transformar desde pequeños pasos diarios.</p></article>
+        <article class="bonus"><img src="https://marlentucoach.com/wp-content/uploads/2026/01/mente-card-05.jpeg" alt="Portada del bono Estrategias de inteligencia emocional aplicadas a la comunicación asertiva en liderazgo" loading="lazy"><p class="tag">Bono 5</p><h3>Inteligencia emocional para la comunicación asertiva</h3><p>Herramientas para comunicarte con más claridad, empatía y autocontrol.</p></article>
+        <article class="bonus"><img src="https://marlentucoach.com/wp-content/uploads/2026/01/mente-card-06.jpeg" alt="Portada del bono Test de autoevaluación del equilibrio personal y laboral" loading="lazy"><p class="tag">Bono 6</p><h3>¿Cómo está tu equilibrio entre lo personal y lo laboral?</h3><p>Una evaluación rápida para identificar qué tan balanceada está tu vida.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="voices" aria-labelledby="t-voces">
+    <div class="wrap">
+      <p class="eyebrow">Testimonios</p>
+      <h2 id="t-voces" style="margin-top:.8rem">Líderes que ya lo están viviendo</h2>
+      <div class="voices-grid">
+        <figure class="voice feature">
+          <blockquote>“Sentía que avanzaba profesionalmente, pero por dentro estaba agotada. Mente sana, corazón contento me hizo ver que también puedo liderar desde el bienestar.”</blockquote>
+          <figcaption><span class="avatar" aria-hidden="true">VR</span><span><b>Valeria Rojas</b>Gerente de marketing · Perú</span></figcaption>
+        </figure>
+        <figure class="voice">
+          <blockquote>“No sabía qué tanto necesitaba cuidar mi mente para liderar. Mi equipo y yo ahora estamos más alineados y en mejor sintonía.”</blockquote>
+          <figcaption><span class="avatar" aria-hidden="true">AT</span><span><b>Angela Talledo</b>Gerente de recursos humanos · Argentina</span></figcaption>
+        </figure>
+        <figure class="voice">
+          <blockquote>“Este curso llegó justo cuando necesitaba aprender a cuidar mi mente sin dejar de ser productiva.”</blockquote>
+          <figcaption><span class="avatar" aria-hidden="true">CV</span><span><b>Carolina Velasco</b>Gerente de proyecto · Colombia</span></figcaption>
+        </figure>
+        <figure class="voice">
+          <blockquote>“La presión constante me estaba pasando factura emocional. Buscaba una forma consciente de gestionar el estrés sin desconectarme de mis responsabilidades.”</blockquote>
+          <figcaption><span class="avatar" aria-hidden="true">RG</span><span><b>Ricardo Gómez</b>Jefe de departamento · México</span></figcaption>
+        </figure>
+        <figure class="voice">
+          <blockquote>“Trabajo bajo resultados, metas y urgencias todos los días. Necesito herramientas reales para mantener la calma y claridad en medio del caos.”</blockquote>
+          <figcaption><span class="avatar" aria-hidden="true">MÁ</span><span><b>Miguel Álvarez</b>Product Manager · España</span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="offer" id="oferta" aria-labelledby="t-oferta">
+    <div class="wrap">
+      <img class="cover" src="https://marlentucoach.com/wp-content/uploads/2026/07/icon-img-marco-mente-sana-e1784841330370.webp" alt="Mente Sana, Corazón Contento" loading="lazy" width="899" height="1274">
+      <div>
+        <p class="eyebrow">Oferta especial</p>
+        <h2 id="t-oferta">Mente Sana, Corazón Contento®</h2>
+        <p class="sub">21 días para liderar con serenidad, bienestar y salud emocional</p>
+        <ul class="stack">
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Master Class grabadas</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Libro digital de bienestar emocional</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Plantilla del reto de 21 días</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Acceso de por vida, desde cualquier dispositivo</li>
+          <li class="bon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>6 bonos exclusivos: tests de bienestar, lenguaje emocional y equilibrio, botiquín emocional, 21 micro-hábitos y comunicación asertiva</li>
+        </ul>
+        <div class="price-tag"><span class="now">47 USD</span><s>97 USD</s><small>pago único</small></div>
+        <a class="btn btn-buy" href="https://pay.hotmart.com/N102929415G?checkoutMode=10">Entrar al reto de 21 días
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        <div class="pay"><img src="https://marlentucoach.com/wp-content/uploads/2025/12/metodo-de-pago-1-1.webp" alt="Tarjetas, PayPal, OXXO y otros métodos de pago" loading="lazy"><span>Tarjeta de crédito o débito, pagos en cuotas. Pagas en la moneda local de tu país.</span></div>
+        <div class="guarantee">
+          <img src="https://marlentucoach.com/wp-content/uploads/2026/07/icon-garantia-7-dias-3.webp" alt="Garantía de 7 días" loading="lazy">
+          <div><b>Garantía de 7 días</b><p>Confío plenamente en el impacto de este programa. Si después de aplicarlo no experimentas mayor calma mental, equilibrio emocional y una relación más sana contigo mismo, te devuelvo tu inversión.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="faq" aria-labelledby="t-faq">
+    <div class="wrap split">
+      <div class="sticky-col">
+        <p class="eyebrow">Resolvemos tus dudas</p>
+        <h2 id="t-faq" style="margin-top:.8rem">Preguntas frecuentes</h2>
+        <p class="help">¿Te queda otra duda? Escríbenos por <a href="https://wa.me/5219981355000?text=Hola%2C%20tengo%20una%20duda%20sobre%20Mente%20Sana%2C%20Coraz%C3%B3n%20Contento">WhatsApp</a>.</p>
+      </div>
+      <div>
+        <details open><summary>¿Para quién está diseñado este curso?</summary><p>Está diseñado para emprendedores, líderes y empresarios que sienten desgaste mental o emocional y desean recuperar claridad, equilibrio y bienestar sin detener su vida profesional.</p></details>
+        <details><summary>¿Necesito experiencia previa o conocimientos en bienestar emocional para tomar el reto?</summary><p>No. El reto está diseñado para cualquier persona que quiera mejorar su claridad mental y equilibrio emocional. Todo el contenido es práctico, sencillo y guiado paso a paso, sin tecnicismos ni experiencia previa.</p></details>
+        <details><summary>¿Este reto es solo para personas que están pasando por una crisis emocional?</summary><p>No. También es para prevenir el desgaste antes de llegar al límite. Si te cuesta parar, duermes con la mente acelerada o decides desde la urgencia, el reto te ayuda a recuperar calma y claridad con prácticas simples.</p></details>
+        <details><summary>¿Cuánto tiempo necesito dedicarle cada día?</summary><p>Está pensado para personas con agenda llena. Puedes avanzar con prácticas breves de aproximadamente 15 minutos al día y repetir los ejercicios cuando necesites reforzar tu bienestar emocional.</p></details>
+        <details><summary>¿Qué incluye exactamente mi inscripción?</summary><p>Incluye Master Class grabadas, libro digital de bienestar emocional, plantilla del reto de 21 días, acceso de por vida y 6 bonos exclusivos para aplicar el proceso paso a paso.</p></details>
+        <details><summary>¿Cuánto tiempo tendré acceso al contenido?</summary><p>Tendrás acceso de por vida. Puedes volver al contenido cada vez que necesites recuperar enfoque, regular tus emociones o retomar tus hábitos de bienestar.</p></details>
+        <details><summary>¿Qué tan rápido obtengo acceso después de pagar?</summary><p>Acceso inmediato. Recibirás un correo para entrar desde cualquier dispositivo, sin esperas ni complicaciones.</p></details>
+        <details><summary>¿Qué métodos de pago puedo usar?</summary><p>Tarjeta de crédito o débito y pagos en cuotas.</p></details>
+        <details><summary>¿Habrá soporte si me pierdo o tengo dudas al implementarlo?</summary><p>Sí. Podrás enviar tus preguntas por WhatsApp, correo electrónico o formulario.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="close" aria-labelledby="t-cierre">
+    <div class="wrap">
+      <div>
+        <div class="days" aria-hidden="true">
+          <span class="week on"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="week on"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="week on"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        </div>
+        <h2 id="t-cierre">21 días para liderar con serenidad, <em>bienestar y salud emocional</em></h2>
+      </div>
+      <div class="side">
+        <p>Acceso inmediato, unos 15 minutos al día y garantía de 7 días.</p>
+        <a class="btn btn-buy" href="https://pay.hotmart.com/N102929415G?checkoutMode=10">Entrar al reto · 47 USD</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="contact">
+      <a href="https://wa.me/5219981355000?text=Hola%2C%20quiero%20informaci%C3%B3n%20sobre%20tus%20servicios">WhatsApp (+52) 998 135 5000</a>
+      <a href="mailto:contacto@marlentucoach.com">contacto@marlentucoach.com</a>
+    </div>
+    <div class="legal">
+      <a href="https://marlentucoach.com/privacidad/">Aviso de privacidad</a>
+      <a href="https://marlentucoach.com/cookies/">Política de cookies</a>
+    </div>
+    <p class="fine">© 2026 Marlen Tu Coach. Todos los derechos reservados. Este sitio no forma parte de Facebook ni de Meta Platforms, Inc., y no está respaldado por Meta de ninguna forma. Facebook es una marca registrada de Meta Platforms, Inc.</p>
+  </div>
+</footer>
+
+<div class="buybar" id="buybar" aria-hidden="true">
+  <span class="p"><b>47 USD</b>Garantía de 7 días</span>
+  <a class="btn btn-buy" href="https://pay.hotmart.com/N102929415G?checkoutMode=10" tabindex="-1">Entrar al reto</a>
+</div>
+<a class="wa" href="https://wa.me/5219981355000?text=Hola%2C%20quiero%20informaci%C3%B3n%20sobre%20tus%20servicios" aria-label="Escribir por WhatsApp">
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.66 15L2 22l5.16-1.35A10 10 0 1 0 12 2zm5.47 14.13c-.23.65-1.34 1.24-1.85 1.28-.5.05-.97.23-3.26-.68-2.76-1.09-4.53-3.9-4.67-4.08-.13-.18-1.11-1.48-1.11-2.83 0-1.34.7-2 .95-2.28.25-.27.54-.34.72-.34h.52c.17 0 .39-.06.61.47.23.55.78 1.9.85 2.04.07.14.11.3.02.48-.53 1.07-1.1 1.03-.81 1.52.86 1.48 1.72 1.99 3.03 2.65.22.11.35.09.48-.06.13-.14.55-.64.7-.86.15-.22.3-.18.5-.11.2.07 1.29.61 1.51.72.22.11.37.17.42.26.06.1.06.55-.17 1.2z"/></svg>
+</a>
+
+<script>
+  // El video de YouTube solo se carga al pulsar: la página abre más rápido desde anuncios.
+  document.querySelector('#video button').addEventListener('click', function () {
+    var box = document.getElementById('video');
+    box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/8JMcN-I0OrE?autoplay=1&rel=0" title="Resumen del contenido de Mente Sana, Corazón Contento" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>';
+  });
+
+  // Barra de compra en celular: aparece al pasar la portada y se oculta en la oferta y el cierre,
+  // donde el botón ya está a la vista.
+  (function () {
+    var bar = document.getElementById('buybar');
+    var hero = document.querySelector('.hero .buy-row');
+    var hide = [document.getElementById('oferta'), document.querySelector('.close')];
+    var pastHero = false, onOffer = [false, false];
+    function update() { bar.classList.toggle('show', pastHero && !onOffer[0] && !onOffer[1]); }
+    new IntersectionObserver(function (e) { pastHero = !e[0].isIntersecting && e[0].boundingClientRect.top < 0; update(); }).observe(hero);
+    hide.forEach(function (el, i) { new IntersectionObserver(function (e) { onOffer[i] = e[0].isIntersecting; update(); }, { threshold: 0.15 }).observe(el); });
+  })();
+
+  // Los 21 puntos del reto se llenan al llegar a la sección.
+  (function () {
+    var sec = document.getElementById('reto');
+    new IntersectionObserver(function (e, o) { if (e[0].isIntersecting) { sec.classList.add('seen'); o.disconnect(); } }, { threshold: 0.35 }).observe(sec);
+  })();
+</script>
+</body>
+</html>

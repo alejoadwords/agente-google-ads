@@ -25057,7 +25057,7 @@ function cmdkCommands() {
     { group: 'Acciones', icon: '⚙️', label: 'Configuración',               kw: 'settings ajustes perfil cuenta', run: () => openSettings() },
     { group: 'Acciones', icon: '🔗', label: 'Conectar Google Ads',         kw: 'conectar google api vincular',  run: () => connectGoogleAds() },
     { group: 'Acciones', icon: '🔗', label: 'Conectar Meta Ads',           kw: 'conectar meta facebook api vincular', run: () => connectMetaAds() },
-    { group: 'Acciones', icon: '💳', label: 'Conectar MercadoPago',        kw: 'mercadopago pagos cobrar propuestas', run: () => connectMercadoPago() },
+      { group: 'Acciones', icon: '\u{1F4B3}', label: 'Conectar MercadoPago',        kw: 'mercadopago pagos cobrar propuestas', run: () => connectMercadoPago() },
     { group: 'Acciones', icon: '⭐', label: 'Actualizar plan',             kw: 'upgrade plan pro agency precio pagar', run: () => openUpgradeFlow() },
     { group: 'Acciones', icon: '🌙', label: 'Cambiar tema (claro/oscuro)', kw: 'dark mode modo oscuro tema claro noche', run: () => toggleTheme() },
     { group: 'Acciones', icon: '🎁', label: 'Novedades',                   kw: 'novedades nuevo cambios changelog actualizaciones que hay de nuevo', run: () => novAbrirManual() },
@@ -32835,6 +32835,10 @@ async function prpRenderAll() {
       const d = await fetchAuth('/api/proposals?mp_status=1').then(r => r.json());
       const el = document.getElementById('prp-mp-status');
       if (!el) return;
+      // Si el servidor dice que la conexión no está disponible, no se ofrece.
+      // A quien YA la tenga conectada se le sigue enseñando su estado: no se
+      // le esconde algo que está funcionando.
+      if (!d.connected && !d.disponible) { el.innerHTML = ''; return; }
       el.innerHTML = d.connected
         ? '<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#009EE3;background:#009EE314;border:1px solid #009EE340;border-radius:20px;padding:5px 13px">💳 MercadoPago conectado — tus propuestas cobran automático</span>'
         : '<button class="btn-sec sm" onclick="connectMercadoPago()" style="border-color:#009EE3;color:#009EE3">💳 Conectar MercadoPago — cobra tus propuestas automático</button>';

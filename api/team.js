@@ -3,9 +3,12 @@
 // miembro se registra con Clerk y al canjear el token queda vinculado al
 // workspace del dueño. Los endpoints core (leads, agenda, etiquetas, inbox)
 // resuelven member→owner para que el equipo trabaje sobre los mismos datos.
-// Asientos por plan (incluyen al dueño): Free/Pro 1 (invitar = upsell a
-// Agency), Agency 3. Admin sin límite. Add-on de asientos extra: futuro
-// (patrón leads_extra en el JWT: seats_extra).
+// Asientos por plan (incluyen al dueño): los dice PLAN_SEATS unas líneas más
+// abajo, que es la verdad — free 1, pro 3, agency 10. Aquí ponía «Free/Pro 1,
+// Agency 3», que dejó de ser cierto y mandó a revisar una cuenta de agencia
+// con siete asientos creyendo que se había saltado el límite.
+// Admin sin límite. Add-on de asientos extra: futuro (patrón leads_extra en
+// el JWT: seats_extra).
 export const config = { runtime: 'edge' };
 
 import { asegurarUsuario } from './_usuario-espejo.js';

@@ -347,7 +347,16 @@ export default async function handler(req) {
   // GET ?mp_status=1 — ¿tengo MercadoPago conectado? (para la UI de Propuestas)
   if (req.method === 'GET' && url.searchParams.get('mp_status')) {
     const c = await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.mercadopago&select=account_name,updated_at&limit=1`, { headers: sbHeaders() }).then(r => r.json()).catch(() => []);
-    return jsonResp({ connected: !!c?.length, account: c?.[0]?.account_name || null });
+    // `disponible` decide si la interfaz ofrece conectar. Sin las credenciales
+    // de MercadoPago configuradas, /api/mp-auth responde una página en blanco
+    // con un error crudo — y la aplicación le enseñaba a TODO el mundo un botón
+    // que prometía «cobra tus propuestas automáticamente» y llevaba justo ahí.
+    //
+    // El resto del circuito SÍ está: mp-auth arranca el OAuth,
+    // api/oauth/mp-callback guarda la conexión y mp-webhook cobra. Solo faltan
+    // las credenciales, así que en cuanto se configuren el botón vuelve solo.
+    const disponible = !!process.env.MP_CLIENT_ID;
+    return jsonResp({ connected: !!c?.length, account: c?.[0]?.account_name || null, disponible });
   }
 
   // GET — propuestas de un lead (o todas)
