@@ -14,10 +14,17 @@
 // Se ejecuta contra la base de verdad con cuentas inventadas, que se borran.
 
 import { execSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+
+// Identidad propia en cada pasada: con identificadores fijos, dos pasadas a la
+// vez —dos sesiones trabajando, o la batería lanzada dos veces— se pisaban y
+// salía «clave duplicada» o «queda algo de la prueba». Falla una vez de cada
+// tantas, que es la peor clase de prueba: la que enseña a no creerse los rojos.
+const SUFIJO = randomUUID().slice(0, 8);
 
 const PROYECTO = 'qgznzzhkuwxcknmcnrzn';
-const CUENTA = 'user_prueba_nps_ficha';
-const OTRA = 'user_prueba_nps_otra';
+const CUENTA = `user_prueba_nps_ficha_${SUFIJO}`;
+const OTRA = `user_prueba_nps_otra_${SUFIJO}`;
 
 const cru = execSync('security find-generic-password -s "Supabase CLI" -w', { encoding: 'utf8' }).trim();
 const TOK = Buffer.from(cru.replace(/^go-keyring-base64:/, ''), 'base64').toString('utf8').trim();
@@ -45,10 +52,10 @@ const claves = await fetch(`https://api.supabase.com/v1/projects/${PROYECTO}/api
 process.env.SUPABASE_URL = `https://${PROYECTO}.supabase.co`;
 process.env.SUPABASE_SERVICE_KEY = claves.find(k => k.name === 'service_role').api_key;
 
-const DETRACTOR = '77777777-0000-0000-0000-000000000001';
-const CALLADO   = '77777777-0000-0000-0000-000000000002';
-const NADA      = '77777777-0000-0000-0000-000000000003';
-const PROMOTOR  = '77777777-0000-0000-0000-000000000004';
+const DETRACTOR = randomUUID();
+const CALLADO   = randomUUID();
+const NADA      = randomUUID();
+const PROMOTOR  = randomUUID();
 
 const limpiar = () => sql(`
   delete from public.nps_responses where user_id in ('${CUENTA}','${OTRA}');
@@ -64,15 +71,15 @@ insert into public.leads (id, user_id, client_id, name, stage, source) values
 
 insert into public.nps_responses (user_id, client_id, lead_id, token, score, comment, sent_at, responded_at, answers, preguntas) values
  -- Contestó 4 y escribió. Y tiene una pregunta propia contestada.
- ('${CUENTA}', null, '${DETRACTOR}','tk1', 4, 'Tardaron mucho en responderme.',
+ ('${CUENTA}', null, '${DETRACTOR}','tk1_${SUFIJO}', 4, 'Tardaron mucho en responderme.',
    now() - interval '3 days', now() - interval '2 days',
    '{"p1":"El tiempo de respuesta","p2":3}'::jsonb,
    '[{"id":"p1","texto":"¿Qué podríamos mejorar?","tipo":"texto"},
      {"id":"p2","texto":"¿Cómo calificas la atención?","tipo":"escala5"}]'::jsonb),
  -- Enviada hace dos días y NUNCA contestada: score nulo, no un cero.
- ('${CUENTA}', null, '${CALLADO}','tk2', null, null, now() - interval '2 days', null, null, null),
+ ('${CUENTA}', null, '${CALLADO}','tk2_${SUFIJO}', null, null, now() - interval '2 days', null, null, null),
  -- Un promotor de otro cliente.
- ('${CUENTA}','cli_a','${PROMOTOR}','tk3', 10, '¡Excelentes!',
+ ('${CUENTA}','cli_a','${PROMOTOR}','tk3_${SUFIJO}', 10, '¡Excelentes!',
    now() - interval '5 days', now() - interval '5 days', null, null);`);
 
 const { encuestaDelLead } = await import('../api/nps.js');

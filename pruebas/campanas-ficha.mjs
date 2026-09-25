@@ -18,10 +18,17 @@
 // Se ejecuta contra la base de verdad con cuentas inventadas, que se borran.
 
 import { execSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+
+// Identidad propia en cada pasada: con identificadores fijos, dos pasadas a la
+// vez —dos sesiones trabajando, o la batería lanzada dos veces— se pisaban y
+// salía «clave duplicada» o «queda algo de la prueba». Falla una vez de cada
+// tantas, que es la peor clase de prueba: la que enseña a no creerse los rojos.
+const SUFIJO = randomUUID().slice(0, 8);
 
 const PROYECTO = 'qgznzzhkuwxcknmcnrzn';
-const CUENTA = 'user_prueba_camp_ficha';
-const OTRA = 'user_prueba_camp_otra';
+const CUENTA = `user_prueba_camp_ficha_${SUFIJO}`;
+const OTRA = `user_prueba_camp_otra_${SUFIJO}`;
 
 const cru = execSync('security find-generic-password -s "Supabase CLI" -w', { encoding: 'utf8' }).trim();
 const TOK = Buffer.from(cru.replace(/^go-keyring-base64:/, ''), 'base64').toString('utf8').trim();
@@ -49,15 +56,15 @@ const claves = await fetch(`https://api.supabase.com/v1/projects/${PROYECTO}/api
 process.env.SUPABASE_URL = `https://${PROYECTO}.supabase.co`;
 process.env.SUPABASE_SERVICE_KEY = claves.find(k => k.name === 'service_role').api_key;
 
-const LEAD = '66666666-0000-0000-0000-000000000001';
-const C_MIA = '66666666-0000-0000-0000-000000000010';
-const C_WA = '66666666-0000-0000-0000-000000000011';
-const C_BAJA = '66666666-0000-0000-0000-000000000012';
-const C_AJENA = '66666666-0000-0000-0000-000000000013';
-const CORREO = 'quemado.prueba@ejemplo-acuarius.test';
+const LEAD = randomUUID();
+const C_MIA = randomUUID();
+const C_WA = randomUUID();
+const C_BAJA = randomUUID();
+const C_AJENA = randomUUID();
+const CORREO = `quemado.prueba.${SUFIJO}@ejemplo-acuarius.test`;
 
 const limpiar = () => sql(`
-  delete from public.email_events where to_email='${CORREO}' or resend_id like 'rs_prueba%';
+  delete from public.email_events where to_email='${CORREO}' or resend_id like 'rs_prueba_${SUFIJO}%';
   delete from public.campaign_recipients where lead_id='${LEAD}';
   delete from public.campaigns where user_id in ('${CUENTA}','${OTRA}');
   delete from public.leads where user_id in ('${CUENTA}','${OTRA}');`);
@@ -76,15 +83,15 @@ insert into public.campaigns (id, user_id, client_id, name, channel, subject, bo
 -- El mismo lead en las cuatro. La de otra cuenta es la trampa: la fila existe
 -- y se busca por lead_id, sin user_id que la filtre.
 insert into public.campaign_recipients (campaign_id, lead_id, status, detail, resend_id, processed_at) values
- ('${C_MIA}','${LEAD}','sent', null, 'rs_prueba_abierto', now() - interval '2 days'),
+ ('${C_MIA}','${LEAD}','sent', null, 'rs_prueba_${SUFIJO}_abierto', now() - interval '2 days'),
  ('${C_WA}','${LEAD}','sent', null, null, now() - interval '5 days'),
  ('${C_BAJA}','${LEAD}','skipped','dado de baja', null, now() - interval '1 day'),
- ('${C_AJENA}','${LEAD}','sent', null, 'rs_prueba_ajeno', now() - interval '3 days');
+ ('${C_AJENA}','${LEAD}','sent', null, 'rs_prueba_${SUFIJO}_ajeno', now() - interval '3 days');
 
 -- Como los guarda el webhook: solo resend_id y event. Sin lead_id, sin
 -- campaign_id. Clic Y apertura del mismo correo: debe ganar el clic.
 insert into public.email_events (resend_id, event) values
- ('rs_prueba_abierto','delivered'), ('rs_prueba_abierto','opened'), ('rs_prueba_abierto','clicked');
+ ('rs_prueba_${SUFIJO}_abierto','delivered'), ('rs_prueba_${SUFIJO}_abierto','opened'), ('rs_prueba_${SUFIJO}_abierto','clicked');
 
 -- Y la dirección, quemada por un rebote duro.
 insert into public.email_events (resend_id, event, to_email) values

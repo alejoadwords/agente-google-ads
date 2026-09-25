@@ -12,9 +12,41 @@
 // Siembra y borra su propia cuenta de prueba. No toca ninguna cuenta real.
 
 import { execSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+// Identidad propia en cada pasada: con identificadores fijos, dos pasadas a la
+// vez —dos sesiones trabajando, o la batería lanzada dos veces— se pisaban y
+// salía «clave duplicada» o «queda algo de la prueba». Falla una vez de cada
+// tantas, que es la peor clase de prueba: la que enseña a no creerse los rojos.
+const SUFIJO = randomUUID().slice(0, 8);
+
+// Esta prueba NO se puede aislar con identificadores propios, y conviene que
+// quede escrito: dispara el cron de verdad, y el cron recorre TODAS las
+// cuentas. Si otra pasada tiene citas montadas, también las avisa, y entonces
+// «avisa exactamente a dos citas» ve cuatro. No es un fallo del cron: es que
+// la prueba mide un total global.
+//
+// Así que se pide turno. Un `mkdir` es atómico: o lo creas tú o ya estaba.
+// Si el turno lleva más de cinco minutos, se da por muerto —una pasada que
+// reventó sin soltarlo— y se toma igual.
+const TURNO = join(tmpdir(), 'acuarius-prueba-recordatorios.lock');
+for (let espera = 0; ; espera++) {
+  try { mkdirSync(TURNO); break; } catch {
+    let edad = Infinity;
+    try { edad = Date.now() - statSync(TURNO).mtimeMs; } catch { continue; }
+    if (edad > 5 * 60000) { try { rmSync(TURNO, { recursive: true }); } catch {} continue; }
+    if (espera === 0) console.log('  · otra pasada lo está corriendo; esperando turno');
+    if (espera > 120) { console.error('  ✗ no se liberó el turno en dos minutos'); process.exit(1); }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+process.on('exit', () => { try { rmSync(TURNO, { recursive: true }); } catch {} });
 
 const PROYECTO = 'qgznzzhkuwxcknmcnrzn';
-const CUENTA = 'user_prueba_recordatorios';
+const CUENTA = `user_prueba_recordatorios_${SUFIJO}`;
 
 function tokenDelLlavero() {
   const cru = execSync('security find-generic-password -s "Supabase CLI" -w', { encoding: 'utf8' }).trim();
@@ -91,12 +123,12 @@ await limpiar();
 await sql(`
 insert into public.booking_settings (user_id, client_id, token, nombre_negocio, zona_horaria,
   horario, excepciones, recordatorios, activo, wa_template)
-values ('${CUENTA}','', 'dddd1111eeee2222ffff3333aaaa4444','Negocio de Prueba','America/Bogota',
+values ('${CUENTA}','', 'dddd1111eeee2222${SUFIJO}','Negocio de Prueba','America/Bogota',
   '{}'::jsonb, '{}'::jsonb, '[24, 2]'::jsonb, true,
   '{"name":"recordatorio_de_cita","language":"es"}'::jsonb);
 
 insert into public.channel_connections (user_id, channel, external_id, access_token, is_active)
-values ('${CUENTA}','whatsapp','111222333','TOKEN-FALSO',true);
+values ('${CUENTA}','whatsapp','111222333_${SUFIJO}','TOKEN-FALSO',true);
 
 insert into public.leads (user_id, name, email, phone, stage, source)
 values ('${CUENTA}','Cliente Prueba','cliente@ejemplo-prueba.test','+57 300 000 1111','nuevo','reserva');
@@ -109,7 +141,7 @@ insert into public.activities (user_id, client_id, lead_id, type, title, due_at,
   booking_token, booking_status ${extra ? ', recordatorios_enviados' : ''})
 values ('${CUENTA}', null, '${lead}', 'meeting', '${nombre}',
   now() + interval '${minutosDesdeAhora} minutes', now() + interval '${minutosDesdeAhora + 30} minutes',
-  md5('${nombre}'), 'confirmada' ${extra ? ', ' + extra : ''});`;
+  md5('${nombre}_${SUFIJO}'), 'confirmada' ${extra ? ', ' + extra : ''});`;
 
 await sql([
   cita('dentro de 90 min', 90),          // toca el aviso de 2 h
@@ -121,7 +153,7 @@ await sql([
 // Una cancelada y una reunión normal de la agenda: ninguna debe recibir nada.
 await sql(`
 insert into public.activities (user_id, lead_id, type, title, due_at, booking_token, booking_status, cancelled_at)
-values ('${CUENTA}','${lead}','meeting','cancelada', now() + interval '80 minutes', md5('cancelada'), 'cancelada', now());
+values ('${CUENTA}','${lead}','meeting','cancelada', now() + interval '80 minutes', md5('cancelada_${SUFIJO}'), 'cancelada', now());
 insert into public.activities (user_id, lead_id, type, title, due_at)
 values ('${CUENTA}','${lead}','meeting','reunion a mano', now() + interval '85 minutes');`);
 

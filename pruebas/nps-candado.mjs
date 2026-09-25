@@ -12,9 +12,16 @@
 // Se ejecuta contra la base de verdad con una cuenta inventada, que se borra.
 
 import { execSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+
+// Identidad propia en cada pasada: con identificadores fijos, dos pasadas a la
+// vez —dos sesiones trabajando, o la batería lanzada dos veces— se pisaban y
+// salía «clave duplicada» o «queda algo de la prueba». Falla una vez de cada
+// tantas, que es la peor clase de prueba: la que enseña a no creerse los rojos.
+const SUFIJO = randomUUID().slice(0, 8);
 
 const PROYECTO = 'qgznzzhkuwxcknmcnrzn';
-const CUENTA = 'user_prueba_nps_candado';
+const CUENTA = `user_prueba_nps_candado_${SUFIJO}`;
 
 const cru = execSync('security find-generic-password -s "Supabase CLI" -w', { encoding: 'utf8' }).trim();
 const TOK = Buffer.from(cru.replace(/^go-keyring-base64:/, ''), 'base64').toString('utf8').trim();
@@ -42,10 +49,10 @@ const claves = await fetch(`https://api.supabase.com/v1/projects/${PROYECTO}/api
 process.env.SUPABASE_URL = `https://${PROYECTO}.supabase.co`;
 process.env.SUPABASE_SERVICE_KEY = claves.find(k => k.name === 'service_role').api_key;
 
-const LIMPIO   = '88888888-0000-0000-0000-000000000001';
-const RECIENTE = '88888888-0000-0000-0000-000000000002';
-const ANTIGUO  = '88888888-0000-0000-0000-000000000003';
-const SIN_CONTESTAR = '88888888-0000-0000-0000-000000000004';
+const LIMPIO   = randomUUID();
+const RECIENTE = randomUUID();
+const ANTIGUO  = randomUUID();
+const SIN_CONTESTAR = randomUUID();
 
 const limpiar = () => sql(`
   delete from public.nps_responses where user_id='${CUENTA}';
@@ -60,12 +67,12 @@ insert into public.leads (id, user_id, client_id, name, email, stage, source) va
  ('${SIN_CONTESTAR}','${CUENTA}', null, 'Enviada ayer, sin contestar', 'd@ejemplo-acuarius.test','ganado','manual');
 
 insert into public.nps_responses (user_id, lead_id, token, score, sent_at, responded_at) values
- ('${CUENTA}','${RECIENTE}','tk_ayer', 9, now() - interval '1 day', now() - interval '1 day'),
+ ('${CUENTA}','${RECIENTE}','tk_ayer_${SUFIJO}', 9, now() - interval '1 day', now() - interval '1 day'),
  -- Fuera de la ventana: encuestar otra vez al cabo del tiempo es legítimo.
- ('${CUENTA}','${ANTIGUO}','tk_viejo', 7, now() - interval '200 days', now() - interval '200 days'),
+ ('${CUENTA}','${ANTIGUO}','tk_viejo_${SUFIJO}', 7, now() - interval '200 days', now() - interval '200 days'),
  -- Enviada y sin contestar: reenviarla crearía una segunda fila pendiente y
  -- hundiría la tasa de respuesta.
- ('${CUENTA}','${SIN_CONTESTAR}','tk_pend', null, now() - interval '1 day', null);`);
+ ('${CUENTA}','${SIN_CONTESTAR}','tk_pend_${SUFIJO}', null, now() - interval '1 day', null);`);
 
 const { yaSeEncuesto } = await import('../api/cron-automations.js');
 

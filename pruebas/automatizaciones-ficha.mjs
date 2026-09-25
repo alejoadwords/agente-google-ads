@@ -16,9 +16,16 @@
 // Se ejecuta contra la base de verdad con una cuenta inventada, que se borra.
 
 import { execSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+
+// Identidad propia en cada pasada: con identificadores fijos, dos pasadas a la
+// vez —dos sesiones trabajando, o la batería lanzada dos veces— se pisaban y
+// salía «clave duplicada» o «queda algo de la prueba». Falla una vez de cada
+// tantas, que es la peor clase de prueba: la que enseña a no creerse los rojos.
+const SUFIJO = randomUUID().slice(0, 8);
 
 const PROYECTO = 'qgznzzhkuwxcknmcnrzn';
-const CUENTA = 'user_prueba_autos_ficha';
+const CUENTA = `user_prueba_autos_ficha_${SUFIJO}`;
 
 const cru = execSync('security find-generic-password -s "Supabase CLI" -w', { encoding: 'utf8' }).trim();
 const TOK = Buffer.from(cru.replace(/^go-keyring-base64:/, ''), 'base64').toString('utf8').trim();
@@ -46,10 +53,10 @@ const claves = await fetch(`https://api.supabase.com/v1/projects/${PROYECTO}/api
 process.env.SUPABASE_URL = `https://${PROYECTO}.supabase.co`;
 process.env.SUPABASE_SERVICE_KEY = claves.find(k => k.name === 'service_role').api_key;
 
-const AUTO = '55555555-0000-0000-0000-000000000001';
-const LEAD = '55555555-0000-0000-0000-000000000002';
-const JOB_RAMA = '55555555-0000-0000-0000-000000000003';
-const JOB_HUERFANO = '55555555-0000-0000-0000-000000000004';
+const AUTO = randomUUID();
+const LEAD = randomUUID();
+const JOB_RAMA = randomUUID();
+const JOB_HUERFANO = randomUUID();
 
 const limpiar = () => sql(`
   delete from public.automation_logs where user_id='${CUENTA}';

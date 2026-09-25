@@ -8,10 +8,15 @@
 // Se prueba contra la base de verdad, con un id inventado que se borra al final.
 
 import { execSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 
 const PROYECTO = 'qgznzzhkuwxcknmcnrzn';
-const FALSO = 'user_prueba_espejo_0001';
+// Identidad propia por pasada: con un identificador fijo, dos pasadas a la vez
+// se pisaban —una limpiaba lo que la otra acababa de crear— y la comprobación
+// final decía «queda algo de la prueba». Ver la misma nota en mover-pipeline.
+const PREFIJO = 'user_prueba_espejo';
+const FALSO = `${PREFIJO}_${randomUUID().slice(0, 8)}`;
 
 const cru = execSync('security find-generic-password -s "Supabase CLI" -w', { encoding: 'utf8' }).trim();
 const TOK = Buffer.from(cru.replace(/^go-keyring-base64:/, ''), 'base64').toString('utf8').trim();
@@ -45,6 +50,13 @@ const { asegurarUsuario } = await import('../api/_usuario-espejo.js');
 const limpiar = () => sql(`delete from public.user_profiles where user_id='${FALSO}';
                            delete from public.users where id='${FALSO}';`);
 await limpiar();
+
+// Restos de pasadas interrumpidas. El corte por edad deja convivir dos pasadas
+// simultáneas. `user_profiles` no tiene fecha, así que cuelga de su usuario.
+await sql(`
+  delete from public.user_profiles p using public.users u
+    where p.user_id = u.id and u.id like '${PREFIJO}%' and u.created_at < now() - interval '1 hour';
+  delete from public.users where id like '${PREFIJO}%' and created_at < now() - interval '1 hour';`);
 
 console.log('\nCrear la fila cuando falta\n');
 {
@@ -149,7 +161,11 @@ console.log('\nLa tabla que no existe ya no se consulta\n');
 
 await limpiar();
 await sql(`delete from public.users where id='${FALSO}_b';`);
-const queda = await sql(`select count(*)::int as n from public.users where id like 'user_prueba_espejo%';`);
+// Solo las filas de ESTA pasada. Contando todo el prefijo, la comprobación
+// exigía que ninguna otra pasada estuviera viva, que es justo lo que se
+// acaba de arreglar: dos a la vez son legítimas.
+const queda = await sql(`select count(*)::int as n from public.users
+  where id in ('${FALSO}','${FALSO}_b');`);
 console.log('\nLimpieza\n');
 chk('no queda nada de la prueba', queda[0].n === 0, String(queda[0].n));
 
