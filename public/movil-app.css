@@ -21,7 +21,40 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .tab svg{width:22px;height:22px}
 .tab[aria-selected="true"]{color:var(--blue)}
 .tab:active{background:var(--bg-subtle)}
-.vista{position:absolute;inset:0;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;
+/* ── Barra superior ──
+   Fija, en todas las pantallas: menú a la izquierda, avisos y perfil a la
+   derecha. Igual que la de PayPal, y por el mismo motivo: lo que se usa cada
+   día vive abajo, al alcance del pulgar, y lo de vez en cuando vive arriba
+   sin gastar una pestaña. */
+.barra{position:absolute;top:0;left:0;right:0;z-index:45;display:flex;align-items:center;gap:8px;
+  background:var(--bg);padding:calc(8px + env(safe-area-inset-top)) 12px 8px;min-height:52px}
+.bicono{flex:none;width:40px;height:40px;border-radius:50%;border:0;background:var(--bg-card);
+  color:var(--text);display:flex;align-items:center;justify-content:center;position:relative;
+  box-shadow:0 0 0 1px var(--border)}
+.bicono:active{background:var(--bg-subtle);transform:scale(.94)}
+.bicono svg{width:21px;height:21px}
+/* El número de avisos sin leer. Un punto a secas no dice CUÁNTOS, y con dos
+   notas pendientes eso cambia si abres ahora o luego. */
+.bpunto{position:absolute;top:-2px;right:-2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;
+  background:var(--danger);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;
+  justify-content:center;box-shadow:0 0 0 2px var(--bg)}
+/* El atributo `hidden` vale display:none, pero lo pone la hoja del navegador y
+   cualquier `display` de una clase le gana. Sin esta línea el globito sale
+   SIEMPRE, también con cero avisos: una alarma permanente que deja de leerse.
+   Es la tercera vez que este mismo detalle muerde —.vista y .fab ya lo
+   tienen—, así que aquí queda dicho. */
+.bpunto[hidden]{display:none}
+.bhueco{flex:1;min-width:0}
+/* El cliente activo, solo en cuentas de agencia. Es el contexto de TODO lo que
+   se ve debajo: sin él a la vista, se trabaja la ficha del cliente equivocado. */
+.bcliente{width:100%;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;
+  border:0;background:none;font:inherit;font-weight:700;font-size:var(--fs-sm);color:var(--text);padding:6px}
+.bcliente span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bcliente svg{flex:none;width:14px;height:14px;color:var(--muted)}
+.bcliente:active{opacity:.6}
+
+.vista{position:absolute;top:calc(52px + env(safe-area-inset-top));left:0;right:0;bottom:0;
+  background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;
   padding-bottom:calc(66px + env(safe-area-inset-bottom))}
 .vista[hidden]{display:none}
 .hoja{position:absolute;inset:0;z-index:60;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;
@@ -29,8 +62,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .hoja.saliendo{animation:retrocede var(--dur-base) var(--ease) forwards}
 @keyframes empuja{from{transform:translateX(100%)}to{transform:none}}
 @keyframes retrocede{from{transform:none}to{transform:translateX(100%)}}
+/* Dentro de una VISTA la barra de arriba ya esquiva la muesca, así que la
+   cabecera no la vuelve a esquivar —salía un hueco doble—. Dentro de una HOJA
+   no hay barra, y ahí sí tiene que hacerlo ella. */
 .cab{position:sticky;top:0;z-index:10;background:var(--bg-card);border-bottom:1px solid var(--border);
-  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:10px;min-height:52px}
+  padding:10px 16px;display:flex;align-items:center;gap:10px;min-height:52px}
+.hoja > .cab{padding-top:calc(10px + env(safe-area-inset-top))}
 .cab h1{margin:0;font-size:var(--fs-lg);font-weight:700;letter-spacing:-.3px}
 .cab .sub{color:var(--muted);font-size:var(--fs-xs);margin-top:1px}
 .volver{border:0;background:none;padding:6px;margin:-6px 0 -6px -6px;color:var(--blue);display:flex;
@@ -449,3 +486,24 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .tablero svg:first-child{color:var(--blue);flex:none}
 .tablero svg:last-child{color:var(--muted);flex:none;opacity:.6}
 .tablero:active{background:var(--bg-subtle);transform:scale(.985)}
+
+/* ── Tu cuenta ── */
+.perfil-cab{display:flex;align-items:center;gap:14px;padding:20px 16px 16px}
+.perfil-ini{flex:none;width:58px;height:58px;border-radius:50%;background:var(--blue-lt);color:var(--blue);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--fs-xl)}
+.perfil-quien{min-width:0;display:flex;flex-direction:column;gap:2px}
+.perfil-quien b{font-size:var(--fs-lg);font-weight:700;letter-spacing:-.2px}
+.perfil-quien span{color:var(--muted);font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.perfil-plan{align-self:flex-start;margin-top:4px;padding:2px 10px;border-radius:999px;
+  background:var(--blue-lt);color:var(--blue);font-size:10px;font-weight:700;letter-spacing:.3px}
+/* Cerrar sesión se separa del resto y va en rojo: es la única de esta pantalla
+   que se lamenta si se toca por error. */
+.mfila.salir .mt{color:var(--danger)}
+.mfila.salir .micono{color:var(--danger)}
+
+/* ── Avisos ── */
+.aviso-fila{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rlg);
+  padding:12px 14px;margin-bottom:8px}
+.aviso-fila .at{font-weight:700;font-size:var(--fs-sm)}
+.aviso-fila .ab{color:var(--text);font-size:var(--fs-sm);margin-top:4px;line-height:1.5}
+.aviso-fila .ac{color:var(--muted);font-size:var(--fs-xs);margin-top:6px}

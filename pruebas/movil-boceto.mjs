@@ -338,6 +338,41 @@ console.log('\nBuscar por id no puede depender del tipo\n');
   chk('los ids en los onclick van entre comillas', sinComillas.length === 0, sinComillas.join(' '));
 }
 
+console.log('\nNingún nombre de función repetido\n');
+{
+  // Dos `function` con el mismo nombre en el mismo ámbito NO es un error: gana
+  // la última y la otra desaparece sin un aviso. Pasó con `abrirAvisos`: la
+  // nueva leía los avisos de verdad y la vieja, más abajo en el fichero,
+  // enseñaba dos de ejemplo. El botón llamaba a la vieja y nadie lo notó
+  // —ni `node --check`, ni el navegador, ni la consola—.
+  const nombres = {};
+  for (const m of guion.matchAll(/^(?:async )?function ([a-zA-Z_$][\w$]*)\s*\(/gm)) {
+    nombres[m[1]] = (nombres[m[1]] || 0) + 1;
+  }
+  const repes = Object.entries(nombres).filter(([, n]) => n > 1);
+  chk('cada función se declara una sola vez',
+      repes.length === 0, repes.map(([n, c]) => n + ' ×' + c).join(', '));
+}
+
+console.log('\nLo que nace oculto, se queda oculto\n');
+{
+  // `hidden` vale display:none, pero lo pone la hoja del NAVEGADOR y cualquier
+  // `display` de una clase le gana. Ya mordió tres veces: .vista salía en todas
+  // las pantallas, .fab en todas, y el globito de avisos se quedaba encendido
+  // con cero pendientes —una alarma permanente deja de leerse—.
+  const css = readFileSync(new URL('../public/movil-app.css', import.meta.url), 'utf8');
+  const conDisplay = new Set([...css.matchAll(/^\.([a-z-]+)\s*\{[^}]*display\s*:/gm)].map((m) => m[1]));
+  const protegidas = new Set([...css.matchAll(/^\.([a-z-]+)\[hidden\]/gm)].map((m) => m[1]));
+  // Elementos del marcado que nacen con `hidden`, con su lista de clases exacta.
+  const ocultos = [...guion.matchAll(/class="([a-z][a-z0-9 -]*)"[^>]*\shidden\b/g)]
+    .flatMap((m) => m[1].trim().split(/\s+/));
+  const desprotegidos = [...new Set(ocultos)].filter((c) => conDisplay.has(c) && !protegidas.has(c));
+  chk('toda clase con display que nace oculta tiene su regla [hidden]',
+      desprotegidos.length === 0, desprotegidos.map((c) => '.' + c).join(', '));
+  // Y el globito en concreto, que es el que se ve desde la primera pantalla.
+  chk('el globito de avisos sabe esconderse', protegidas.has('bpunto'));
+}
+
 console.log('\nNo se llama a nada que no exista\n');
 {
   // `pintarInicio()` no existió nunca, y aun así lo llamaban seis sitios: al

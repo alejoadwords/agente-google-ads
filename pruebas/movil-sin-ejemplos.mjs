@@ -102,5 +102,51 @@ console.log('\nEl botón flotante dice lo que hace\n');
   chk('la lista deja sitio para que no lo tape', /#leads \.lista\{padding-bottom:\d+px\}/.test(css));
 }
 
+console.log('\nLa barra de arriba: tres puertas y ninguna muerta\n');
+{
+  // Menú, avisos y cuenta. Y el cliente activo en medio, solo si hay de dónde
+  // elegir.
+  for (const [q, h] of [['menú', 'M.abrirMenu()'], ['avisos', 'M.abrirAvisos()'], ['cuenta', 'M.abrirPerfil()']]) {
+    chk('la barra abre ' + q, fuente.includes(h));
+  }
+  chk('las tres pantallas existen',
+      /function abrirMenu\(/.test(codigo) && /async function abrirAvisos\(/.test(codigo)
+      && /function abrirPerfil\(/.test(codigo));
+  // El botón atrás del sistema tiene que cerrarlas o uno se queda encerrado.
+  chk('el botón atrás las cierra', /\['hoja-menu','hoja-avisos','hoja-perfil'\]/.test(codigo));
+  // La franja que ofrece el móvil promete que se puede volver «con un toque».
+  // Ese toque no existía en NINGUNA parte: una salida prometida y ausente es
+  // peor que no ofrecerla.
+  chk('hay salida a la versión de escritorio', /function volverEscritorio\(/.test(codigo));
+  chk('y usa el enganche de verdad', /movilEnganche\.apagar\(\)/.test(codigo));
+  chk('se puede cerrar sesión', /function cerrarSesion\(/.test(codigo) && /logout\(\)/.test(codigo));
+  // Los avisos son los MISMOS que la campana de la web, no una segunda lista.
+  chk('los avisos salen de crmAvisos, no de una copia',
+      /typeof crmAvisos !== 'undefined'/.test(codigo) && !/var AVISOS =/.test(codigo));
+  chk('y se marcan leídos por el camino de la web', /crmAvisosMarcarLeidos\(\)/.test(codigo));
+}
+
+console.log('\nEl cliente activo de una agencia se puede cambiar\n');
+{
+  chk('la barra enseña el cliente', /function pintarBarraCliente\(/.test(codigo));
+  // Con uno solo el selector no decide nada y solo quita sitio.
+  chk('solo cuando hay de dónde elegir', /if \(cs\.length < 2\)/.test(codigo));
+  // Dejar los leads del cliente anterior bajo el nombre del nuevo es la peor
+  // forma de equivocarse en una agencia.
+  const i = codigo.indexOf('async function elegirCliente');
+  const fn = codigo.slice(i, codigo.indexOf('\n}', i));
+  // Que el nombre aparezca no basta: tiene que LLAMARLO. Mirar solo si el
+  // nombre está deja pasar que quede en un `typeof` y el cambio se haga a mano.
+  chk('el cambio lo hace la aplicación, no una copia de su lógica',
+      /await window\.agencyOpenClient\(id\)/.test(fn), fn.slice(0, 120));
+  // Y NO puede escribirlo por su cuenta: la web se quedaría en el cliente
+  // anterior y las dos pantallas enseñarían cuentas distintas.
+  chk('y el móvil no toca el valor a mano',
+      !/agencyActiveClientId\s*=/.test(fn), 'lo asigna él mismo');
+  chk('al cambiar se recarga todo', /cargarReales\(\)/.test(fn));
+  chk('y se olvida el tablero del cliente anterior', /pipelineActual = null/.test(fn));
+  chk('si no se pudo cambiar, se dice', /No se pudo cambiar de cliente/.test(fn));
+}
+
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');
 process.exit(fallos ? 1 : 0);

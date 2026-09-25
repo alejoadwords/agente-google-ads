@@ -38,6 +38,9 @@ const ICN_PATHS = {
   tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
   // El mismo trazo que ya usaba el botón de enlace del panel, ahora con nombre
   // para que la ficha no tenga que repetir el SVG.
+  menu:     '<path d="M3 12h18"/><path d="M3 6h18"/><path d="M3 18h18"/>',
+  salir:    '<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+  monitor:  '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
   phone:    '<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/>',
   link:     '<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>',
 };
@@ -354,6 +357,12 @@ function cerrarLead(){
 // sistema salta dos pantallas de golpe y el usuario se pierde.
 window.addEventListener('popstate', function(){
   if ($('#sheet')) { cerrarSheet(); return; }
+  // Las hojas de la barra son hojas como las demás: el botón atrás del sistema
+  // tiene que cerrarlas, o se queda uno encerrado dentro del menú.
+  var deLaBarra = ['hoja-menu','hoja-avisos','hoja-perfil'];
+  for (var b = 0; b < deLaBarra.length; b++) {
+    if ($('#' + deLaBarra[b])) { cerrarBarra(deLaBarra[b]); return; }
+  }
   if ($('#hoja-mod')) { cerrarModulo(); return; }
   if ($('#hoja-conv')) { cerrarConv(); return; }
   if ($('#hoja-lead')) cerrarLead();
@@ -1014,6 +1023,244 @@ function alternarAuto(id, el){
   });
 }
 
+// ── La barra de arriba ───────────────────────────────────────────────────────
+// Tres puertas, como en las aplicaciones que la gente ya sabe usar: el menú a
+// la izquierda, los avisos y la cuenta a la derecha. Lo de cada día vive abajo
+// al alcance del pulgar; lo de vez en cuando, aquí, sin gastar una pestaña.
+
+function hojaConCab(id, titulo, sub, cuerpo){
+  var h = document.createElement('div');
+  h.className = 'hoja'; h.id = id;
+  h.innerHTML = '<div class="cab"><button class="volver" onclick="M.cerrarBarra(\''+id+'\')">'+icn('arrow',24)+'</button>'
+    + '<div><h1>'+esc(titulo)+'</h1>'+(sub ? '<div class="sub">'+esc(sub)+'</div>' : '')+'</div></div>'
+    + cuerpo;
+  movilRaiz().appendChild(h);
+  history.pushState({hoja:1},'');
+  return h;
+}
+function cerrarBarra(id){
+  var h = $('#'+id); if (!h) return;
+  h.classList.add('saliendo');
+  setTimeout(function(){ if (h.parentNode) h.remove(); }, 200);
+}
+
+// El menú. Lo que antes era la pestaña «Más» —una etiqueta que no dice nada—
+// más lo de marketing que no cabe abajo.
+function abrirMenu(){
+  toque();
+  var grupos = [
+    ['Analizar',   ['analisis','nps','aperturas','seo']],
+    ['Contenido',  ['studio','plant','paginas']],
+    ['Tu cuenta',  ['clientes','academia','ajustes']],
+  ];
+  var cuerpo = grupos.map(function(g){
+    var filas = g[1].map(function(id){
+      var m = null;
+      for (var i=0;i<MODULOS.length;i++) if (MODULOS[i].id === id) m = MODULOS[i];
+      if (!m) return '';
+      return '<button class="mfila" onclick="M.abrirModulo(\''+esc(id)+'\')">'
+        + '<span class="micono">'+icn(m.icono,18)+'</span>'
+        + '<span class="cuerpo"><span class="mt">'+esc(m.nom)+'</span><span class="ms">'+esc(m.sub)+'</span></span>'
+        + '<span class="chev">'+icn('arrow',18)+'</span></button>';
+    }).join('');
+    return filas ? '<div class="mgrupo">'+esc(g[0])+'</div><div>'+filas+'</div>' : '';
+  }).join('');
+  hojaConCab('hoja-menu', 'Menú', '', cuerpo);
+}
+
+// Los avisos sin leer: las notas que la dirección le deja a quien atiende. Son
+// las MISMAS que la campana de la web —`crmAvisos`, que carga app.js— para que
+// el número de aquí y el de allá no puedan decir cosas distintas.
+function avisosDeLaWeb(){
+  try {
+    return (typeof crmAvisos !== 'undefined' && Array.isArray(crmAvisos)) ? crmAvisos : null;
+  } catch (e) { return null; }
+}
+async function abrirAvisos(){
+  toque();
+  var h = hojaConCab('hoja-avisos', 'Avisos', '',
+    '<div class="lista" id="avisos-lista"><div class="vacio">Trayendo tus avisos…</div></div>');
+  if (typeof crmAvisosCargar === 'function') {
+    try { await crmAvisosCargar(); } catch (e) { console.warn('[movil] avisos', e); }
+  }
+  var caja = $('#avisos-lista'); if (!caja || !h.parentNode) return;
+  var av = avisosDeLaWeb();
+  if (av === null) {
+    // Sin sesión no es que fallara: es que no hay de dónde traerlos. Decir «no
+    // se pudo» ahí asusta por algo que no está roto.
+    caja.innerHTML = MODO === 'ejemplo'
+      ? '<div class="vacio">Entra con tu cuenta para ver tus avisos.</div>'
+      : '<div class="vacio">No se pudieron traer tus avisos.</div>';
+    return;
+  }
+  caja.innerHTML = av.length ? (av.map(function(a){
+      var t = String(a.texto || '');
+      return '<div class="aviso-fila">'
+        + '<div class="at">'+esc(a.autor || 'Alguien')+(a.lead ? ' · '+esc(a.lead) : '')+'</div>'
+        + '<div class="ab">'+esc(t)+'</div>'
+        + (a.cuando ? '<div class="ac">'+esc(a.cuando)+'</div>' : '')
+        + '</div>';
+    }).join('')
+    // Marcarlos leídos es una DECISIÓN, no un efecto de haber abierto la hoja:
+    // quien la abre de paso, en la calle, no quiere perder el aviso.
+    + '<button class="bbtn" onclick="M.leerAvisos()">Marcar como leídos</button>')
+    : '<div class="vacio">No tienes avisos sin leer.</div>';
+  pintarPunto();
+}
+
+async function leerAvisos(){
+  // El mismo camino que la campana de la web: así el número de aquí y el de
+  // allá no pueden quedarse diciendo cosas distintas.
+  if (typeof crmAvisosMarcarLeidos !== 'function') {
+    chicharra('No se pudo marcar como leídos.', 'mal');
+    return;
+  }
+  toque(12);
+  try { await crmAvisosMarcarLeidos(); }
+  catch (e) { chicharra('No se pudo marcar como leídos.', 'mal'); return; }
+  cerrarBarra('hoja-avisos');
+  pintarPunto();
+  pintarPulso();
+}
+
+// El número del globito. Se recalcula cada vez que algo puede haberlo movido.
+function pintarPunto(){
+  var p = $('#barra-punto'); if (!p) return;
+  var av = avisosDeLaWeb();
+  var n = (av && av.length) || 0;
+  p.textContent = n > 9 ? '9+' : String(n);
+  p.hidden = !n;
+}
+
+// Quién eres y cómo sales. Esta pantalla existe sobre todo por una cosa: la
+// franja que ofrece el móvil promete «si no te convence, vuelves con un toque»
+// y ese toque NO existía en ninguna parte. Una salida que se promete y no está
+// es peor que no ofrecerla.
+function quienSoy(){
+  var u = null;
+  try { u = (typeof clerkInstance !== 'undefined' && clerkInstance) ? clerkInstance.user : null; } catch (e) {}
+  var plan = '';
+  try { plan = (typeof userPlan !== 'undefined' && userPlan) ? String(userPlan) : ''; } catch (e) {}
+  return {
+    nom: (u && (u.fullName || u.firstName)) || '',
+    correo: (u && u.primaryEmailAddress && u.primaryEmailAddress.emailAddress) || '',
+    plan: plan,
+  };
+}
+var PLAN_NOM = { free:'Gratis', trial:'Prueba de Pro', pro:'Pro', agency:'Agencia' };
+
+function abrirPerfil(){
+  toque();
+  var y = quienSoy();
+  var ini = (y.nom || y.correo || '?').trim().charAt(0).toUpperCase();
+  var cuerpo = '<div class="perfil-cab">'
+      + '<div class="perfil-ini">'+esc(ini)+'</div>'
+      + '<div class="perfil-quien"><b>'+esc(y.nom || 'Tu cuenta')+'</b>'
+      + (y.correo ? '<span>'+esc(y.correo)+'</span>' : '')
+      + (y.plan ? '<span class="perfil-plan">'+esc(PLAN_NOM[y.plan] || y.plan)+'</span>' : '')
+      + '</div></div>'
+    + '<div class="lista">'
+      + '<button class="mfila" onclick="M.abrirModulo(\'academia\')">'
+        + '<span class="micono">'+icn('star',18)+'</span>'
+        + '<span class="cuerpo"><span class="mt">Academia</span><span class="ms">Aprende a sacarle partido</span></span>'
+        + '<span class="chev">'+icn('arrow',18)+'</span></button>'
+      + '<button class="mfila" onclick="M.abrirModulo(\'ajustes\')">'
+        + '<span class="micono">'+icn('gear',18)+'</span>'
+        + '<span class="cuerpo"><span class="mt">Configuración</span><span class="ms">Equipo, plan e integraciones</span></span>'
+        + '<span class="chev">'+icn('arrow',18)+'</span></button>'
+      + '<button class="mfila" onclick="M.volverEscritorio()">'
+        + '<span class="micono">'+icn('monitor',18)+'</span>'
+        + '<span class="cuerpo"><span class="mt">Volver a la versión de siempre</span>'
+        + '<span class="ms">La de escritorio, con todo lo que aquí no cabe</span></span>'
+        + '<span class="chev">'+icn('arrow',18)+'</span></button>'
+    + '</div>'
+    + '<div class="lista"><button class="mfila salir" onclick="M.cerrarSesion()">'
+      + '<span class="micono">'+icn('salir',18)+'</span>'
+      + '<span class="cuerpo"><span class="mt">Cerrar sesión</span></span></button></div>';
+  hojaConCab('hoja-perfil', 'Tu cuenta', '', cuerpo);
+}
+
+function volverEscritorio(){
+  try {
+    if (window.movilEnganche && typeof window.movilEnganche.apagar === 'function') {
+      window.movilEnganche.apagar();
+      return;
+    }
+  } catch (e) { console.warn('[movil] volver', e); }
+  // Sin el enganche —el boceto suelto— no hay a dónde volver, y decirlo es
+  // mejor que un botón que no responde.
+  chicharra('Esta es la vista de prueba: no hay versión de escritorio detrás.', 'mal');
+}
+
+function cerrarSesion(){
+  if (typeof logout === 'function') { logout(); return; }
+  chicharra('No se pudo cerrar la sesión desde aquí.', 'mal');
+}
+
+// ── Cliente activo (cuentas de agencia) ─────────────────────────────────────
+// Una agencia trabaja la cuenta de UN cliente a la vez, y de esa elección
+// cuelga todo lo que se ve debajo: leads, tableros, campañas. Sin poder
+// cambiarlo desde el móvil, se trabajaba la ficha del cliente equivocado.
+function clientesDeLaWeb(){
+  try {
+    return (typeof agencyClients !== 'undefined' && Array.isArray(agencyClients)) ? agencyClients : [];
+  } catch (e) { return []; }
+}
+function nombreCliente(id){
+  var cs = clientesDeLaWeb();
+  for (var i=0;i<cs.length;i++) if (String(cs[i].id) === String(id)) {
+    return cs[i].client_name || cs[i].name || 'Sin nombre';
+  }
+  return '';
+}
+// Solo se enseña cuando hay de dónde elegir. Con un cliente el selector no
+// decide nada y solo quita sitio, igual que el de tableros.
+function pintarBarraCliente(){
+  var medio = $('#barra-medio'); if (!medio) return;
+  var cs = clientesDeLaWeb();
+  // La clase NO se toca: `bhueco` es la que lleva el `flex:1` que empuja los
+  // iconos a los lados. Quitándola, el nombre del cliente se pegaba al menú y
+  // los tres iconos se amontonaban a la izquierda.
+  if (cs.length < 2) { medio.innerHTML = ''; return; }
+  medio.innerHTML = '<button class="bcliente" onclick="M.abrirClientes()">'
+    + '<span>'+esc(nombreCliente(alcanceCliente()) || 'Elegir cliente')+'</span>'
+    + icn('arrow',14) + '</button>';
+}
+function abrirClientes(){
+  toque();
+  var cs = clientesDeLaWeb(), act = alcanceCliente();
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Cliente</div>'
+    + cs.map(function(c){
+        var n = c.client_name || c.name || 'Sin nombre';
+        return '<button class="opcion" aria-current="'+(String(c.id) === String(act))+'" '
+          + 'onclick="M.elegirCliente(\''+esc(String(c.id))+'\')">'
+          + esc(n) + '<span class="marca">'+icn('check',18)+'</span></button>';
+      }).join('')
+    + '<div style="color:var(--muted);font-size:var(--fs-xs);padding:12px 4px 0;line-height:1.5">'
+    + 'Todo lo que ves —contactos, tableros y campañas— es del cliente elegido.</div>');
+}
+async function elegirCliente(id){
+  if (String(id) === String(alcanceCliente())) { cerrarSheet(); return; }
+  cerrarSheet();
+  toque(12);
+  // Se cambia POR LA APLICACIÓN, no a mano: así la web y el móvil quedan en el
+  // mismo cliente y no hace falta una segunda copia de esa lógica.
+  if (typeof window.agencyOpenClient === 'function') {
+    try { await window.agencyOpenClient(id); }
+    catch (e) { console.warn('[movil] cambiar de cliente', e); }
+  }
+  if (String(alcanceCliente()) !== String(id)) {
+    chicharra('No se pudo cambiar de cliente.', 'mal');
+    return;
+  }
+  pintarBarraCliente();
+  // Y se recarga TODO: dejar los leads del cliente anterior en pantalla bajo el
+  // nombre del nuevo es la peor forma de equivocarse en una agencia.
+  pipelineActual = null;
+  MODULO_CACHE = {};
+  cargarReales();
+}
+
 function reintentarModulo(id){
   delete MODULO_CACHE[id];
   var M = FICHA_MODULO(id);
@@ -1191,8 +1438,10 @@ var MODS = [
   {id:'inicio',     t:'Pulso',     icono:'sparkles'},
   {id:'crm',        t:'CRM',       icono:'users',  tabs:[['leads','Contactos'],['tareas','Tareas'],['agenda','Agenda']]},
   {id:'chats',      t:'Chats',     icono:'chat',   tabs:[['bandeja','Bandeja'],['chatbots','Agentes IA']]},
-  {id:'marketing',  t:'Marketing', icono:'sparkles'},
-  {id:'mas',        t:'Más',       icono:'split'}
+  {id:'marketing',  t:'Marketing', icono:'trend'}   // no 'sparkles': lo lleva el Pulso y dos pestañas con el mismo icono no se distinguen de reojo
+  // «Más» ya no es una pestaña: era una etiqueta que no dice nada y ocupaba un
+  // quinto del sitio de abajo. Su contenido vive en el menú de la barra, que
+  // es donde se busca lo que no se usa cada día.
 ];
 var subActual = {crm:'leads', chats:'bandeja'};
 
@@ -1260,13 +1509,6 @@ function pintarMenu(cont, ids){
 function pintarMarketing(){
   pintarMenu('lista-marketing',
     ['campanas','plant','paginas','listas','autos','fuentes','props','reservas','studio','seo']);
-}
-function pintarMas(){
-  var html = '<div class="mgrupo">Análisis</div><div id="mas-analisis"></div>'
-           + '<div class="mgrupo">Cuenta</div><div id="mas-cuenta"></div>';
-  movilRaiz().querySelector('#lista-mas').innerHTML = html;
-  pintarMenu('mas-analisis', ['analisis','nps','aperturas']);
-  pintarMenu('mas-cuenta',   ['clientes','academia','ajustes']);
 }
 
 // ── Pulso ───────────────────────────────────────────────────────────────────
@@ -1488,30 +1730,6 @@ function fichaFalta(l){
     + caja('Propuestas',      [], 'Ninguna propuesta enviada.')
     + caja('Conversaciones',  [['whatsapp','Última hace 2 h · la atiendes tú']], 'Sin conversaciones.')
     + '</div>';
-}
-
-// La campana: los mensajes que otra persona te dejó. En la web es un panel que
-// cuelga del icono; aquí es una hoja, que es donde el pulgar la espera.
-var AVISOS = [
-  {de:'Marilia González', lead:'Sandra Caro', hace:'hace 1 h',
-   txt:'Ojo con este, ya preguntó dos veces por el canon. Llámala hoy.'},
-  {de:'Pierluigi Pezzano', lead:'Paula Restrepo', hace:'ayer',
-   txt:'Confirmá si sigue interesada en el penthouse antes de mandar la propuesta.'}
-];
-function abrirAvisos(){
-  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Mensajes para ti</div>'
-    + AVISOS.map(function(a){
-        return '<div class="nota-int" style="margin-bottom:8px">'
-          + '<b>' + esc(a.de) + ' · sobre ' + esc(a.lead) + ' · ' + esc(a.hace) + '</b>'
-          + esc(a.txt) + '</div>';
-      }).join('')
-    // Marcarlos leídos es una decisión, no un efecto de haber abierto la hoja:
-    // quien la abre de paso no quiere perder el aviso.
-    + '<button class="bbtn" onclick="M.leerAvisos()">Marcar como leídos</button>');
-}
-function leerAvisos(){
-  PULSO = PULSO.filter(function(c){ return c.t.indexOf('sin leer') < 0; });
-  toque(12); cerrarSheet(); pintarPulso();
 }
 
 // El Pulso calculado de los datos de verdad. Las mismas reglas que la web:
@@ -1819,6 +2037,13 @@ async function cargarReales(){
     BOTS = ags;
     pintarBots();
   });
+  // El globito de la campana: si no se piden, el número sale a cero y parece
+  // que no hay nada pendiente cuando sí lo hay.
+  if (typeof crmAvisosCargar === 'function') {
+    Promise.resolve().then(crmAvisosCargar).then(pintarPunto).catch(function(e){
+      console.warn('[movil] avisos', e);
+    });
+  }
   // Si el alcance llegó tarde —app.js lo resuelve por su cuenta— se recarga una
   // vez con el bueno. Quedarse con el equivocado enseñaría otra cuenta que la
   // web, que es justo lo que se está arreglando.
@@ -1832,6 +2057,7 @@ async function cargarReales(){
 function repintarTodo(){
   pintarTableros(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
   pintarConvs(); pintarBots(); pintarPulso(); pintarSubtitulos();
+  pintarBarraCliente(); pintarPunto();
 }
 
 // ── La sesión ───────────────────────────────────────────────────────────────
@@ -1904,7 +2130,14 @@ function pintarSubtitulos(){
 
 // Lo pone en marcha quien lo carga. `traeSesion` dice si hay que esperar a
 // Clerk (página suelta) o si ya lo trae la aplicación.
-var MOVIL_MARCA = `<div class="vista" id="inicio">
+var MOVIL_MARCA = `<div class="barra">
+  <button class="bicono" onclick="M.abrirMenu()" aria-label="Men&uacute;">${icn('menu',21)}</button>
+  <div class="bhueco" id="barra-medio"></div>
+  <button class="bicono" onclick="M.abrirAvisos()" aria-label="Avisos">${icn('bell',21)}<span class="bpunto" id="barra-punto" hidden></span></button>
+  <button class="bicono" onclick="M.abrirPerfil()" aria-label="Tu cuenta">${icn('users',21)}</button>
+</div>
+
+<div class="vista" id="inicio">
   <div class="pulso-cab"><h1>Pulso</h1><span class="cuando">jueves 24, 9:12</span></div>
   <div class="aviso">Boceto de la versi&oacute;n m&oacute;vil. Los datos son de ejemplo: nada de lo que toques aqu&iacute; es real.</div>
   <div id="pulso-lista"></div>
@@ -1948,11 +2181,6 @@ var MOVIL_MARCA = `<div class="vista" id="inicio">
   <div id="lista-marketing"></div>
 </div>
 
-<div class="vista" id="mas" hidden>
-  <div class="cab"><div><h1>M&aacute;s</h1><div class="sub">Informes y cuenta</div></div></div>
-  <div id="lista-mas"></div>
-</div>
-
 <button class="fab" onclick="M.nuevoLead()" hidden>${icn('plus',22)}<span>Contacto</span></button>
 <nav class="tabs"></nav>`;
 
@@ -1971,7 +2199,7 @@ function movilMontar(opciones){
   // veía un Pulso ajeno hasta que llegaban sus datos.
   if (opciones.fetchAuth) { MODO = 'cargando'; vaciarEjemplos(); }
   pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
-  pintarConvs(); pintarBots(); pintarPulso(); pintarMarketing(); pintarMas();
+  pintarConvs(); pintarBots(); pintarPulso(); pintarMarketing();
   verMod('inicio');
   if (opciones.fetchAuth) {
     // Dentro de la aplicación la sesión ya está resuelta: se reutiliza su
@@ -2021,6 +2249,9 @@ function movilMontar(opciones){
     guardarNota: guardarNota, guardarCampo: guardarCampo, crearLead: crearLead,
     reintentarModulo: reintentarModulo,
     llamar: llamar, whatsapp: whatsapp,
+    abrirMenu: abrirMenu, abrirAvisos: abrirAvisos, abrirPerfil: abrirPerfil,
+    cerrarBarra: cerrarBarra, volverEscritorio: volverEscritorio, cerrarSesion: cerrarSesion,
+    abrirClientes: abrirClientes, elegirCliente: elegirCliente,
     abrirEtiquetas: abrirEtiquetas, ponerEtiqueta: ponerEtiqueta,
     alternarAuto: alternarAuto,
     toque: toque,
