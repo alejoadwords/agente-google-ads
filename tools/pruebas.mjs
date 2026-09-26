@@ -103,19 +103,35 @@ const suites = readdirSync(join(RAIZ, 'pruebas'))
   .sort();
 
 const rotas = [];
+// Una suite que no puede correr —le falta una herramienta que este repositorio
+// no trae— no está rota ni está en verde: no comprobó nada. Contarla como
+// rota deja un rojo permanente, y un rojo que siempre está enseña a ignorar
+// el rojo. Contarla como verde es peor: dice que verificó algo que no miró.
+const OMITIDA = 75;
+const omitidas = [];
 let ok = 0, comprobaciones = 0;
 try {
   for (const f of suites) {
     const r = await correr(f, dir);
     comprobaciones += (r.salida.match(/✓/g) || []).length;
     if (r.codigo === 0) { ok++; process.stdout.write('.'); }
+    else if (r.codigo === OMITIDA) { omitidas.push({ f, ...r }); process.stdout.write('-'); }
     else { rotas.push({ f, ...r }); process.stdout.write('X'); }
   }
 } finally {
   rmSync(dir, { recursive: true, force: true });   // las credenciales no se quedan en disco
 }
 
-console.log(`\n\n  ${ok}/${suites.length} suites en verde · ${comprobaciones} comprobaciones`);
+const corridas = suites.length - omitidas.length;
+console.log(`\n\n  ${ok}/${corridas} suites en verde · ${comprobaciones} comprobaciones`
+  + (omitidas.length ? ` · ${omitidas.length} omitida${omitidas.length === 1 ? '' : 's'}` : ''));
+if (omitidas.length) {
+  console.log(`\n  ── OMITIDAS (${omitidas.length}) ──────────────────────`);
+  for (const o of omitidas) {
+    const motivo = (o.salida.split('\n').find(l => l.includes('OMITIDA')) || '').replace(/.*OMITIDA:?/, '').trim();
+    console.log(`  - ${o.f}${motivo ? '  ' + motivo.slice(0, 110) : ''}`);
+  }
+}
 if (rotas.length) {
   console.log(`\n  ── ROTAS (${rotas.length}) ─────────────────────────────`);
   for (const r of rotas) {

@@ -15,7 +15,19 @@
 // Se miden los estilos CALCULADOS en un navegador. Comprobar esto buscando
 // texto en el fichero diría que la regla está escrita, no que gana.
 
-import { chromium } from '../node_modules/playwright/index.mjs';
+// Playwright no viene con el repositorio —`package.json` no tiene ni una
+// dependencia, a propósito—, así que esta suite no siempre se puede correr.
+// Antes el `import` reventaba y la batería salía con un rojo permanente que no
+// era un fallo: un rojo que siempre está enseña a ignorar el rojo. Ahora se
+// omite diciéndolo, y el lanzador la cuenta aparte — ni verde ni rota, porque
+// no comprobó nada.
+let chromium;
+try {
+  ({ chromium } = await import('../node_modules/playwright/index.mjs'));
+} catch {
+  console.log('OMITIDA: falta playwright (npm i -D playwright && npx playwright install chromium)');
+  process.exit(75);
+}
 import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 
 const INDEX = new URL('../public/index.html', import.meta.url).pathname;

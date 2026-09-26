@@ -13,7 +13,19 @@
 // Se mide en un navegador de verdad a los anchos que existen. Un desbordamiento
 // de seis píxeles no se ve leyendo CSS, y en el escritorio no pasa nunca.
 
-import { chromium } from '../node_modules/playwright/index.mjs';
+// Playwright no viene con el repositorio —`package.json` no tiene ni una
+// dependencia, a propósito—, así que esta suite no siempre se puede correr.
+// Antes el `import` reventaba y la batería salía con un rojo permanente que no
+// era un fallo: un rojo que siempre está enseña a ignorar el rojo. Ahora se
+// omite diciéndolo, y el lanzador la cuenta aparte — ni verde ni rota, porque
+// no comprobó nada.
+let chromium;
+try {
+  ({ chromium } = await import('../node_modules/playwright/index.mjs'));
+} catch {
+  console.log('OMITIDA: falta playwright (npm i -D playwright && npx playwright install chromium)');
+  process.exit(75);
+}
 
 const INDEX = new URL('../public/index.html', import.meta.url).pathname;
 const ANCHOS = [430, 390, 360, 320];   // Pro Max, iPhone normal, Android chico, SE
