@@ -1,4 +1,5 @@
 {
+  "installCommand": "npm install --omit=dev",
   "functions": {
     "api/video-gen.js": {
       "maxDuration": 30

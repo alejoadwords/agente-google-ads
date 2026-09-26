@@ -28,8 +28,11 @@ Planes: **free**, **trial** (14 días de Pro), **pro** (39 USD) y **agency**
   `public_metadata`**, así que los gates de plan tienen que preguntarle a Clerk.
 - **IA**: API de Anthropic. Sonnet 5 para los agentes, Haiku 4.5 donde basta.
 - **Correo**: Resend, solo desde el dominio verificado app.acuarius.app.
-- **`package.json` no tiene ni una dependencia**, a propósito. Lo que hace
-  falta (VAPID, cifrado push, JWT) va con WebCrypto.
+- **`package.json` no tiene ni una dependencia de ejecución**, a propósito. Lo
+  que hace falta (VAPID, cifrado push, JWT) va con WebCrypto. La única de
+  desarrollo es Playwright, para las dos pruebas que miden la interfaz en un
+  navegador de verdad; `vercel.json` instala con `--omit=dev` para que no se
+  baje un navegador en cada despliegue.
 
 ## Estructura
 
