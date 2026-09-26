@@ -145,7 +145,36 @@ export function aTarea(a, ahora = Date.now()) {
   };
 }
 
-export function aCita(a) {
+// La ventana de la agenda del teléfono: desde el principio de HOY —para que la
+// reunión de esta mañana siga a la vista, con su marca de pasada— hasta mes y
+// medio adelante, que es lo que cabe programar de una visita comercial.
+export function desdeHoy(ahora = Date.now()) {
+  const d = new Date(ahora); d.setHours(0, 0, 0, 0); return d;
+}
+export function hastaEnUnMesYMedio(ahora = Date.now()) {
+  const d = new Date(ahora + 45 * 86400000); d.setHours(23, 59, 59, 999); return d;
+}
+
+/** El día de una fecha como clave comparable ('2026-09-25'), en hora LOCAL.
+ *  Con `toISOString().slice(0,10)` una cita de las siete de la noche en
+ *  Colombia caería en el día siguiente. */
+export function claveDia(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+/** Cómo se nombra un día en la agenda. «Hoy» y «Mañana» se leen sin pensar;
+ *  el resto lleva el día de la semana, que es como se habla de una visita. */
+export function nombreDia(d, ahora = Date.now()) {
+  const hoy = claveDia(new Date(ahora));
+  const man = claveDia(new Date(ahora + 86400000));
+  const k = claveDia(d);
+  if (k === hoy) return 'Hoy';
+  if (k === man) return 'Mañana';
+  return d.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' });
+}
+
+export function aCita(a, ahora = Date.now()) {
   const ini = a.due_at ? new Date(a.due_at) : null;
   const fin = a.end_at ? new Date(a.end_at) : null;
   const mins = ini && fin ? Math.round((fin - ini) / 60000) : null;
@@ -156,9 +185,15 @@ export function aCita(a) {
     lead: a.lead_id || null,
     h: ini ? ini.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '—',
     dur: mins ? (mins >= 60 ? (mins / 60) + ' h' : mins + ' min') : '',
+    // El DÍA, que faltaba. La agenda no es de hoy: trae lo que viene. Sin el
+    // día, dos visitas a las nueve en martes y en jueves se leían idénticas y
+    // no había forma de saber cuál era cuál — el error más caro posible en una
+    // pantalla cuyo único trabajo es decirte dónde tienes que estar.
+    dia: ini ? nombreDia(ini, ahora) : 'Sin fecha',
+    clave: ini ? claveDia(ini) : '',
     t: a.title || 'Cita',
     s: a.description || '',
-    pasada: ini ? ini.getTime() < Date.now() : false,
+    pasada: ini ? ini.getTime() < ahora : false,
   };
 }
 
@@ -538,7 +573,16 @@ export async function cargarTodo(fetchAuth, { clientId } = {}) {
 
     // El calendario, solo para las citas: `?tareas=1` recorta a los próximos
     // días y una cita de dentro de un mes desaparecería de la agenda.
-    uno('/api/agenda' + (q1 || ''), (d) => d.activities || []),
+    //
+    // CON ventana, que es como entra la web. Sin `from` ni `to` el servidor
+    // devuelve las 500 actividades más ANTIGUAS de la cuenta: en Certain, 564
+    // actividades, así que todo lo posterior al 29 de septiembre no llegaba
+    // nunca — una cita de octubre simplemente no existía en el teléfono, sin
+    // aviso ni hueco. Y lo que sí llegaba eran las citas de semanas pasadas,
+    // que llenaban la pantalla por encima de lo que viene.
+    uno('/api/agenda?from=' + encodeURIComponent(desdeHoy().toISOString())
+        + '&to=' + encodeURIComponent(hastaEnUnMesYMedio().toISOString()) + q,
+        (d) => d.activities || []),
     uno('/api/chat-conversations?' + q.slice(1), (d) => (d.conversations || d.convs || []).map(aConversacion)),
     // Una cuenta puede tener varios tableros —Certain tiene cuatro, y sus
     // leads viven en «Arriendo», no en el principal—. Sin poder elegir, el

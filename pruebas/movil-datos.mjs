@@ -230,7 +230,10 @@ console.log('\nLa clave de la respuesta es la que manda el servidor\n');
   // una ventana de tantos caracteres se colaban las claves del de al lado.
   // Dos puertas de la agenda: la lista de trabajo —que clasifica el servidor—
   // y el calendario, que da las citas. Cada una con su clave.
-  for (const puerta of ["'/api/agenda?tareas=1'", "'/api/agenda' + (q1"]) {
+  // El calendario pasó a pedirse con ventana (`?from=&to=`): sin ella el
+  // servidor devolvía las 500 actividades más antiguas y las citas de dentro
+  // de un mes no llegaban nunca.
+  for (const puerta of ["'/api/agenda?tareas=1'", "'/api/agenda?from='"]) {
     const desde = movil.indexOf(puerta);
     chk('sigue existiendo la llamada ' + puerta, desde >= 0, 'no está');
     if (desde < 0) continue;

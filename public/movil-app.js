@@ -181,10 +181,13 @@ var TAREAS = [
   {t:'Confirmar visita con Paula',       cuando:'proxima', hecha:false},
   {t:'Llamar a Walter',                     cuando:'hoy',     hecha:true}
 ];
+// El ejemplo lleva dos días a propósito: con uno solo no se ve si los
+// encabezados de día funcionan, que es justo lo que faltaba en esta pantalla.
 var CITAS = [
-  {h:'09:30', dur:'45 min', t:'Visita · Alto Prado',        s:'Hellen Marún',      pasada:true},
-  {h:'11:00', dur:'30 min', t:'Llamada de seguimiento',     s:'Rubén Corro',       pasada:false},
-  {h:'15:00', dur:'1 h',    t:'Presentación de propuesta',  s:'Paula Restrepo',    pasada:false}
+  {h:'09:30', dur:'45 min', t:'Visita · Alto Prado',        s:'Hellen Marún',      pasada:true,  dia:'Hoy',    clave:'d1'},
+  {h:'11:00', dur:'30 min', t:'Llamada de seguimiento',     s:'Rubén Corro',       pasada:false, dia:'Hoy',    clave:'d1'},
+  {h:'15:00', dur:'1 h',    t:'Presentación de propuesta',  s:'Paula Restrepo',    pasada:false, dia:'Hoy',    clave:'d1'},
+  {h:'08:00', dur:'1 h',    t:'Visita · Villa Campestre',   s:'Sandra Caro',       pasada:false, dia:'Mañana', clave:'d2'}
 ];
 
 var PIPELINES = null;
@@ -292,11 +295,21 @@ function pintarAgenda(){
     return;
   }
   var html = '';
+  var diaAnterior = null, puestoAhora = false;
   for (var i=0;i<CITAS.length;i++){
     var c = CITAS[i];
-    // La línea de «ahora» va justo antes de la primera cita que no ha pasado:
-    // es lo que hace que se lea de un vistazo qué queda por delante.
-    if (!c.pasada && (i===0 || CITAS[i-1].pasada)) html += '<div class="ahora">AHORA</div>';
+    // El encabezado de DÍA. La agenda trae mes y medio, no solo hoy: sin esto
+    // se leían cuatro horas seguidas sin saber de qué día era cada una.
+    if (c.clave !== diaAnterior) {
+      html += '<div class="grupo">'+esc(c.dia || 'Sin fecha')+'</div>';
+      diaAnterior = c.clave;
+    }
+    // La línea de «ahora» va justo antes de la primera cita que no ha pasado,
+    // y UNA sola vez: antes se repetía en cada día, porque la primera cita de
+    // mañana también viene después de una pasada.
+    if (!puestoAhora && !c.pasada && i > 0 && CITAS[i-1].pasada) {
+      html += '<div class="ahora">AHORA</div>'; puestoAhora = true;
+    }
     html += (c.lead
       ? '<button class="cita" onclick="M.abrirLead(\''+esc(String(c.lead))+'\')">'
       // Sin contacto asociado no hay adónde ir: se pinta como fila, no como
@@ -307,7 +320,11 @@ function pintarAgenda(){
       + '<span><span class="qt">'+esc(c.t)+'</span><span class="qs">'+esc(c.s)+'</span></span>'
       + (c.lead ? '</button>' : '</div>');
   }
-  $('#agenda .lista').innerHTML = html || '<div class="vacio">Nada agendado para hoy.</div>';
+  // No dice «para hoy»: la lista cubre desde hoy hasta mes y medio adelante, y
+  // afirmar que hoy está libre cuando lo que está vacío son las seis semanas
+  // siguientes es decir algo que no se ha comprobado.
+  $('#agenda .lista').innerHTML = html
+    || '<div class="vacio">Nada agendado de aquí a mes y medio.</div>';
 }
 
 function verLeads(etapa){ filtrar(etapa||'todos'); ver('leads'); }
@@ -546,6 +563,102 @@ async function crearTarea(){
   // Y el lead queda tocado: toda la inactividad del CRM cuelga de updated_at.
   l.hace = 'ahora'; l.tocado = Date.now();
   pintarLeads(); pintarPulso(); pintarSubtitulos();
+  cargarReales();
+}
+
+// ── Agendar una cita ────────────────────────────────────────────────────────
+//
+// La única acción de todo el CRM que se hace de pie, en la puerta del
+// inmueble, con el cliente delante diciendo «¿y el jueves?». En el teléfono no
+// existía: había que llegar al computador, y la mitad de las veces la visita
+// se queda sin agendar.
+//
+// Una cita es una `activity` de tipo 'meeting', igual que en la web, y el
+// servidor la sincroniza con Google Calendar si la cuenta lo tiene conectado.
+var DURACIONES = [['30 min',30],['1 h',60],['1 h 30',90],['2 h',120]];
+var duracionCita = 60;
+
+// Se puede agendar desde la ficha de un contacto o desde la agenda a secas.
+// Sin contacto la cita se crea igual —una reunión interna es una cita—, solo
+// que no hay a quién invitar.
+function abrirCita(conLead){
+  var l = conLead ? leadAbierto : null;
+  if (conLead && !l) return;
+  var def = CUANDOS[0][1]();
+  duracionCita = 60;
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Agendar cita</div>'
+    + '<input id="sh-cita" type="text" placeholder="De qué es la cita" value="'
+      + esc(l ? 'Visita · ' + l.nom : '') + '">'
+    + '<div class="rapidas" style="margin-top:10px">'
+      + CUANDOS.map(function(c, i){
+          return '<button class="rapida" onclick="M.cuandoCita('+i+')">'+esc(c[0])+'</button>';
+        }).join('')
+    + '</div>'
+    + '<input id="sh-cita-cuando" type="datetime-local" style="margin-top:8px" value="'+paraInput(def)+'">'
+    + '<div class="rapidas" style="margin-top:10px" id="sh-dur">'
+      + DURACIONES.map(function(d, i){
+          return '<button class="rapida'+(d[1]===60?' puesta':'')+'" onclick="M.durCita('+i+')">'+esc(d[0])+'</button>';
+        }).join('')
+    + '</div>'
+    // La invitación solo si hay a quién mandarla. Ofrecer «invitar al contacto»
+    // cuando no tiene correo es prometer un correo que no sale.
+    + (l && l.email
+        ? '<label class="casilla" style="margin-top:10px"><input type="checkbox" id="sh-cita-inv">'
+          + '<span>Invitar a <b>'+esc(l.email)+'</b> al evento</span></label>'
+        : (l ? '<div class="casilla-nota">Este contacto no tiene correo, así que no se le puede invitar. '
+               + 'La cita se agenda igual.</div>' : ''))
+    + '<button class="bbtn" onclick="M.crearCita('+(l?'true':'false')+')">Agendar</button>');
+}
+function cuandoCita(i){
+  var e = $('#sh-cita-cuando'); if (!e || !CUANDOS[i]) return;
+  e.value = paraInput(CUANDOS[i][1]());
+  toque();
+}
+function durCita(i){
+  if (!DURACIONES[i]) return;
+  duracionCita = DURACIONES[i][1];
+  // Que se vea cuál está elegida: cuatro botones iguales y un número invisible
+  // es pedirle al usuario que adivine qué duración va a guardar.
+  var caja = $('#sh-dur'); if (!caja) return;
+  var bs = caja.querySelectorAll('.rapida');
+  for (var j=0;j<bs.length;j++) bs[j].classList.toggle('puesta', j === i);
+  toque();
+}
+
+async function crearCita(conLead){
+  var l = conLead ? leadAbierto : null;
+  var ti = $('#sh-cita'), ci = $('#sh-cita-cuando'), inv = $('#sh-cita-inv');
+  if (!ti || !ci) return;
+  var texto = String(ti.value || '').trim();
+  var cuando = String(ci.value || '').trim();
+  if (!texto) { chicharra('Escribe de qué es la cita.', 'mal'); return; }
+  if (!cuando) { chicharra('Ponle fecha y hora.', 'mal'); return; }
+  var ini = new Date(cuando);
+  if (isNaN(ini.getTime())) { chicharra('Esa fecha no se entiende.', 'mal'); return; }
+  var fin = new Date(ini.getTime() + duracionCita * 60000);
+
+  var d = await guardar(conAlcance('/api/agenda'), {
+    type: 'meeting', title: texto,
+    due_at: ini.toISOString(), end_at: fin.toISOString(),
+    lead_id: l ? l.id : null,
+    invite_lead: !!(inv && inv.checked),
+  }, 'POST');
+  if (!d) return;   // `guardar` ya dijo por qué; lo escrito se queda en la hoja
+
+  cerrarSheet();
+  // Lo que el servidor NO pudo hacer se dice. `guardar` ya cantó «Guardado»,
+  // que es verdad —la cita está en Acuarius—, pero si Google Calendar quedó
+  // fuera hay que enterarse ahora: quien agenda una visita da por hecho que le
+  // va a sonar el teléfono, y esa alarma vive en el calendario.
+  if (d.gcal_warning) chicharra(d.gcal_warning, 'mal');
+  else if (d.gcal_synced) chicharra('Agendada y en tu Google Calendar', 'ok');
+
+  if (l) {
+    delete FICHA_CACHE[l.id];
+    pedirFicha();
+    l.hace = 'ahora'; l.tocado = Date.now();
+    pintarLeads();
+  }
   cargarReales();
 }
 
@@ -2041,7 +2154,18 @@ function ver(id){
   for (var j=0;j<ts.length;j++)
     ts[j].setAttribute('aria-selected', String(m ? ts[j].dataset.v === m.id : false));
   if (m && m.tabs) pintarSubTabs(m.id, id);
-  var fab = $('.fab'); if (fab) fab.hidden = (id !== 'leads');
+  // El botón flotante cambia de trabajo según la pestaña: en Contactos crea un
+  // contacto, en Agenda agenda una cita. Antes solo existía en Contactos, así
+  // que agendar una visita era lo único del CRM que obligaba a volver al
+  // computador — justo lo que se hace de pie y con el cliente delante.
+  var fab = $('.fab');
+  if (fab) {
+    var esAgenda = (id === 'agenda');
+    fab.hidden = !(id === 'leads' || esAgenda);
+    fab.onclick = esAgenda ? function(){ abrirCita(false); } : nuevoLead;
+    var et = fab.querySelector('span');
+    if (et) et.textContent = esAgenda ? 'Cita' : 'Contacto';
+  }
   window.scrollTo(0,0);
 }
 
@@ -2352,7 +2476,13 @@ function fichaFalta(l){
         : caja('Tareas', d.tareas.map(function(t){ return [t.cuando === 'vencida' ? 'vencida' : t.s, t.t]; }),
                'Ninguna tarea pendiente.',
                '<button class="mas-h2" onclick="M.abrirTarea()">'+icn('plus',14)+' Tarea</button>'))
-    + de('Citas', d.citas, function(c){ return [c.h, c.t]; }, 'Ninguna cita agendada.')
+    // La cita lleva el DÍA además de la hora: «09:30» a secas no dice si la
+    // visita es hoy o el jueves, que es lo único que se quiere saber de ella.
+    + (d.citas === null || d.citas === undefined
+        ? de('Citas', null, null, '')
+        : caja('Citas', d.citas.map(function(c){ return [(c.dia ? c.dia + ' · ' : '') + c.h, c.t]; }),
+               'Ninguna cita agendada.',
+               '<button class="mas-h2" onclick="M.abrirCita(true)">'+icn('plus',14)+' Cita</button>'))
     + (filasAutos === null
         ? de('Automatizaciones', null, null, '')
         : caja('Automatizaciones', filasAutos, 'Ninguna en curso.'))
@@ -2792,16 +2922,18 @@ function pintarSubtitulos(){
     var sub = v.querySelector('.cab .sub');
     if (sub) sub.textContent = txt;
   };
+  // Null mientras carga NO es un fallo: es que todavía no ha llegado. Decir
+  // «no se pudo traer» en ese hueco asusta sin motivo, y decir «0» miente.
   var cuenta = function(lista, uno, varios, noSePudo){
-    if (lista === null) return noSePudo;
+    if (lista === null) return MODO === 'cargando' ? 'trayendo…' : noSePudo;
     if (!lista.length) return varios.replace('{n}', '0');
     return (lista.length === 1 ? uno : varios).replace('{n}', lista.length);
   };
   var visibles = (LEADS === null) ? null : leadsVisibles();
-  s('leads', (LEADS === null) ? 'no se pudieron traer'
+  s('leads', (LEADS === null) ? (MODO === 'cargando' ? 'trayendo…' : 'no se pudieron traer')
     : cuenta(visibles, '1 contacto', '{n} contactos', 'no se pudieron traer')
       + (pipelineActual ? ' · ' + nombreTablero() : ''));
-  s('tareas', TAREAS === null ? 'no se pudieron traer' : (function(){
+  s('tareas', TAREAS === null ? (MODO === 'cargando' ? 'trayendo…' : 'no se pudieron traer') : (function(){
     var v = TAREAS.filter(function(t){ return t.cuando === 'vencida' && !t.hecha; }).length;
     var h = TAREAS.filter(function(t){ return t.cuando === 'hoy' && !t.hecha; }).length;
     if (!v && !h) return 'nada pendiente hoy';
@@ -2809,7 +2941,7 @@ function pintarSubtitulos(){
          + (h ? h + ' para hoy' : '');
   })());
   s('agenda', cuenta(CITAS, '1 cita', '{n} citas', 'no se pudo traer'));
-  s('bandeja', CONVS === null ? 'no se pudieron traer' : (function(){
+  s('bandeja', CONVS === null ? (MODO === 'cargando' ? 'trayendo…' : 'no se pudieron traer') : (function(){
     var n = CONVS.filter(function(c){ return c.nolei > 0; }).length;
     return n ? n + (n === 1 ? ' sin leer' : ' sin leer') : 'todo leído';
   })());
@@ -2887,6 +3019,13 @@ function movilMontar(opciones){
   if (opciones.fetchAuth) { MODO = 'cargando'; vaciarEjemplos(); }
   pintarTabs(); pintarFiltros(); pintarLeads(); pintarTareas(); pintarAgenda();
   pintarConvs(); pintarBots(); pintarPulso(); pintarMarketing();
+  // Los SUBTÍTULOS también. `vaciarEjemplos()` limpiaba las listas pero no las
+  // cabeceras, que llevan su texto escrito en el marcado: con la sesión
+  // abierta y los datos en camino, la cabecera de Agenda decía «jueves 24 · 3
+  // citas» y la de Contactos «6 contactos activos». Números inventados sobre
+  // SU cuenta, que es exactamente lo que se quitó de las listas hace dos
+  // semanas y aquí seguía. Es el mismo fallo en el sitio de al lado.
+  pintarSubtitulos();
   verMod('inicio');
   if (opciones.fetchAuth) {
     // Dentro de la aplicación la sesión ya está resuelta: se reutiliza su
@@ -2942,6 +3081,7 @@ function movilMontar(opciones){
     verVideo: verVideo, verPestana: verPestana, usarRapida: usarRapida,
     abrirEtiquetas: abrirEtiquetas, ponerEtiqueta: ponerEtiqueta,
     abrirTarea: abrirTarea, cuandoTarea: cuandoTarea, crearTarea: crearTarea,
+    abrirCita: abrirCita, cuandoCita: cuandoCita, durCita: durCita, crearCita: crearCita,
     abrirCierre: abrirCierre, ponerMotivo: ponerMotivo, guardarCierre: guardarCierre,
     abrirResponsable: abrirResponsable, ponerResponsable: ponerResponsable,
     alternarAuto: alternarAuto,

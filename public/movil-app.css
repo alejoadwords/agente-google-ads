@@ -294,6 +294,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .rapida{flex:none;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:var(--bg);
   color:var(--text);font:inherit;font-size:var(--fs-xs);white-space:nowrap}
 .rapida:active{background:var(--blue-lt);border-color:var(--blue-md)}
+/* La elegida, para la duración de una cita: cuatro botones idénticos no dicen
+   cuál se va a guardar, y la duración no se ve en ningún otro sitio. */
+.rapida.puesta{background:var(--blue-lt);border-color:var(--blue);color:var(--blue);font-weight:700}
 .escribir{display:flex;gap:8px;align-items:flex-end}
 .escribir textarea{flex:1;min-height:40px;max-height:110px;border:1px solid var(--border);border-radius:20px;
   padding:10px 14px;font:inherit;font-size:var(--fs-md);background:var(--bg);color:var(--text);resize:none}

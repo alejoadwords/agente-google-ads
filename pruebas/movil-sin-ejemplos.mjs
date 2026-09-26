@@ -180,5 +180,31 @@ console.log('\nEl cliente activo de una agencia se puede cambiar\n');
   chk('si no se pudo cambiar, se dice', /No se pudo cambiar de cliente/.test(fn));
 }
 
+// Las listas se vaciaron hace dos semanas; los SUBTÍTULOS no. Llevan su texto
+// escrito en el marcado —«jueves 24 · 3 citas», «6 contactos activos», «3 sin
+// leer»— y nadie los repintaba al montar: con la sesión abierta y los datos en
+// camino, la cabecera afirmaba números inventados sobre la cuenta del usuario.
+// Es el mismo fallo de antes, en el sitio de al lado.
+console.log('\nLas cabeceras tampoco pueden llevar números inventados\n');
+{
+  const i = codigo.indexOf('function movilMontar');
+  const fn = codigo.slice(i, codigo.indexOf('\n}', i));
+  chk('al montar se repintan los subtítulos', /pintarSubtitulos\(\)/.test(fn), fn.slice(0, 200));
+  const pinta = fn.indexOf('pintarSubtitulos()');
+  const ver = fn.indexOf("verMod('inicio')");
+  chk('y antes de enseñar la primera pantalla', pinta >= 0 && pinta < ver,
+      'se repinta en ' + pinta + ' y se enseña en ' + ver);
+
+  // Y mientras carga no puede decir ni «0» ni «no se pudo»: lo uno miente y
+  // lo otro asusta.
+  const j = codigo.indexOf('function pintarSubtitulos');
+  const ps = codigo.slice(j, codigo.indexOf('\n}\n', j));
+  chk('mientras carga se dice que se está trayendo',
+      (ps.match(/MODO === 'cargando'/g) || []).length >= 4,
+      String((ps.match(/MODO === 'cargando'/g) || []).length) + ' de 4 subtítulos');
+  chk('los cuatro subtítulos lo contemplan',
+      ["s('leads'", "s('tareas'", "s('agenda'", "s('bandeja'"].every((k) => ps.includes(k)));
+}
+
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');
 process.exit(fallos ? 1 : 0);

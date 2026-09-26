@@ -2,6 +2,27 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-25-movil-agendar-cita",
+      "fecha": "2026-09-25",
+      "tipo": "nuevo",
+      "titulo": "Ya puedes agendar una cita desde el celular",
+      "texto": "En la pestaña Agenda y en la ficha de cada contacto hay un botón para agendar. Eliges de qué es la cita, el día, la hora y cuánto dura, y puedes invitar al contacto por correo. Si tienes Google Calendar conectado, la cita queda también en tu calendario; si no se pudo, te lo decimos en el momento."
+    },
+    {
+      "id": "2026-09-25-movil-agenda-por-dias",
+      "fecha": "2026-09-25",
+      "tipo": "arreglo",
+      "titulo": "La agenda del celular ya dice de qué día es cada cita",
+      "texto": "Antes cada cita se veía solo con la hora, así que dos visitas a las nueve en días distintos se leían igual. Ahora la agenda va agrupada por día —Hoy, Mañana y la fecha— y trae lo de las próximas seis semanas. Además, en cuentas con mucho movimiento las citas más lejanas podían no aparecer; eso quedó corregido."
+    },
+    {
+      "id": "2026-09-25-movil-cabeceras",
+      "fecha": "2026-09-25",
+      "tipo": "arreglo",
+      "titulo": "Las cabeceras del celular ya no muestran cifras de ejemplo",
+      "texto": "Mientras cargaban tus datos, los títulos de Contactos, Tareas, Agenda y Conversaciones enseñaban números de la demostración. Ahora dicen que están trayendo tu información y, al llegar, la tuya."
+    },
+    {
       "id": "2026-09-25-mercadopago-oculto",
       "fecha": "2026-09-25",
       "tipo": "arreglo",
