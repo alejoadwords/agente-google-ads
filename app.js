@@ -27637,7 +27637,24 @@ async function agnLoad() {
 }
 
 // ── MercadoPago: conexión para cobro automático de propuestas ───────────────
-function connectMercadoPago() {
+async function connectMercadoPago() {
+  // Se pregunta antes de salir de la aplicación. Sin las credenciales
+  // configuradas, /api/mp-auth responde una página en blanco con un error
+  // técnico, y el usuario se queda fuera de Acuarius sin entender qué pasó.
+  // El botón de Propuestas ya está acotado, pero al ⌘K se llega escribiendo
+  // «mercadopago» y ahí no hay forma de esconder la entrada.
+  try {
+    const d = await fetchAuth('/api/proposals?mp_status=1').then(r => r.json());
+    if (!d.disponible && !d.connected) {
+      showToast('El cobro automático con MercadoPago todavía no está disponible. Mientras tanto puedes poner tu link de pago en la propuesta.', 'info');
+      return;
+    }
+  } catch (e) {
+    // Si no se puede preguntar, no se arrastra al usuario a una página que
+    // quizá sea un error: se dice y se queda donde está.
+    showToast('No se pudo comprobar si MercadoPago está disponible. Reintenta en un momento.', 'error');
+    return;
+  }
   const uid = clerkInstance?.user?.id || '';
   window.location.href = '/api/mp-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
 }
