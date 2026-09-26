@@ -14,6 +14,42 @@ import { abrirConexion, cifrar } from '../_cifrado.js';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
+// ── Firma de Meta ───────────────────────────────────────────────────────────
+// Meta firma cada POST con HMAC-SHA256 del cuerpo usando el secreto de la app,
+// en la cabecera `X-Hub-Signature-256`. Sin comprobarla, este endpoint acepta
+// mensajes de cualquiera que conozca la URL: bastaría inventar un remitente
+// para meter conversaciones y leads en la cuenta de un cliente.
+//
+// Se firma el cuerpo EN CRUDO, byte a byte. Por eso abajo se lee con .text()
+// y se parsea después: volver a serializar el JSON cambia espacios y orden de
+// claves, y la firma dejaría de cuadrar por un motivo invisible.
+//
+// Cuando exista la vía «trae tus credenciales», cada cliente apuntará el
+// webhook de SU app aquí y la firma vendrá con el secreto de ESA app, no con
+// el nuestro: habrá que guardar el secreto por conexión y probar contra el
+// que toque. Es la razón de fondo por la que repartir un verify token único
+// entre clientes no sirve como puerta.
+async function firmaValida(crudo, cabecera) {
+  const secreto = process.env.META_APP_SECRET;
+  if (!secreto || !cabecera) return false;
+  const esperado = String(cabecera).replace(/^sha256=/, '').trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(esperado)) return false;
+  try {
+    const llave = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(secreto),
+      { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+    );
+    const firma = await crypto.subtle.sign('HMAC', llave, new TextEncoder().encode(crudo));
+    const mio = [...new Uint8Array(firma)].map(b => b.toString(16).padStart(2, '0')).join('');
+    // Comparación en tiempo constante: un `===` sale antes en el primer byte
+    // distinto y deja medir dónde falla.
+    if (mio.length !== esperado.length) return false;
+    let dif = 0;
+    for (let i = 0; i < mio.length; i++) dif |= mio.charCodeAt(i) ^ esperado.charCodeAt(i);
+    return dif === 0;
+  } catch { return false; }
+}
+
 function sb() {
   return { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=representation' };
 }
@@ -179,8 +215,12 @@ export default async function handler(req) {
 
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
-  let body;
-  try { body = await req.json(); } catch { return new Response('Bad request', { status: 400 }); }
+  // En crudo primero: la firma se calcula sobre estos bytes exactos.
+  let crudo, body;
+  try {
+    crudo = await req.text();
+    body = JSON.parse(crudo);
+  } catch { return new Response('Bad request', { status: 400 }); }
 
   // Simulador, igual que el de TikTok: permite probar WhatsApp, Messenger e
   // Instagram sin una cuenta real conectada, que es lo que hace falta para
@@ -203,6 +243,30 @@ export default async function handler(req) {
       resolverNombre: nombreDelContacto,
     }).catch(e => ({ ok: false, reason: String(e && e.message || e) }));
     return new Response(JSON.stringify(r), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  // A partir de aquí, solo Meta. El simulador de arriba tiene su propia puerta
+  // (CRON_SECRET) y no pasa por esta, porque no viene firmado.
+  //
+  // Se responde 403 y no 200: a un remitente falso no se le dice «recibido».
+  // Meta reintenta ante un no-200, pero si la firma no cuadra es que no era
+  // Meta, así que no hay nada que reintentar.
+  if (!(await firmaValida(crudo, req.headers.get('x-hub-signature-256')))) {
+    // Se registra, y no es por curiosidad. Si META_APP_SECRET dejara de ser el
+    // secreto correcto, TODOS los mensajes de Meta se rechazarían y el síntoma
+    // sería que el inbox deja de recibir, sin un solo error a la vista. Así
+    // aparece en error_log y cron-errores lo canta.
+    try {
+      const { registrarError } = await import('../_registro-errores.js');
+      await registrarError({
+        origen: 'webhook',
+        donde: '/api/webhooks/meta',
+        error: 'firma inválida: se rechazó un POST',
+        detalle: 'object=' + String(body?.object || '?') +
+                 ' · cabecera=' + (req.headers.get('x-hub-signature-256') ? 'presente' : 'ausente'),
+      });
+    } catch (e) { /* registrar no puede tumbar la puerta */ }
+    return new Response('Firma inválida', { status: 403 });
   }
 
   // Responder 200 a Meta inmediatamente para evitar reintentos.
