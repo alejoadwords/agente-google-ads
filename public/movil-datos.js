@@ -519,13 +519,26 @@ export async function cargarTodo(fetchAuth, { clientId } = {}) {
     } catch { return null; }
   };
   const q = clientId ? '&client_id=' + encodeURIComponent(clientId) : '';
-  const [leads, actividades, convs, pipelines] = await Promise.all([
-    uno('/api/leads?limit=200' + q, (d) => (d.leads || []).map((l) => aLead(l))),
-    // `activities`, en inglés y como lo escribe el servidor. Se leía
-    // `d.actividades`, que no existe: el móvil se quedaba SIEMPRE sin tareas ni
-    // citas, y como `[]` es una lista válida no decía «no se pudieron traer»
-    // sino «nada pendiente hoy». Un cero inventado es peor que un error.
-    uno('/api/agenda?proximos=1' + q, (d) => d.activities || []),
+  const q1 = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+  const [leads, tareas, actividades, convs, pipelines] = await Promise.all([
+    // SIN límite, como la web. Con `?limit=200` una cuenta de 377 contactos
+    // —Certain— veía 200 al azar, y entonces el Pulso del teléfono y el del
+    // computador contaban cosas distintas sobre la misma cuenta.
+    uno('/api/leads' + (q1 || ''), (d) => (d.leads || []).map((l) => aLead(l))),
+
+    // `?tareas=1`, que es lo que pide la web. Antes se pedía `?proximos=1`, un
+    // parámetro que NO EXISTE: la petición caía en la rama del calendario, que
+    // devuelve otra cosa —todas las actividades del cliente, sin ventana, sin
+    // excluir las de leads cerrados y sin las que no cuelgan de ningún
+    // cliente—. De ahí que el móvil dijera 5 tareas vencidas y la web 10.
+    //
+    // Y la clasificación la hace el SERVIDOR. Recalcularla aquí era garantizar
+    // que los dos números se separaran al primer cambio de criterio.
+    uno('/api/agenda?tareas=1' + q, (d) => d && Array.isArray(d.vencidas) ? d : null),
+
+    // El calendario, solo para las citas: `?tareas=1` recorta a los próximos
+    // días y una cita de dentro de un mes desaparecería de la agenda.
+    uno('/api/agenda' + (q1 || ''), (d) => d.activities || []),
     uno('/api/chat-conversations?' + q.slice(1), (d) => (d.conversations || d.convs || []).map(aConversacion)),
     // Una cuenta puede tener varios tableros —Certain tiene cuatro, y sus
     // leads viven en «Arriendo», no en el principal—. Sin poder elegir, el
@@ -533,10 +546,17 @@ export async function cargarTodo(fetchAuth, { clientId } = {}) {
     uno('/api/pipelines' + (clientId ? '?client_id=' + encodeURIComponent(clientId) : ''),
         (d) => (d.pipelines || []).map((p) => ({ id: p.id, nom: p.name || 'Sin nombre', principal: !!p.is_default }))),
   ]);
+  // Las tres cestas del servidor, con su clasificación intacta. `aTarea`
+  // sigue dando el texto y la hora, pero el «vencida / hoy / próxima» ya no se
+  // decide aquí.
+  const deCesta = (lista, cuando) => (lista || []).map((t) => ({ ...aTarea(t), cuando }));
   return {
     pipelines,
     leads,
-    tareas: actividades ? actividades.filter((a) => !esCita(a)).map((a) => aTarea(a)) : null,
+    tareas: tareas
+      ? deCesta(tareas.vencidas, 'vencida')
+          .concat(deCesta(tareas.hoy, 'hoy'), deCesta(tareas.proximas, 'proxima'))
+      : null,
     citas: actividades ? actividades.filter(esCita).map(aCita) : null,
     convs,
   };
