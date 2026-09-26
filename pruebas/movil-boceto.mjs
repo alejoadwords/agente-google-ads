@@ -242,7 +242,11 @@ console.log('\nSe puede elegir el tablero\n');
   chk('el filtro de leads lo respeta', /l\.pipeline !== pipelineActual/.test(guion));
   // Arrancar en un tablero vacío parece una cuenta sin contactos.
   chk('arranca en el tablero con más leads', /cuenta\[mejor\]/.test(guion));
-  chk('y el Pulso cuenta solo ese tablero', /if \(pipelineActual\) leads = leads\.filter/.test(guion));
+  // El Pulso, en cambio, cuenta TODOS los tableros del cliente: es lo que hace
+  // el de la web, y filtrar aquí hacía que el teléfono dijera 6 donde el
+  // computador decía 9 sobre la misma cuenta.
+  chk('pero el Pulso cuenta todos los tableros',
+      !/if \(pipelineActual\) leads = leads\.filter/.test(guionSinComentarios()));
 }
 
 console.log('\nEl Pulso dice lo mismo que la web\n');

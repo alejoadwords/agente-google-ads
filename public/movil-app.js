@@ -2363,6 +2363,15 @@ function fichaFalta(l){
 
 // El Pulso calculado de los datos de verdad. Las mismas reglas que la web:
 // tareas vencidas, leads sin tocar hace más de 3 días, y los que entraron hoy.
+// El Pulso cuenta todos los tableros del cliente, así que al ir a la lista se
+// quita el filtro: si la tarjeta dice 9 y la lista enseña 6, el número deja de
+// servir para nada.
+function verTodosLosTableros(){
+  if (!pipelineActual) return;
+  pipelineActual = null;
+  pintarTableros(); pintarFiltros(); pintarLeads(); pintarSubtitulos();
+}
+
 function pulsoDeDatos(){
   // Las MISMAS tres reglas que `pulsoCrmCards` en app.js. Antes el móvil
   // inventaba las suyas —tareas vencidas, leads en etapa «nuevo»— y por eso
@@ -2370,16 +2379,24 @@ function pulsoDeDatos(){
   // decir nada: dos números distintos y ninguno de fiar.
   var cards = [];
   var DIA = 864e5, ahora = Date.now();
+  // TODOS los del cliente, sin filtrar por tablero. El Pulso de la web cuenta
+  // así, y filtrar aquí hacía que el teléfono dijera 6 donde el computador
+  // decía 9 sobre la misma cuenta. Dos números y ninguno de fiar.
+  //
+  // El botón de la tarjeta se lleva el filtro de tablero por delante, para que
+  // la lista a la que llega enseñe exactamente los que anuncia.
   var leads = (typeof LEADS !== 'undefined' && LEADS) ? LEADS : [];
-  // El tablero elegido manda: anunciar «6 sin actividad» de toda la cuenta y
-  // mandar a un tablero donde hay dos es lo mismo que mentir.
-  if (pipelineActual) leads = leads.filter(function(l){ return l.pipeline === pipelineActual; });
 
   // Un lead con una tarea pendiente NO está abandonado: alguien ya quedó en
   // hacer algo. Es la misma salvedad que hace la web.
+  // La MISMA salvedad que la web: solo cuenta una tarea para HOY o más
+  // adelante. Una vencida no salva a nadie —justo al revés, es la señal de que
+  // lleva tiempo parado— y contarla escondía leads que sí están abandonados.
   var conTarea = {};
   if (typeof TAREAS !== 'undefined' && TAREAS) {
-    TAREAS.forEach(function(t){ if (t.lead && !t.hecha) conTarea[t.lead] = true; });
+    TAREAS.forEach(function(t){
+      if (t.lead && !t.hecha && (t.cuando === 'hoy' || t.cuando === 'proxima')) conTarea[t.lead] = true;
+    });
   }
 
   // Tareas vencidas, lo primero. Misma regla que la web, y el mismo montón que
@@ -2420,7 +2437,7 @@ function pulsoDeDatos(){
       t: 'CRM · ' + stale.length + (stale.length === 1 ? ' lead sin actividad' : ' leads sin actividad'),
       b: 'Sin contacto hace más de 3 días. Incluye a «' + stale[0].nom + '»'
          + (stale[0].etapa ? ' (etapa ' + etiquetaEtapa(stale[0].etapa) + ')' : '') + '.',
-      cta:'Ver cuáles', ir:function(){ verMod('crm'); verSub('crm','leads'); }});
+      cta:'Ver cuáles', ir:function(){ verTodosLosTableros(); verMod('crm'); verSub('crm','leads'); }});
   }
 
   var fresh = leads.filter(function(l){ return (ahora - (l.creado || 0)) < DIA; });
@@ -2429,7 +2446,7 @@ function pulsoDeDatos(){
       t: 'CRM · ' + fresh.length + (fresh.length === 1 ? ' lead nuevo' : ' leads nuevos') + ' hoy',
       b: fresh.slice(0,2).map(function(l){ return l.nom; }).join(', ')
          + (fresh.length > 2 ? ' y más' : '') + '. Contáctalos mientras están calientes.',
-      cta:'Verlos', ir:function(){ verMod('crm'); verSub('crm','leads'); }});
+      cta:'Verlos', ir:function(){ verTodosLosTableros(); verMod('crm'); verSub('crm','leads'); }});
   }
 
   // Esta no está en la web porque allí la bandeja se ve de un vistazo en el

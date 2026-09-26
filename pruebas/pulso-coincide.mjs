@@ -109,6 +109,40 @@ console.log('\nLa clasificación la hace el servidor, no cada pantalla\n');
   chk('y una respuesta con otra forma también es null', raro.tareas === null, JSON.stringify(raro.tareas));
 }
 
+console.log('\nEl Pulso cuenta el mismo conjunto que la web\n');
+{
+  const mov = soloCodigo(leer('public/movil-app.js'));
+  const i = mov.indexOf('function pulsoDeDatos');
+  const fn = mov.slice(i, mov.indexOf('\n  return cards;', i));
+
+  // La web filtra por CLIENTE y nada más. El móvil filtraba además por el
+  // tablero elegido, así que decía 6 donde el computador decía 9 sobre la
+  // misma cuenta — y el usuario no tenía forma de saber cuál creer.
+  chk('el Pulso NO filtra por tablero',
+      !/pipelineActual\)\s*leads = leads\.filter/.test(fn),
+      (fn.match(/pipelineActual[^\n]{0,70}/) || [''])[0]);
+  // Y como cuenta todos, al ir a la lista se quita el filtro: una tarjeta que
+  // dice 9 y una lista que enseña 6 convierte el número en ruido.
+  // Los DOS botones que llevan a la lista de contactos, no uno: contar que
+  // aparezca una vez deja pasar que al otro se le olvide.
+  const aLaLista = (fn.match(/ir:function\(\)\{ [^}]*verSub\('crm','leads'\)/g) || []);
+  chk('los dos botones llevan a la lista', aLaLista.length === 2, String(aLaLista.length));
+  chk('y los dos quitan el filtro de tablero',
+      aLaLista.every((x) => /verTodosLosTableros\(\)/.test(x)),
+      aLaLista.filter((x) => !/verTodosLosTableros/.test(x)).join(' | '));
+
+  // Solo una tarea para HOY o más adelante salva a un lead. Una vencida es
+  // justo la señal de que lleva tiempo parado: contarla escondía abandonados.
+  chk('solo una tarea futura evita el «sin actividad»',
+      /t\.cuando === 'hoy' \|\| t\.cuando === 'proxima'/.test(fn), 'cuenta también las vencidas');
+  chk('y la web hace lo mismo', /f >= crmFechaLocal\(new Date\(\)\)/.test(app));
+
+  // Las dos ventanas, iguales.
+  chk('«nuevo hoy» son las últimas 24 h en los dos',
+      /ahora - \(l\.creado \|\| 0\)\) < DIA/.test(fn)
+      && /now - new Date\(l\.created_at\)\.getTime\(\)\) < DAY/.test(app));
+}
+
 console.log('\nLas reglas del Pulso siguen siendo las mismas\n');
 {
   const mov = leer('public/movil-app.js');
