@@ -99,6 +99,17 @@ function chicharra(txt, tipo){
   _chichaTmr = setTimeout(function(){ if (c.parentNode) c.remove(); }, tipo === 'mal' ? 6000 : 2600);
 }
 
+// El alcance de cliente pegado a la ruta. Lo que se CREA hereda el client_id
+// de la petición: sin él la fila nace con client_id null, fuera del cliente, y
+// como las dos pantallas filtran por cliente el registro desaparece de la
+// vista aunque esté guardado. Un contacto que se guarda y no se ve es peor
+// que uno que no se guarda: nadie lo vuelve a crear.
+function conAlcance(ruta){
+  var c = alcanceCliente();
+  if (!c) return ruta;
+  return ruta + (ruta.indexOf('?') >= 0 ? '&' : '?') + 'client_id=' + encodeURIComponent(c);
+}
+
 async function guardar(ruta, cuerpo, metodo, alDeshacer){
   if (MODO !== 'real' || typeof fetchAuth !== 'function') {
     if (alDeshacer) alDeshacer();
@@ -429,7 +440,7 @@ async function abrirEtiquetas(){
     + '<div id="sh-tags"><div class="vacio" style="padding:20px">Trayendo las etiquetas…</div></div>');
   if (CATALOGO_TAGS === null && MODO === 'real' && typeof fetchAuth === 'function') {
     try {
-      var r = await fetchAuth('/api/lead-tags');
+      var r = await fetchAuth(conAlcance('/api/lead-tags'));
       var d = r && r.ok ? await r.json() : null;
       CATALOGO_TAGS = d && Array.isArray(d.tags) ? d.tags.map(function(t){ return t.name || t; }) : null;
     } catch (e) { CATALOGO_TAGS = null; }
@@ -513,7 +524,7 @@ async function crearTarea(){
   // recordatorios y el Pulso; `lead_activities` es solo el historial. Crear
   // la línea del historial sin la tarea dejaría constancia de un seguimiento
   // que nadie va a recordar.
-  var d = await guardar('/api/agenda', {
+  var d = await guardar(conAlcance('/api/agenda'), {
     type: 'task', title: texto, due_at: fecha.toISOString(), lead_id: l.id,
   }, 'POST');
   if (!d) return;   // `guardar` ya dijo por qué; el texto se queda en la hoja
@@ -788,7 +799,7 @@ async function crearLead(){
   // tablero que quizá ni se usa —Certain trabaja en «Arriendo»— y parecería
   // que no se guardó.
   if (pipelineActual) cuerpo.pipeline_id = pipelineActual;
-  var d = await guardar('/api/leads', cuerpo, 'POST');
+  var d = await guardar(conAlcance('/api/leads'), cuerpo, 'POST');
   if (!d) return;
   cerrarSheet();
   if (d.lead && TRADUCTOR) {
