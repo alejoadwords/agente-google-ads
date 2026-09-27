@@ -337,6 +337,12 @@ export default async function handler(req) {
                 text: msg.text?.body || msg[msg.type]?.caption || '',
                 media,
                 providerMessageId: msg.id,
+                // De qué anuncio viene, si viene de uno. Meta lo manda SOLO en
+                // el primer mensaje tras el clic: si no se recoge aquí, no se
+                // reconstruye después de ninguna forma. Un lead de Meta Lead
+                // Ads guarda campaña, conjunto y anuncio; uno que entraba por
+                // clic-a-WhatsApp guardaba únicamente «whatsapp».
+                referral: msg.referral || null,
               });
             }
           }

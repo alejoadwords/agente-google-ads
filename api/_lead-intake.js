@@ -189,6 +189,33 @@ const RED_DEL_CLIC = {
 // Saca los campos de pauta de un payload plano. Devuelve {} si no hay ninguno:
 // nunca escribe claves vacías, que ensuciarían el catálogo de columnas con
 // campos que siempre están en blanco.
+// Lo mismo, pero para quien llega por un anuncio de clic-a-WhatsApp. El webhook
+// trae un bloque `referral` con otra forma, y se traduce a LAS MISMAS claves que
+// arriba: si un lead de Lead Ads guardara «Campaña» y uno de clic-a-WhatsApp
+// guardara «campaign», el reporte de pauta saldría partido en dos y nadie
+// entendería por qué.
+//
+// Lo que Meta manda en el referral es el ANUNCIO, no la campaña: `source_id` es
+// el id del anuncio. Campaña y conjunto no vienen — se resuelven preguntándole
+// después a la Graph API con el token de ads del cliente, que hoy no todos
+// tienen. Por eso se guarda el id: el nombre del anuncio se puede cambiar, el id
+// no, y es lo que permitirá completarlo más adelante sin perder estos leads.
+export function pautaDeReferral(ref) {
+  if (!ref || typeof ref !== 'object') return {};
+  const corto = (v) => (v === undefined || v === null || String(v).trim() === '')
+    ? null : String(v).trim().slice(0, 120);
+  const out = {};
+  // El titular es lo único legible por una persona; el id, lo único estable.
+  const anuncio = corto(ref.headline) || corto(ref.source_id);
+  if (anuncio) out['Anuncio'] = anuncio;
+  if (corto(ref.source_id)) out['ID de anuncio'] = corto(ref.source_id);
+  if (corto(ref.ctwa_clid)) out['Clic de anuncio'] = corto(ref.ctwa_clid);
+  // `source_type` es 'ad' o 'post': lo segundo es una publicación orgánica con
+  // botón de WhatsApp, que NO es pauta y no debe contarse como tal.
+  if (Object.keys(out).length) out['Plataforma'] = ref.source_type === 'post' ? 'Meta orgánico' : 'Meta';
+  return out;
+}
+
 export function camposDePauta(body) {
   const out = {};
   if (!body || typeof body !== 'object') return out;
