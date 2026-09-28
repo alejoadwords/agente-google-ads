@@ -1,0 +1,178 @@
+// El catálogo que el agente ofrece: node pruebas/catalogo-precios.mjs
+//
+// Tres fallos que no se notaban en la respuesta del agente —contestaba con el
+// mismo aplomo— y que costaban ventas en silencio:
+//
+//   1. UN SOLO PRECIO POR INMUEBLE, sacado cogiendo el importe mayor de la
+//      ficha. En una ficha que anuncia venta Y arriendo el mayor es el de
+//      venta: 30 de los 469 inmuebles de Certain guardaban 800 millones donde
+//      iba un canon de 3. Esos 30 desaparecían de TODA búsqueda de arriendo,
+//      porque el filtro comparaba el presupuesto contra el precio de venta.
+//   2. EL CATÁLOGO NUNCA SE PODABA. Solo se insertaba y se actualizaba, así
+//      que un inmueble retirado de la web se quedaba para siempre. Y los que se
+//      retiran son justo los que se acaban de arrendar.
+//   3. LAS PISTAS NO LLEGABAN AL FILTRO. Ciudad, zona y presupuesto se
+//      preguntaban en la calificación, que no alimentaba la búsqueda, y el
+//      bloque de captura nunca los pedía. Visto en la primera prueba real:
+//      «busco apartamento en Buenavista» → el agente lo apuntaba como criterio
+//      cumplido y el catálogo le pasaba los 25 arriendos más baratos de toda la
+//      costa.
+
+import { readFileSync } from 'node:fs';
+import { preciosDeTexto, precioPrincipal } from '../api/_catalogo.js';
+import { aPlata, pistasDeBusqueda } from '../api/_inbox-engine.js';
+
+const cat = readFileSync(new URL('../api/_catalogo.js', import.meta.url), 'utf8');
+const eng = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
+
+let mal = 0;
+const ok = (c, m, extra) => {
+  console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c && extra !== undefined ? ' → ' + extra : ''));
+  if (!c) mal++;
+};
+
+// ── 1. Cada precio en su sitio ──────────────────────────────────────────────
+console.log('\nUna ficha que vende Y arrienda tiene dos precios');
+
+// Texto tal como queda una ficha de Certain al quitarle las etiquetas HTML.
+const DOBLE = ' Código: 121514354 Apartamento Barranquilla Venta: $ 550,000,000 ' +
+              'Arriendo: $ 2,900,000 Administración: $ 704,000 Estrato: 5 ';
+const p = preciosDeTexto(DOBLE);
+ok(p.precio_arriendo === 2900000, 'el canon se lee de la etiqueta «Arriendo»', p.precio_arriendo);
+ok(p.precio_venta === 550000000, 'el precio de venta, de la suya', p.precio_venta);
+ok(p.administracion === 704000, 'y la administración, que antes se tiraba', p.administracion);
+
+// El fallo exacto que había: quien busca arriendo con 3 millones no veía este
+// inmueble, porque se comparaba su presupuesto contra 550.000.000.
+ok(p.precio_arriendo < 3000000 * 1.15,
+   'con 3 millones de presupuesto, este inmueble SÍ entra por su canon');
+
+console.log('\nY una que solo hace una cosa, uno solo');
+const SOLO_V = ' Lote en Venta España, Cartagena Venta: $ 350,000,000 337 m2 ';
+const v = preciosDeTexto(SOLO_V);
+ok(v.precio_venta === 350000000 && v.precio_arriendo == null,
+   'solo venta: el canon queda vacío, no se inventa', JSON.stringify(v));
+const SOLO_A = ' Barranquilla Arriendo: $ 4,200,000 3 hab ';
+const a = preciosDeTexto(SOLO_A);
+ok(a.precio_arriendo === 4200000 && a.precio_venta == null,
+   'solo arriendo: el de venta queda vacío', JSON.stringify(a));
+
+console.log('\nLo que no es un precio no se cuela');
+ok(preciosDeTexto(' Teléfono: 3218521992 ').precio_arriendo == null,
+   'un teléfono no lleva $ y no entra');
+ok(preciosDeTexto(' Área: $ 337 ').precio_venta == null,
+   'y un importe ridículo tampoco: por debajo de 100.000 no es un precio');
+ok(Object.keys(preciosDeTexto('')).length === 0, 'sin texto, nada');
+ok(Object.keys(preciosDeTexto(null)).length === 0, 'con null tampoco revienta');
+
+// La cabecera repite el dato más abajo; manda la primera aparición.
+const REPETIDO = ' Arriendo: $ 2,716,000 ... Información del inmueble Arriendo: $ 2,716,000 ';
+ok(preciosDeTexto(REPETIDO).precio_arriendo === 2716000, 'un dato repetido no se duplica ni se pisa');
+
+console.log('\nLa columna de siempre sigue teniendo el precio que toca');
+ok(precioPrincipal('Arriendo', p) === 2900000, 'en un arriendo, el canon');
+ok(precioPrincipal('Venta', p) === 550000000, 'en una venta, la venta');
+ok(precioPrincipal('Arriendo/Venta', p) === 2900000,
+   'y en uno que hace las dos, el canon: es el que se compara con un presupuesto');
+ok(precioPrincipal('Arriendo', { precio_suelto: 1500000 }) === 1500000,
+   'si la web no etiqueta, se usa el importe suelto antes que dejarlo sin precio');
+ok(precioPrincipal('Venta', {}) === null, 'y sin nada, null, no un cero');
+
+// ── 2. La poda ──────────────────────────────────────────────────────────────
+console.log('\nLo que el sitio ya no publica, se borra');
+
+const sync = cat.slice(cat.indexOf('export async function sincronizarLote'));
+ok(/method: 'DELETE'/.test(sync), 'ahora sí hay un borrado: antes el catálogo solo crecía');
+ok(/if \(terminado\)/.test(sync.slice(sync.indexOf('La barrida'))),
+   'y solo al cerrar una pasada completa, nunca a mitad');
+ok(/visto_en=lt\.\$\{paseDesde\}/.test(sync),
+   'borra lo que no se vio en esta pasada, que es la marca que ya se escribía');
+
+// El corte tiene que fijarse ANTES de leer nada. Con la hora del final, lo
+// guardado en la primera página quedaría por detrás del corte y se borraría
+// solo: la pasada se comería a sí misma.
+const iSync = cat.indexOf('export async function sincronizarLote');
+ok(cat.indexOf('const paseDesde', iSync) < cat.indexOf('wp-json/wp/v2/${tipo}', iSync),
+   'el corte se fija antes de leer la primera página, no después');
+
+ok(/orderby=id&order=asc/.test(cat),
+   'las páginas se piden por id, no por fecha de modificación');
+ok(!/orderby=modified/.test(cat),
+   'porque con «modified» un inmueble editado a mitad de pasada desplaza a otro, ' +
+   'que se quedaría sin visitar y la poda lo borraría estando vivo');
+
+ok(/sobran > \(sobran \+ vivos\) \/ 3/.test(sync),
+   'y hay freno: si la pasada dejaría fuera más de un tercio, no borra nada');
+ok(/No se borró nada/.test(sync), 'y lo dice, en vez de callarse');
+ok(/sobran == null \|\| vivos == null/.test(sync),
+   'si no se puede ni contar, tampoco borra: borrar es lo único que no se deshace');
+
+// ── 3. Las pistas llegan al filtro ──────────────────────────────────────────
+console.log('\nLo que la persona dijo llega a la búsqueda');
+
+ok(/"ciudad": "\.\.\.", "zona": "\.\.\.", "presupuesto"/.test(eng),
+   'el bloque de captura ya pide ciudad, zona y presupuesto');
+
+const soloCaptura = pistasDeBusqueda(
+  { ciudad: 'Barranquilla', zona: 'Buenavista', presupuesto: '3000000' }, {});
+ok(soloCaptura.barrio === 'Buenavista' && soloCaptura.presupuesto === 3000000,
+   'del bloque de captura', JSON.stringify(soloCaptura));
+
+// El caso real: la zona la recogió la calificación, no la captura.
+const soloCalif = pistasDeBusqueda({}, {
+  _ruta: 'arriendo',
+  zona_barrio: { valor: 'Buenavista', cumple: true },
+  presupuesto: { valor: 'hasta 3 millones', cumple: true },
+});
+ok(soloCalif.barrio === 'Buenavista', 'y también de la calificación, emparejando por el nombre del criterio');
+ok(soloCalif.presupuesto === 3000000, 'con el presupuesto en pesos, no en palabras', soloCalif.presupuesto);
+ok(soloCalif.operacion === 'arriendo', 'y la operación sigue saliendo del enrutado');
+
+const vacio = pistasDeBusqueda({}, { presupuesto: { valor: '', cumple: false } });
+ok(vacio.presupuesto === null,
+   'un criterio sin respuesta no es un presupuesto de cero');
+
+console.log('\n«Tres millones» son tres millones, no tres pesos');
+const plata = [
+  ['$3.000.000', 3000000], ['3 millones', 3000000], ['hasta 3 millones', 3000000],
+  ['3,5 millones', 3500000], ['2.5M', 2500000], ['800 mil', 800000],
+  ['$ 1.200.000 mensuales', 1200000], ['550.000.000', 550000000],
+  // De un rango se coge el tope: el filtro busca POR DEBAJO del presupuesto,
+  // así que con el tope se enseña todo el rango y con el suelo, casi nada.
+  ['entre 2 y 3 millones', 3000000],
+  ['sin información', null], ['no sé', null], ['', null], [null, null],
+  // Esto es lo que rompía: un «3» suelto daba un filtro de «precio menor que 3»
+  // y el agente decía que no tenía nada. Mejor no filtrar que filtrar a cero.
+  ['3', null],
+];
+for (const [txt, esp] of plata) ok(aPlata(txt) === esp, JSON.stringify(txt) + ' → ' + esp, aPlata(txt));
+
+// ── 4. El filtro usa la columna que toca ────────────────────────────────────
+console.log('\nY la búsqueda compara contra el precio correcto');
+
+const filtro = eng.slice(eng.indexOf('export async function propiedadesParaPrompt'),
+                         eng.indexOf('export function pistasDeBusqueda'));
+ok(/precio_arriendo,precio_venta,administracion/.test(filtro), 'se traen los tres precios');
+ok(/esArriendo \? 'precio_arriendo' : esVenta \? 'precio_venta' : null/.test(filtro),
+   'y se filtra por el de la operación que la persona busca');
+ok(/and\(\$\{col\}\.is\.null,precio\.lte\.\$\{tope\}\)/.test(filtro),
+   'con respaldo al precio viejo mientras un catálogo no se haya vuelto a sincronizar: ' +
+   'sin eso el agente se quedaría sin nada que ofrecer justo al desplegar, y en silencio');
+ok(/administracion \? 'admón\. '/.test(filtro), 'la administración se le pasa al agente');
+ok(/por confirmar/.test(filtro),
+   'marcada como no definitiva: se publica aparte del canon y cambia');
+
+// ── 5. Una sola implementación ──────────────────────────────────────────────
+console.log('\nEl botón y el cron hacen lo mismo');
+const endpoint = readFileSync(new URL('../api/knowledge-sync.js', import.meta.url), 'utf8');
+const cron = readFileSync(new URL('../api/cron-catalogo.js', import.meta.url), 'utf8');
+for (const [nombre, src] of [['el endpoint', endpoint], ['el cron', cron]]) {
+  ok(/from '\.\/_catalogo\.js'/.test(src), `${nombre} usa el módulo compartido`);
+  ok(!/preciosDeTexto|precioPrincipal/.test(src.replace(/from '\.\/_catalogo\.js'/, '')),
+     `y ${nombre} no tiene su propia copia del lector de precios`);
+}
+ok(/Bearer \$\{CRON_SECRET\}/.test(cron), 'el cron exige el secreto');
+ok(/latir\('cron-catalogo', \{ empezo:/.test(cron), 'y deja latido de entrada');
+
+console.log('');
+process.exit(mal ? 1 : 0);

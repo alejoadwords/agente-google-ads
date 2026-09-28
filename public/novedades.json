@@ -2,6 +2,20 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-28-agente-usted",
+      "fecha": "2026-09-28",
+      "tipo": "arreglo",
+      "titulo": "Un agente en tono formal ya trata de usted de verdad",
+      "texto": "Si tenías el agente configurado en formal, seguía tuteando a tus clientes. La instrucción existía, pero iba suelta entre las demás y se perdía. Ahora va primera, con ejemplo y sin excepciones: lo medimos sobre seis primeras conversaciones y pasó de tutear en las seis a no tutear en ninguna. No tienes que cambiar nada en tu agente."
+    },
+    {
+      "id": "2026-09-28-catalogo-al-dia",
+      "fecha": "2026-09-28",
+      "tipo": "mejora",
+      "titulo": "Tu catálogo se mantiene al día solo, y con el precio correcto",
+      "texto": "Antes el inventario solo se actualizaba si alguien pulsaba «Sincronizar», y nunca se quitaba nada: un inmueble que retirabas de tu web seguía ofreciéndose. Ahora se actualiza solo cada hora y lo que dejas de publicar desaparece del catálogo. Además, un inmueble que anuncias en venta y en arriendo guarda los dos precios por separado y la administración publicada: antes se guardaba el mayor, así que esos inmuebles no aparecían en ninguna búsqueda de arriendo. Y lo que te dicen por chat —ciudad, zona y presupuesto— ya se usa para filtrar lo que el agente ofrece."
+    },
+    {
       "id": "2026-09-28-sesion-vencida",
       "fecha": "2026-09-28",
       "tipo": "arreglo",

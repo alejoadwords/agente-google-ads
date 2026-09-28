@@ -180,6 +180,10 @@
     {
       "path": "/api/cron-notas",
       "schedule": "0 13,20 * * 1-5"
+    },
+    {
+      "path": "/api/cron-catalogo",
+      "schedule": "25 * * * *"
     }
   ]
 }
