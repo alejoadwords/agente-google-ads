@@ -30,6 +30,11 @@ export default async function handler(req) {
     return new Response('No autorizado', { status: 401 });
   }
 
+  // La entrada, aparte de la salida: un latido que solo se escribe al terminar
+  // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
+  await latir('cron-errores', { empezo: new Date().toISOString() });
+
+
   // Un cron callado no genera errores: genera ausencia, que es justo lo que
   // nadie mira. El 23-09-2026 el resumen diario de tareas no salió y no había
   // forma de saberlo hasta que un asesor lo reportó. Esto lo convierte en un

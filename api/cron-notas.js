@@ -58,6 +58,11 @@ export default async function handler(req) {
     return new Response('No autorizado', { status: 401 });
   }
 
+  // La entrada, aparte de la salida: un latido que solo se escribe al terminar
+  // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
+  await latir('cron-notas', { empezo: new Date().toISOString() });
+
+
   const corte = new Date(Date.now() - HORAS * 3600000).toISOString();
   const viejo = new Date(Date.now() - DIAS_MAXIMO * 86400000).toISOString();
 

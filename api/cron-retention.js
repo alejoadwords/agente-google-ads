@@ -9,6 +9,7 @@
 // filas que llevan más de RETENCION_GRACIA días con deleted_at.
 
 import { registrarError } from './_registro-errores.js';
+import { latir } from './_latido.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -99,6 +100,11 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'No autorizado' });
   }
 
+  // La entrada se marca aparte de la salida: un latido que solo se escribe al
+  // terminar no distingue «Vercel no lo llamó» de «lo llamó y se murió a
+  // mitad». Ver api/_latido.js.
+  await latir('cron-retention', { empezo: new Date().toISOString() });
+
   const resumen = { cuentas: 0, a_papelera: 0, purgados: 0, errores: [] };
 
   // 1 — reglas de retención por cuenta
@@ -180,5 +186,6 @@ export default async function handler(req, res) {
   }
 
   console.log('[cron-retention]', JSON.stringify(resumen));
+  await latir('cron-retention', resumen, resumen.errores.length ? resumen.errores.join(' · ').slice(0, 200) : null);
   return res.status(200).json(resumen);
 }

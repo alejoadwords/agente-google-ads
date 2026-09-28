@@ -13,6 +13,7 @@ export const config = { runtime: 'edge' };
 
 import { emailHtml, bloque, RESPONDER_A } from './_email-layout.js';
 import { enviarResend } from './_correo.js';
+import { latir } from './_latido.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -79,14 +80,19 @@ export default async function handler(req) {
     return new Response('No autorizado', { status: 401 });
   }
 
+  // La entrada se marca aparte de la salida: un latido que solo se escribe al
+  // terminar no distingue «Vercel no lo llamó» de «lo llamó y se murió a
+  // mitad». Ver api/_latido.js.
+  await latir('cron-integridad', { empezo: new Date().toISOString() });
+  const responder = async (cuerpo, fallo) => {
+    await latir('cron-integridad', cuerpo, fallo);
+    return new Response(JSON.stringify(cuerpo), { headers: { 'Content-Type': 'application/json' } });
+  };
+
   const hallazgos = (await Promise.all([tareasFantasma(), tareasSinLead(), clienteDesajustado()]))
     .filter(Boolean);
 
-  if (!hallazgos.length) {
-    return new Response(JSON.stringify({ ok: true, hallazgos: 0 }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  if (!hallazgos.length) return responder({ ok: true, hallazgos: 0 });
 
   const cuerpo = hallazgos.map(h =>
     `<p style="margin:0 0 6px"><b>${h.titulo}</b> — ${h.detalle.length}</p>` +
@@ -111,7 +117,5 @@ export default async function handler(req) {
     }),
   }).catch(e => console.error('[integridad] no se pudo avisar:', e?.message));
 
-  return new Response(JSON.stringify({ ok: false, hallazgos: hallazgos.map(h => h.titulo) }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return responder({ ok: false, hallazgos: hallazgos.map(h => h.titulo) });
 }

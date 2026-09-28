@@ -11,6 +11,7 @@ export const config = { runtime: 'edge' };
 
 import { emailHtml, pasos, esc, RESPONDER_A } from './_email-layout.js';
 import { enviarResend } from './_correo.js';
+import { latir } from './_latido.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -58,6 +59,15 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
   }
 
+  // La entrada se marca aparte de la salida: un latido que solo se escribe al
+  // terminar no distingue «Vercel no lo llamó» de «lo llamó y se murió a
+  // mitad». Ver api/_latido.js.
+  await latir('cron-conectores', { empezo: new Date().toISOString() });
+  const responder = async (cuerpo, fallo) => {
+    await latir('cron-conectores', cuerpo, fallo);
+    return new Response(JSON.stringify(cuerpo), { headers: { 'Content-Type': 'application/json' } });
+  };
+
   const limite = new Date(Date.now() - SILENCIO_MINIMO * DIA).toISOString();
   const candidatos = await fetch(
     `${SUPABASE_URL}/rest/v1/lead_forms?tipo=eq.conector&active=is.true&aviso_silencio_at=is.null` +
@@ -66,7 +76,7 @@ export default async function handler(req) {
     { headers: sb() }
   ).then(r => (r.ok ? r.json() : [])).catch(() => []);
 
-  if (!candidatos.length) return new Response(JSON.stringify({ ok: true, avisados: 0 }));
+  if (!candidatos.length) return responder({ ok: true, avisados: 0 });
 
   const key = process.env.RESEND_API_KEY;
   const correos = new Map();
@@ -122,7 +132,5 @@ export default async function handler(req) {
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, avisados, ignorados, revisados: candidatos.length }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return responder({ ok: true, avisados, ignorados, revisados: candidatos.length });
 }

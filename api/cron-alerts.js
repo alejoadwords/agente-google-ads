@@ -6,6 +6,7 @@ export const config = { runtime: 'nodejs' };
 
 import { emailHtml, RESPONDER_A } from './_email-layout.js';
 import { enviarResend } from './_correo.js';
+import { latir } from './_latido.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const CRON_SECRET         = process.env.CRON_SECRET;
@@ -76,6 +77,15 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // La entrada se marca aparte de la salida: un latido que solo se escribe al
+  // terminar no distingue «Vercel no lo llamó» de «lo llamó y se murió a
+  // mitad». Ver api/_latido.js.
+  await latir('cron-alerts', { empezo: new Date().toISOString() });
+  const responder = async (estado, cuerpo, fallo) => {
+    await latir('cron-alerts', cuerpo, fallo);
+    return res.status(estado).json(cuerpo);
+  };
+
   try {
     // 1. Obtener usuarios Pro/Agency/Admin con conexiones activas
     // Free users no reciben alertas automáticas (feature de plan pagado)
@@ -84,7 +94,7 @@ export default async function handler(req, res) {
       supabaseReq('/users?plan=in.(pro,agency,admin)&select=id'),
     ]);
 
-    if (!connections?.length) return res.json({ ok: true, usersChecked: 0, alertsCreated: 0 });
+    if (!connections?.length) return responder(200, { ok: true, usersChecked: 0, alertsCreated: 0 });
 
     const paidUserIds = new Set((paidUsers || []).map(u => u.id));
 
@@ -126,10 +136,10 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.json({ ok: true, usersChecked: uniqueUserIds.length, alertsCreated: totalAlerts });
+    return responder(200, { ok: true, usersChecked: uniqueUserIds.length, alertsCreated: totalAlerts });
 
   } catch (err) {
     console.error('cron-alerts error:', err);
-    return res.status(500).json({ error: err.message });
+    return responder(500, { error: err.message }, err?.message || 'falló sin motivo');
   }
 }

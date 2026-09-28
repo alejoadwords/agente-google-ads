@@ -366,6 +366,11 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // La entrada, aparte de la salida: un latido que solo se escribe al terminar
+  // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
+  await latir('cron-campaigns', { empezo: new Date().toISOString() });
+
+
   let processed = 0, closed = 0, tandas = 0;
   // Resend ha dicho que no acepta más. Corta la corrida ENTERA, no solo el lote.
   //

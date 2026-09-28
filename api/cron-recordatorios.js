@@ -169,6 +169,11 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'No autorizado' });
   }
 
+  // La entrada, aparte de la salida: un latido que solo se escribe al terminar
+  // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
+  await latir('cron-recordatorios', { empezo: new Date().toISOString() });
+
+
   const ahora = Date.now();
   const bitacora = [];
   let avisados = 0, fallos = 0;

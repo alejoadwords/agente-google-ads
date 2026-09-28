@@ -2,6 +2,7 @@
 // Genera y envía reportes semanales automáticos todos los lunes a las 8am UTC
 import { enviarResend } from './_correo.js';
 import { yaSeHizo, periodoDe } from './_una-vez.js';
+import { latir } from './_latido.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -396,6 +397,15 @@ export default async function handler(req, res) {
     return res.status(401).end();
   }
 
+  // La entrada se marca aparte de la salida: un latido que solo se escribe al
+  // terminar no distingue «Vercel no lo llamó» de «lo llamó y se murió a
+  // mitad». Ver api/_latido.js.
+  await latir('cron-reports', { empezo: new Date().toISOString() });
+  const responder = async (estado, cuerpo, fallo) => {
+    await latir('cron-reports', cuerpo, fallo);
+    return res.status(estado).json(cuerpo);
+  };
+
   try {
     // Get all paid users
     const [connections, paidUsers] = await Promise.all([
@@ -403,7 +413,7 @@ export default async function handler(req, res) {
       supabaseReq('/users?plan=in.(pro,agency,admin)&select=id'),
     ]);
 
-    if (!connections?.length) return res.json({ ok: true, processed: 0, snapshots: 0 });
+    if (!connections?.length) return responder(200, { ok: true, processed: 0, snapshots: 0 });
 
     const paidUserIds = new Set((paidUsers || []).map(u => u.id));
     const uniqueUserIds = [...new Set(
@@ -422,9 +432,9 @@ export default async function handler(req, res) {
       await new Promise(r => setTimeout(r, 500));
     }
 
-    return res.json({ ok: true, processed: uniqueUserIds.length, snapshots: totalSnapshots });
+    return responder(200, { ok: true, processed: uniqueUserIds.length, snapshots: totalSnapshots });
   } catch (err) {
     console.error('cron-reports error:', err);
-    return res.status(500).json({ error: err.message });
+    return responder(500, { error: err.message }, err?.message || 'falló sin motivo');
   }
 }

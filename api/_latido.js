@@ -56,16 +56,27 @@ export async function latir(cron, resultado, fallo) {
 // suena siempre es un aviso que se deja de leer. Al enchufar otro cron, se
 // añade aquí; hasta entonces no se vigila.
 export const CADA = {
+  'cron-alerts': 15 * 60,        // 0 9,14,18 * * 1-5 — el hueco largo es 18:00→9:00
   'cron-automations': 10,
   'cron-campaigns': 10,
+  'cron-conectores': 24 * 60,    // 0 14 * * 1-5
   'cron-errores': 60,
+  'cron-integridad': 24 * 60,    // 0 11 * * *
+  'cron-knowledge': 31 * 24 * 60,        // 0 12 1 * * — 31 días: el mes más largo
+  'cron-monthly-reports': 31 * 24 * 60,  // 0 8 1 * *
   'cron-notas': 24 * 60,         // 0 13,20 * * 1-5
   'cron-recordatorios': 10,
   'cron-programados': 5,
+  'cron-reports': 7 * 24 * 60,   // 0 8 * * 1
+  'cron-retention': 24 * 60,     // 0 6 * * *
   'cron-tasks': 24 * 60,         // 0 12 * * 1-5
   'cron-trials': 24 * 60,        // 0 13 * * *
   'cron-ventana': 60,
 };
+
+// Los que solo corren de lunes a viernes. Su silencio se mide en minutos
+// HÁBILES, no de reloj: ver `calladoEn`.
+export const SOLO_ENTRE_SEMANA = ['cron-alerts', 'cron-conectores', 'cron-notas', 'cron-tasks'];
 
 /**
  * Cuánto silencio se le perdona a cada uno antes de avisar.
@@ -85,18 +96,75 @@ export const tolerancia = (minutos) => (minutos <= 60 ? minutos * 3 : minutos + 
 // buscar, así que un cron sin fila no significaba nada.
 export const DESDE = '2026-09-23T16:00:00Z';
 
+// Un cron no se empieza a vigilar cuando nació la vigilancia, sino cuando se
+// le puso el latido.
+//
+// Los siete de abajo se enchufaron el 27-09, cuatro días después de estrenar
+// esto. Con la fecha común, en cuanto entraron en `CADA` ya llevaban «cuatro
+// días sin latir» —más de las 30 horas que se le perdonan a un cron diario— y
+// el vigilante los habría denunciado a los pocos minutos de publicar, TODOS a
+// la vez y sin que ninguno hubiera tenido todavía su primer turno con el
+// código nuevo. Un aviso que sale el día de estrenar por estrenar es el que
+// enseña a ignorar los avisos.
+export const DESDE_POR_CRON = {
+  'cron-alerts': '2026-09-27T17:00:00Z',
+  'cron-conectores': '2026-09-27T17:00:00Z',
+  'cron-integridad': '2026-09-27T17:00:00Z',
+  'cron-knowledge': '2026-09-27T17:00:00Z',
+  'cron-monthly-reports': '2026-09-27T17:00:00Z',
+  'cron-reports': '2026-09-27T17:00:00Z',
+  'cron-retention': '2026-09-27T17:00:00Z',
+};
+
+/** Desde cuándo se vigila a este cron en concreto. */
+export const desdeDe = (cron) => DESDE_POR_CRON[cron] || DESDE;
+
 /**
- * Los que llevan callados más de lo que se les perdona. Los que solo corren de
- * lunes a viernes se perdonan el sábado y el domingo.
+ * Minutos transcurridos entre dos instantes, contando SOLO de lunes a viernes.
+ *
+ * Saltarse el sábado y el domingo no bastaba, y el aviso habría empezado a
+ * mentir el lunes 28-09-2026 por la mañana: `cron-tasks` corre a las 12:00 de
+ * lunes a viernes, así que el lunes a las 00:15 —cuando el vigilante pasa—
+ * llevaría 60 horas callado. Con 30 de tolerancia, aviso. Y no habría pasado
+ * nada: es viernes más el fin de semana.
+ *
+ * Se recorre día a día porque el cálculo tiene que ser exacto en los bordes
+ * —un tramo que empieza un viernes por la tarde y acaba un lunes por la
+ * mañana— y aquí se comparan como mucho unas pocas semanas.
+ */
+export function minutosHabiles(desde, hasta) {
+  let ini = new Date(desde).getTime();
+  const fin = new Date(hasta).getTime();
+  let total = 0;
+  // La condición del bucle ya cubre los casos raros: hacia atrás, el mismo
+  // instante y una fecha ilegible —NaN— no entran, y el resultado es cero.
+  while (ini < fin) {
+    const d = new Date(ini);
+    const finDelDia = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
+    const tramo = Math.min(finDelDia, fin) - ini;
+    const dia = d.getUTCDay();
+    if (dia !== 0 && dia !== 6) total += tramo / 60000;
+    ini = finDelDia;
+  }
+  return total;
+}
+
+/** Cuánto lleva callado un cron, con la regla que le toque. */
+export function calladoEn(cron, desde, ahora) {
+  return SOLO_ENTRE_SEMANA.includes(cron)
+    ? minutosHabiles(desde, ahora)
+    : (new Date(ahora).getTime() - new Date(desde).getTime()) / 60000;
+}
+
+/**
+ * Los que llevan callados más de lo que se les perdona. A los de lunes a
+ * viernes no se les cuenta el fin de semana.
  */
 export function callados(latidos, ahora = new Date()) {
   const porNombre = {};
   (latidos || []).forEach(l => { porNombre[l.cron] = l; });
-  const finDeSemana = ahora.getUTCDay() === 0 || ahora.getUTCDay() === 6;
-  const soloEntreSemana = ['cron-tasks', 'cron-notas'];
   const fuera = [];
   for (const [cron, minutos] of Object.entries(CADA)) {
-    if (finDeSemana && soloEntreSemana.includes(cron)) continue;
     const l = porNombre[cron];
     // Un cron que NUNCA ha latido se denuncia, pero solo cuando ya ha tenido
     // tiempo de hacerlo.
@@ -112,11 +180,11 @@ export function callados(latidos, ahora = new Date()) {
     // más el margen— contado desde que la vigilancia existe. Si en ese plazo
     // no ha aparecido, es que no está corriendo.
     if (!l) {
-      const desdeQueSeVigila = (ahora.getTime() - new Date(DESDE).getTime()) / 60000;
+      const desdeQueSeVigila = calladoEn(cron, desdeDe(cron), ahora);
       if (desdeQueSeVigila > tolerancia(minutos)) fuera.push({ cron, desde: null, minutos: null });
       continue;
     }
-    const callado = (ahora.getTime() - new Date(l.ultima_vez).getTime()) / 60000;
+    const callado = calladoEn(cron, l.ultima_vez, ahora);
     if (callado > tolerancia(minutos)) fuera.push({ cron, desde: l.ultima_vez, minutos: Math.round(callado) });
   }
   return fuera;

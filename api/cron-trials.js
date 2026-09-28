@@ -68,6 +68,10 @@ export default async function handler(req, res) {
   const authHeader = req.headers['authorization'];
   if (authHeader !== `Bearer ${CRON_SECRET}`) return res.status(401).json({ error: 'Unauthorized' });
 
+  // La entrada, aparte de la salida: un latido que solo se escribe al terminar
+  // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
+  await latir('cron-trials', { empezo: new Date().toISOString() });
+
   let expired = 0, reminded = 0, scanned = 0, vencidos = 0, avisados = 0, deEquipo = 0;
   const sinFecha = [];   // planes de pago sin fecha de fin: no se tocan, se reportan
   // Quien es asesor de otra cuenta NO tiene plan propio: lo cubre la licencia

@@ -3,6 +3,7 @@
 // Incluye comparativa mes actual vs mes anterior y análisis estratégico más profundo
 import { enviarResend } from './_correo.js';
 import { yaSeHizo, periodoDe } from './_una-vez.js';
+import { latir } from './_latido.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -377,13 +378,22 @@ async function apuntaIA({ userId, origen, agente, modelo, uso }) {
 export default async function handler(req, res) {
   if (req.headers.authorization !== `Bearer ${CRON_SECRET}`) return res.status(401).end();
 
+  // La entrada se marca aparte de la salida: un latido que solo se escribe al
+  // terminar no distingue «Vercel no lo llamó» de «lo llamó y se murió a
+  // mitad». Ver api/_latido.js.
+  await latir('cron-monthly-reports', { empezo: new Date().toISOString() });
+  const responder = async (estado, cuerpo, fallo) => {
+    await latir('cron-monthly-reports', cuerpo, fallo);
+    return res.status(estado).json(cuerpo);
+  };
+
   try {
     const [connections, paidUsers] = await Promise.all([
       supabaseReq('/platform_connections?select=user_id&order=user_id'),
       supabaseReq('/users?plan=in.(pro,agency,admin)&select=id'),
     ]);
 
-    if (!connections?.length) return res.json({ ok: true, processed: 0, snapshots: 0 });
+    if (!connections?.length) return responder(200, { ok: true, processed: 0, snapshots: 0 });
 
     const paidIds     = new Set((paidUsers || []).map(u => u.id));
     const uniqueUsers = [...new Set(connections.map(c => c.user_id).filter(id => paidIds.has(id)))];
@@ -398,9 +408,9 @@ export default async function handler(req, res) {
       await new Promise(r => setTimeout(r, 600));
     }
 
-    return res.json({ ok: true, processed: uniqueUsers.length, snapshots: totalSnapshots, type: 'monthly' });
+    return responder(200, { ok: true, processed: uniqueUsers.length, snapshots: totalSnapshots, type: 'monthly' });
   } catch (err) {
     console.error('cron-monthly-reports error:', err);
-    return res.status(500).json({ error: err.message });
+    return responder(500, { error: err.message }, err?.message || 'falló sin motivo');
   }
 }

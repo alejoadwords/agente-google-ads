@@ -33,6 +33,11 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
   }
 
+  // La entrada, aparte de la salida: un latido que solo se escribe al terminar
+  // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
+  await latir('cron-ventana', { empezo: new Date().toISOString() });
+
+
   const ahora = Date.now();
   // La franja: lo que ya entró en las últimas horas de vida de la ventana pero
   // todavía no ha caducado. El aviso se marca en la fila, así que aunque una

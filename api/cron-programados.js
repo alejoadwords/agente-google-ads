@@ -37,6 +37,11 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
   }
 
+  // La entrada, aparte de la salida: un latido que solo se escribe al terminar
+  // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
+  await latir('cron-programados', { empezo: new Date().toISOString() });
+
+
   const ahora = new Date().toISOString();
   // Si la base no contesta NO es que no haya nada programado. Antes se
   // confundían las dos cosas y un mensaje que debía salir se quedaba dentro

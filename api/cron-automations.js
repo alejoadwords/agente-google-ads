@@ -821,6 +821,11 @@ export default async function handler(req, res) {
   if (authHeader !== `Bearer ${CRON_SECRET}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+
+  // La entrada, aparte de la salida: un latido que solo se escribe al terminar
+  // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
+  await latir('cron-automations', { empezo: new Date().toISOString() });
+
   try {
     const enqueued = await processInactiveTriggers();
     const processed = await processJobs();

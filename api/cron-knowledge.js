@@ -9,6 +9,7 @@
 
 import crypto from 'crypto';
 import { enviarResend } from './_correo.js';
+import { latir } from './_latido.js';
 
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
@@ -129,6 +130,11 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // La entrada se marca aparte de la salida: un latido que solo se escribe al
+  // terminar no distingue «Vercel no lo llamó» de «lo llamó y se murió a
+  // mitad». Ver api/_latido.js.
+  await latir('cron-knowledge', { empezo: new Date().toISOString() });
+
   const mes = new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
   const drafts = [];
   const errors = [];
@@ -192,5 +198,7 @@ export default async function handler(req, res) {
   }
 
   console.log('[cron-knowledge] drafts:', drafts.length, 'errors:', errors);
-  return res.status(200).json({ ok: true, drafts: drafts.map(d => d.agent), errors });
+  const cuerpo = { ok: true, drafts: drafts.map(d => d.agent), errors };
+  await latir('cron-knowledge', cuerpo, errors.length ? errors.join(' · ').slice(0, 200) : null);
+  return res.status(200).json(cuerpo);
 }

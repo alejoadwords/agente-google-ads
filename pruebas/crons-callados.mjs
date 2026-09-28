@@ -9,7 +9,7 @@
 // prueba vigila al vigilante: un aviso que salta cuando no debe se deja de
 // leer, y entonces no sirve para nada el día que sí importa.
 
-import { callados, CADA, tolerancia, DESDE } from '../api/_latido.js';
+import { callados, CADA, tolerancia, DESDE, DESDE_POR_CRON, desdeDe, SOLO_ENTRE_SEMANA, minutosHabiles } from '../api/_latido.js';
 
 let mal = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) mal++; };
@@ -41,14 +41,47 @@ ok(callados(conRetraso, MIERCOLES).length === 0, 'un retraso de 25 min en un cro
 const muyTarde = alDia.map(l => l.cron === 'cron-campaigns' ? { ...l, ultima_vez: hace(45) } : l);
 ok(callados(muyTarde, MIERCOLES).some(c => c.cron === 'cron-campaigns'), 'pero 45 min sí');
 
-// Los que solo corren entre semana no pueden avisar el sábado.
-const viernes = Object.keys(CADA).map(cron => ({
-  cron, ultima_vez: cron === 'cron-tasks' ? hace(60 * 50, SABADO) : hace(1, SABADO),
+// ── El fin de semana no cuenta, pero tampoco tapa ───────────────────────────
+//
+// La primera regla era «el sábado y el domingo no se avisa de los que solo
+// corren de lunes a viernes», y tenía dos agujeros opuestos:
+//
+//  · tapaba de más: el sábado no avisaba aunque el cron se hubiera saltado su
+//    turno del VIERNES, que es un fallo de verdad;
+//  · y no tapaba lo suficiente: el LUNES por la mañana el silencio medido
+//    incluía el fin de semana entero. `cron-tasks` corre a las 12:00 de lunes
+//    a viernes, así que el lunes a las 00:15 —cuando pasa el vigilante— habría
+//    llevado 60 horas calladas contra 30 de tolerancia. Aviso seguro, y sin
+//    que hubiera pasado nada. El lunes 28-09-2026 habría sido el primero.
+//
+// Ahora el silencio de esos crons se mide en minutos HÁBILES.
+const unoDeCadaUno = (referencia, salvo, cuando) => Object.keys(CADA).map(cron => ({
+  cron, ultima_vez: cron === salvo ? cuando : hace(1, referencia),
 }));
-ok(!callados(viernes, SABADO).some(c => c.cron === 'cron-tasks'),
-   'el sábado no se avisa de un cron que solo corre de lunes a viernes');
+const VIERNES_12 = '2026-09-25T12:00:00Z';
+const JUEVES_13  = '2026-09-24T13:00:00Z';
+const LUNES_TEMPRANO = new Date('2026-09-28T00:15:00Z');   // cuando pasa cron-errores
+const LUNES_TARDE    = new Date('2026-09-28T19:00:00Z');   // ya debería haber corrido a las 12:00
+
+ok(!callados(unoDeCadaUno(SABADO, 'cron-tasks', VIERNES_12), SABADO)
+     .some(c => c.cron === 'cron-tasks'),
+   'el sábado, con su turno del viernes hecho, no avisa');
+ok(callados(unoDeCadaUno(SABADO, 'cron-tasks', JUEVES_13), SABADO)
+     .some(c => c.cron === 'cron-tasks'),
+   'pero si se saltó el viernes, el sábado SÍ avisa — el fin de semana no lo tapa');
+ok(!callados(unoDeCadaUno(LUNES_TEMPRANO, 'cron-tasks', VIERNES_12), LUNES_TEMPRANO)
+     .some(c => c.cron === 'cron-tasks'),
+   'el lunes de madrugada no avisa: las 60 horas son fin de semana, no silencio');
+ok(callados(unoDeCadaUno(LUNES_TARDE, 'cron-tasks', VIERNES_12), LUNES_TARDE)
+     .some(c => c.cron === 'cron-tasks'),
+   'y el lunes por la tarde, si no corrió a las 12:00, sí');
 ok(callados(sinTareas, MIERCOLES).some(c => c.cron === 'cron-tasks'),
-   'pero el mismo silencio entre semana sí avisa');
+   'el mismo silencio entre semana sigue avisando');
+
+// A los de todos los días el fin de semana SÍ les cuenta: ellos corren igual.
+ok(callados(unoDeCadaUno(SABADO, 'cron-retention', JUEVES_13), SABADO)
+     .some(c => c.cron === 'cron-retention'),
+   'a un cron diario el fin de semana no se le perdona: corre sábado y domingo');
 
 // Un cron que NUNCA ha latido: ni ignorarlo siempre ni denunciarlo siempre.
 //
@@ -91,5 +124,114 @@ ok(f3.find(c => c.cron === 'cron-tasks')?.desde === null,
 const yaLatio = [{ cron: 'cron-trials', ultima_vez: hace(60 * 31) }];
 ok(callados(yaLatio, MIERCOLES).some(c => c.cron === 'cron-trials'),
    'en cuanto late una vez, su silencio posterior sí avisa');
+
+// ── Que no quede ningún cron sin vigilar ────────────────────────────────────
+//
+// Siete de los dieciséis no dejaban latido, así que el vigilante no podía
+// decir nada de ellos: `cron-retention`, `cron-integridad` y `cron-conectores`
+// corren a diario o cada día hábil y nadie sabía si corrían. Un instrumento
+// que cubre la mitad da confianza falsa, que es peor que no tener ninguno.
+//
+// Esta comprobación es la que impide que vuelva a pasar: se lee `vercel.json`,
+// no una lista escrita a mano, así que un cron nuevo entra en rojo hasta que
+// late.
+{
+  const { readFileSync } = await import('node:fs');
+  const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  const enVercel = (vercel.crons || []).map(c => c.path.replace('/api/', ''));
+  ok(enVercel.length > 0, 'vercel.json declara crons: ' + enVercel.length);
+
+  const sinVigilar = enVercel.filter(c => !(c in CADA));
+  ok(sinVigilar.length === 0, 'todos los crons de vercel.json están vigilados'
+     + (sinVigilar.length ? ' → faltan: ' + sinVigilar.join(', ') : ''));
+
+  const sobran = Object.keys(CADA).filter(c => !enVercel.includes(c));
+  ok(sobran.length === 0, 'y no se vigila ninguno que ya no exista'
+     + (sobran.length ? ' → sobran: ' + sobran.join(', ') : ''));
+
+  // Vigilar sin latir es peor que no vigilar: sería un aviso permanente de un
+  // cron perfectamente vivo, y un aviso que suena siempre se deja de leer.
+  const mudos = Object.keys(CADA).filter(c => {
+    try { return !/latir\(/.test(readFileSync(new URL('../api/' + c + '.js', import.meta.url), 'utf8')); }
+    catch { return true; }
+  });
+  ok(mudos.length === 0, 'y todos llaman a latir()'
+     + (mudos.length ? ' → mudos: ' + mudos.join(', ') : ''));
+
+  // La entrada además de la salida: sin ella no se distingue «Vercel no lo
+  // llamó» de «lo llamó y se murió a mitad».
+  const sinEntrada = Object.keys(CADA).filter(c => {
+    try { return !/\{ empezo:/.test(readFileSync(new URL('../api/' + c + '.js', import.meta.url), 'utf8')); }
+    catch { return true; }
+  });
+  ok(sinEntrada.length === 0, 'y todos marcan la entrada'
+     + (sinEntrada.length ? ' → sin marca: ' + sinEntrada.join(', ') : ''));
+
+  // El horario declarado y el intervalo vigilado tienen que hablar de lo
+  // mismo. Un cron de lunes a viernes vigilado con la regla de los de diario
+  // avisaría cada lunes por la mañana.
+  const soloLV = enVercel.filter(c => {
+    const cr = (vercel.crons || []).find(x => x.path === '/api/' + c);
+    return /1-5|MON-FRI/i.test(cr.schedule.split(' ').slice(4).join(' '));
+  });
+  const mal2 = soloLV.filter(c => !SOLO_ENTRE_SEMANA.includes(c));
+  ok(mal2.length === 0, 'los de lunes a viernes están marcados como tales'
+     + (mal2.length ? ' → faltan: ' + mal2.join(', ') : ''));
+  const noLV = SOLO_ENTRE_SEMANA.filter(c => !soloLV.includes(c));
+  ok(noLV.length === 0, 'y ninguno se libra del fin de semana sin merecerlo'
+     + (noLV.length ? ' → sobran: ' + noLV.join(', ') : ''));
+}
+
+// ── Minutos hábiles ─────────────────────────────────────────────────────────
+ok(minutosHabiles('2026-09-25T12:00:00Z', '2026-09-28T00:15:00Z') === 12 * 60 + 15,
+   'de viernes 12:00 a lunes 00:15 hay 12 h 15 min hábiles, no 60 h');
+ok(minutosHabiles('2026-09-26T00:00:00Z', '2026-09-28T00:00:00Z') === 0,
+   'un fin de semana entero son cero minutos hábiles');
+ok(minutosHabiles('2026-09-23T10:00:00Z', '2026-09-23T11:30:00Z') === 90,
+   'dentro del mismo día laborable se cuenta normal');
+ok(minutosHabiles('2026-09-28T10:00:00Z', '2026-09-23T10:00:00Z') === 0,
+   'hacia atrás da cero, no un número negativo');
+ok(minutosHabiles('2026-09-23T10:00:00Z', '2026-09-23T10:00:00Z') === 0,
+   'el mismo instante son cero minutos');
+ok(minutosHabiles('no es una fecha', '2026-09-23T10:00:00Z') === 0,
+   'y una fecha ilegible da cero, no NaN');
+
+// ── Un cron recién vigilado no se denuncia por estrenarlo ───────────────────
+//
+// Los siete que se enchufaron el 27-09 entraron en `CADA` cuatro días después
+// de que naciera la vigilancia. Con la fecha común habrían llevado «cuatro
+// días sin latir» desde el minuto uno y el vigilante los habría sacado a
+// todos a la vez, antes de que ninguno tuviera su primer turno. Cada uno se
+// cuenta desde que SE LE PUSO el latido.
+{
+  const recienes = Object.keys(DESDE_POR_CRON);
+  ok(recienes.length > 0, 'hay crons con fecha propia de vigilancia: ' + recienes.length);
+  ok(recienes.every(c => c in CADA), 'y todos están en CADA');
+  ok(desdeDe('cron-tasks') === DESDE, 'los de siempre usan la fecha común');
+  ok(desdeDe('cron-retention') === DESDE_POR_CRON['cron-retention'], 'y los nuevos, la suya');
+
+  // Contra un instante ABSOLUTO, no contra la propia constante que se está
+  // comprobando. Medirlo relativo a `DESDE_POR_CRON` era una tautología: al
+  // mover la fecha se movía con ella la ventana de la prueba, y adelantarla
+  // cuatro días —el fallo exacto que esto viene a cazar— pasaba en verde. Es
+  // el mismo error que ya se cometió con la ventana de la agenda.
+  //
+  // 27-09 a las 17:10 UTC es el minuto de publicar esto. Con la fecha común
+  // —23-09— los siete ya llevarían cuatro días de silencio, muy por encima de
+  // las 30 horas de un cron diario, y saldrían todos.
+  const AL_PUBLICAR = new Date('2026-09-27T17:10:00Z');
+  const viejosAlDia = Object.keys(CADA).filter(c => !(c in DESDE_POR_CRON))
+    .map(cron => ({ cron, ultima_vez: new Date(AL_PUBLICAR.getTime() - 60000).toISOString() }));
+  const falsos = recienes.filter(c => callados(viejosAlDia, AL_PUBLICAR).some(x => x.cron === c));
+  ok(falsos.length === 0, 'al publicar no avisa de ninguno de los recién enchufados'
+     + (falsos.length ? ' → falsos: ' + falsos.join(', ') : ''));
+  ok(recienes.every(c => new Date(desdeDe(c)) > new Date(DESDE)),
+     'porque cada uno se cuenta desde que se le puso el latido, no desde el 23-09');
+
+  // Pero pasado su plazo sí: si de verdad no corre, se sabe.
+  const DOS_DIAS_DESPUES = new Date('2026-09-29T17:10:00Z');
+  ok(callados(viejosAlDia, DOS_DIAS_DESPUES).some(c => c.cron === 'cron-retention'),
+     'y a las 48 horas sin latir, cron-retention sí sale');
+}
 
 process.exit(mal ? 1 : 0);
