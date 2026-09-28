@@ -69,6 +69,9 @@ globalThis.fetch = async (url, opts) => {
            json: async () => clerkResponde.json };
 };
 const pedir = (auth) => ({ headers: { get: (k) => (k.toLowerCase() === 'authorization' ? auth : null) } });
+// La misma petición como la ve una función NODE: `req.headers` es un objeto
+// plano con las claves en minúscula, no un `Headers` con `.get()`.
+const pedirNode = (auth) => ({ headers: auth === null ? {} : { authorization: auth } });
 
 // ── 1. Lo bueno sigue entrando ──────────────────────────────────────────────
 console.log('\nUn token bueno entra, como siempre\n');
@@ -83,6 +86,20 @@ console.log('\nUn token bueno entra, como siempre\n');
   const t = await token();
   ok((await verificarSesion(pedir('bearer ' + t))).id === 'user_123',
      'el prefijo «bearer» en minúscula también vale');
+}
+
+console.log('\nY lo mismo desde una función Node, que lee las cabeceras de otra forma\n');
+{
+  const t = await token();
+  ok((await verificarSesion(pedirNode('Bearer ' + t))).id === 'user_123',
+     'un token bueno entra igual con req.headers como objeto plano');
+  const r = await verificarSesion(pedirNode(null));
+  ok(r.id === null && /sin cabecera/.test(r.motivo),
+     'y sin cabecera se distingue igual', r.motivo);
+  const v = await verificarSesion(pedirNode('Bearer ' + await token({ exp: Math.floor(Date.now() / 1000) - 60 })));
+  ok(v.vencida === true, 'y la sesión vencida también');
+  // Y no se rompe con algo que no tenga cabeceras en absoluto.
+  ok((await verificarSesion({})).id === null, 'una petición sin headers no revienta');
 }
 
 // ── 2. Cada rechazo dice cuál fue ───────────────────────────────────────────

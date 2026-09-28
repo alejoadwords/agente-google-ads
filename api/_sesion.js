@@ -25,6 +25,19 @@ const JWKS = 'https://clerk.acuarius.app/.well-known/jwks.json';
 
 const b64 = (s) => atob(String(s).replace(/-/g, '+').replace(/_/g, '/'));
 
+// La cabecera, venga del runtime que venga.
+//
+// En edge `req.headers` es un `Headers` y se lee con `.get()`; en Node es un
+// objeto plano con las claves en minúscula. Cada endpoint llevaba la forma de
+// SU runtime escrita dentro, y por eso las doce funciones Node no podían usar
+// este módulo. Se mira qué hay delante en vez de exigir una de las dos.
+function cabecera(req, nombre) {
+  const h = req && req.headers;
+  if (!h) return null;
+  if (typeof h.get === 'function') return h.get(nombre);
+  return h[nombre.toLowerCase()] || h[nombre] || null;
+}
+
 // Las llaves de Clerk, guardadas un rato.
 //
 // Antes cada endpoint se las pedía a Clerk en CADA petición, y al abrir una
@@ -66,7 +79,7 @@ async function llavesDeClerk(kid) {
 export async function verificarSesion(req, opciones) {
   const mal = (motivo, vencida) => ({ id: null, motivo, vencida: !!vencida });
 
-  const auth = req.headers.get('Authorization');
+  const auth = cabecera(req, 'Authorization');
   // `tokenAlterno` es para `api/errores.js`: `sendBeacon` no permite poner
   // cabeceras, así que al cerrar la pestaña el token viaja en el cuerpo. Sin
   // esa puerta se perderían los errores del último momento, que son justo los

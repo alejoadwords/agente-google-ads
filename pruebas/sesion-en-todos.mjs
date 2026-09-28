@@ -43,7 +43,7 @@ console.log('\nUn solo verificador para toda la aplicación\n');
   const PENDIENTES_NODE = [
     'admin.js', 'generate-image.js', 'geo-rank.js', 'google-ads.js', 'meta-ads.js',
     'refresh-google-token.js', 'refresh-meta-token.js', 'report.js', 'seo-rank.js',
-    'social-publish.js', 'video-credits.js', 'video-gen.js',
+    'social-publish.js', 'video-gen.js',
   ];
   const copias = ficheros.filter((f) => f !== '_sesion.js' && leer(f).includes('.well-known/jwks.json'));
   const nuevas = copias.filter((f) => !PENDIENTES_NODE.includes(f));
@@ -111,11 +111,26 @@ for (const f of conSesion) {
 
 console.log('\nLa regla de los módulos compartidos\n');
 {
-  // CLAUDE.md: un `api/_*.js` solo se importa desde funciones edge. Aquí se
-  // comprueba, en vez de confiar.
+  // CLAUDE.md dice que un `api/_*.js` solo se importa desde funciones edge, y
+  // `api/cron-tasks.js` lleva escrito que `_registro-errores.js` «rompió el
+  // build una vez» desde Node. Pero `api/cron-retention.js` TAMBIÉN es Node,
+  // lo importa estáticamente y corre todos los días a las 06:00. O sea que la
+  // regla, como creencia general, está desactualizada.
+  //
+  // Lo que NO se puede es darla por buena sin más: hay que comprobarlo
+  // desplegando, función por función. Por eso las que son Node van listadas
+  // una a una, y cada nombre de esta lista significa «desplegada y
+  // comprobada en producción».
+  const NODE_COMPROBADAS = ['video-credits.js'];   // 28-09-2026
   const noEdge = conSesion.filter((f) => !leer(f).includes("runtime: 'edge'"));
-  ok(noEdge.length === 0,
-     'solo funciones edge importan api/_sesion.js', noEdge.join(', '));
+  const sinComprobar = noEdge.filter((f) => !NODE_COMPROBADAS.includes(f));
+  ok(sinComprobar.length === 0,
+     'las funciones Node que importan api/_sesion.js están comprobadas en producción',
+     sinComprobar.join(', '));
+  // Y al revés: una que se declare comprobada tiene que seguir siendo Node y
+  // seguir importándolo, o la lista se vuelve un adorno.
+  const fantasmas = NODE_COMPROBADAS.filter((f) => !noEdge.includes(f));
+  ok(fantasmas.length === 0, 'y la lista no arrastra nombres que ya no aplican', fantasmas.join(', '));
 }
 {
   const s = leer('_sesion.js');
