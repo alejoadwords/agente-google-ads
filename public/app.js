@@ -579,11 +579,43 @@ function clerkReady() {
 }
 
 // fresh: fuerza un token nuevo saltándose la caché de Clerk (para reintentar un 401)
+// ¿Este token ya venció? Se mira el `exp` sin comprobar la firma: no hace
+// falta criptografía para saber la hora, y el servidor sigue verificando de
+// verdad. Si no se puede leer, se manda y que decida él.
+function tokenYaVencio(t) {
+  try {
+    const p = JSON.parse(atob(String(t).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    // Cinco segundos de margen: un token que vence mientras viaja llega muerto.
+    return !!(p.exp && p.exp * 1000 <= Date.now() + 5000);
+  } catch (e) { return false; }
+}
+
 async function getAuthHeaders({ fresh = false } = {}) {
   await clerkReady();
   let token = fresh ? null : sessionToken;
   if (clerkInstance && clerkInstance.session) {
     try { token = await clerkInstance.session.getToken(fresh ? { skipCache: true } : undefined); } catch(e) {}
+  }
+  // Un token VENCIDO no se manda. Venga del que teníamos guardado o del propio
+  // Clerk, si ya pasó su hora es basura.
+  //
+  // Esto tenía a alguien golpeando la API con un token de hacía DOS HORAS,
+  // setenta y un veces seguidas —`uso-pantallas` late cada minuto—. El camino
+  // era este: cuando `clerkInstance.session` desaparece —la pestaña durmió, se
+  // cerró sesión en otra, Clerk perdió el hilo— esta función se quedaba con
+  // `sessionToken`, el último que consiguió, y lo mandaba igual. El servidor
+  // contestaba 401, el reintento no entraba porque tampoco había sesión, y
+  // nadie limpiaba `sessionToken`. Así para siempre.
+  //
+  // Mandar un token muerto es PEOR que no mandar ninguno: produce un «no
+  // autorizado» que se lee como falta de permisos, cuando lo que hay que hacer
+  // es volver a entrar. Sin token, el 401 dice lo que es.
+  if (token && tokenYaVencio(token)) {
+    sessionToken = null;
+    token = null;
+    // Y si además no hay sesión de la que sacar uno nuevo, esto no se arregla
+    // solo: se le dice a la persona, una vez.
+    if (!(clerkInstance && clerkInstance.session)) sesionVencida();
   }
   if (token) sessionToken = token;
   const headers = { 'Content-Type': 'application/json' };

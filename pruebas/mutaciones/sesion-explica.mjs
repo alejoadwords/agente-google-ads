@@ -46,4 +46,15 @@ export const MUTACIONES = [
     romper: cambiar("  if (_yaAvisadoVencida) return;\n  _yaAvisadoVencida = true;", "") },
   { nombre: 'pauta vuelve al 401 mudo', archivo: 'pauta',
     romper: cambiar("  if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'pauta'), 401);", "  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);") },
+  // El fallo del token de dos horas
+  { nombre: 'vuelve a mandarse el token vencido', archivo: 'app',
+    romper: cambiar("  if (token && tokenYaVencio(token)) {", "  if (false) {") },
+  { nombre: 'se tira el token pero no se limpia el guardado', archivo: 'app',
+    romper: cambiar("    sessionToken = null;\n    token = null;", "    token = null;") },
+  { nombre: 'no se avisa cuando no hay sesión de la que sacar otro', archivo: 'app',
+    romper: cambiar("    if (!(clerkInstance && clerkInstance.session)) sesionVencida();", "") },
+  { nombre: 'se avisa aunque SÍ haya sesión (aviso en falso)', archivo: 'app',
+    romper: cambiar("    if (!(clerkInstance && clerkInstance.session)) sesionVencida();", "    sesionVencida();") },
+  { nombre: 'el margen de cinco segundos desaparece', archivo: 'app',
+    romper: cambiar("    return !!(p.exp && p.exp * 1000 <= Date.now() + 5000);", "    return false;") },
 ];

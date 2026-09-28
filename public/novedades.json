@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-28-token-vencido",
+      "fecha": "2026-09-28",
+      "tipo": "arreglo",
+      "titulo": "Se acabaron los «No autorizado» con la sesión abierta",
+      "texto": "Si tu navegador se quedaba con una sesión vieja —al despertar el computador, o al cerrar sesión en otra pestaña— seguía pidiendo datos con una credencial ya vencida y las pantallas respondían «No autorizado», como si te faltaran permisos. Recargar no siempre lo arreglaba. Ahora esa credencial se descarta en cuanto vence y te avisamos para que vuelvas a entrar, que es lo único que hacía falta."
+    },
+    {
       "id": "2026-09-28-agente-usted",
       "fecha": "2026-09-28",
       "tipo": "arreglo",

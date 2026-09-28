@@ -354,5 +354,73 @@ console.log('\nSi la petición salió sin token, se reintenta\n');
   ok(/_yaAvisadoVencida/.test(fn), 'una sola vez: al abrir una pantalla salen diez peticiones');
 }
 
+// ── 7. Un token vencido NO se manda ─────────────────────────────────────────
+//
+// El fallo que tenía a alguien golpeando la API con un token de hacía DOS
+// HORAS, setenta y un veces seguidas: cuando `clerkInstance.session`
+// desaparece —la pestaña durmió, se cerró sesión en otra, Clerk perdió el
+// hilo— `getAuthHeaders` se quedaba con el último token que consiguió y lo
+// mandaba igual. 401, sin reintento —tampoco había sesión— y nadie limpiaba
+// el guardado. `uso-pantallas` late cada minuto: setenta y un minutos así.
+//
+// Mandar un token muerto es PEOR que no mandar ninguno: el 401 se lee como
+// falta de permisos cuando lo que hay que hacer es volver a entrar.
+console.log('\nUn token vencido no se manda, venga de donde venga\n');
+{
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const desde = app.indexOf('function tokenYaVencio(t) {');
+  const firma = 'async function getAuthHeaders({ fresh = false } = {}) {';
+  const i = app.indexOf(firma);
+  if (desde < 0 || i < 0) throw new Error('No encontré getAuthHeaders en app.js: revisa esta prueba');
+  let prof = 0, j = i + firma.length - 1;
+  for (; j < app.length; j++) {
+    if (app[j] === '{') prof++;
+    else if (app[j] === '}' && --prof === 0) break;
+  }
+  const src = app.slice(desde, j + 1);
+
+  const correr = async ({ haySesion, guardado, daClerk, fresh = false }) => {
+    const avisos = [];
+    const entorno = {
+      clerkReady: async () => true,
+      clerkInstance: haySesion ? { session: { getToken: async () => daClerk } } : null,
+      sesionVencida: (m) => avisos.push(m || 'vencida'),
+      atob: globalThis.atob,
+    };
+    const nombres = Object.keys(entorno);
+    // `sessionToken` se lee Y se escribe dentro, así que no puede ir por valor:
+    // se declara en el ámbito generado y se devuelve al final.
+    const cuerpo = 'let sessionToken = __inicial;\n' + src
+      + '\n; return getAuthHeaders({ fresh: __fresh }).then(h => ({ h, sessionToken }));';
+    const f = new Function(...nombres, '__inicial', '__fresh', cuerpo);
+    const { h, sessionToken } = await f(...nombres.map((n) => entorno[n]), guardado, fresh);
+    return { auth: h.Authorization || null, guardadoDespues: sessionToken, avisos };
+  };
+
+  const vivo = await token();
+  const muerto = await token({ exp: Math.floor(Date.now() / 1000) - 7200 });   // dos horas
+
+  const r1 = await correr({ haySesion: false, guardado: muerto });
+  ok(r1.auth === null, 'sin sesión y con un token vencido guardado, NO se manda', String(r1.auth).slice(0, 40));
+  ok(r1.guardadoDespues === null, 'y se tira el guardado, para no repetirlo cada minuto',
+     String(r1.guardadoDespues).slice(0, 30));
+  ok(r1.avisos.length === 1, 'y se le dice a la persona: esto no se arregla solo', String(r1.avisos.length));
+
+  const r2 = await correr({ haySesion: false, guardado: vivo });
+  ok(r2.auth === 'Bearer ' + vivo,
+     'pero si el guardado sigue vivo, se manda: no hay por qué echar a nadie');
+  ok(r2.avisos.length === 0, 'y sin avisar de nada');
+
+  const r3 = await correr({ haySesion: true, guardado: null, daClerk: vivo });
+  ok(r3.auth === 'Bearer ' + vivo, 'con sesión, se usa el que da Clerk');
+  ok(r3.guardadoDespues === vivo, 'y se guarda para la siguiente');
+
+  // El caso feo: hay sesión, pero Clerk devuelve uno ya vencido.
+  const r4 = await correr({ haySesion: true, guardado: null, daClerk: muerto });
+  ok(r4.auth === null, 'si hasta Clerk devuelve uno vencido, tampoco se manda');
+  ok(r4.avisos.length === 0,
+     'pero NO se avisa: hay sesión, así que el reintento con token fresco puede arreglarlo');
+}
+
 console.log(mal ? `\n${mal} fallo(s)\n` : '\nTodo en orden\n');
 process.exit(mal ? 1 : 0);
