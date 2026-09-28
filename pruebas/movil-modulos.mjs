@@ -540,9 +540,16 @@ console.log('\nNingún botón vibra y ya\n');
   // real no los ve nunca.
   const quedan = (guion.match(/M\.toque\(\)"/g) || []).length;
   chk('no quedan botones muertos en pantallas con datos reales', quedan <= 2, String(quedan));
-  // Una fila de cita sin contacto asociado no se pinta como botón.
-  chk('la cita abre su contacto', /M\.abrirLead\(\\''\+esc\(String\(c\.lead\)\)/.test(guion));
-  chk('y sin contacto no finge ser un botón', /: '<div class="cita">'\)/.test(guion));
+  // Toda cita se toca —antes la que no tenía contacto era una fila muerta— y
+  // abre sus acciones. La regla de fondo no cambia: ningún botón que no lleve
+  // a ninguna parte. Por eso «Ver el contacto» sale SOLO si lo hay.
+  chk('toda cita abre sus acciones', /M\.abrirCitaAcciones\(/.test(guion));
+  const acciones = guion.slice(guion.indexOf('function abrirCitaAcciones'),
+                               guion.indexOf('function irAlContactoDeLaCita'));
+  chk('«Ver el contacto» solo si la cita tiene uno',
+      /c\.lead \? fila\('users', 'Ver el contacto'/.test(acciones), acciones.slice(0, 160));
+  chk('y desde ahí se puede reprogramar y cancelar',
+      /M\.abrirReprogramar\(\)/.test(acciones) && /M\.pedirCancelarCita\(\)/.test(acciones));
   chk('«+ etiqueta» abre el catálogo de la cuenta', /M\.abrirEtiquetas\(\)/.test(guion));
 }
 

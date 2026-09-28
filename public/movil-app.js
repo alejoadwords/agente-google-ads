@@ -35,6 +35,7 @@ const ICN_PATHS = {
   bell:     '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
   split:    '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/>',
   star:     '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
+  trash:    '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>',
   tag:      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
   // El mismo trazo que ya usaba el botón de enlace del panel, ahora con nombre
   // para que la ficha no tenga que repetir el SVG.
@@ -118,11 +119,14 @@ async function guardar(ruta, cuerpo, metodo, alDeshacer){
   }
   chicharra('Guardando…', 'esperando');
   try {
-    var r = await fetchAuth(ruta, {
-      method: metodo || 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cuerpo),
-    });
+    // Un DELETE no lleva cuerpo. Mandar `"null"` como body es un cuerpo con
+    // contenido, y hay servidores y proxies que lo rechazan sin más.
+    var opciones = { method: metodo || 'PUT' };
+    if (cuerpo !== null && cuerpo !== undefined) {
+      opciones.headers = { 'Content-Type': 'application/json' };
+      opciones.body = JSON.stringify(cuerpo);
+    }
+    var r = await fetchAuth(ruta, opciones);
     // `fetchAuth` NO lanza con un 4xx o un 5xx: hay que mirar `ok` a mano. Dar
     // por bueno lo que devuelve sin mirarlo es volver al fallo de partida.
     var d = {};
@@ -183,11 +187,20 @@ var TAREAS = [
 ];
 // El ejemplo lleva dos días a propósito: con uno solo no se ve si los
 // encabezados de día funcionan, que es justo lo que faltaba en esta pantalla.
+// Con `lead`, `iso` y `mins` como los que trae `aCita` de verdad: sin ellos el
+// banco no enseñaba «Ver el contacto» ni se podía revisar el reprogramar, que
+// es justo lo que hay que mirar antes de publicarlo.
 var CITAS = [
-  {h:'09:30', dur:'45 min', t:'Visita · Alto Prado',        s:'Hellen Marún',      pasada:true,  dia:'Hoy',    clave:'d1'},
-  {h:'11:00', dur:'30 min', t:'Llamada de seguimiento',     s:'Rubén Corro',       pasada:false, dia:'Hoy',    clave:'d1'},
-  {h:'15:00', dur:'1 h',    t:'Presentación de propuesta',  s:'Paula Restrepo',    pasada:false, dia:'Hoy',    clave:'d1'},
-  {h:'08:00', dur:'1 h',    t:'Visita · Villa Campestre',   s:'Sandra Caro',       pasada:false, dia:'Mañana', clave:'d2'}
+  {id:'c1', lead:1, iso:'2026-09-24T09:30:00', mins:45,
+   h:'09:30', dur:'45 min', t:'Visita · Alto Prado',        s:'Hellen Marún',      pasada:true,  dia:'Hoy',    clave:'d1'},
+  {id:'c2', lead:2, iso:'2026-09-24T11:00:00', mins:30,
+   h:'11:00', dur:'30 min', t:'Llamada de seguimiento',     s:'Rubén Corro',       pasada:false, dia:'Hoy',    clave:'d1'},
+  {id:'c3', lead:6, iso:'2026-09-24T15:00:00', mins:60,
+   h:'15:00', dur:'1 h',    t:'Presentación de propuesta',  s:'Paula Restrepo',    pasada:false, dia:'Hoy',    clave:'d1'},
+  // Sin contacto a propósito: así el banco enseña también la hoja sin «Ver el
+  // contacto», que es un caso real —una reunión interna— y no un descuido.
+  {id:'c4', lead:null, iso:'2026-09-25T08:00:00', mins:60,
+   h:'08:00', dur:'1 h',    t:'Reunión de equipo',          s:'Sala grande',       pasada:false, dia:'Mañana', clave:'d2'}
 ];
 
 var PIPELINES = null;
@@ -310,15 +323,14 @@ function pintarAgenda(){
     if (!puestoAhora && !c.pasada && i > 0 && CITAS[i-1].pasada) {
       html += '<div class="ahora">AHORA</div>'; puestoAhora = true;
     }
-    html += (c.lead
-      ? '<button class="cita" onclick="M.abrirLead(\''+esc(String(c.lead))+'\')">'
-      // Sin contacto asociado no hay adónde ir: se pinta como fila, no como
-      // botón. Un botón que no lleva a ninguna parte se toca dos veces y se
-      // da por roto.
-      : '<div class="cita">')
+    // Toda cita se toca, tenga contacto o no: antes la que no lo tenía era una
+    // fila muerta, y la que sí llevaba directa al contacto — así que mover o
+    // cancelar una visita solo se podía desde el computador, que es lo que
+    // menos se tiene a mano cuando el cliente acaba de decir «mejor el jueves».
+    html += '<button class="cita" onclick="M.abrirCitaAcciones('+i+')">'
       + '<span class="hora">'+esc(c.h)+'<span class="dur">'+esc(c.dur)+'</span></span>'
       + '<span><span class="qt">'+esc(c.t)+'</span><span class="qs">'+esc(c.s)+'</span></span>'
-      + (c.lead ? '</button>' : '</div>');
+      + '</button>';
   }
   // No dice «para hoy»: la lista cubre desde hoy hasta mes y medio adelante, y
   // afirmar que hoy está libre cuando lo que está vacío son las seis semanas
@@ -397,6 +409,13 @@ window.addEventListener('popstate', function(){
 
 // ── Hojas desde abajo ───────────────────────────────────────────────────────
 function abrirSheet(html){
+  // Una hoja SUSTITUYE a la anterior, no se apila encima.
+  //
+  // Sin esto, pasar de las acciones de una cita a «Reprogramar» dejaba dos
+  // fondos y dos hojas con el mismo id: el dedo caía en el fondo de la vieja
+  // —que cierra al tocarlo— y la nueva se iba sin llegar a verse. Parecía que
+  // el botón no hacía nada.
+  cerrarSheet();
   var f = document.createElement('div'); f.className='fondo'; f.id='fondo'; f.onclick = cerrarSheet;
   var s = document.createElement('div'); s.className='sheet'; s.id='sheet';
   s.innerHTML = '<div class="asa"></div>' + html;
@@ -659,6 +678,121 @@ async function crearCita(conLead){
     l.hace = 'ahora'; l.tocado = Date.now();
     pintarLeads();
   }
+  cargarReales();
+}
+
+// ── Mover o cancelar una cita ───────────────────────────────────────────────
+//
+// «Mejor el jueves» y «al final no puedo» son las dos frases que más se oyen
+// después de agendar, y las dos obligaban a volver al computador.
+//
+// Cancelar BORRA la actividad y su evento de Google Calendar, igual que en la
+// web. Se avisa antes con todas las letras y en un segundo toque: lo que no se
+// puede deshacer no se hace con el mismo gesto con el que se abre una ficha.
+var citaAbierta = null;
+
+function citaDe(i){
+  return (CITAS && CITAS[i]) ? CITAS[i] : null;
+}
+
+function abrirCitaAcciones(i){
+  var c = citaDe(i); if (!c) return;
+  citaAbierta = c;
+  toque();
+  var fila = function(icono, texto, accion, clase){
+    return '<button class="mfila'+(clase ? ' '+clase : '')+'" onclick="'+accion+'">'
+      + '<span class="micono">'+icn(icono,18)+'</span>'
+      + '<span class="cuerpo"><span class="mt">'+esc(texto)+'</span></span>'
+      + '<span class="chev">'+icn('arrow',18)+'</span></button>';
+  };
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md)">'+esc(c.t)+'</div>'
+    + '<div style="color:var(--muted);font-size:var(--fs-sm);margin-bottom:6px">'
+      + esc((c.dia ? c.dia + ' · ' : '') + c.h + (c.dur ? ' · ' + c.dur : '')) + '</div>'
+    // Solo si cuelga de un contacto: un botón que no lleva a ninguna parte se
+    // toca dos veces y se da por roto.
+    + (c.lead ? fila('users', 'Ver el contacto', 'M.irAlContactoDeLaCita()') : '')
+    + fila('calendar', 'Reprogramar', 'M.abrirReprogramar()')
+    + fila('trash', 'Cancelar la cita', 'M.pedirCancelarCita()', 'salir'));
+}
+
+function irAlContactoDeLaCita(){
+  var c = citaAbierta; if (!c || !c.lead) return;
+  cerrarSheet();
+  abrirLead(c.lead);
+}
+
+function abrirReprogramar(){
+  var c = citaAbierta; if (!c) return;
+  // Se parte de la fecha que tiene, no de mañana a las nueve: reprogramar es
+  // mover un poco, y obligar a reescribir el día entero invita a equivocarse.
+  var actual = c.iso ? new Date(c.iso) : new Date();
+  if (isNaN(actual.getTime())) actual = new Date();
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Reprogramar</div>'
+    + '<div style="color:var(--muted);font-size:var(--fs-sm);margin-bottom:10px">'
+      + esc(c.t) + ' — ahora está para ' + esc((c.dia ? c.dia + ' · ' : '') + c.h) + '.</div>'
+    + '<div class="rapidas">'
+      + CUANDOS.map(function(x, i){
+          return '<button class="rapida" onclick="M.cuandoMover('+i+')">'+esc(x[0])+'</button>';
+        }).join('')
+    + '</div>'
+    + '<input id="sh-mover" type="datetime-local" style="margin-top:8px" value="'+paraInput(actual)+'">'
+    + '<button class="bbtn" onclick="M.moverCita()">Mover la cita</button>');
+}
+function cuandoMover(i){
+  var e = $('#sh-mover'); if (!e || !CUANDOS[i]) return;
+  e.value = paraInput(CUANDOS[i][1]());
+  toque();
+}
+
+async function moverCita(){
+  var c = citaAbierta, e = $('#sh-mover');
+  if (!c || !e) return;
+  var cuando = String(e.value || '').trim();
+  if (!cuando) { chicharra('Ponle fecha y hora.', 'mal'); return; }
+  var ini = new Date(cuando);
+  if (isNaN(ini.getTime())) { chicharra('Esa fecha no se entiende.', 'mal'); return; }
+
+  // La duración se CONSERVA. Mandar solo `due_at` movería el principio y
+  // dejaría el final donde estaba: en Google Calendar saldría una cita que
+  // acaba antes de empezar, o de cuatro horas. El servidor acepta los dos
+  // campos y sincroniza el evento con ellos.
+  var dura = c.mins || 60;
+  var cuerpo = { id: c.id, due_at: ini.toISOString(),
+                 end_at: new Date(ini.getTime() + dura * 60000).toISOString() };
+
+  var d = await guardar('/api/agenda', cuerpo, 'PUT');
+  if (!d) return;   // `guardar` ya dijo por qué; la hoja se queda abierta
+
+  cerrarSheet();
+  if (d.gcal_warning) chicharra(d.gcal_warning, 'mal');
+  cargarReales();
+}
+
+function pedirCancelarCita(){
+  var c = citaAbierta; if (!c) return;
+  // Segundo toque, y diciendo QUÉ se pierde. Un «¿seguro?» a secas no informa
+  // de que el evento también desaparece del calendario, que es donde esa
+  // persona tiene puesta la alarma.
+  abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:6px">¿Cancelar esta cita?</div>'
+    + '<div class="casilla-nota">' + esc(c.t) + ' — ' + esc((c.dia ? c.dia + ' · ' : '') + c.h) + '.<br>'
+      + 'Se borra de Acuarius y también de tu Google Calendar, si estaba sincronizada. '
+      + 'Esto no se puede deshacer.</div>'
+    + '<button class="bbtn peligro" onclick="M.cancelarCita()">Sí, cancelarla</button>'
+    + '<button class="bbtn fantasma" onclick="M.cerrarSheet()">Dejarla como está</button>');
+}
+
+async function cancelarCita(){
+  var c = citaAbierta; if (!c) return;
+  var d = await guardar('/api/agenda?id=' + encodeURIComponent(c.id), null, 'DELETE');
+  if (!d) return;   // no se borró: la hoja se queda y `guardar` dijo por qué
+
+  cerrarSheet();
+  // Se quita de la lista sin esperar a la recarga, para que el toque tenga
+  // efecto visible al instante; `cargarReales` confirma después con lo que
+  // diga el servidor.
+  if (CITAS) CITAS = CITAS.filter(function(x){ return String(x.id) !== String(c.id); });
+  citaAbierta = null;
+  pintarAgenda(); pintarSubtitulos();
   cargarReales();
 }
 
@@ -3082,6 +3216,9 @@ function movilMontar(opciones){
     abrirEtiquetas: abrirEtiquetas, ponerEtiqueta: ponerEtiqueta,
     abrirTarea: abrirTarea, cuandoTarea: cuandoTarea, crearTarea: crearTarea,
     abrirCita: abrirCita, cuandoCita: cuandoCita, durCita: durCita, crearCita: crearCita,
+    abrirCitaAcciones: abrirCitaAcciones, irAlContactoDeLaCita: irAlContactoDeLaCita,
+    abrirReprogramar: abrirReprogramar, cuandoMover: cuandoMover, moverCita: moverCita,
+    pedirCancelarCita: pedirCancelarCita, cancelarCita: cancelarCita,
     abrirCierre: abrirCierre, ponerMotivo: ponerMotivo, guardarCierre: guardarCierre,
     abrirResponsable: abrirResponsable, ponerResponsable: ponerResponsable,
     alternarAuto: alternarAuto,

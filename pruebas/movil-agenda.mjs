@@ -51,6 +51,10 @@ console.log('\nUna cita lleva el día, no solo la hora\n');
   chk('y es el día LOCAL, no el de UTC', c.clave === '2026-09-22', c.clave);
   chk('trae un nombre de día legible', typeof c.dia === 'string' && c.dia.length > 0, c.dia);
   chk('la duración sigue saliendo', c.dur === '1 h', c.dur);
+  // Y la fecha CRUDA, que es lo único con lo que se puede reprogramar: de
+  // «09:30» y «1 h» ya no se recupera ni el día ni los 45 minutos originales.
+  chk('trae la fecha cruda, para poder moverla', c.iso === tarde.toISOString(), String(c.iso));
+  chk('y los minutos que dura, como número', c.mins === 60, String(c.mins));
   chk('y el contacto, para poder abrirlo', c.lead === 'L1', String(c.lead));
 }
 {
@@ -130,6 +134,13 @@ const conAsidero = fuente.trimEnd().slice(0, -CIERRE.length) + `
     modoReal: function(){ MODO = 'real'; },
     abrirLead: function(l){ leadAbierto = l; },
     ponerCitas: function(c){ CITAS = c; },
+    citas: function(){ return CITAS || []; },
+    // Apaga la recarga. OJO: este bloque vive dentro de un template literal,
+    // así que aquí NO puede entrar un backtick — rompe la cadena y la prueba
+    // ni arranca. Con el simulacro, la recarga responde a todo con el mismo
+    // objeto y deja CITAS en []: entonces 'la cita desaparece' daba verde
+    // porque desaparecían TODAS, que no es lo que se quiere comprobar.
+    sinRecarga: function(){ cargarReales = function(){ return Promise.resolve(); }; },
     pintarAgenda: function(){ return pintarAgenda(); },
     ver: function(id){ return ver(id); },
     duracion: function(){ return duracionCita; },
@@ -174,7 +185,11 @@ function montar({ responde = { ok: true, datos: {} } } = {}) {
     body: elemento('body'), head: elemento('head'),
   };
   const fetchAuth = async (ruta, opts = {}) => {
-    llamadas.push({ ruta, metodo: opts.method, cuerpo: opts.body ? JSON.parse(opts.body) : null });
+    // `traeCuerpo` aparte de `cuerpo`: `JSON.stringify(null)` es la cadena
+    // 'null', y al parsearla vuelve a ser null — idéntico a no mandar nada.
+    // Sin esta marca, «el DELETE no lleva cuerpo» daba verde igual.
+    llamadas.push({ ruta, metodo: opts.method, traeCuerpo: opts.body !== undefined,
+                    cuerpo: opts.body ? JSON.parse(opts.body) : null });
     if (responde.explota) throw new Error('sin red');
     return {
       ok: !!responde.ok, status: responde.ok ? 200 : 422,
@@ -479,6 +494,194 @@ console.log('\nSe llega a agendar desde la agenda y desde la ficha\n');
     chk(`${f} está expuesto en window.M`,
         new RegExp('\\b' + f + ':\\s*' + f + '\\b').test(codApp));
   }
+}
+
+// ── 8. Mover una cita ───────────────────────────────────────────────────────
+//
+// «Mejor el jueves» es lo que más se oye después de agendar, y obligaba a
+// volver al computador. Lo delicado al mover no es la fecha: es la DURACIÓN.
+// Mandar solo `due_at` mueve el principio y deja el final donde estaba, así
+// que en Google Calendar aparece una cita que acaba antes de empezar.
+console.log('\nReprogramar conserva la duración\n');
+const unaCita = (extra) => Object.assign({
+  id: 'A1', lead: 'L1', h: '09:00', dur: '45 min', dia: 'Mañana', clave: 'd2',
+  t: 'Visita · Alto Prado', s: '', pasada: false,
+  iso: '2026-10-01T09:00:00.000Z', mins: 45,
+}, extra || {});
+
+{
+  const e = montar({ responde: { ok: true, datos: { activity: { id: 'A1' } } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.ponerCitas([unaCita()]);
+  g.M.abrirCitaAcciones(0);
+  const campo = e.plantar('#sh-mover'); campo.value = '2026-10-03T16:00';
+  g.M.moverCita();
+  await esperar(); await esperar(); await esperar();
+  const c = e.llamadas.find((x) => /\/api\/agenda/.test(x.ruta)) || {};
+  chk('llama a /api/agenda', !!c.ruta, JSON.stringify(e.llamadas.map((x) => x.ruta)));
+  chk('con PUT', c.metodo === 'PUT', c.metodo);
+  chk('mandando el id de la cita', c.cuerpo && c.cuerpo.id === 'A1', JSON.stringify(c.cuerpo));
+  chk('con la fecha nueva, en hora local',
+      c.cuerpo && new Date(c.cuerpo.due_at).getTime() === new Date('2026-10-03T16:00').getTime(),
+      c.cuerpo?.due_at);
+  chk('y MOVIENDO también el final: 45 min siguen siendo 45',
+      c.cuerpo && (new Date(c.cuerpo.end_at) - new Date(c.cuerpo.due_at)) === 45 * 60000,
+      String((new Date(c.cuerpo?.end_at) - new Date(c.cuerpo?.due_at)) / 60000) + ' min');
+}
+{
+  // Una cita sin duración conocida no puede quedarse sin final.
+  const e = montar({ responde: { ok: true, datos: {} } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.ponerCitas([unaCita({ mins: null })]);
+  g.M.abrirCitaAcciones(0);
+  const campo = e.plantar('#sh-mover'); campo.value = '2026-10-03T16:00';
+  g.M.moverCita();
+  await esperar(); await esperar(); await esperar();
+  const c = e.llamadas.find((x) => /\/api\/agenda/.test(x.ruta)) || {};
+  chk('sin duración conocida se le pone una hora, no cero',
+      c.cuerpo && (new Date(c.cuerpo.end_at) - new Date(c.cuerpo.due_at)) === 3600000,
+      String((new Date(c.cuerpo?.end_at) - new Date(c.cuerpo?.due_at)) / 60000) + ' min');
+}
+{
+  const e = montar({ responde: { ok: false, error: 'esa actividad no existe' } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  const citas = [unaCita()];
+  g.__pruebas.ponerCitas(citas);
+  g.M.abrirCitaAcciones(0);
+  const campo = e.plantar('#sh-mover'); campo.value = '2026-10-03T16:00';
+  g.M.moverCita();
+  await esperar(); await esperar(); await esperar();
+  chk('si el servidor dice que no, se dice con su motivo',
+      e.chicharras.some((x) => /esa actividad no existe/.test(x.txt) && /mal/.test(x.clase)),
+      JSON.stringify(e.chicharras.map((x) => x.txt)));
+  chk('y la cita NO se queda movida en pantalla', citas[0].iso === '2026-10-01T09:00:00.000Z');
+}
+{
+  const e = montar({ responde: { ok: true, datos: {
+    activity: { id: 'A1' }, gcal_warning: 'El evento de Google Calendar no se pudo actualizar: 403' } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.ponerCitas([unaCita()]);
+  g.M.abrirCitaAcciones(0);
+  const campo = e.plantar('#sh-mover'); campo.value = '2026-10-03T16:00';
+  g.M.moverCita();
+  await esperar(); await esperar(); await esperar();
+  chk('si el calendario no se pudo actualizar, se dice',
+      e.chicharras.some((x) => /Google Calendar no se pudo actualizar/.test(x.txt) && /mal/.test(x.clase)),
+      JSON.stringify(e.chicharras.map((x) => x.txt)));
+}
+
+// ── 9. Cancelar una cita ────────────────────────────────────────────────────
+console.log('\nCancelar borra de verdad, y avisa antes de qué se pierde\n');
+{
+  const e = montar({ responde: { ok: true, datos: { ok: true } } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.sinRecarga();
+  g.__pruebas.ponerCitas([unaCita(), unaCita({ id: 'A2', t: 'Otra' })]);
+  g.M.abrirCitaAcciones(0);
+  g.M.cancelarCita();
+  await esperar(); await esperar(); await esperar();
+  const c = e.llamadas.find((x) => /\/api\/agenda/.test(x.ruta)) || {};
+  chk('llama con DELETE', c.metodo === 'DELETE', c.metodo);
+  chk('y el id va por la ruta, como lo lee el servidor',
+      /[?&]id=A1/.test(c.ruta || ''), c.ruta);
+  chk('sin cuerpo: un DELETE no lo lleva', c.traeCuerpo === false, JSON.stringify(c.cuerpo));
+  chk('la cita desaparece de la lista sin esperar a la recarga',
+      !g.__pruebas.citas().some((x) => x.id === 'A1'),
+      JSON.stringify(g.__pruebas.citas().map((x) => x.id)));
+  chk('y la otra se queda', g.__pruebas.citas().some((x) => x.id === 'A2'),
+      JSON.stringify(g.__pruebas.citas().map((x) => x.id)));
+  // Quitarla de la lista es solo para que el toque se vea al instante. La
+  // verdad la sigue diciendo el servidor, así que después se recarga.
+  const borrar = codApp.slice(codApp.indexOf('async function cancelarCita'));
+  chk('y después se recarga contra el servidor', /cargarReales\(\)/.test(borrar.slice(0, 700)));
+}
+{
+  const e = montar({ responde: { ok: false, error: 'no se pudo borrar' } });
+  const g = correr(e);
+  g.__pruebas.modoReal();
+  g.__pruebas.sinRecarga();
+  g.__pruebas.ponerCitas([unaCita()]);
+  g.M.abrirCitaAcciones(0);
+  g.M.cancelarCita();
+  await esperar(); await esperar(); await esperar();
+  chk('si no se borró, la cita SIGUE en la lista',
+      g.__pruebas.citas().some((x) => x.id === 'A1'),
+      JSON.stringify(g.__pruebas.citas().map((x) => x.id)));
+  chk('y se dice por qué',
+      e.chicharras.some((x) => /no se pudo borrar/.test(x.txt) && /mal/.test(x.clase)),
+      JSON.stringify(e.chicharras.map((x) => x.txt)));
+}
+{
+  // El aviso ANTES de borrar: no basta con un «¿seguro?».
+  const aviso = codApp.slice(codApp.indexOf('function pedirCancelarCita'),
+                             codApp.indexOf('async function cancelarCita'));
+  chk('se pide confirmación en un segundo toque', /abrirSheet\(/.test(aviso));
+  chk('y se dice que el evento del calendario también se borra',
+      /Google Calendar/.test(aviso), aviso.slice(0, 160));
+  chk('y que no se puede deshacer', /no se puede deshacer/.test(aviso));
+  chk('el botón que borra va marcado como peligro', /bbtn peligro/.test(aviso));
+  chk('y hay una salida que no borra nada', /Dejarla como está/.test(aviso));
+  chk('.bbtn.peligro existe en el CSS', /\.bbtn\.peligro\{/.test(css));
+  chk('.bbtn.fantasma también', /\.bbtn\.fantasma\{/.test(css));
+  // El borrado NO puede colgar del mismo toque que abre la hoja.
+  const acciones = codApp.slice(codApp.indexOf('function abrirCitaAcciones'),
+                                codApp.indexOf('function irAlContactoDeLaCita'));
+  // Y la regla de siempre: ningún botón que no lleve a ninguna parte. Una cita
+  // sin contacto no puede ofrecer «Ver el contacto».
+  chk('«Ver el contacto» solo si la cita tiene uno',
+      /c\.lead \? fila\('users', 'Ver el contacto'/.test(acciones), acciones.slice(0, 220));
+  chk('la lista de acciones no borra directamente',
+      !/M\.cancelarCita\(\)/.test(acciones) && /M\.pedirCancelarCita\(\)/.test(acciones),
+      acciones.slice(0, 200));
+}
+{
+  // En modo muestra no se borra nada de verdad.
+  const e = montar();
+  const g = correr(e);
+  g.movilMontar({});
+  g.__pruebas.ponerCitas([unaCita()]);
+  g.M.abrirCitaAcciones(0);
+  g.M.cancelarCita();
+  await esperar(); await esperar();
+  chk('en muestra no se llama a nadie', e.llamadas.length === 0, String(e.llamadas.length));
+  chk('y la cita sigue ahí', g.__pruebas.citas().some((x) => x.id === 'A1'));
+}
+
+// ── 10. Una hoja sustituye a la anterior, no se apila ───────────────────────
+//
+// Pasar de las acciones de una cita a «Reprogramar» dejaba dos fondos y dos
+// hojas con el mismo id. El dedo caía en el fondo de la vieja —que cierra al
+// tocarlo— y la nueva se iba sin llegar a verse: parecía que el botón no hacía
+// nada. Se ve solo encadenando hojas, que es lo que trae esta pantalla.
+{
+  const i = codApp.indexOf('function abrirSheet');
+  const fn = codApp.slice(i, codApp.indexOf('function cerrarSheet'));
+  chk('abrirSheet cierra la hoja anterior antes de poner la suya',
+      /cerrarSheet\(\);/.test(fn), fn.slice(0, 200));
+  const pos = fn.indexOf('cerrarSheet();');
+  chk('y la cierra ANTES de crear nada', pos >= 0 && pos < fn.indexOf('createElement'),
+      'cierra en ' + pos + ' y crea en ' + fn.indexOf('createElement'));
+}
+
+// ── 11. El icono existe ─────────────────────────────────────────────────────
+// `icn()` cae a `chart` cuando no conoce el nombre: un icono inventado no
+// falla, solo pinta un gráfico de barras en el botón de borrar.
+{
+  const cat = fuente.slice(fuente.indexOf('const ICN_PATHS = {'),
+                           fuente.indexOf('\n};', fuente.indexOf('const ICN_PATHS = {')));
+  const usados = [...new Set([
+    ...[...codApp.matchAll(/icn\(['"](\w[\w-]*)['"]/g)].map((m) => m[1]),
+    // Los que viajan como argumento: `fila('trash', …)` acaba en `icn(icono)`,
+    // y ahí el nombre ya es una variable que ninguna expresión regular ve.
+    ...[...codApp.matchAll(/\bfila\(['"](\w[\w-]*)['"]/g)].map((m) => m[1]),
+  ])];
+  const sin = usados.filter((n) => !new RegExp('^\\s*' + n + ':', 'm').test(cat));
+  chk('los ' + usados.length + ' iconos que usa movil-app.js existen', sin.length === 0, sin.join(', '));
 }
 
 console.log(fallos ? `\n  ${fallos} comprobaciones fallaron\n` : '\n  todo en verde\n');

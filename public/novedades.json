@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-28-movil-mover-cita",
+      "fecha": "2026-09-28",
+      "tipo": "nuevo",
+      "titulo": "Reprogramar o cancelar una cita desde el celular",
+      "texto": "Toca cualquier cita de la Agenda y elige: ver el contacto, reprogramarla o cancelarla. Al moverla se conserva la duración, y si tienes Google Calendar conectado el evento se mueve contigo. Cancelar borra la cita y su evento del calendario, así que se pide confirmación antes."
+    },
+    {
       "id": "2026-09-28-mencion-dueno",
       "fecha": "2026-09-28",
       "tipo": "arreglo",

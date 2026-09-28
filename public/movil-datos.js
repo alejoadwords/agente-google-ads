@@ -194,6 +194,12 @@ export function aCita(a, ahora = Date.now()) {
     t: a.title || 'Cita',
     s: a.description || '',
     pasada: ini ? ini.getTime() < ahora : false,
+    // La fecha CRUDA y cuánto dura, para poder moverla. Lo pintado —«09:30»,
+    // «1 h»— no sirve para reprogramar: al mover una cita hay que conservar la
+    // duración, y de «1 h» ya no se puede recuperar que eran 45 minutos si la
+    // original los tenía.
+    iso: a.due_at || null,
+    mins: mins || null,
   };
 }
 
