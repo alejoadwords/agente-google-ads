@@ -15,6 +15,7 @@
 export const config = { runtime: 'edge' };
 
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+import { sincronizarLote, UA } from './_catalogo.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -23,28 +24,6 @@ const CORS = {
 };
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const UA = { 'User-Agent': 'Acuarius/1.0 (+https://acuarius.app)' };
-
-// Cuántas fichas se leen por ejecución. Cada una tarda ~2s, así que en serie 40
-// serían ~80s y la función se cortaría antes de terminar. Se leen de 5 en 5:
-// ~16s por lote, dentro del límite y sin castigar la web ajena.
-const LOTE = 30;
-const A_LA_VEZ = 5;
-
-// Ejecuta las tareas de A_LA_VEZ en A_LA_VEZ conservando el orden del resultado.
-async function enTandas(items, fn) {
-  const salida = new Array(items.length);
-  let i = 0;
-  async function obrero() {
-    while (i < items.length) {
-      const mio = i++;
-      salida[mio] = await fn(items[mio], mio);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(A_LA_VEZ, items.length) }, obrero));
-  return salida;
-}
-
 // ── Deteccion automatica del sitio ──────────────────────────────────────────
 // El conector no puede estar atado a como llama Certain a sus campos: otra
 // inmobiliaria usara otros nombres. Se inspecciona el sitio, se propone que es
@@ -139,36 +118,6 @@ function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-const num = (v) => {
-  const n = parseInt(String(v ?? '').replace(/[^\d]/g, ''), 10);
-  return Number.isFinite(n) ? n : null;
-};
-
-async function terminos(base, tax) {
-  const mapa = new Map();
-  for (let p = 1; p <= 10; p++) {
-    const r = await fetch(`${base}/wp-json/wp/v2/${tax}?per_page=100&page=${p}`, { headers: UA });
-    if (!r.ok) break;
-    const filas = await r.json().catch(() => []);
-    if (!Array.isArray(filas) || !filas.length) break;
-    filas.forEach(t => mapa.set(t.id, t.name));
-    if (filas.length < 100) break;
-  }
-  return mapa;
-}
-
-// El precio no está en el API: se lee de la ficha. Se coge el MAYOR importe
-// creíble de la página — los menores suelen ser administración o cuotas.
-async function precioDeFicha(url) {
-  try {
-    const html = await fetch(url, { headers: UA }).then(r => r.text());
-    const importes = [...html.matchAll(/\$\s?([\d.,]{6,})/g)]
-      .map(m => num(m[1]))
-      .filter(n => n && n >= 200000 && n < 100000000000);
-    return importes.length ? Math.max(...importes) : null;
-  } catch { return null; }
-}
-
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   try {
@@ -254,102 +203,16 @@ async function manejar(req) {
   }
 
   // ── Sincronizar un lote ───────────────────────────────────────────────────
+  // La lógica vive en _catalogo.js porque la comparte con el cron: con dos
+  // copias, el lector de precios de una se arregla y el de la otra no.
   if (req.method === 'POST') {
     const fuente = await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources?${filtroFuente}&select=*&limit=1`, { headers: sb() })
       .then(r => (r.ok ? r.json() : [])).then(r => r?.[0] || null).catch(() => null);
     if (!fuente) return jsonResp({ error: 'Este cliente no tiene web configurada todavía' }, 404);
 
-    const base = fuente.base_url;
-    const pagina = Math.max(1, fuente.cursor_pagina || 1);
-
-    const tipo = fuente.post_type || 'propiedades';
-    const mapeo = fuente.mapeo || {};
-    const listado = await fetch(`${base}/wp-json/wp/v2/${tipo}?per_page=${LOTE}&page=${pagina}&orderby=modified&order=desc`, { headers: UA });
-    if (!listado.ok) {
-      await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources?id=eq.${fuente.id}`, {
-        method: 'PATCH', headers: sb(),
-        body: JSON.stringify({ ultimo_estado: 'error', ultimo_error: 'La web respondió ' + listado.status, ultimo_sync: new Date().toISOString() }),
-      });
-      return jsonResp({ error: 'La web respondió ' + listado.status }, 502);
-    }
-    const totalPaginas = parseInt(listado.headers.get('x-wp-totalpages') || '1', 10) || 1;
-    const props = await listado.json().catch(() => []);
-
-    // Solo se piden las taxonomías que el mapeo dice que sirven
-    const usadas = [...new Set(Object.values(mapeo).filter(Boolean))];
-    const mapas = {};
-    for (const t of usadas) mapas[t] = await terminos(base, t);
-    const uno = (rol, p) => {
-      const tax = mapeo[rol];
-      if (!tax || !mapas[tax]) return null;
-      return (p[tax] || []).map(id => mapas[tax].get(id)).filter(Boolean)[0] || null;
-    };
-
-    // Los precios, en paralelo: es lo único lento de todo el proceso
-    const precios = await enTandas(props, (p) => precioDeFicha(p.link));
-
-    const filas = [];
-    props.forEach((p, idx) => {
-      const codigo = String((p.title?.rendered || '')).replace(/<[^>]*>/g, '').trim();
-      if (!codigo) return;
-      filas.push({
-        user_id: userId, client_id: clientId, codigo,
-        operacion: uno('operacion', p),
-        tipo: uno('tipo', p),
-        ciudad: uno('ciudad', p),
-        barrio: uno('barrio', p),
-        habitaciones: num(uno('habitaciones', p)),
-        banos: num(uno('banos', p)),
-        estrato: num(uno('estrato', p)),
-        precio: precios[idx] || null,
-        url: p.link,
-        modificado: p.modified ? new Date(p.modified).toISOString() : null,
-        visto_en: new Date().toISOString(),
-      });
-    });
-
-    // La web puede repetir el mismo código en dos fichas —en Certain pasa con 15
-    // de 484— y Postgres no deja actualizar dos veces la misma fila en una sola
-    // sentencia: fallaba el lote entero. Se queda la primera, que al venir
-    // ordenado por fecha de modificación es la más reciente.
-    const porCodigo = new Map();
-    for (const f of filas) if (!porCodigo.has(f.codigo)) porCodigo.set(f.codigo, f);
-    const unicas = [...porCodigo.values()];
-    const repetidos = filas.length - unicas.length;
-
-    if (unicas.length) {
-      const up = await fetch(`${SUPABASE_URL}/rest/v1/client_properties?on_conflict=user_id,client_id,codigo`, {
-        method: 'POST',
-        headers: { ...sb(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify(unicas),
-      });
-      if (!up.ok) {
-        const det = await up.text().catch(() => '');
-        await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources?id=eq.${fuente.id}`, {
-          method: 'PATCH', headers: sb(),
-          body: JSON.stringify({ ultimo_estado: 'error', ultimo_error: det.slice(0, 300), ultimo_sync: new Date().toISOString() }),
-        });
-        return jsonResp({ error: 'No se pudieron guardar las propiedades: ' + det.slice(0, 300) }, 500);
-      }
-    }
-
-    const siguiente = pagina >= totalPaginas ? 1 : pagina + 1;
-    const terminado = pagina >= totalPaginas;
-    await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources?id=eq.${fuente.id}`, {
-      method: 'PATCH', headers: sb(),
-      body: JSON.stringify({
-        cursor_pagina: siguiente,
-        ultimo_sync: new Date().toISOString(),
-        ultimo_estado: terminado ? 'ok' : 'en_curso',
-        ultimo_error: null,
-      }),
-    });
-
-    return jsonResp({
-      guardadas: unicas.length, pagina, de: totalPaginas, terminado,
-      sin_precio: unicas.filter(f => !f.precio).length,
-      codigos_repetidos: repetidos,
-    });
+    const r = await sincronizarLote(fuente);
+    if (r.error) return jsonResp({ error: r.error }, r.estado || 500);
+    return jsonResp(r);
   }
 
   return jsonResp({ error: 'Método no permitido' }, 405);

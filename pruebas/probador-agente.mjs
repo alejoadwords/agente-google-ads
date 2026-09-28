@@ -95,11 +95,15 @@ ok(/propiedadesParaPrompt\(/.test(cuerpo), 'usa el mismo filtro de catálogo');
 ok(/getRegla\(/.test(cuerpo) && /evaluar\(/.test(cuerpo),
    'y la misma regla de calificación, evaluada por el mismo código');
 
-// Las cuatro pistas del filtro, con los mismos nombres que en producción: si
-// aquí se escribieran distinto, el probador ofrecería otras propiedades.
-for (const pista of ['operacion', 'ciudad', 'barrio', 'presupuesto']) {
-  ok(new RegExp(`${pista}:`).test(cuerpo), `la pista «${pista}» se calcula igual`);
-}
+// Las pistas del filtro se calculan con la MISMA función que en producción. Se
+// comprobaban una por una por su nombre, y eso se rompió el día que dejaron de
+// escribirse a mano: la prueba se puso roja mientras el probador hacía
+// exactamente lo correcto. Lo que importa no es cómo se escriben, es que sea el
+// mismo código.
+ok(/pistasDeBusqueda\(/.test(cuerpo), 'el ensayo calcula las pistas con pistasDeBusqueda');
+ok((eng.match(/pistasDeBusqueda\(/g) || []).length >= 4,
+   'la misma que usan la conversación real y la respuesta sugerida',
+   String((eng.match(/pistasDeBusqueda\(/g) || []).length));
 
 // ── 3. La memoria del ensayo ────────────────────────────────────────────────
 console.log('\nEl historial se acuerda de lo capturado');

@@ -64,6 +64,7 @@ export const CADA = {
   'cron-integridad': 24 * 60,    // 0 11 * * *
   'cron-knowledge': 31 * 24 * 60,        // 0 12 1 * * — 31 días: el mes más largo
   'cron-monthly-reports': 31 * 24 * 60,  // 0 8 1 * *
+  'cron-catalogo': 60,           // 25 * * * *
   'cron-notas': 24 * 60,         // 0 13,20 * * 1-5
   'cron-recordatorios': 10,
   'cron-programados': 5,
@@ -108,6 +109,7 @@ export const DESDE = '2026-09-23T16:00:00Z';
 // enseña a ignorar los avisos.
 export const DESDE_POR_CRON = {
   'cron-alerts': '2026-09-27T17:00:00Z',
+  'cron-catalogo': '2026-09-28T22:00:00Z',
   'cron-conectores': '2026-09-27T17:00:00Z',
   'cron-integridad': '2026-09-27T17:00:00Z',
   'cron-knowledge': '2026-09-27T17:00:00Z',
