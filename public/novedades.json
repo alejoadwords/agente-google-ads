@@ -2,6 +2,20 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-28-mencion-dueno",
+      "fecha": "2026-09-28",
+      "tipo": "arreglo",
+      "titulo": "Al escribir @ en una nota ya aparece el dueño de la cuenta",
+      "texto": "La lista que sale al escribir @ solo traía a las personas invitadas al equipo, así que quien dirige la cuenta no aparecía nunca y no se le podía etiquetar. Ahora encabeza la lista. Además, si eres asesor la lista ya se carga sola: antes podía salir vacía."
+    },
+    {
+      "id": "2026-09-28-mencion-avisa",
+      "fecha": "2026-09-28",
+      "tipo": "arreglo",
+      "titulo": "Etiquetar a alguien ahora le llega al momento",
+      "texto": "Cuando etiquetabas a un compañero con @, le aparecía en la campana pero el correo podía tardar hasta un día, y si lo habías escrito en una Llamada, un Email, una Reunión o una Tarea no le llegaba nunca. Ahora el correo y el aviso al teléfono salen en el momento, sea cual sea el tipo de nota."
+    },
+    {
       "id": "2026-09-27-referral-whatsapp",
       "fecha": "2026-09-27",
       "tipo": "nuevo",

@@ -20868,15 +20868,58 @@ let _menMenu = null;          // el desplegable abierto, si lo hay
 let _menCaja = null;          // el textarea sobre el que está
 let _menElegido = new WeakMap();  // textarea → { id, nombre }
 
-/** El equipo mencionable: activos con cuenta, y el dueño. */
+// El equipo tal como lo necesita el `@`, en su propia variable.
+//
+// NO se rellena `crmTeam`: ese global lo leen el filtro por comercial y el
+// selector de responsable, que hoy se apagan a propósito cuando quien mira es
+// un miembro. Llenarlo desde aquí les cambiaría la pantalla a gente que no ha
+// pedido nada.
+let _menEquipo = null;
+
+/**
+ * Trae el equipo para el `@`. A diferencia de `teamEnsureLoaded`, NO se salta
+ * a los miembros.
+ *
+ * Ese atajo —`if (window._workspace) return`— dejaba a un vendedor con la
+ * lista VACÍA: se añadió la llamada a `teamEnsureLoaded()` al abrir la ficha
+ * precisamente para que un asesor pudiera mencionar, y la llamada no hacía
+ * nada porque la función se iba por la primera línea. Solo funcionaba de
+ * rebote, para un administrador que además hubiera abierto Configuración →
+ * Equipo en esa misma sesión.
+ */
+async function menCargarEquipo() {
+  if (_menEquipo) return;
+  try {
+    const d = await fetchAuth('/api/team').then(r => r.json());
+    _menEquipo = d.members || [];
+  } catch { _menEquipo = []; }
+}
+
+/** El equipo mencionable: los activos con cuenta, y el dueño. */
 function menCandidatos() {
-  const lista = (crmTeam || [])
+  const fuente = (_menEquipo && _menEquipo.length) ? _menEquipo : (crmTeam || []);
+  const lista = fuente
     .filter(m => m.status === 'active' && m.member_user_id)
     .map(m => ({ id: m.member_user_id, nombre: m.member_name || m.member_email || 'Sin nombre' }));
-  // El dueño no tiene fila en el equipo y también se le menciona.
+
+  // El dueño NO tiene fila en `team_members`, así que hay que ponerlo a mano.
+  //
+  // Antes solo se añadía cuando el dueño era quien miraba, y etiquetado «Tú».
+  // O sea: a las ocho personas del equipo de Certain el `@` nunca les ofreció
+  // a Marilia —la dueña— que es justo a quien más se quiere avisar. Y a ella
+  // le ofrecía mencionarse a sí misma, que no hace nada.
+  //
+  // Para un miembro, quién es el dueño viene de `window._workspace`, que lo
+  // trae `/api/team?me` al arrancar. El servidor ya lo aceptaba: `esDelEquipo`
+  // deja pasar al dueño desde el primer día, y el correo sabe buscarle la
+  // dirección en Clerk. Lo único que faltaba era ofrecerlo.
+  const w = window._workspace;
+  if (w && w.ownerId) lista.unshift({ id: w.ownerId, nombre: w.ownerName || 'Dirección' });
+
+  // Y uno no se menciona a sí mismo: el servidor ignora la mención propia, así
+  // que ofrecerla es un botón que guarda la nota y no avisa a nadie.
   const yo = clerkInstance?.user?.id;
-  if (!crmSoyMiembro && yo) lista.unshift({ id: yo, nombre: 'Tú', propio: true });
-  return lista;
+  return lista.filter(p => p.id && p.id !== yo);
 }
 
 /** A quién quedó mencionado en esta caja, si sigue escrito. */
@@ -20900,6 +20943,10 @@ function menCerrar() {
 function menEnchufar(caja) {
   if (!caja || caja.dataset.mencion === '1') return;
   caja.dataset.mencion = '1';
+  // El equipo se pide aquí también, y no solo desde la ficha: enchufar el `@`
+  // sin tener a quién ofrecer es un desplegable que se abre vacío, y quien lo
+  // ve una vez no vuelve a escribir `@`.
+  menCargarEquipo().catch(() => {});
   caja.addEventListener('input', () => menQuizasAbrir(caja));
   caja.addEventListener('keydown', (e) => {
     if (!_menMenu) return;
@@ -39394,8 +39441,10 @@ function lfPintar() {
   // perdería con el primer cambio de pestaña. `menEnchufar` es idempotente.
   menEnchufar(document.getElementById('lf-texto'));
   // El equipo hace falta para la lista del desplegable, y un miembro también
-  // menciona: sin esto, a un asesor el `@` no le ofrecía a nadie.
-  if (typeof teamEnsureLoaded === 'function') teamEnsureLoaded().catch(() => {});
+  // menciona: sin esto, a un asesor el `@` no le ofrecía a nadie. Va por
+  // `menCargarEquipo` y no por `teamEnsureLoaded`, que se salta a los miembros
+  // —que era la razón de que esta línea no sirviera para nada—.
+  if (typeof menCargarEquipo === 'function') menCargarEquipo().catch(() => {});
 }
 
 /** Las mismas acciones del panel: se reutilizan sus funciones, no se copian. */

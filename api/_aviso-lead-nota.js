@@ -59,7 +59,7 @@ export function conEnlaces(txt) {
   return out;
 }
 
-export async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId }) {
+export async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId, mencion }) {
   try {
     if (!paraId) return { enviado: false, motivo: 'el lead no tiene responsable' };
 
@@ -79,10 +79,15 @@ export async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId
       body: JSON.stringify({
         from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
         to: destino.email,
-        subject: `Nota sobre ${nombreLead}`,
+        subject: mencion ? `${quien} te mencionó en ${nombreLead}` : `Nota sobre ${nombreLead}`,
         html: emailHtml({
-          titulo: `${esc(quien)} te dejó una nota`,
-          intro: `Sobre <strong>${esc(deQuien)}</strong>, un lead que tienes asignado.`,
+          titulo: mencion ? `${esc(quien)} te mencionó en una nota` : `${esc(quien)} te dejó una nota`,
+          // A quien te mencionan NO tiene por qué llevar ese lead: decirle «un
+          // lead que tienes asignado» sería falso la mayoría de las veces, y
+          // basta una frase falsa para que el correo deje de creerse.
+          intro: mencion
+            ? `Sobre <strong>${esc(deQuien)}</strong>.`
+            : `Sobre <strong>${esc(deQuien)}</strong>, un lead que tienes asignado.`,
           preheader: String(texto).slice(0, 90),
           // Azul de marca, no el ámbar de las notas internas del inbox: aquella
           // es contexto entre pares, esta viene de arriba y se lee distinto.

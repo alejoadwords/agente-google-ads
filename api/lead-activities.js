@@ -339,11 +339,21 @@ export default async function handler(req) {
     // dato, el correo es el mensajero. Pero se devuelve qué pasó, para que la
     // interfaz no diga «avisado» cuando no salió nada.
     let aviso = null;
-    if (avisar) {
-      if (!lead.assigned_to) {
-        aviso = { enviado: false, motivo: 'este lead no tiene responsable asignado' };
-      } else if (!para) {
-        aviso = { enviado: false, motivo: 'el lead es tuyo, no hay a quién avisar' };
+    // Mencionar a alguien avisa IGUAL que la nota de dirección.
+    //
+    // Estaba solo bajo `avisar`, y el navegador no manda `avisar` con un `@`.
+    // Resultado: la mención dejaba la marca `para` —así que salía en la
+    // campana— pero no mandaba ni correo ni aviso al teléfono. Si la nota era
+    // de tipo «nota», el correo acababa saliendo 24 horas después por
+    // `cron-notas`; si el `@` se escribía en una Llamada, un Email, una
+    // Reunión o una Tarea, ese cron ni la mira (`type=eq.nota`) y no salía
+    // nunca. Etiquetar a alguien y que no se entere es peor que no poder
+    // etiquetarlo.
+    if (avisar || mencionado) {
+      if (!para) {
+        aviso = !lead.assigned_to
+          ? { enviado: false, motivo: 'este lead no tiene responsable asignado' }
+          : { enviado: false, motivo: 'el lead es tuyo, no hay a quién avisar' };
       } else {
         try {
           const { avisarNotaLead } = await import('./_aviso-lead-nota.js');
@@ -353,6 +363,10 @@ export default async function handler(req) {
             lead: { id: lead.id, name: lead.name, company: lead.company },
             texto: content || '',
             paraId: para,
+            // El correo se lee distinto: una nota de dirección va al
+            // responsable del lead, y a quien mencionas puede no ser suyo.
+            // Decirle «un lead que tienes asignado» sería mentira.
+            mencion: !!mencionado,
           });
         } catch (e) {
           aviso = { enviado: false, motivo: 'no se pudo enviar el correo' };
