@@ -42,19 +42,40 @@ console.log('\nSi alguien olvida el canal, se comporta como antes\n');
   chk('sin canal, se asume WhatsApp', ASTERISCO.test(p));
 }
 
-console.log('\nLos dos sitios que la llaman pasan el canal\n');
+console.log('\nTodas las llamadas pasan el canal\n');
 {
   // Sin esto el arreglo se deshace solo: la función admite el canal, nadie se
   // lo manda, y todo vuelve a WhatsApp por el valor por defecto sin que
   // ninguna prueba de las de arriba se entere.
+  //
+  // No se fija el NÚMERO de llamadas: al añadir el probador del agente esta
+  // prueba se puso roja por contar tres donde esperaba dos, y el canal estaba
+  // perfectamente puesto. Contar llamadas protege de nada; lo que hay que
+  // exigir es que cada una, sean las que sean, lleve su canal.
   const js = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
   // El `(?<!function )` deja fuera la propia definición, que si no se cuenta
   // como una llamada más y encima sin canal.
   const llamadas = [...js.matchAll(/(?<!function )buildSystemPrompt\(([\s\S]{0,400}?)\);/g)];
-  chk('sigue habiendo dos llamadas', llamadas.length === 2, String(llamadas.length));
+  chk('hay al menos dos sitios que la llaman', llamadas.length >= 2, String(llamadas.length));
+
+  // Los argumentos de primer nivel: el canal es el quinto.
+  const argumentos = (txt) => {
+    const out = []; let prof = 0, act = '';
+    for (const ch of txt) {
+      if ('([{'.includes(ch)) prof++;
+      else if (')]}'.includes(ch)) prof--;
+      if (ch === ',' && prof === 0) { out.push(act.trim()); act = ''; continue; }
+      act += ch;
+    }
+    if (act.trim()) out.push(act.trim());
+    return out;
+  };
   for (const [i, m] of llamadas.entries()) {
-    chk(`la llamada ${i + 1} le pasa el canal`, /conv\.channel/.test(m[1]),
-        m[1].replace(/\s+/g, ' ').slice(0, 70));
+    const args = argumentos(m[1]);
+    const quinto = args[4] || '';
+    chk(`la llamada ${i + 1} le pasa el canal`,
+        !!quinto && /canal|channel/i.test(quinto),
+        args.length < 5 ? `solo ${args.length} argumentos` : `el 5.º es «${quinto}»`);
   }
 }
 

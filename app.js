@@ -22210,11 +22210,14 @@ function crmRenderAgents() {
 // scroll: el contenido se cortaba y la sección de Calificación era inalcanzable.
 // Cinco pasos cortos evitan el scroll en vez de pelearse con él. Los campos
 // conservan sus identificadores, así que guardar no cambia.
-const AG_PASOS = ['Identidad', 'Respuestas', 'Canales', 'Calificación', 'Proceso'];
+const AG_PASOS = ['Identidad', 'Respuestas', 'Canales', 'Calificación', 'Proceso', 'Probar'];
 let _agPaso = 1;
 
 // El paso de canales solo existe al editar: un agente recién creado no tiene
 function agPasoExiste(n) {
+  // Probar exige un agente guardado: el ensayo lo responde el servidor leyendo
+  // su configuración de la base, no lo que hay escrito en el formulario.
+  if (n === 6) return !!agEditingId;
   if (n !== 3) return true;
   const sec = document.getElementById('ag-channels-section');
   return !!sec && sec.style.display !== 'none';
@@ -22294,6 +22297,9 @@ function crmOpenAgentModal(agentId) {
     if (chSect) chSect.style.display = 'none';
   }
   agRenderFaqs();
+  // El ensayo anterior no se arrastra a otro agente: sería el historial de una
+  // conversación con otra configuración.
+  agPrbReiniciar();
   document.getElementById('crm-agent-modal').classList.add('open');
   // Siempre se entra por el primer paso; el de canales solo aparece al editar,
   // así que se decide después de haberlo mostrado u ocultado arriba.
@@ -22331,6 +22337,147 @@ function agAddFaq() {
 function agRemoveFaq(i) {
   agFaqs.splice(i, 1);
   agRenderFaqs();
+}
+
+// ── Probador del agente ─────────────────────────────────────────────────────
+// El historial vive aquí, en el navegador, y viaja EN BRUTO en cada envío: los
+// bloques ocultos van dentro de los mensajes del agente porque el motor los
+// relee para acumular lo que ya sabe. Si se limpiaran antes de devolverlos, el
+// ensayo se quedaría amnésico y la calificación no avanzaría nunca — que es uno
+// de los fallos que este probador tiene que poder destapar.
+let agPrbHist = [];   // [{role, content}] con los bloques dentro
+let agPrbVista = [];  // lo mismo, ya limpio, que es lo que se pinta
+let agPrbOcupado = false;
+
+function agPrbReiniciar() {
+  agPrbHist = [];
+  agPrbVista = [];
+  agPrbPintar();
+  agPrbRadiografia(null);
+}
+
+function agPrbPintar() {
+  const c = document.getElementById('ag-prb-chat');
+  if (!c) return;
+  if (!agPrbVista.length) {
+    c.innerHTML = '<div style="font-size:11.5px;color:var(--muted2);line-height:1.55;text-align:center;padding:26px 10px">' +
+      'Escríbele como si fueras un cliente.<br>Nada de lo que pase aquí queda en tu CRM.</div>';
+    return;
+  }
+  c.innerHTML = agPrbVista.map(m =>
+    '<div class="ag-prb-fila crm-inbox-bubble-wrap ' + m.role + '">' +
+      '<div class="crm-inbox-bubble ' + m.role + '">' + esc(m.content) + '</div>' +
+    '</div>'
+  ).join('') + (agPrbOcupado
+    ? '<div class="ag-prb-fila crm-inbox-bubble-wrap assistant"><div class="crm-inbox-bubble assistant" style="opacity:.6">Escribiendo…</div></div>'
+    : '');
+  c.scrollTop = c.scrollHeight;
+}
+
+// La radiografía es la mitad del valor del probador: en producción esto va
+// oculto, y un catálogo que no filtra o una ruta que el enrutado no reconoce no
+// se notan en la respuesta. Aquí sí.
+function agPrbRadiografia(r) {
+  const el = document.getElementById('ag-prb-rx');
+  if (!el) return;
+  if (!r) {
+    el.innerHTML = '<div class="ag-prb-rx-grupo"><h5>Radiografía</h5>' +
+      '<p class="vacio">Aquí verás lo que el agente entendió: los datos que capturó, ' +
+      'a qué proceso te manda, si te califica y qué del catálogo te ofreció.</p></div>';
+    return;
+  }
+  const bloque = (titulo, cuerpo) =>
+    '<div class="ag-prb-rx-grupo"><h5>' + titulo + '</h5>' + cuerpo + '</div>';
+  const nada = t => '<p class="vacio">' + t + '</p>';
+
+  const datos = Object.entries(r.capturado || {}).filter(([, v]) => v);
+  const partes = [];
+
+  partes.push(bloque('Datos capturados', datos.length
+    ? '<p>' + datos.map(([k, v]) => esc(k) + ': <strong>' + esc(String(v)) + '</strong>').join('<br>') + '</p>'
+    : nada('Todavía ninguno')));
+
+  if (r.ruta) {
+    partes.push(bloque('Proceso', r.ruta.reconocida
+      ? '<p><strong>' + esc(r.ruta.etiqueta || r.ruta.clave) + '</strong><br>' +
+        (r.ruta.asignada
+          ? '<span class="ag-prb-bien">Asignado a ' + esc(r.ruta.asignar_nombre || 'un asesor') + '</span>'
+          : '<span class="ag-prb-mal">Sin asesor asignado</span>') + '</p>'
+      : '<p class="ag-prb-mal">Dijo «' + esc(r.ruta.clave) + '», que no está entre tus opciones. ' +
+        'En producción el lead se quedaría donde estaba.</p>'));
+  } else {
+    partes.push(bloque('Proceso', nada('Aún no ha decidido a cuál mandarte')));
+  }
+
+  const cal = r.calificacion || {};
+  const nombreEstado = { calificado: 'Calificado', descartado: 'Descartado', pendiente: 'Pendiente', inactivo: '' };
+  partes.push(bloque('Calificación', cal.activa
+    ? '<p><strong class="' + (cal.estado === 'calificado' ? 'ag-prb-bien' : cal.estado === 'descartado' ? 'ag-prb-mal' : '') + '">' +
+      esc(nombreEstado[cal.estado] || cal.estado) + '</strong>' +
+      (cal.total ? ' <span style="color:var(--muted2)">(' + cal.cumplidas + ' de ' + cal.total + ')</span>' : '') +
+      (cal.resumen ? '<br>' + esc(cal.resumen).replace(/\n/g, '<br>') : '') + '</p>'
+    : nada('No tiene calificación activa')));
+
+  const cat = r.catalogo || {};
+  const pistas = Object.entries(cat.pistas || {}).filter(([, v]) => v);
+  partes.push(bloque('Catálogo', cat.ofrecidas
+    ? '<p><strong>' + cat.ofrecidas + '</strong> opciones a la vista<br>' +
+      (pistas.length
+        ? '<span style="color:var(--muted2)">Filtrado por ' + pistas.map(([k, v]) =>
+            esc(k) + ': ' + esc(k === 'presupuesto' ? '$' + Number(v).toLocaleString('es-CO') : String(v))).join(', ') + '</span>'
+        : '<span class="ag-prb-mal">Sin filtrar: le está viendo las más baratas de todo el inventario</span>') + '</p>'
+    : nada('No se le pasó ninguna opción')));
+
+  if (r.escalar) partes.push(bloque('Escalada', '<p class="ag-prb-bien">Pidió pasar a un asesor</p>'));
+
+  el.innerHTML = partes.join('');
+}
+
+async function agPrbEnviar() {
+  if (agPrbOcupado) return;
+  const inp = document.getElementById('ag-prb-texto');
+  const texto = (inp?.value || '').trim();
+  if (!texto) return;
+  if (!agEditingId) { showToast('Guarda el agente antes de probarlo', 'error'); return; }
+
+  inp.value = '';
+  agPrbHist.push({ role: 'user', content: texto });
+  agPrbVista.push({ role: 'user', content: texto });
+  agPrbOcupado = true;
+  agPrbPintar();
+
+  try {
+    const r = await fetchAuth('/api/agent-probar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: agEditingId, mensajes: agPrbHist }),
+    });
+    const d = await r.json();
+    agPrbOcupado = false;
+    if (!r.ok || d.error) {
+      // El turno que falló se retira: dejarlo haría que el siguiente envío
+      // reprodujera el mismo error con dos mensajes seguidos del cliente.
+      agPrbHist.pop();
+      agPrbVista.pop();
+      agPrbPintar();
+      showToast(d.error || 'No se pudo probar el agente', 'error');
+      return;
+    }
+    agPrbHist.push({ role: 'assistant', content: d.bruto });
+    agPrbVista.push({ role: 'assistant', content: d.texto });
+    agPrbPintar();
+    agPrbRadiografia(d);
+    const rest = document.getElementById('ag-prb-restantes');
+    if (rest && typeof d.restantes === 'number') {
+      rest.textContent = d.restantes <= 40 ? 'Te quedan ' + d.restantes + ' mensajes de prueba hoy' : '';
+    }
+  } catch (e) {
+    agPrbOcupado = false;
+    agPrbHist.pop();
+    agPrbVista.pop();
+    agPrbPintar();
+    showToast('No se pudo probar el agente', 'error');
+  }
 }
 
 function agRenderChannels(agent) {

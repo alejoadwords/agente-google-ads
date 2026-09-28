@@ -1,0 +1,127 @@
+// api/agent-probar.js
+// Probar un agente antes de encenderlo.
+//
+// Hasta ahora un agente se publicaba a ciegas: la primera conversación de
+// verdad era también la primera prueba, y la hacía un cliente del cliente. Este
+// endpoint responde con el MISMO prompt, el MISMO inventario y la MISMA regla
+// que la conversación real, pero sin escribir nada en el CRM.
+//
+// El historial lo manda el navegador. Es a propósito: así no hay conversación
+// que crear ni que limpiar después. Y viaja EN BRUTO, con los bloques ocultos
+// dentro de los mensajes del agente, porque el motor los relee para acumular lo
+// capturado entre turnos.
+//
+// Tope diario: el ensayo gasta tokens de verdad. Sin tope, una pestaña abierta
+// en bucle es una factura.
+export const config = { runtime: 'edge' };
+
+import { ensayarAgente } from './_inbox-engine.js';
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+const TOPE_DIARIO = 300;  // mensajes de ensayo por cuenta y día
+
+function sbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    apikey: SUPABASE_KEY,
+    Authorization: `Bearer ${SUPABASE_KEY}`,
+  };
+}
+
+function jsonResp(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status, headers: { ...CORS, 'Content-Type': 'application/json' },
+  });
+}
+
+async function getUserId(req) {
+  const auth = req.headers.get('Authorization');
+  if (!auth) return null;
+  const token = auth.replace('Bearer ', '');
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [hB64, pB64, sB64] = parts;
+    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
+    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
+    const key = jwks.keys?.find(k => k.kid === header.kid);
+    if (!key) return null;
+    const cryptoKey = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const data = new TextEncoder().encode(`${hB64}.${pB64}`);
+    if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data))) return null;
+    const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload.sub || null;
+  } catch { return null; }
+}
+
+// Cuántos ensayos lleva hoy esta cuenta. Se cuenta sobre ai_usage, que es donde
+// consta el gasto: no hay un contador aparte que pueda desincronizarse.
+async function ensayosDeHoy(userId) {
+  const desde = new Date(); desde.setUTCHours(0, 0, 0, 0);
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/ai_usage?user_id=eq.${encodeURIComponent(userId)}` +
+      `&origen=eq.ensayo&created_at=gte.${desde.toISOString()}&select=id`,
+      { headers: { ...sbHeaders(), Prefer: 'count=exact', Range: '0-0' } }
+    );
+    const rango = res.headers.get('content-range') || '';
+    return parseInt(rango.split('/')[1] || '0', 10) || 0;
+  } catch {
+    // Si no se puede contar, no se bloquea: dejar a alguien sin poder probar su
+    // agente por un fallo de lectura es peor que un ensayo de más.
+    return 0;
+  }
+}
+
+export default async function handler(req) {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  if (req.method !== 'POST') return jsonResp({ error: 'Método no permitido' }, 405);
+
+  let userId = await getUserId(req);
+  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+
+  // Un miembro prueba el agente de la cuenta del dueño, que es donde vive. Si
+  // la comprobación falla no se sigue: con la identidad equivocada buscaríamos
+  // el agente en otra cuenta y diríamos que no existe.
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(userId)}` +
+      `&status=eq.active&select=owner_user_id&limit=1`,
+      { headers: sbHeaders() }
+    );
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const fila = (await res.json())?.[0];
+    if (fila?.owner_user_id) userId = fila.owner_user_id;
+  } catch {
+    return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
+
+  let body;
+  try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+
+  const usados = await ensayosDeHoy(userId);
+  if (usados >= TOPE_DIARIO) {
+    return jsonResp({
+      error: `Llegaste al tope de ${TOPE_DIARIO} mensajes de prueba por día. Vuelve mañana o escríbenos si necesitas más.`,
+    }, 429);
+  }
+
+  const r = await ensayarAgente({
+    userId,
+    agentId: body.agent_id,
+    canal: body.canal || 'whatsapp',
+    mensajes: body.mensajes,
+  });
+  if (!r.ok) return jsonResp({ error: r.error }, 400);
+
+  return jsonResp({ ...r, restantes: Math.max(0, TOPE_DIARIO - usados - 1) });
+}

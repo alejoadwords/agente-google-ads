@@ -10,7 +10,7 @@
 import { ensureCatalog, enqueueAutomations, pipelinePrincipal } from './_lead-intake.js';
 import { getPolicy } from './_channel-policy.js';
 import { asignarLead } from './_assign.js';
-import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredicto } from './_qualify.js';
+import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredicto, resumenLegible } from './_qualify.js';
 import { pautaDeReferral } from './_lead-intake.js';
 import { registrarUso } from './_uso-ia.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
@@ -329,6 +329,102 @@ export async function sugerirRespuesta(userId, conversationId) {
   } catch (e) {
     return { ok: false, error: 'No se pudo consultar al agente: ' + (e?.message || 'error desconocido') };
   }
+}
+
+// ── Ensayo del agente, antes de encenderlo ──────────────────────────────────
+// Hasta ahora un agente se publicaba a ciegas: la primera conversación de
+// verdad era también la primera prueba, y la hacía un cliente del cliente.
+//
+// Esto responde igual que la conversación real —el MISMO prompt, el MISMO
+// inventario, la MISMA regla— pero no escribe nada: ni conversación, ni
+// mensajes, ni lead, ni etiquetas. Lo único que deja es el consumo en
+// ai_usage, que es dinero gastado de verdad y tiene que constar.
+//
+// Devuelve además lo que en producción va oculto: qué capturó, qué pistas
+// llegaron al filtro del catálogo, a qué ruta te manda y si te califica. Sin
+// eso sería una demo; con eso es la herramienta para ajustar el entrenamiento.
+export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensajes = [] }) {
+  if (!userId || !agentId) return { ok: false, error: 'Falta el agente.' };
+  const limpios = (Array.isArray(mensajes) ? mensajes : [])
+    .filter(m => m && (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim())
+    .map(m => ({ role: m.role, content: String(m.content).slice(0, 4000) }))
+    .slice(-12);
+  if (!limpios.length || limpios[limpios.length - 1].role !== 'user') {
+    return { ok: false, error: 'El ensayo necesita un mensaje tuyo al final.' };
+  }
+
+  const agent = await fetch(
+    `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${encodeURIComponent(agentId)}&user_id=eq.${encodeURIComponent(userId)}&select=*`,
+    { headers: sb() }
+  ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
+  if (!agent) return { ok: false, error: 'Ese agente no existe en tu cuenta.' };
+
+  // Lo capturado y lo calificado se acumulan del historial del propio ensayo,
+  // igual que en producción se acumulan del historial guardado. Aquí el
+  // historial lo manda el navegador, así que los bloques ocultos tienen que
+  // viajar dentro de los mensajes del asistente: si el navegador los limpiara
+  // antes de devolverlos, el ensayo se quedaría amnésico y en 'pendiente' para
+  // siempre, que es justo el fallo que este ensayo debe poder destapar.
+  const deAsistente = limpios.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
+  const capturado = extractCapturedData(deAsistente);
+  const previas = extraerCalificacion(deAsistente);
+
+  const regla = await getRegla(userId, agentId).catch(() => null);
+
+  // Las pistas, calculadas aparte y devueltas: son la explicación de por qué el
+  // agente ofreció lo que ofreció. Un catálogo que no filtra no se nota en la
+  // respuesta, se nota aquí.
+  const pistas = {
+    operacion: previas._ruta || null,
+    ciudad: capturado.ciudad || null,
+    barrio: capturado.zona || capturado.barrio || null,
+    presupuesto: Number(String(capturado.presupuesto || '').replace(/[^\d]/g, '')) || null,
+  };
+  const inventario = await propiedadesParaPrompt(userId, agent.client_id || null, pistas)
+    .catch(() => ({ lineas: [], total: 0 }));
+
+  const system = buildSystemPrompt(agent, capturado, regla, inventario, canal, null);
+
+  let bruto;
+  try {
+    bruto = await responderViendo(system, limpios, [], { userId, origen: 'ensayo' });
+  } catch (e) {
+    return { ok: false, error: 'No se pudo consultar al agente: ' + (e?.message || 'error desconocido') };
+  }
+  const texto = cleanForUser(bruto).trim();
+  if (!texto) return { ok: false, error: 'El agente no devolvió texto. Suele ser el presupuesto de tokens: reintenta.' };
+
+  const respuestas = { ...previas, ...extraerCalificacion(bruto) };
+  const veredicto = evaluar(regla, respuestas);
+  const nuevo = extractCapturedData(bruto);
+  const ruta = respuestas._ruta || null;
+  const destino = ruta ? (regla?.enrutado?.rutas || []).find(r => r.clave === ruta) || null : null;
+
+  return {
+    ok: true,
+    texto,
+    // En bruto para que el navegador lo devuelva tal cual en el siguiente turno.
+    bruto,
+    capturado: { ...capturado, ...nuevo },
+    escalar: bruto.includes('[ESCALAR]'),
+    calificacion: {
+      activa: !!regla?.activo,
+      estado: veredicto.estado,
+      cumplidas: veredicto.cumplidas ?? null,
+      total: veredicto.total ?? null,
+      resumen: regla?.activo ? resumenLegible(regla, respuestas) : '',
+    },
+    ruta: ruta ? {
+      clave: ruta,
+      etiqueta: destino?.etiqueta || null,
+      // Que el modelo devuelva una clave que el enrutado no conoce es un fallo
+      // silencioso en producción: el lead se queda donde estaba. Aquí se ve.
+      reconocida: !!destino,
+      asignada: !!destino?.asignar_a,
+      asignar_nombre: destino?.asignar_nombre || null,
+    } : null,
+    catalogo: { pistas, ofrecidas: inventario.total, lineas: inventario.lineas },
+  };
 }
 
 // ── Entrada al pipeline ───────────────────────────────────────────────────────
