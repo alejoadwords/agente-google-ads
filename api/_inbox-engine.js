@@ -11,6 +11,7 @@ import { ensureCatalog, enqueueAutomations, pipelinePrincipal } from './_lead-in
 import { getPolicy } from './_channel-policy.js';
 import { asignarLead } from './_assign.js';
 import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredicto } from './_qualify.js';
+import { pautaDeReferral } from './_lead-intake.js';
 import { registrarUso } from './_uso-ia.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
 
@@ -135,7 +136,33 @@ function reglaDeResaltado(canal) {
 
 // `canal` por defecto en 'whatsapp': si alguna llamada futura se olvida de
 // pasarlo, el comportamiento es el de antes y no el de un canal sin formato.
-export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null, canal = 'whatsapp') {
+// Lo que el agente necesita saber de un anuncio de clic-a-WhatsApp.
+//
+// Sin esto trata igual a quien acaba de pulsar un anuncio de un apartamento
+// concreto que a quien escribe en frío, y le pregunta qué busca cuando la
+// persona ya lo dijo al hacer clic. Con el titular delante puede abrir por
+// donde la conversación ya venía.
+//
+// El titular es del ANUNCIO, no algo que la persona haya dicho: por eso se
+// advierte de no darlo por confirmado. Alguien puede pulsar un anuncio de
+// arriendo y venir buscando compra.
+function bloqueDeAnuncio(referral) {
+  if (!referral || typeof referral !== 'object') return '';
+  const t = (v) => String(v || '').trim().slice(0, 200);
+  const titular = t(referral.headline);
+  const cuerpo = t(referral.body);
+  if (!titular && !cuerpo) return '';
+  const organico = referral.source_type === 'post';
+  return `DE DÓNDE VIENE ESTA PERSONA:
+Escribió tras pulsar ${organico ? 'una publicación' : 'un anuncio'} que decía:
+${titular ? `Titular: ${titular}` : ''}${cuerpo ? `\nTexto: ${cuerpo}` : ''}
+
+Úsalo para entrar en materia, no para dar nada por hecho: es lo que decía ${organico ? 'la publicación' : 'el anuncio'}, no lo que la persona te ha dicho. Puede haber pulsado buscando otra cosa. No repitas el anuncio palabra por palabra ni menciones que sabes de dónde viene.
+
+`;
+}
+
+export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null, canal = 'whatsapp', referral = null) {
   const faqs = (agent.faqs || []).map(f => `P: ${f.q}\nR: ${f.a}`).join('\n\n');
   const captured = Object.entries(capturedData || {})
     .filter(([, v]) => v)
@@ -186,7 +213,7 @@ SI TE MANDAN UNA FOTO:
 - Que se parezca a algo del listado NO significa que sea eso. No afirmes que es una propiedad concreta salvo que te lo diga la persona; si crees reconocerla, preguntale
 - Si la foto no se entiende o no tiene que ver, dilo con amabilidad y pide lo que necesitas
 
-DATOS CAPTURADOS HASTA AHORA:
+${bloqueDeAnuncio(referral)}DATOS CAPTURADOS HASTA AHORA:
 ${captured}
 
 Cuando detectes nombre o dato de contacto nuevo en la conversación, incluye al final de tu respuesta (invisible para el usuario):
@@ -290,7 +317,8 @@ export async function sugerirRespuesta(userId, conversationId) {
     { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) },
     null,
     inventario,
-    conv.channel
+    conv.channel,
+    conv.referral || null
   );
 
   try {
@@ -345,6 +373,11 @@ export async function upsertLeadFromConversation(userId, clientId, conv, capture
     tags: channelTag.length >= 2 ? [channelTag] : [],
     notes: captureData.interes ? `Interés: ${captureData.interes}` : null,
   };
+  // De qué anuncio vino, si vino de uno. Va con LAS MISMAS claves que un lead
+  // de Meta Lead Ads (`camposDePauta`), o el reporte de pauta saldría partido
+  // en dos por la misma campaña.
+  const pauta = pautaDeReferral(conv.referral);
+  if (Object.keys(pauta).length) leadPayload.custom_fields = pauta;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
     method: 'POST', headers: sb(), body: JSON.stringify(leadPayload),
   });
@@ -559,7 +592,7 @@ function textoDeAdjunto(adj, error) {
 // webhook del canal. Meta no manda el nombre en el evento, solo el id, así que
 // sin esto el lead entra como "Contacto messenger" y el comercial recibe una
 // ficha sin nombre.
-export async function processIncoming({ channel, externalId, contactId, contactName, text, providerMessageId, send, resolverNombre, media }) {
+export async function processIncoming({ channel, externalId, contactId, contactName, text, providerMessageId, send, resolverNombre, media, referral }) {
   // Un mensaje puede ser solo un archivo, sin una palabra. Exigir texto era lo
   // que hacía desaparecer las fotos que manda el cliente.
   if ((!text && !media) || !externalId || !contactId) return { ok: false, reason: 'payload incompleto' };
@@ -628,6 +661,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
         status: aMano ? 'human' : 'bot',
         last_inbound_at: new Date().toISOString(),
         unread_count: 1,
+        referral: referral || null,
       }),
     }).then(r => r.json()).then(r => r?.[0]).catch(() => null);
     if (!conv) return { ok: false, reason: 'no se pudo crear la conversación' };
@@ -637,6 +671,20 @@ export async function processIncoming({ channel, externalId, contactId, contactN
         reglaCal.activo, connection.pipeline_id || null).catch(() => null);
       if (leadId) conv.lead_id = leadId;
     }
+  }
+
+  // La conversación ya existía pero el anuncio llega ahora: alguien que escribió
+  // antes y hoy vuelve por una pauta. Se guarda solo si no había nada.
+  //
+  // Es una decisión, no un descuido: la atribución se queda con el PRIMER
+  // origen. Si se sobrescribiera, un contacto viejo que hoy pulsa un anuncio
+  // haría desaparecer de dónde salió de verdad, y el reporte le daría el mérito
+  // a la campaña equivocada.
+  if (referral && !conv.referral) {
+    await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
+      method: 'PATCH', headers: sb(), body: JSON.stringify({ referral }),
+    }).catch(() => {});
+    conv.referral = referral;
   }
 
   // A mano, o ya escalado a una persona: se guarda el mensaje y ahi acaba. El
@@ -717,7 +765,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   }).catch(() => ({ lineas: [], total: 0 }));
 
   const reply = await responderViendo(
-    buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel),
+    buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null),
     hist, [], { userId: connection.user_id, origen: 'whatsapp' }
   );
 
