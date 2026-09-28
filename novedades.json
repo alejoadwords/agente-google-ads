@@ -2,6 +2,23 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-probar-enlace",
+      "fecha": "2026-09-29",
+      "tipo": "nuevo",
+      "titulo": "Comparte un enlace para que tu cliente pruebe el agente",
+      "texto": "En el paso «Probar» del editor hay un botón nuevo: «Compartir con tu cliente». Genera un enlace que tu cliente abre sin cuenta, desde el teléfono o el computador, y conversa con el agente como lo haría un comprador. Solo ve el chat: no ve tu proceso de venta, ni la calificación, ni tu catálogo por dentro. Y nada de lo que escriba se guarda como contacto. El enlace vale 30 días.",
+      "accion": {
+        "texto": "Ir a Agentes IA",
+        "ir": "conversaciones"
+      }
+    },
+    {
+      "id": "2026-09-29-calificacion-espera",
+      "fecha": "2026-09-29",
+      "tipo": "arreglo",
+      "titulo": "El agente ya no da por calificado a quien todavía no ha contestado",
+      "texto": "Cuando el agente aún no tenía una respuesta —el presupuesto, por ejemplo— a veces la apuntaba como «sin información» y el sistema la contaba como respondida. Eso adelantaba el veredicto: un contacto podía llegarle a tu comercial marcado como calificado sin haber dado los datos, o descartado sin haber dicho nada. Ahora lo que falta se sigue preguntando, y el veredicto espera a tenerlo todo." },
+    {
       "id": "2026-09-28-token-vencido",
       "fecha": "2026-09-28",
       "tipo": "arreglo",

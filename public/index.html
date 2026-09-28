@@ -6171,9 +6171,20 @@ if (window.AGENTES_ACTIVOS) {
                      onkeydown="if(event.key==='Enter'){event.preventDefault();agPrbEnviar()}">
               <button class="btn-pri sm" id="ag-prb-btn" onclick="agPrbEnviar()">Enviar</button>
             </div>
-            <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
               <button class="btn-ghost sm" onclick="agPrbReiniciar()">Empezar de nuevo</button>
+              <button class="btn-sec sm" onclick="agPrbCompartir(this)">Compartir con tu cliente</button>
               <span style="font-size:11px;color:var(--muted2)" id="ag-prb-restantes"></span>
+            </div>
+            <div id="ag-prb-enlace" style="display:none;margin-top:9px">
+              <div style="font-size:11px;color:var(--muted2);margin-bottom:5px">
+                Tu cliente puede conversar con el agente desde aquí, sin cuenta. Solo ve el chat,
+                no tu proceso de venta ni la calificación.
+              </div>
+              <div style="display:flex;gap:7px">
+                <input class="auto-input" id="ag-prb-url" readonly onclick="this.select()">
+                <button class="btn-pri sm" onclick="agPrbCopiar(this)">Copiar</button>
+              </div>
             </div>
           </div>
           <div class="ag-prb-rx" id="ag-prb-rx"></div>

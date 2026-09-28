@@ -59,8 +59,10 @@ ok(/user_id=eq\.\$\{encodeURIComponent\(userId\)\}/.test(cuerpo),
    'y acotado al dueño: sin eso se podría probar el agente de otra cuenta con su id');
 
 // El gasto sí tiene que constar: es dinero de verdad.
-ok(/origen: 'ensayo'/.test(cuerpo),
+ok(/origen = 'ensayo'/.test(cuerpo),
    'el consumo se registra con origen propio, para poder verlo y ponerle tope');
+ok(/responderViendo\(system, limpios, \[\], \{ userId, origen \}\)/.test(cuerpo),
+   'y ese origen llega al registro, no se queda en el argumento');
 
 // ── 2. Responde igual que en producción ─────────────────────────────────────
 console.log('\nMismo prompt, mismo inventario, misma regla');

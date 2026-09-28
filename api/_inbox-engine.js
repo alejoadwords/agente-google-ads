@@ -447,7 +447,7 @@ export async function sugerirRespuesta(userId, conversationId) {
 // Devuelve además lo que en producción va oculto: qué capturó, qué pistas
 // llegaron al filtro del catálogo, a qué ruta te manda y si te califica. Sin
 // eso sería una demo; con eso es la herramienta para ajustar el entrenamiento.
-export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensajes = [] }) {
+export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensajes = [], origen = 'ensayo' }) {
   if (!userId || !agentId) return { ok: false, error: 'Falta el agente.' };
   const limpios = (Array.isArray(mensajes) ? mensajes : [])
     .filter(m => m && (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim())
@@ -486,7 +486,7 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
 
   let bruto;
   try {
-    bruto = await responderViendo(system, limpios, [], { userId, origen: 'ensayo' });
+    bruto = await responderViendo(system, limpios, [], { userId, origen });
   } catch (e) {
     return { ok: false, error: 'No se pudo consultar al agente: ' + (e?.message || 'error desconocido') };
   }

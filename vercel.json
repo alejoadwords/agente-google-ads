@@ -112,6 +112,10 @@
       "destination": "/agente/index.html"
     },
     {
+      "source": "/probar/:token",
+      "destination": "/probar.html"
+    },
+    {
       "source": "/((?!api/|_vercel/).*)",
       "destination": "/index.html"
     }

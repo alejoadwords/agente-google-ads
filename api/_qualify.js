@@ -186,10 +186,51 @@ export function extraerCalificacion(text) {
         if (limpia) out._ruta = limpia;
         continue;
       }
-      if (v && typeof v === 'object') out[k] = { valor: limpiarTexto(v.valor, 200), cumple: !!v.cumple };
+      if (v && typeof v === 'object') {
+        const valor = limpiarTexto(v.valor, 200);
+        // Un criterio sin respuesta NO es un criterio respondido.
+        //
+        // El modelo reporta a veces `{"presupuesto": {"valor": "sin
+        // información", "cumple": false}}` para algo que acaba de preguntar y
+        // que nadie le ha contestado todavía. Eso contaba como respondido, y
+        // con todos los criterios «respondidos» el veredicto salía: un lead
+        // llegaba al comercial marcado como calificado y sin presupuesto, o
+        // descartado sin haber dicho una palabra. Lo que falta se omite, que es
+        // justo lo que el prompt le pide, y entonces el veredicto se queda en
+        // 'pendiente' y el agente sigue preguntando.
+        if (esNoRespuesta(valor)) continue;
+        out[k] = { valor, cumple: !!v.cumple };
+      }
     }
     return out;
   } catch { return {}; }
+}
+
+// Las formas que toma «todavía no me lo han dicho».
+//
+// Se compara sin tildes: el modelo escribe «sin información» y «sin
+// informacion» indistintamente, y una lista que solo reconociera una de las dos
+// dejaría pasar la mitad.
+//
+// La cola de hasta 12 caracteres es para «sin información aún» o «no lo dijo
+// todavía». Y nada de esto puede tragarse una respuesta de verdad: «no» a secas
+// es una respuesta, y «no tiene parqueadero» también.
+const NO_RESPUESTA = new RegExp(
+  '^(' +
+  'sin (informacion|datos?|especificar|definir|responder|aclarar)' +
+  '|no (lo )?(se|sabe|dijo|indico|indica|respondio|responde|especifico|especifica|' +
+      'proporciono|proporciona|menciono|menciona|confirmo|confirma|aclaro|aclara|contesto)' +
+  '|no disponible|no aplica|desconocid[oa]|pendiente|ningun[oa]?|n/?a|null|none|vacio' +
+  ')( (aun|todavia|por ahora|de momento|por el momento|hasta ahora))?$'
+);
+
+export function esNoRespuesta(valor) {
+  const v = String(valor ?? '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // fuera tildes
+    .toLowerCase().trim()
+    .replace(/^[\s.,;:¿?¡!—–-]+|[\s.,;:¿?¡!—–-]+$/g, '');
+  if (!v) return true;
+  return NO_RESPUESTA.test(v);
 }
 
 // Veredicto determinista: 'pendiente' mientras falten respuestas,
