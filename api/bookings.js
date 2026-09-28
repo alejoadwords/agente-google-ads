@@ -12,6 +12,7 @@ export const config = { runtime: 'edge' };
 
 import { quienPregunta, alcanceDeCliente, clienteAjeno, normalizarPerfil, exigeModulo } from './_perfiles.js';
 import { iconoValido, ICONO_POR_DEFECTO } from './_iconos-reserva.js';
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -50,28 +51,6 @@ function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status, headers: { ...CORS, 'Content-Type': 'application/json' },
   });
-}
-
-async function getUserId(req) {
-  const auth = req.headers.get('Authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '');
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const cryptoKey = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const data = new TextEncoder().encode(`${hB64}.${pB64}`);
-    if (!await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data)) return null;
-    const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload.sub || null;
-  } catch { return null; }
 }
 
 /** 32 caracteres hex, el mismo formato que los tokens de formularios. */
@@ -275,8 +254,9 @@ async function guardarRecursosDe(serviceId, ids, userId, cliente) {
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
-  const actor = await getUserId(req);
-  if (!actor) return jsonResp({ error: 'No autorizado' }, 401);
+  const sesion = await verificarSesion(req);
+  const actor = sesion.id;
+  if (!actor) return jsonResp(await cuerpoSinSesion(sesion, 'bookings'), 401);
 
   let quien;
   try { quien = await quienPregunta(actor); }

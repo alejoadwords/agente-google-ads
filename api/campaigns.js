@@ -43,6 +43,7 @@ async function clerkMeta(userId) {
 
 import { registrarUso, cuentaDe } from './_uso-ia.js';
 import { enviarResend } from './_correo.js';
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -103,32 +104,6 @@ function sbHeaders(prefer) {
 
 let _lastPlan = 'free';
 let _emailsExtra = 0; // paquetes de 2.000 emails/mes comprados (Hotmart → Clerk emails_extra)
-async function getUserId(req) {
-  const auth = req.headers.get('Authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '');
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const cryptoKey = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const data = new TextEncoder().encode(`${hB64}.${pB64}`);
-    const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data);
-    if (!valid) return null;
-    const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    const meta = payload.public_metadata || payload.publicMetadata || {};
-    _lastPlan = meta.plan || 'free';
-    _emailsExtra = parseInt(meta.emails_extra || 0) || 0;
-    return payload.sub || null;
-  } catch { return null; }
-}
-
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 async function isAdmin(userId) {
   if (!userId || !process.env.CLERK_SECRET_KEY) return false;
@@ -463,9 +438,9 @@ export async function correoQuemado(email) {
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  let userId = await getUserId(req);
-
-  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+  const sesion = await verificarSesion(req);
+  let userId = sesion.id;
+  if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'campaigns'), 401);
 
   // Miembros del equipo: se opera sobre la cuenta del DUEÑO. Sin esto, un
   // miembro veía esta sección VACÍA —su propia cuenta, que no tiene nada— y el

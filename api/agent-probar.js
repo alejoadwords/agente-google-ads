@@ -16,6 +16,7 @@
 export const config = { runtime: 'edge' };
 
 import { ensayarAgente } from './_inbox-engine.js';
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -41,28 +42,6 @@ function jsonResp(data, status = 200) {
   });
 }
 
-async function getUserId(req) {
-  const auth = req.headers.get('Authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '');
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const cryptoKey = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const data = new TextEncoder().encode(`${hB64}.${pB64}`);
-    if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data))) return null;
-    const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload.sub || null;
-  } catch { return null; }
-}
-
 // Cuántos ensayos lleva hoy esta cuenta. Se cuenta sobre ai_usage, que es donde
 // consta el gasto: no hay un contador aparte que pueda desincronizarse.
 async function ensayosDeHoy(userId) {
@@ -86,8 +65,9 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') return jsonResp({ error: 'Método no permitido' }, 405);
 
-  let userId = await getUserId(req);
-  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+  const sesion = await verificarSesion(req);
+  let userId = sesion.id;
+  if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'agent-probar'), 401);
 
   // Un miembro prueba el agente de la cuenta del dueño, que es donde vive. Si
   // la comprobación falla no se sigue: con la identidad equivocada buscaríamos

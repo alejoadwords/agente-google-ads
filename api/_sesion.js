@@ -25,20 +25,57 @@ const JWKS = 'https://clerk.acuarius.app/.well-known/jwks.json';
 
 const b64 = (s) => atob(String(s).replace(/-/g, '+').replace(/_/g, '/'));
 
+// Las llaves de Clerk, guardadas un rato.
+//
+// Antes cada endpoint se las pedía a Clerk en CADA petición, y al abrir una
+// pantalla salen diez a la vez: diez viajes de ida y vuelta para nada, y diez
+// oportunidades de que uno falle. Y cuando falla, el token es bueno y aun así
+// se rechaza — uno de los cinco motivos que esto viene a distinguir.
+//
+// El peligro de cachear llaves es quedarse con las viejas cuando Clerk las
+// rota: entonces se rechazarían tokens buenos hasta que caduque la caché. Por
+// eso el corte no es solo el reloj — si el `kid` del token no está entre las
+// guardadas, se vuelve a preguntar antes de rechazar a nadie.
+let _llaves = null, _llavesHasta = 0;
+async function llavesDeClerk(kid) {
+  const frescas = _llaves && Date.now() < _llavesHasta;
+  const tiene = frescas && (_llaves.keys || []).some(k => k.kid === kid);
+  if (frescas && tiene) return _llaves;
+  // Solo se llega aquí si no hay llaves guardadas, si caducaron, o si el `kid`
+  // del token no está entre ellas. En ese último caso NO se vuelve a lo
+  // guardado aunque esté fresco: diría «ninguna llave tiene ese kid», que
+  // suena a token falso, cuando la verdad es que no pudimos preguntar. El
+  // motivo exacto es justo lo que esto viene a dar.
+  const r = await fetch(JWKS);
+  if (!r.ok) {
+    const e = new Error('Clerk devolvió ' + r.status + ' al pedirle las llaves');
+    e.codigo = r.status;
+    throw e;
+  }
+  _llaves = await r.json();
+  _llavesHasta = Date.now() + 600000;   // diez minutos
+  return _llaves;
+}
+
 /**
  * @returns {{id: string|null, motivo: string|null, vencida: boolean}}
  *   `id` es el `sub` de Clerk cuando el token es bueno. Si no, `motivo` dice
  *   qué pasó —para el registro del servidor, nunca para el navegador— y
  *   `vencida` distingue el caso que el usuario arregla volviendo a entrar.
  */
-export async function verificarSesion(req) {
+export async function verificarSesion(req, opciones) {
   const mal = (motivo, vencida) => ({ id: null, motivo, vencida: !!vencida });
 
   const auth = req.headers.get('Authorization');
+  // `tokenAlterno` es para `api/errores.js`: `sendBeacon` no permite poner
+  // cabeceras, así que al cerrar la pestaña el token viaja en el cuerpo. Sin
+  // esa puerta se perderían los errores del último momento, que son justo los
+  // que preceden a que alguien cierre la aplicación enfadado.
+  const alterno = opciones && opciones.tokenAlterno;
   // Sin cabecera NO es un fallo que investigar: es una petición sin sesión, y
   // de esas llegan solas. Se distingue para no llenar el registro de ruido.
-  if (!auth) return mal('sin cabecera Authorization');
-  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  if (!auth && !alterno) return mal('sin cabecera Authorization');
+  const token = (auth ? auth.replace(/^Bearer\s+/i, '').trim() : '') || String(alterno || '').trim();
   if (!token) return mal('la cabecera Authorization venía vacía');
 
   const partes = token.split('.');
@@ -61,13 +98,13 @@ export async function verificarSesion(req) {
 
   let jwks;
   try {
-    const r = await fetch(JWKS);
-    if (!r.ok) return mal('Clerk devolvió ' + r.status + ' al pedirle las llaves');
-    jwks = await r.json();
+    jwks = await llavesDeClerk(header.kid);
   } catch (e) {
     // Este es el que más rabia da: el token es bueno y aun así se rechaza,
     // porque no pudimos preguntar. Sin este mensaje parece un permiso.
-    return mal('no se pudieron traer las llaves de Clerk: ' + (e && e.message));
+    return mal(e && e.codigo
+      ? e.message
+      : 'no se pudieron traer las llaves de Clerk: ' + (e && e.message));
   }
 
   const key = (jwks.keys || []).find(k => k.kid === header.kid);
@@ -93,14 +130,22 @@ export async function verificarSesion(req) {
 }
 
 /**
- * La respuesta al navegador cuando no hay sesión, y la anotación al registro.
+ * El CUERPO de la respuesta cuando no hay sesión, y la anotación al registro.
+ *
+ * Devuelve el cuerpo en vez de la respuesta entera a propósito: cada endpoint
+ * tiene su propio `jsonResp`, y varios de ellos añaden ahí sus cabeceras CORS
+ * —los formularios públicos, el webhook de leads—. Si esto construyera la
+ * `Response`, esos endpoints perderían sus cabeceras justo en el 401 y el
+ * navegador vería un error de CORS en lugar del motivo. Se cambia el cuerpo y
+ * no el sobre.
  *
  * Al usuario NO se le cuenta la criptografía: se le dice lo único que puede
  * hacer. El motivo real se guarda del lado del servidor, que es donde hace
  * falta tres horas después.
  */
-export async function respuestaSinSesion({ motivo, vencida }, donde, cabeceras) {
-  // La petición sin cabecera no se anota: es ruido, no un fallo.
+export async function cuerpoSinSesion({ motivo, vencida }, donde) {
+  // La petición sin cabecera no se anota: es ruido, no un fallo. Llegan solas
+  // —un robot, una pestaña vieja— y anotarlas todas taparía las que importan.
   if (motivo && motivo !== 'sin cabecera Authorization') {
     try {
       const { registrarError } = await import('./_registro-errores.js');
@@ -110,10 +155,14 @@ export async function respuestaSinSesion({ motivo, vencida }, donde, cabeceras) 
       });
     } catch { /* que no se pueda anotar no puede tumbar la respuesta */ }
   }
-  const cuerpo = vencida
+  return vencida
     ? { error: 'Tu sesión venció. Vuelve a entrar para seguir.', sesion_vencida: true }
     : { error: 'No autorizado' };
-  return new Response(JSON.stringify(cuerpo), {
+}
+
+/** Para el endpoint que no tiene un `jsonResp` propio. */
+export async function respuestaSinSesion(sesion, donde, cabeceras) {
+  return new Response(JSON.stringify(await cuerpoSinSesion(sesion, donde)), {
     status: 401,
     headers: { 'Content-Type': 'application/json', ...(cabeceras || {}) },
   });

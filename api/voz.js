@@ -21,6 +21,7 @@ export const config = { runtime: 'edge' };
 import { quienPregunta, soloSusLeads } from './_perfiles.js';
 import { registrarUso, cuentaDe, costoDe } from './_uso-ia.js';
 import { HERRAMIENTAS, ejecutar, hoyLocal } from './_voz-herramientas.js';
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -42,28 +43,6 @@ async function sb(ruta) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1${ruta}`, { headers: sbHeaders() });
   if (!r.ok) throw new Error('supabase ' + r.status);
   return r.json();
-}
-
-// Verificación del JWT de Clerk (mismo patrón que api/leads.js)
-async function getUserId(req) {
-  const auth = req.headers.get('Authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '');
-  try {
-    const [hB64, pB64, sB64] = token.split('.');
-    if (!sB64) return null;
-    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, sig, new TextEncoder().encode(`${hB64}.${pB64}`));
-    if (!ok) return null;
-    const p = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (p.exp && p.exp < Math.floor(Date.now() / 1000)) return null;
-    return p.sub || null;
-  } catch { return null; }
 }
 
 // Quién la tiene encendida. En una variable de entorno para sumar gente sin
@@ -175,8 +154,9 @@ function apuntarPregunta(fila) {
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
-  const userId = await getUserId(req);
-  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+  const sesion = await verificarSesion(req);
+  const userId = sesion.id;
+  if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'voz'), 401);
   if (req.method === 'GET') return jsonResp({ habilitado: enLaBeta(userId) });
   if (req.method !== 'POST') return jsonResp({ error: 'Método no permitido' }, 405);
   if (!enLaBeta(userId)) return jsonResp({ error: 'No disponible', habilitado: false }, 403);

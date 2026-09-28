@@ -15,6 +15,7 @@
 export const config = { runtime: 'edge' };
 
 import { quienPregunta, puedeVer, exigeModulo, alcanceDeCliente } from './_perfiles.js';
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -29,27 +30,6 @@ function sbHeaders() {
 }
 function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
-}
-
-async function getUserId(req) {
-  const auth = req.headers.get('Authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '');
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then((r) => r.json());
-    const key = jwks.keys?.find((k) => k.kid === header.kid);
-    if (!key) return null;
-    const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
-    if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, sig, new TextEncoder().encode(`${hB64}.${pB64}`)))) return null;
-    const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload.sub || null;
-  } catch { return null; }
 }
 
 // El slug va en la URL pública, así que se limpia a conciencia: minúsculas,
@@ -68,8 +48,9 @@ export default async function handler(req, contexto) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const url = new URL(req.url);
 
-  let userId = await getUserId(req);
-  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+  const sesion = await verificarSesion(req);
+  let userId = sesion.id;
+  if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'landings'), 401);
 
   // Miembros del equipo: se opera sobre la cuenta del DUEÑO. Sin esto, un
   // miembro veía esta sección VACÍA —su propia cuenta, que no tiene nada— y el

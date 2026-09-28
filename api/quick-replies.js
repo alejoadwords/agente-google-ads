@@ -4,6 +4,8 @@
 // le sirve a una clínica.
 export const config = { runtime: 'edge' };
 
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -22,28 +24,6 @@ function sb() {
   };
 }
 
-async function getUserId(req) {
-  const auth = req.headers.get('Authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '');
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const data = new TextEncoder().encode(`${hB64}.${pB64}`);
-    if (!await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, sig, data)) return null;
-    const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload.sub || null;
-  } catch { return null; }
-}
-
 function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
@@ -58,8 +38,9 @@ export default async function handler(req) {
 }
 
 async function manejar(req) {
-  let userId = await getUserId(req);
-  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+  const sesion = await verificarSesion(req);
+  let userId = sesion.id;
+  if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'quick-replies'), 401);
   // A que cliente esta acotado este miembro. Se lee en la MISMA consulta que
   // ya resolvia al dueno: sin esto habria que preguntarlo otra vez.
   let clienteDelMiembro = null;

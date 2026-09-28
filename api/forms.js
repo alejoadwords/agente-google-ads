@@ -5,6 +5,7 @@
 export const config = { runtime: 'edge' };
 
 import { quienPregunta, puedeVer, exigeModulo, alcanceDeCliente } from './_perfiles.js';
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -21,29 +22,6 @@ function sbHeaders() {
     'Authorization': `Bearer ${SUPABASE_KEY}`,
     'Prefer': 'return=representation',
   };
-}
-
-async function getUserId(req) {
-  const auth = req.headers.get('Authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '');
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const cryptoKey = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const data = new TextEncoder().encode(`${hB64}.${pB64}`);
-    const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data);
-    if (!valid) return null;
-    const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload.sub || null;
-  } catch { return null; }
 }
 
 function jsonResp(data, status = 200) {
@@ -142,8 +120,9 @@ function sanitizeReglas(raw) {
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
-  let userId = await getUserId(req);
-  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+  const sesion = await verificarSesion(req);
+  let userId = sesion.id;
+  if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'forms'), 401);
 
   // Equipo: se opera sobre la cuenta del dueño, y Marketing se escribe solo
   // desde los perfiles que lo tienen. Leer sí: el reporte de Marketing vive

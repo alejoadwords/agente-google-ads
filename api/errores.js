@@ -12,6 +12,7 @@ export const config = { runtime: 'edge' };
 // tabla. Y limita lo que acepta por petición, por lo mismo.
 
 import { registrarError } from './_registro-errores.js';
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -24,33 +25,6 @@ const CORS = {
 // pero llenaría el aviso de basura y en dos días dejaríamos de leerlo — que es
 // exactamente el fallo que este sistema viene a evitar.
 let _jwks = null, _jwksExp = 0;
-async function quien(req, cuerpo) {
-  try {
-    // sendBeacon no permite cabeceras, así que al cerrar la pestaña el token
-    // viaja en el cuerpo. Sin esto, los errores del último momento —justo los
-    // que preceden a que alguien cierre la app enfadado— se perdían.
-    const t = (req.headers.get('Authorization') || '').replace('Bearer ', '') || String(cuerpo?.t || '');
-    const partes = t.split('.');
-    if (partes.length !== 3) return null;
-    const [hB64, pB64, sB64] = partes;
-    const bin = x => Uint8Array.from(atob(x.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const txt = x => new TextDecoder().decode(bin(x));
-    const cabecera = JSON.parse(txt(hB64));
-    if (!_jwks || _jwksExp < Date.now()) {
-      _jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-      _jwksExp = Date.now() + 600000;
-    }
-    const clave = _jwks.keys?.find(k => k.kid === cabecera.kid);
-    if (!clave) return null;
-    const ck = await crypto.subtle.importKey('jwk', clave, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, bin(sB64), new TextEncoder().encode(`${hB64}.${pB64}`));
-    if (!ok) return null;
-    const j = JSON.parse(txt(pB64));
-    if (j.exp && j.exp < Math.floor(Date.now() / 1000)) return null;
-    return j.sub || null;
-  } catch { return null; }
-}
-
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: CORS });
@@ -58,8 +32,15 @@ export default async function handler(req) {
   let body;
   try { body = await req.json(); } catch { return new Response('{}', { status: 400, headers: CORS }); }
 
-  const usuario = await quien(req, body);
-  if (!usuario) return new Response(JSON.stringify({ error: 'No autorizado.' }), { status: 401, headers: CORS });
+  // El token puede llegar en el CUERPO: `sendBeacon` no permite cabeceras, y
+  // sin esa puerta se perderían los errores del último momento —justo los que
+  // preceden a que alguien cierre la aplicación enfadado—.
+  const sesion = await verificarSesion(req, { tokenAlterno: body?.t });
+  const usuario = sesion.id;
+  if (!usuario) {
+    return new Response(JSON.stringify(await cuerpoSinSesion(sesion, 'errores')),
+      { status: 401, headers: CORS });
+  }
 
   // Como mucho cinco por petición: el navegador ya los agrupa, y esto evita que
   // un bucle infinito en el cliente nos mande mil.

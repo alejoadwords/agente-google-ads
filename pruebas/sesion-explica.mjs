@@ -16,7 +16,7 @@
 
 import { readFileSync } from 'node:fs';
 import { webcrypto } from 'node:crypto';
-import { verificarSesion, respuestaSinSesion } from '../api/_sesion.js';
+import { verificarSesion, cuerpoSinSesion, respuestaSinSesion } from '../api/_sesion.js';
 
 let mal = 0;
 const ok = (c, m, extra) => {
@@ -117,15 +117,62 @@ console.log('\nY cada rechazo dice cuál de los cinco motivos fue\n');
   ok(r.id === null && /kid/.test(r.motivo), 'un kid que Clerk no conoce lo dice', r.motivo);
 }
 {
+  // Las llaves se guardan diez minutos, así que para probar «Clerk no
+  // responde» hace falta un módulo SIN caché. Se importa una copia limpia con
+  // una consulta en la ruta: es lo mismo que hace el navegador con `?v=`, y
+  // evita tener que abrir un agujero de pruebas en el código que se despliega.
+  const limpio = async () => (await import('../api/_sesion.js?nueva=' + Math.random())).verificarSesion;
+
   // El que más rabia da: el token es bueno y aun así se rechaza, porque no
   // pudimos preguntar. Sin nombre propio parece un permiso denegado.
   clerkResponde = { explota: true };
-  const r = await verificarSesion(pedir('Bearer ' + await token()));
+  const v1 = await limpio();
+  const r = await v1(pedir('Bearer ' + await token()));
   ok(r.id === null && /llaves de Clerk/.test(r.motivo),
-     'si Clerk no responde, se dice que fue Clerk — no que el usuario no tiene permiso', r.motivo);
+     'sin llaves guardadas y con Clerk caído, se dice que fue Clerk', r.motivo);
+
   clerkResponde = { ok: false, status: 503, json: {} };
-  const r2 = await verificarSesion(pedir('Bearer ' + await token()));
+  const v2 = await limpio();
+  const r2 = await v2(pedir('Bearer ' + await token()));
   ok(r2.id === null && /503/.test(r2.motivo), 'y con qué código contestó', r2.motivo);
+
+  // Y lo que arregla la caché: si ya teníamos llaves buenas, un Clerk caído NO
+  // puede echar a nadie. El token sigue siendo válido; el que no contesta es
+  // el de al lado.
+  const v3 = await limpio();
+  clerkResponde = { ok: true, json: LLAVES };
+  ok((await v3(pedir('Bearer ' + await token()))).id === 'user_123', 'primero entra bien');
+  clerkResponde = { explota: true };
+  ok((await v3(pedir('Bearer ' + await token()))).id === 'user_123',
+     'y con Clerk sin responder sigue entrando: las llaves guardadas valen más que un rechazo');
+  // Las dos formas de caerse: no contestar, y contestar mal. La segunda se me
+  // escapó y un mutante sobrevivió por ahí.
+  clerkResponde = { ok: false, status: 503, json: {} };
+  ok((await v3(pedir('Bearer ' + await token()))).id === 'user_123',
+     'y si contesta 503, igual: tampoco echa a nadie con llaves buenas guardadas');
+
+  clerkResponde = { ok: true, json: LLAVES };
+}
+{
+  // La caché no puede dejar fuera a un token firmado con una llave NUEVA: si
+  // Clerk las rota, quedarse con las viejas rechazaría a todo el mundo hasta
+  // que caduque. Ante un `kid` que no está, se vuelve a preguntar.
+  const { verificarSesion: v } = await import('../api/_sesion.js?rotacion=' + Math.random());
+  clerkResponde = { ok: true, json: LLAVES };
+  ok((await v(pedir('Bearer ' + await token()))).id === 'user_123', 'con las llaves de hoy, entra');
+
+  const otroPar = await webcrypto.subtle.generateKey(
+    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true, ['sign', 'verify']);
+  const jwk2 = await webcrypto.subtle.exportKey('jwk', otroPar.publicKey);
+  const KID2 = 'ins_rotada';
+  const h = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: KID2 }));
+  const pl = b64url(JSON.stringify({ sub: 'user_456', exp: Math.floor(Date.now() / 1000) + 3600 }));
+  const sg = await webcrypto.subtle.sign('RSASSA-PKCS1-v1_5', otroPar.privateKey,
+    new TextEncoder().encode(h + '.' + pl));
+  clerkResponde = { ok: true, json: { keys: [...LLAVES.keys, { ...jwk2, kid: KID2, use: 'sig', alg: 'RS256' }] } };
+  ok((await v(pedir('Bearer ' + h + '.' + pl + '.' + b64url(sg)))).id === 'user_456',
+     'y si Clerk rota la llave, se vuelve a preguntar en vez de rechazar');
   clerkResponde = { ok: true, json: LLAVES };
 }
 
@@ -153,7 +200,8 @@ console.log('\nAl usuario, lo que puede hacer; al registro, el motivo real\n');
 // todas llenaría el registro. Un registro que llora sin motivo deja de leerse.
 {
   const fuente = readFileSync(new URL('../api/_sesion.js', import.meta.url), 'utf8');
-  const cuerpo = fuente.slice(fuente.indexOf('export async function respuestaSinSesion'));
+  const cuerpo = fuente.slice(fuente.indexOf('export async function cuerpoSinSesion'),
+                              fuente.indexOf('/** Para el endpoint'));
   ok(/motivo !== 'sin cabecera Authorization'/.test(cuerpo),
      'la petición sin cabecera NO se anota: es ruido, no un fallo');
   ok(/registrarError/.test(cuerpo), 'las demás sí se anotan, con su motivo');
@@ -195,7 +243,9 @@ console.log('\nAl usuario, lo que puede hacer; al registro, el motivo real\n');
 {
   const pauta = readFileSync(new URL('../api/pauta.js', import.meta.url), 'utf8');
   ok(/verificarSesion\(req\)/.test(pauta), 'api/pauta.js verifica con el nuevo camino');
-  ok(/respuestaSinSesion\(sesion, 'pauta'/.test(pauta), 'y contesta por él');
+  ok(/cuerpoSinSesion\(sesion, 'pauta'\)/.test(pauta), 'y contesta con su motivo');
+  ok(/jsonResp\(await cuerpoSinSesion/.test(pauta),
+     'por su PROPIO jsonResp: varios endpoints meten ahí sus cabeceras CORS');
   // Dos verificadores en el mismo fichero acaban separándose.
   ok(!/async function getUserId/.test(pauta),
      'y ya no le queda la copia vieja: dos verificadores en un fichero se separan con el tiempo');

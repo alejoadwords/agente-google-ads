@@ -104,7 +104,15 @@ console.log('\nSi el envío falla, no se pierde ni se acumula sin fin\n');
 
 console.log('\nEl servidor no se cree lo que le manden\n');
 {
-  chk('exige sesión', /if \(!userId\) return json\(\{ error: 'No autorizado' \}, 401\)/.test(api));
+  // La propiedad, no la frase: antes esto fijaba el texto exacto del rechazo y
+  // se puso en rojo al unificar el verificador, con el endpoint intacto. Lo
+  // que hay que proteger es que sin sesión NO se mida —un endpoint de
+  // analítica abierto es una invitación a que le escriban cualquier cosa—.
+  chk('exige sesión', /const sesion = await verificarSesion\(req\)/.test(api)
+      && /if \(!userId\) return json\(await cuerpoSinSesion\(/.test(api));
+  // Y que corte ANTES de leer el cuerpo: validar primero y rechazar después
+  // sería trabajar gratis para quien no tiene sesión.
+  chk('y corta antes de leer nada', api.indexOf('cuerpoSinSesion') < api.indexOf('await req.json()'));
   chk('solo acepta pantallas declaradas', /PANTALLAS\.has\(v\?\.p\) \? v\.p : '\(otra\)'/.test(api));
   chk('recorta un tiempo absurdo en vez de tirar la visita', /Math\.min\(Number\(v\?\.ms\) \|\| 0, 7200000\)/.test(api));
   chk('junta las repeticiones antes de tocar la base', /porClave/.test(api));

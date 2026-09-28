@@ -14,6 +14,7 @@ export const config = { runtime: 'edge' };
 import { asegurarUsuario } from './_usuario-espejo.js';
 import { quienPregunta, gestionaEquipo, normalizarPerfil, puedeTocarA, paraElCliente, PERFILES } from './_perfiles.js';
 import { enviarResend } from './_correo.js';
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -235,32 +236,6 @@ async function traspasar(cuenta, suyo, destino) {
 
 let _lastPlan = 'free';
 let _seatsExtra = 0;
-async function getUserId(req) {
-  const auth = req.headers.get('Authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '');
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const cryptoKey = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const data = new TextEncoder().encode(`${hB64}.${pB64}`);
-    const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data);
-    if (!valid) return null;
-    const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    const meta = payload.public_metadata || payload.publicMetadata || {};
-    _lastPlan = meta.plan || 'free';
-    _seatsExtra = parseInt(meta.seats_extra || 0) || 0;
-    return payload.sub || null;
-  } catch { return null; }
-}
-
 
 // ── Plan del usuario ──────────────────────────────────────────────────────────
 // Clerk dejó de incluir public_metadata en el token de sesión (formato v2), así
@@ -417,13 +392,14 @@ function jsonResp(data, status = 200) {
 
 export default async function handler(req, contexto) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  const userId = await getUserId(req);
+  const sesion = await verificarSesion(req);
+  const userId = sesion.id;
   if (userId && _lastPlan === 'free') {
     const meta = await clerkMeta(userId);
     if (meta.plan) _lastPlan = meta.plan;
     if (meta.seats_extra) _seatsExtra = parseInt(meta.seats_extra) || 0;
   }
-  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+  if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'team'), 401);
   const url = new URL(req.url);
 
   // GET ?me=1 — ¿soy miembro del workspace de alguien? (para el init de la app)

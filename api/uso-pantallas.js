@@ -17,6 +17,8 @@
 
 export const config = { runtime: 'edge' };
 
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -41,10 +43,11 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
 
-  const userId = await quienEs(req);
+  const sesion = await verificarSesion(req);
+  const userId = sesion.id;
   // Sin sesión no se mide. Un endpoint de analítica abierto es una invitación
   // a que le escriban cualquier cosa.
-  if (!userId) return json({ error: 'No autorizado' }, 401);
+  if (!userId) return json(await cuerpoSinSesion(sesion, 'uso-pantallas'), 401);
 
   let body;
   try { body = await req.json(); } catch { return json({ error: 'Body inválido' }, 400); }
@@ -89,25 +92,4 @@ export default async function handler(req) {
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
-}
-
-// Mismo patrón de verificación que el resto de la API.
-async function quienEs(req) {
-  const auth = req.headers.get('Authorization');
-  if (!auth) return null;
-  try {
-    const [hB64, pB64, sB64] = auth.replace('Bearer ', '').split('.');
-    if (!sB64) return null;
-    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, sig, new TextEncoder().encode(`${hB64}.${pB64}`));
-    if (!ok) return null;
-    const p = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (p.exp && p.exp < Math.floor(Date.now() / 1000)) return null;
-    return p.sub || null;
-  } catch { return null; }
 }

@@ -24,6 +24,7 @@ const CACHE_TTL_MS        = 60 * 60 * 1000; // 60 minutes
 
 import { registrarUso, cuentaDe } from './_uso-ia.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -36,29 +37,6 @@ function json(data, status = 200) {
     status,
     headers: { ...CORS, 'Content-Type': 'application/json' },
   });
-}
-
-// ── Clerk JWT verification ────────────────────────────────────────────────────
-async function verifyClerkToken(token) {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const cryptoKey = await crypto.subtle.importKey(
-      'jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']
-    );
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const data = new TextEncoder().encode(`${hB64}.${pB64}`);
-    const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data);
-    if (!valid) return null;
-    const payload = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload.sub || null;
-  } catch { return null; }
 }
 
 // ── Supabase helpers ──────────────────────────────────────────────────────────
@@ -461,9 +439,9 @@ function periodToDates(period, dateFrom, dateTo) {
 
 // ── POST handler — create/update dashboard ────────────────────────────────────
 async function handlePost(req) {
-  const token = (req.headers.get('Authorization') || '').replace('Bearer ', '');
-  const userId = token ? await verifyClerkToken(token) : null;
-  if (!userId) return json({ error: 'No autorizado' }, 401);
+  const sesion = await verificarSesion(req);
+  const userId = sesion.id;
+  if (!userId) return json(await cuerpoSinSesion(sesion, 'dashboard'), 401);
 
   let body;
   try { body = await req.json(); } catch { return json({ error: 'Body inválido' }, 400); }
@@ -599,9 +577,9 @@ async function handleGet(url) {
 
 // ── List handler — get user's dashboards ──────────────────────────────────────
 async function handleList(req) {
-  const token = (req.headers.get('Authorization') || '').replace('Bearer ', '');
-  const userId = token ? await verifyClerkToken(token) : null;
-  if (!userId) return json({ error: 'No autorizado' }, 401);
+  const sesion = await verificarSesion(req);
+  const userId = sesion.id;
+  if (!userId) return json(await cuerpoSinSesion(sesion, 'dashboard'), 401);
 
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/client_dashboards?user_id=eq.${userId}&is_active=eq.true&select=id,client_name,agency_name,period,platforms,views,created_at,updated_at&order=updated_at.desc&limit=50`,

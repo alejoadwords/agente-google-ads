@@ -5,6 +5,7 @@ export const config = { runtime: 'edge' };
 // invitación o al sincronizar a mano. Quien se daba de alta y guardaba
 // cualquier preferencia recibía un 500 con un 23503 que no decía nada.
 import { asegurarUsuario } from './_usuario-espejo.js';
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
@@ -22,31 +23,6 @@ function sbHeaders() {
     'Prefer': 'return=representation',
   };
 }
-async function getUserId(req) {
-  const auth = req.headers.get('Authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '');
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const header = JSON.parse(atob(hB64.replace(/-/g,'+').replace(/_/g,'/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const cryptoKey = await crypto.subtle.importKey(
-      'jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']
-    );
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0));
-    const data = new TextEncoder().encode(`${hB64}.${pB64}`);
-    const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data);
-    if (!valid) return null;
-    const payload = JSON.parse(atob(pB64.replace(/-/g,'+').replace(/_/g,'/')));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload.sub || null;
-  } catch { return null; }
-}
-
 // ── CONVERSATIONS helpers ────────────────────────────────────────────────────
 
 async function convSave(userId, body) {
@@ -120,9 +96,10 @@ async function convDelete(userId, url) {
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
-  let userId = await getUserId(req);
+  const sesion = await verificarSesion(req);
+  let userId = sesion.id;
   if (!userId) {
-    return new Response(JSON.stringify({ error: 'No autorizado' }), {
+    return new Response(JSON.stringify(await cuerpoSinSesion(sesion, 'profile')), {
       status: 401, headers: { ...CORS, 'Content-Type': 'application/json' }
     });
   }

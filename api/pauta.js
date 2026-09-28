@@ -20,7 +20,7 @@ export const config = { runtime: 'edge' };
 import { quienPregunta, exigeModulo, soloSusLeads, alcanceDeCliente } from './_perfiles.js';
 // El 401 de esta pantalla era mudo: «No autorizado» y nada más, ni para el
 // usuario ni para nosotros. Ver api/_sesion.js.
-import { verificarSesion, respuestaSinSesion } from './_sesion.js';
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { dondePreguntar } from './_google-login.js';
 import { resolverClics, consultaDelDia, filasAClics, pendientes as clicsPendientes } from './_gclid.js';
@@ -731,7 +731,7 @@ export default async function handler(req) {
 
   const sesion = await verificarSesion(req);
   const userId = sesion.id;
-  if (!userId) return await respuestaSinSesion(sesion, 'pauta', CORS);
+  if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'pauta'), 401);
 
   try {
     const quien = await quienPregunta(userId);
