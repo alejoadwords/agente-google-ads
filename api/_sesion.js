@@ -139,7 +139,11 @@ export async function verificarSesion(req, opciones) {
 
   if (!payload) return mal('el contenido del token no se pudo leer');
   if (!payload.sub) return mal('el token no trae `sub`');
-  return { id: payload.sub, motivo: null, vencida: false };
+  // `datos` es el contenido entero del token. Casi nadie lo necesita —el `sub`
+  // basta— pero `geo-rank` y `seo-rank` miran `publicMetadata` para decidir el
+  // plan, y migrarlos sin esto les habría cambiado a quién dejan pasar por la
+  // puerta de atrás. Se les da lo mismo que tenían.
+  return { id: payload.sub, datos: payload, motivo: null, vencida: false };
 }
 
 /**
@@ -156,18 +160,30 @@ export async function verificarSesion(req, opciones) {
  * hacer. El motivo real se guarda del lado del servidor, que es donde hace
  * falta tres horas después.
  */
-export async function cuerpoSinSesion({ motivo, vencida }, donde) {
+/**
+ * Solo anota el motivo, sin construir nada.
+ *
+ * Para los endpoints cuyo envoltorio devuelve `null` y deja que responda otro
+ * —`google-ads`, `meta-ads`, los `refresh-*`, `geo-rank`, `seo-rank`—. Sin
+ * esto seguirían siendo mudos aunque verifiquen por el módulo común, que es
+ * media migración y la peor mitad: parece hecha y no dice nada.
+ */
+export async function anotarSesion({ motivo }, donde) {
   // La petición sin cabecera no se anota: es ruido, no un fallo. Llegan solas
   // —un robot, una pestaña vieja— y anotarlas todas taparía las que importan.
-  if (motivo && motivo !== 'sin cabecera Authorization') {
-    try {
-      const { registrarError } = await import('./_registro-errores.js');
-      await registrarError({
-        origen: 'api', donde: donde + '/sesion',
-        error: new Error('se rechazó una sesión: ' + motivo),
-      });
-    } catch { /* que no se pueda anotar no puede tumbar la respuesta */ }
-  }
+  if (!motivo || motivo === 'sin cabecera Authorization') return;
+  try {
+    const { registrarError } = await import('./_registro-errores.js');
+    await registrarError({
+      origen: 'api', donde: donde + '/sesion',
+      error: new Error('se rechazó una sesión: ' + motivo),
+    });
+  } catch { /* que no se pueda anotar no puede tumbar la respuesta */ }
+}
+
+export async function cuerpoSinSesion(sesion, donde) {
+  await anotarSesion(sesion, donde);
+  const { vencida } = sesion;
   return vencida
     ? { error: 'Tu sesión venció. Vuelve a entrar para seguir.', sesion_vencida: true }
     : { error: 'No autorizado' };

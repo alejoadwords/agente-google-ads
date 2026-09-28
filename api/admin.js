@@ -9,6 +9,9 @@
 
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { enviarResend } from './_correo.js';
+// La sesión se verifica con el módulo común, que lee las cabeceras de las
+// dos formas: `Headers` en edge y objeto plano en Node.
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -953,35 +956,6 @@ async function handleSavePlatformAccount(req, res) {
   return res.json({ ok: true });
 }
 
-// ── SESIÓN DE USUARIO ─────────────────────────────────────
-// Varias acciones de este fichero son «rutas públicas de usuario»: no piden
-// el secreto de admin porque las llama la propia aplicación. El problema era
-// que además se CREÍAN el `userId` de la URL. Con eso, cualquiera desde fuera
-// —sin sesión, sin secreto— pedía `get-connection` con el id de otra persona
-// y recibía su token de Google o de Meta en claro y funcionando.
-//
-// La regla: la identidad sale del JWT de Clerk, nunca de la petición. El
-// `userId` de la URL se ignora.
-async function usuarioDeLaSesion(req) {
-  const auth = req.headers.authorization || req.headers.Authorization || '';
-  if (!auth.startsWith('Bearer ')) return null;
-  try {
-    const [hB64, pB64, sB64] = auth.slice(7).split('.');
-    if (!sB64) return null;
-    const cabecera = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const llave = jwks.keys?.find(k => k.kid === cabecera.kid);
-    if (!llave) return null;
-    const ck = await crypto.subtle.importKey('jwk', llave, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const firma = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, firma, new TextEncoder().encode(`${hB64}.${pB64}`));
-    if (!ok) return null;
-    const cuerpo = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (cuerpo.exp && cuerpo.exp < Math.floor(Date.now() / 1000)) return null;
-    return cuerpo.sub || null;
-  } catch { return null; }
-}
-
 // Las acciones que la aplicación llama en nombre de quien tiene la sesión.
 // Si añades una aquí abajo, añádela también a esta lista.
 const RUTAS_DE_USUARIO = new Set([
@@ -1013,10 +987,15 @@ export default async function handler(req, res) {
   // de alertas, que sí pueden actuar en nombre de otra persona.
   if (RUTAS_DE_USUARIO.has(action)) {
     const conSecreto = authCheck(req);
+    const sesion = conSecreto ? null : await verificarSesion(req);
     const quien = conSecreto
       ? (req.query?.userId || req.body?.userId || null)
-      : await usuarioDeLaSesion(req);
-    if (!quien) return res.status(401).json({ error: 'No autorizado' });
+      : sesion.id;
+    // Con el secreto del cron el 401 sería «no mandaste userId», que no tiene
+    // nada que ver con una sesión: ese no se anota como rechazo de sesión.
+    if (!quien) {
+      return res.status(401).json(sesion ? await cuerpoSinSesion(sesion, 'admin') : { error: 'No autorizado' });
+    }
     // Se IMPONE sobre lo que viniera: a partir de aquí ningún manejador puede
     // equivocarse leyendo el userId de la petición, porque ya es el bueno.
     if (req.query && typeof req.query === 'object') req.query.userId = quien;

@@ -12,35 +12,14 @@
 // La verificación va copiada y no importada de un módulo compartido: importar
 // ESM desde una función Node rompe SU build en silencio (READY y ruta muerta).
 
+// La sesión se verifica con el módulo común, que lee las cabeceras de las
+// dos formas: `Headers` en edge y objeto plano en Node.
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const COSTO_VIDEO = 0.45;
 const CUPO_VIDEOS = { free: 1, trial: 5, individual: 5, pro: 5, agency: 15, agencia: 15 };
-
-async function usuarioDelToken(req) {
-  try {
-    const auth = req.headers.authorization || req.headers.Authorization || '';
-    const token = auth.replace('Bearer ', '').trim();
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const b64 = x => Buffer.from(x.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-    const header = JSON.parse(b64(hB64).toString('utf8'));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const cryptoKey = await crypto.subtle.importKey(
-      'jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']
-    );
-    const valid = await crypto.subtle.verify(
-      'RSASSA-PKCS1-v1_5', cryptoKey, b64(sB64), new TextEncoder().encode(`${hB64}.${pB64}`)
-    );
-    if (!valid) return null;
-    const payload = JSON.parse(b64(pB64).toString('utf8'));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload.sub || null;
-  } catch { return null; }
-}
 
 const sbCab = () => ({ apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` });
 
@@ -159,8 +138,9 @@ export default async function handler(req, res) {
 
       // La puerta va solo en submit: consultar el estado no le cuesta nada a
       // nadie, y cortarlo dejaría videos ya pagados sin poder recogerse.
-      const actorId = await usuarioDelToken(req);
-      if (!actorId) return res.status(401).json({ error: 'No autorizado.' });
+      const sesion = await verificarSesion(req);
+      const actorId = sesion.id;
+      if (!actorId) return res.status(401).json(await cuerpoSinSesion(sesion, 'video-gen'));
       const cuenta = await cuentaDe(actorId);
       const plan = await planDe(cuenta);
       const tope = CUPO_VIDEOS[plan] ?? CUPO_VIDEOS.free;

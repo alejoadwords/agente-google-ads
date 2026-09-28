@@ -72,10 +72,17 @@ function leadCerrado(lead) {
   return ETAPAS_CERRADAS.includes(String(lead.stage || '').toLowerCase());
 }
 
-// El registro de errores, a mano. api/_registro-errores.js no se puede importar
-// desde aquí —esta función es Node y ese módulo rompió el build una vez—, pero
-// el RPC es el mismo, así que estos fallos salen en el aviso diario como
-// cualquier otro. Antes, un resumen que no salía no dejaba ni una huella: el
+// El registro de errores, a mano.
+//
+// La nota que había aquí decía que `api/_registro-errores.js` «no se puede
+// importar desde una función Node porque rompió el build una vez». El
+// 28-09-2026 se comprobó desplegando y NO es cierto: `api/cron-retention.js`
+// lo importa estáticamente desde Node y corre cada día, y las doce funciones
+// Node de la API lo usan por `api/_sesion.js`. Lo que rompiera aquella vez
+// era otra cosa.
+//
+// Se deja a mano igual, porque el RPC es el mismo y cambiarlo sin motivo no
+// arregla nada — pero que la nota no vuelva a frenar a nadie. Antes, un resumen que no salía no dejaba ni una huella: el
 // resumen del cron se lo queda Vercel y nadie lo lee.
 async function anotar(mensaje, detalle, usuario) {
   try {

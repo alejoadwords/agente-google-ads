@@ -7,32 +7,16 @@
 // el token guardado en `localStorage`.
 
 import { cuentaDe, tokenDeCuenta } from './_social-cuentas.js';
-
-async function usuarioDeLaSesion(req) {
-  const auth = req.headers.authorization || req.headers.Authorization || '';
-  if (!auth.startsWith('Bearer ')) return null;
-  try {
-    const [hB64, pB64, sB64] = auth.slice(7).split('.');
-    if (!sB64) return null;
-    const cabecera = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const llave = jwks.keys?.find(k => k.kid === cabecera.kid);
-    if (!llave) return null;
-    const ck = await crypto.subtle.importKey('jwk', llave, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const firma = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, firma, new TextEncoder().encode(`${hB64}.${pB64}`));
-    if (!ok) return null;
-    const cuerpo = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (cuerpo.exp && cuerpo.exp < Math.floor(Date.now() / 1000)) return null;
-    return cuerpo.sub || null;
-  } catch { return null; }
-}
+// La sesión se verifica con el módulo común, que lee las cabeceras de las
+// dos formas: `Headers` en edge y objeto plano en Node.
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const quien = await usuarioDeLaSesion(req);
-  if (!quien) return res.status(401).json({ error: 'No autorizado' });
+  const sesion = await verificarSesion(req);
+  const quien = sesion.id;
+  if (!quien) return res.status(401).json(await cuerpoSinSesion(sesion, 'social-publish'));
 
   const {
     network,

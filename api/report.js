@@ -2,6 +2,10 @@
 // POST /api/report        → guarda reporte, devuelve { id }
 // GET  /api/report?id=xxx → devuelve datos del reporte (público, sin auth)
 
+// La sesión se verifica con el módulo común, que lee las cabeceras de las
+// dos formas: `Headers` en edge y objeto plano en Node.
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+
 // Acceso a Supabase por su API REST, como el resto de api/. Este fichero usaba
 // el SDK @supabase/supabase-js, que NUNCA estuvo instalado: package.json no
 // tiene dependencias. La función reventaba al cargar (FUNCTION_INVOCATION_FAILED)
@@ -31,34 +35,6 @@ async function sbInsert(tabla, fila) {
     method: 'POST', headers: sbCab({ Prefer: 'return=minimal' }), body: JSON.stringify(fila),
   });
   return r.ok ? { error: null } : { error: await r.text() };
-}
-
-// ── Verificación real del token ──────────────────────────────────────────────
-// Antes solo se decodificaba el contenido del JWT y se le creía. Un JWT no
-// verificado no prueba nada: cualquiera se escribe uno que diga plan 'agency'
-// y gasta nuestras consultas. Aquí se comprueba la FIRMA contra las claves
-// públicas de Clerk, que se cachean diez minutos.
-let _jwks = null, _jwksExp = 0;
-async function verificarFirma(token) {
-  try {
-    const parts = String(token || '').split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const b64 = x => Buffer.from(x.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-    const header = JSON.parse(b64(hB64).toString('utf8'));
-    if (!_jwks || _jwksExp < Date.now()) {
-      _jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-      _jwksExp = Date.now() + 600000;
-    }
-    const key = _jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, b64(sB64), new TextEncoder().encode(`${hB64}.${pB64}`));
-    if (!ok) return null;
-    const payload = JSON.parse(b64(pB64).toString('utf8'));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload;
-  } catch { return null; }
 }
 
 export default async function handler(req, res) {
@@ -92,9 +68,9 @@ export default async function handler(req, res) {
     // Sesión de Clerk, con la firma comprobada. Antes se intentaba primero
     // con supabase.auth (que aquí no autentica a nadie: los usuarios viven en
     // Clerk) y, al fallar, se aceptaba el 'sub' de un token sin verificar.
-    const payload = await verificarFirma(token);
-    if (!payload?.sub) return res.status(401).json({ error: 'Invalid token' });
-    const userId = payload.sub;
+    const sesion = await verificarSesion(req);
+    if (!sesion.id) return res.status(401).json(await cuerpoSinSesion(sesion, 'report'));
+    const userId = sesion.id;
 
     const body = req.body;
     const {

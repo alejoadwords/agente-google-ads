@@ -5,6 +5,9 @@
 
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { dondePreguntar } from './_google-login.js';
+// La sesión se verifica con el módulo común, que lee las cabeceras de las
+// dos formas: `Headers` en edge y objeto plano en Node.
+import { verificarSesion, anotarSesion } from './_sesion.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const DEV_TOKEN           = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
@@ -386,40 +389,6 @@ async function apuntaIA({ userId, origen, agente, modelo, uso }) {
 }
 
 
-// ── Quién pregunta ──────────────────────────────────────────────────────────
-//
-// Esto faltaba, y era un agujero de verdad: el `userId` llegaba por la URL y
-// con él se leía de la base el token de OAuth guardado de esa persona. Sabiendo
-// un id de Clerk —que no es secreto; /api/leads devuelve el de los compañeros—
-// cualquiera listaba las cuentas publicitarias de otro, leía su gasto y podía
-// CAMBIARLE el presupuesto de una campaña.
-//
-// Ahora el usuario sale del token firmado y el de la URL se ignora. Mismo
-// patrón que api/seo-rank.js, repetido a mano porque esto es Node y no puede
-// importar api/_*.js.
-let _jwks = null, _jwksExp = 0;
-async function verificarFirma(token) {
-  try {
-    const parts = String(token || '').split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const b64 = x => Buffer.from(x.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-    const header = JSON.parse(b64(hB64).toString('utf8'));
-    if (!_jwks || _jwksExp < Date.now()) {
-      _jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-      _jwksExp = Date.now() + 600000;
-    }
-    const key = _jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, b64(sB64), new TextEncoder().encode(`${hB64}.${pB64}`));
-    if (!ok) return null;
-    const payload = JSON.parse(b64(pB64).toString('utf8'));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload;
-  } catch { return null; }
-}
-
 // La cuenta sobre la que se trabaja: la del dueño si quien pregunta es un
 // miembro del equipo. Sin esto, un asesor dejaría de ver los anuncios de la
 // cuenta en la que trabaja.
@@ -441,8 +410,11 @@ async function cuentaDe(actorId) {
 
 /** Devuelve el id de la cuenta, o null si no hay sesión válida. */
 async function usuarioAutenticado(req) {
-  const payload = await verificarFirma((req.headers.authorization || '').replace('Bearer ', ''));
-  if (!payload?.sub) return null;
+  const sesion = await verificarSesion(req);
+  // Este envoltorio devuelve `null` y responde quien lo llama, así que el
+  // motivo se anota aquí o se pierde.
+  if (!sesion.id) { await anotarSesion(sesion, 'google-ads'); return null; }
+  const payload = sesion.datos;
   return await cuentaDe(payload.sub);
 }
 

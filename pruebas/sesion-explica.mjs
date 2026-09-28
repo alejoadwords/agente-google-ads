@@ -217,10 +217,12 @@ console.log('\nAl usuario, lo que puede hacer; al registro, el motivo real\n');
 // todas llenaría el registro. Un registro que llora sin motivo deja de leerse.
 {
   const fuente = readFileSync(new URL('../api/_sesion.js', import.meta.url), 'utf8');
-  const cuerpo = fuente.slice(fuente.indexOf('export async function cuerpoSinSesion'),
+  // La parte que decide qué se anota vive ahora en `anotarSesion`, que usan
+  // los dos caminos: el que construye el cuerpo y el que solo registra.
+  const cuerpo = fuente.slice(fuente.indexOf('export async function anotarSesion'),
                               fuente.indexOf('/** Para el endpoint'));
-  ok(/motivo !== 'sin cabecera Authorization'/.test(cuerpo),
-     'la petición sin cabecera NO se anota: es ruido, no un fallo');
+  ok(/motivo === 'sin cabecera Authorization'\) return;/.test(cuerpo),
+     'la petición sin cabecera NO se anota: es ruido, no un fallo', cuerpo.slice(0, 200));
   ok(/registrarError/.test(cuerpo), 'las demás sí se anotan, con su motivo');
 }
 {

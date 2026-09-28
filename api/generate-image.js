@@ -15,6 +15,10 @@
 // (el despliegue queda READY y la ruta desaparece), y esta función no puede ser
 // edge porque generar una imagen tarda más que el límite de edge.
 
+// La sesión se verifica con el módulo común, que lee las cabeceras de las
+// dos formas: `Headers` en edge y objeto plano en Node.
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -27,34 +31,6 @@ const COSTO_IMAGEN = 0.06;
 // no el límite comercial: está muy por encima de cualquier uso real para que un
 // bucle o una cuenta compartida no se lleven el margen del mes en silencio.
 const CUPO_IMAGENES = { free: 3, trial: 60, individual: 60, pro: 60, agency: 500, agencia: 500 };
-
-// Verifica la FIRMA del token, no solo su contenido. Decodificar el payload y
-// creerle es lo mismo que no pedir nada: cualquiera se escribe un token que
-// diga plan 'agency'.
-async function usuarioDelToken(req) {
-  try {
-    const auth = req.headers.authorization || req.headers.Authorization || '';
-    const token = auth.replace('Bearer ', '').trim();
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [hB64, pB64, sB64] = parts;
-    const b64 = s => Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-    const header = JSON.parse(b64(hB64).toString('utf8'));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const cryptoKey = await crypto.subtle.importKey(
-      'jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']
-    );
-    const valid = await crypto.subtle.verify(
-      'RSASSA-PKCS1-v1_5', cryptoKey, b64(sB64), new TextEncoder().encode(`${hB64}.${pB64}`)
-    );
-    if (!valid) return null;
-    const payload = JSON.parse(b64(pB64).toString('utf8'));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload.sub || null;
-  } catch { return null; }
-}
 
 const sbCab = () => ({ apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` });
 
@@ -117,8 +93,9 @@ export default async function handler(req, res) {
   // decidía por su cuenta, y dos contadores que pueden discrepar son peor que
   // ninguno. Aquí se pregunta y punto.
   if (req.method === 'GET' && (req.query?.action === 'cupo')) {
-    const quien = await usuarioDelToken(req);
-    if (!quien) return res.status(401).json({ error: 'No autorizado.' });
+    const sesion = await verificarSesion(req);
+    const quien = sesion.id;
+    if (!quien) return res.status(401).json(await cuerpoSinSesion(sesion, 'generate-image'));
     const suCuenta = await cuentaDe(quien);
     const suPlan = await planDe(suCuenta);
     const suTope = CUPO_IMAGENES[suPlan] ?? CUPO_IMAGENES.free;
@@ -156,8 +133,9 @@ export default async function handler(req, res) {
   if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
 
   // ── Puerta ────────────────────────────────────────────────────────────────
-  const actorId = await usuarioDelToken(req);
-  if (!actorId) return res.status(401).json({ error: 'No autorizado.' });
+  const sesion2 = await verificarSesion(req);
+  const actorId = sesion2.id;
+  if (!actorId) return res.status(401).json(await cuerpoSinSesion(sesion2, 'generate-image'));
 
   const cuenta = await cuentaDe(actorId);
   const plan = await planDe(cuenta);

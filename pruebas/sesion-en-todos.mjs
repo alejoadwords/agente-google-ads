@@ -40,11 +40,7 @@ console.log('\nUn solo verificador para toda la aplicación\n');
   // CLAUDE.md para los módulos compartidos—. Se declaran aquí uno por uno: un
   // pendiente con nombre y apellidos no se olvida, y si mañana aparece OTRO
   // que no esté en esta lista, la prueba se pone en rojo.
-  const PENDIENTES_NODE = [
-    'admin.js', 'generate-image.js', 'geo-rank.js', 'google-ads.js', 'meta-ads.js',
-    'refresh-google-token.js', 'refresh-meta-token.js', 'report.js', 'seo-rank.js',
-    'social-publish.js', 'video-gen.js',
-  ];
+  const PENDIENTES_NODE = [];   // vacía desde el 28-09-2026: no queda ninguna
   const copias = ficheros.filter((f) => f !== '_sesion.js' && leer(f).includes('.well-known/jwks.json'));
   const nuevas = copias.filter((f) => !PENDIENTES_NODE.includes(f));
   ok(nuevas.length === 0,
@@ -71,9 +67,9 @@ for (const f of conSesion) {
   const s = leer(f);
   const nombre = f.replace(/\.js$/, '');
 
-  // 1. Rechaza con el motivo, no con la frase suelta.
-  const rechaza = /cuerpoSinSesion\(sesion, '([\w-]+)'\)/.exec(s);
-  if (!rechaza) { ok(false, f + ': rechaza con el motivo'); continue; }
+  // 1. Rechaza con el motivo, o —si su envoltorio no responde— lo anota.
+  const rechaza = /(?:cuerpoSinSesion|anotarSesion)\(sesion2?, '([\w-]+)'\)/.exec(s);
+  if (!rechaza) { ok(false, f + ': rechaza con el motivo o lo anota'); continue; }
 
   // 2. Y con SU nombre: si todos dijeran lo mismo, el registro no serviría
   //    para saber qué pantalla falló, que es justo lo que hacía falta.
@@ -89,16 +85,29 @@ for (const f of conSesion) {
   const mudos = (s.match(/error: 'No autorizado' \}, 401\)/g) || []).length;
   if (mudos) { ok(false, f + ': le queda un 401 mudo a mano (' + mudos + ')'); continue; }
 
-  // 4. El sobre es suyo. Varios endpoints meten sus cabeceras CORS en su
+  // 4. El sobre es suyo. Varios endpoints edge meten sus cabeceras CORS en su
   //    propio ayudante; si el rechazo se saltara ese ayudante, el navegador
   //    vería un error de CORS en vez del motivo — y de un formulario público
   //    o del webhook de leads eso es peor que el 401.
-  const linea = s.slice(Math.max(0, s.indexOf('cuerpoSinSesion(sesion') - 200),
-                        s.indexOf('cuerpoSinSesion(sesion') + 60);
-  const envuelto = /(jsonResp|json|new Response)\s*\(/.test(linea);
-  if (!envuelto) { ok(false, f + ': el rechazo conserva su envoltorio', linea.slice(-120)); continue; }
+  //
+  //    Esto es de los EDGE. Una función Node pone las CORS con
+  //    `res.setHeader()` al entrar y responde con `res.status().json()`:
+  //    exigirle el mismo envoltorio era inventarse un fallo.
+  const esEdge = s.includes("runtime: 'edge'");
+  const iCuerpo = s.indexOf('cuerpoSinSesion(sesion');
+  if (esEdge && iCuerpo > 0) {
+    const linea = s.slice(Math.max(0, iCuerpo - 200), iCuerpo + 60);
+    const envuelto = /(jsonResp|json|new Response)\s*\(/.test(linea);
+    if (!envuelto) { ok(false, f + ': el rechazo conserva su envoltorio', linea.slice(-120)); continue; }
+  }
+  if (!esEdge && iCuerpo > 0) {
+    const linea = s.slice(Math.max(0, iCuerpo - 120), iCuerpo + 60);
+    if (!/res\.status\(401\)\.json\(/.test(linea)) {
+      ok(false, f + ': el rechazo Node sale por res.status(401).json()', linea.slice(-110)); continue;
+    }
+  }
 
-  if (s.includes('CORS')) {
+  if (esEdge && s.includes('CORS')) {
     const usaSuAyudante = /(jsonResp|json)\(await cuerpoSinSesion/.test(s)
       // El `new Response(` puede llevar el cuerpo en la línea siguiente, así
       // que entre uno y otro puede haber salto y sangría. Buscarlos pegados
@@ -107,6 +116,27 @@ for (const f of conSesion) {
     if (!usaSuAyudante) { ok(false, f + ': el 401 sale con sus cabeceras CORS'); continue; }
   }
   ok(true, f);
+}
+
+console.log('\nNi los que no responden se quedan mudos\n');
+{
+  // Seis endpoints tienen un envoltorio que devuelve `null` o cae a plan
+  // 'free' y deja que responda otro. Verificar por el módulo común no basta
+  // ahí: si no anotan, siguen siendo mudos — media migración, y la peor
+  // mitad, porque parece hecha.
+  const mudos = conSesion.filter((f) => {
+    const s = leer(f);
+    return !/cuerpoSinSesion\(sesion2?, '[\w-]+'\)/.test(s)
+        && !/anotarSesion\(sesion, '[\w-]+'\)/.test(s);
+  });
+  ok(mudos.length === 0, 'todos dicen quién falló, respondan o no', mudos.join(', '));
+
+  // Y el que anota tiene que usar SU nombre, igual que el que responde.
+  const malNombrados = conSesion.filter((f) => {
+    const m = /anotarSesion\(sesion, '([\w-]+)'\)/.exec(leer(f));
+    return m && m[1] !== f.replace(/\.js$/, '');
+  });
+  ok(malNombrados.length === 0, 'y con su propio nombre', malNombrados.join(', '));
 }
 
 console.log('\nLa regla de los módulos compartidos\n');
@@ -121,7 +151,11 @@ console.log('\nLa regla de los módulos compartidos\n');
   // desplegando, función por función. Por eso las que son Node van listadas
   // una a una, y cada nombre de esta lista significa «desplegada y
   // comprobada en producción».
-  const NODE_COMPROBADAS = ['video-credits.js'];   // 28-09-2026
+  const NODE_COMPROBADAS = [   // desplegadas y comprobadas el 28-09-2026
+    'admin.js', 'generate-image.js', 'geo-rank.js', 'google-ads.js', 'meta-ads.js',
+    'refresh-google-token.js', 'refresh-meta-token.js', 'report.js', 'seo-rank.js',
+    'social-publish.js', 'video-credits.js', 'video-gen.js',
+  ];
   const noEdge = conSesion.filter((f) => !leer(f).includes("runtime: 'edge'"));
   const sinComprobar = noEdge.filter((f) => !NODE_COMPROBADAS.includes(f));
   ok(sinComprobar.length === 0,
@@ -148,9 +182,12 @@ console.log('\nLa regla de los módulos compartidos\n');
 console.log('\nY que siga cortando donde cortaba\n');
 for (const f of conSesion.slice(0, 6).concat(['leads.js', 'team.js', 'pauta.js'])) {
   const s = leer(f);
-  const i = s.indexOf('const sesion = await verificarSesion(req);');
-  const rechazo = s.indexOf('cuerpoSinSesion(sesion');
-  ok(i > 0 && rechazo > i && rechazo - i < 400,
+  // `admin.js` verifica CONDICIONALMENTE —con el secreto del cron no hay
+  // sesión que mirar— así que la línea no es siempre la misma. Se busca la
+  // llamada, no una forma concreta de escribirla.
+  const i = s.indexOf('verificarSesion(req)');
+  const rechazo = Math.max(s.indexOf('cuerpoSinSesion(sesion'), s.indexOf('anotarSesion(sesion'));
+  ok(i > 0 && rechazo > i && rechazo - i < 500,
      f + ': el rechazo va justo detrás de la verificación',
      'verifica en ' + i + ' y rechaza en ' + rechazo);
 }
