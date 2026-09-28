@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-28-sesion-vencida",
+      "fecha": "2026-09-28",
+      "tipo": "arreglo",
+      "titulo": "Una pantalla ya no se queda en «No autorizado»",
+      "texto": "Si al abrir una sección tu sesión todavía no había terminado de cargar, la pantalla se quedaba con un «No autorizado» que parecía falta de permisos y no se arreglaba ni recargando la sección. Ahora se reintenta sola, y si de verdad tu sesión venció te lo decimos con esas palabras para que solo tengas que volver a entrar."
+    },
+    {
       "id": "2026-09-28-movil-mover-cita",
       "fecha": "2026-09-28",
       "tipo": "nuevo",

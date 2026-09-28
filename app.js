@@ -715,8 +715,12 @@ async function _fetchAuthRaw(url, opts = {}) {
     return { ...opts, headers: { ...headers, ...(opts.headers || {}) } };
   };
   let res;
+  // Se guardan las opciones del primer intento para poder mirar DESPUÉS si
+  // llevaban token. Sin esto no hay forma de distinguir «el servidor rechazó
+  // mi token» de «salí sin ninguno», que son dos problemas distintos.
+  const opciones = await withAuth(false);
   try {
-    res = await fetch(url, await withAuth(false));
+    res = await fetch(url, opciones);
   } catch (e) {
     // La red se cayó o el servidor no respondió. Antes esto solo reventaba
     // dentro de quien llamara, y muchas veces en un catch que no decía nada.
@@ -737,11 +741,25 @@ async function _fetchAuthRaw(url, opts = {}) {
     }
     throw e;
   }
-  // Sin sesión el reintento volvería a esperar el timeout entero para nada
-  const haySesion = clerkInstance && clerkInstance.session;
-  if ((res.status === 401 || res.status === 403) && haySesion) {
-    sessionToken = null;
-    res = await fetch(url, await withAuth(true));
+  // El reintento del 401.
+  //
+  // Antes la condición era solo «¿hay sesión AHORA?», y eso dejaba fuera el
+  // caso peor: si la petición salió SIN token —porque `clerkReady()` agotó sus
+  // diez segundos antes de que la sesión llegara— entonces tampoco había
+  // sesión al volver, no se reintentaba, y un tropiezo de un instante se
+  // quedaba congelado en la pantalla como un «No autorizado» que parece falta
+  // de permisos. El usuario ve una sección muerta con la sesión abierta.
+  //
+  // Ahora, si salió sin token, se espera a la sesión y se reintenta. Es UNA
+  // vez más, y solo en el camino que ya venía fallando.
+  const salioSinToken = !opciones.headers || !opciones.headers.Authorization;
+  if (res.status === 401 || res.status === 403) {
+    if (salioSinToken) await clerkReady();
+    const haySesion = clerkInstance && clerkInstance.session;
+    if (haySesion) {
+      sessionToken = null;
+      res = await fetch(url, await withAuth(true));
+    }
   }
   // Una cuenta suspendida no puede quedarse mirando una app a medio pintar:
   // se le dice, una sola vez, y se le cierra la sesión. Sin esto la suspensión
@@ -750,6 +768,16 @@ async function _fetchAuthRaw(url, opts = {}) {
     try {
       const d = await res.clone().json();
       if (d && d.suspendida) { cuentaSuspendida(d.error); return res; }
+    } catch {}
+  }
+  // Una sesión vencida que YA se reintentó no se arregla sola, y la pantalla
+  // se queda con «No autorizado» —que se lee como «no tienes permiso»— sin
+  // decirle a nadie lo único que hay que hacer: volver a entrar. Se avisa una
+  // vez, no en cada petición: al abrir una pantalla salen diez a la vez.
+  if (res.status === 401) {
+    try {
+      const d = await res.clone().json();
+      if (d && d.sesion_vencida) sesionVencida(d.error);
     } catch {}
   }
 
@@ -40616,6 +40644,23 @@ function existePintar(q, lista) {
 // El servidor ya lo corta; esto es para que la persona lo ENTIENDA en vez de
 // ver una pantalla donde todo falla sin decir por qué.
 let _yaAvisadoSuspendida = false;
+// ── La sesión venció ────────────────────────────────────────────────────────
+//
+// Un token vencido devuelve 401, y el 401 se pintaba con la frase del
+// servidor: «No autorizado». Eso se lee como «no tienes permiso para esto»,
+// que es falso y manda a la persona a buscar un problema de permisos que no
+// existe. Lo único que hay que hacer es volver a entrar, así que se dice.
+//
+// Una sola vez: al abrir una pantalla salen diez peticiones a la vez.
+let _yaAvisadoVencida = false;
+function sesionVencida(mensaje) {
+  if (_yaAvisadoVencida) return;
+  _yaAvisadoVencida = true;
+  try {
+    showToast(mensaje || 'Tu sesión venció. Vuelve a entrar para seguir.', 'error');
+  } catch (e) { /* si ni el aviso se puede pintar, al menos no se rompe nada */ }
+}
+
 function cuentaSuspendida(mensaje) {
   if (_yaAvisadoSuspendida) return;
   _yaAvisadoSuspendida = true;

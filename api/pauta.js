@@ -18,6 +18,9 @@
 export const config = { runtime: 'edge' };
 
 import { quienPregunta, exigeModulo, soloSusLeads, alcanceDeCliente } from './_perfiles.js';
+// El 401 de esta pantalla era mudo: «No autorizado» y nada más, ni para el
+// usuario ni para nosotros. Ver api/_sesion.js.
+import { verificarSesion, respuestaSinSesion } from './_sesion.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { dondePreguntar } from './_google-login.js';
 import { resolverClics, consultaDelDia, filasAClics, pendientes as clicsPendientes } from './_gclid.js';
@@ -58,28 +61,6 @@ async function sb(ruta) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1${ruta}`, { headers: sbHeaders() });
   if (!r.ok) throw new Error('supabase ' + r.status + ' en ' + ruta.slice(0, 60));
   return r.json();
-}
-
-// Verificación del JWT de Clerk (mismo patrón que api/leads.js)
-async function getUserId(req) {
-  const auth = req.headers.get('Authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '');
-  try {
-    const [hB64, pB64, sB64] = token.split('.');
-    if (!sB64) return null;
-    const header = JSON.parse(atob(hB64.replace(/-/g, '+').replace(/_/g, '/')));
-    const jwks = await fetch('https://clerk.acuarius.app/.well-known/jwks.json').then(r => r.json());
-    const key = jwks.keys?.find(k => k.kid === header.kid);
-    if (!key) return null;
-    const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    const sig = Uint8Array.from(atob(sB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, sig, new TextEncoder().encode(`${hB64}.${pB64}`));
-    if (!ok) return null;
-    const p = JSON.parse(atob(pB64.replace(/-/g, '+').replace(/_/g, '/')));
-    if (p.exp && p.exp < Math.floor(Date.now() / 1000)) return null;
-    return p.sub || null;
-  } catch { return null; }
 }
 
 // ── claves de campaña ───────────────────────────────────────────────────────
@@ -748,8 +729,9 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'GET' && req.method !== 'POST') return jsonResp({ error: 'Method not allowed' }, 405);
 
-  const userId = await getUserId(req);
-  if (!userId) return jsonResp({ error: 'No autorizado' }, 401);
+  const sesion = await verificarSesion(req);
+  const userId = sesion.id;
+  if (!userId) return await respuestaSinSesion(sesion, 'pauta', CORS);
 
   try {
     const quien = await quienPregunta(userId);
