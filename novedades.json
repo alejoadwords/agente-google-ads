@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-tableros-por-asesor",
+      "fecha": "2026-09-29",
+      "tipo": "nuevo",
+      "titulo": "Define qué procesos de venta atiende cada persona de tu equipo",
+      "texto": "En Ajustes → Usuarios, cada persona muestra ahora en qué procesos de venta trabaja, y puedes cambiarlo. Sirve para algo concreto: cuando el agente de IA califica un lead y decide a qué proceso va, lo reparte por turnos entre quienes atiendan ese proceso, en vez de dejarlo sin dueño. Si no sabes por dónde empezar, el botón «Marcar donde ya trabaja» te propone lo que dicen sus leads de hoy. Y si no marcas nada, todo sigue como estaba: lo reparte la regla de la fuente.",
+      "accion": {
+        "texto": "Ir a Usuarios",
+        "ir": "ajustes-equipo"
+      }
+    },
+    {
       "id": "2026-09-29-probar-enlace",
       "fecha": "2026-09-29",
       "tipo": "nuevo",
@@ -802,7 +813,7 @@
     {
       "id": "2026-09-01-limites-reales",
       "fecha": "2026-09-01",
-      "tipo": "correccion",
+      "tipo": "arreglo",
       "titulo": "Los planes ahora dicen exactamente lo que incluyen",
       "texto": "La descripción de los planes estaba desactualizada: decía «imágenes ilimitadas» donde hay un tope, «10.000 correos al mes» cuando las campañas ya no tienen cupo, y no mencionaba los videos. Ya coincide con lo que la plataforma hace de verdad. También arreglamos los botones de «ver planes», que no llevaban a ninguna parte."
     },
@@ -820,14 +831,14 @@
     {
       "id": "2026-09-01-avisarme-y-analitica",
       "fecha": "2026-09-01",
-      "tipo": "correccion",
+      "tipo": "arreglo",
       "titulo": "El botón «Avisarme cuando esté disponible» ya funciona",
       "texto": "En la ventana de los agentes que aún no están listos, el botón para pedir aviso no llevaba a ninguna parte: el enlace estaba roto y quien lo pulsaba no nos avisaba de nada. Ya abre el correo como debía. De paso corregimos la analítica de la plataforma, que llevaba tiempo sin registrar visitas por una regla de rutas mal puesta."
     },
     {
       "id": "2026-09-01-conexiones-al-abrir",
       "fecha": "2026-09-01",
-      "tipo": "correccion",
+      "tipo": "arreglo",
       "titulo": "Tus conexiones de Meta, Google y LinkedIn se cargan bien al abrir la app",
       "texto": "Si tenías conectada una cuenta publicitaria, al abrir Acuarius la pantalla de Ajustes podía quedarse sin mostrarla hasta que entrabas y volvías a salir. Era un problema de orden de carga: la app intentaba pintar esas conexiones antes de que la pantalla existiera. Ya se espera a que esté lista."
     },
@@ -913,14 +924,14 @@
     {
       "id": "2026-08-31-tareas-de-la-ficha",
       "fecha": "2026-08-31",
-      "tipo": "correccion",
+      "tipo": "arreglo",
       "titulo": "Las tareas creadas desde la ficha del lead ya son tareas de verdad",
       "texto": "Al registrar una Tarea desde la ficha de un lead, quedaba solo como línea del historial: no aparecía en Tareas, ni en la tarjeta del tablero, ni en el resumen diario, y no se podía marcar como hecha. Ahora se crea como tarea real, sale en todos esos sitios y se completa como cualquier otra. Además la fecha límite pasa a ser obligatoria, porque sin fecha una tarea no puede aparecer en ninguna lista."
     },
     {
       "id": "2026-08-31-responder-correos",
       "fecha": "2026-08-31",
-      "tipo": "correccion",
+      "tipo": "arreglo",
       "titulo": "Ahora puedes responder a los correos que te enviamos",
       "texto": "Los avisos de Acuarius salían desde un dominio que solo puede enviar, no recibir: si respondías a un aviso de lead, a una alerta o a un reporte, tu mensaje rebotaba y no llegaba a nadie. Ya no: todas las notificaciones llevan una dirección de respuesta real y contestarlas funciona. Los correos que la plataforma envía a TUS contactos no cambian: esas respuestas siguen siendo tuyas."
     },

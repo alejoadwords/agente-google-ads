@@ -261,6 +261,21 @@ export function resumenLegible(regla, respuestas) {
     .join('\n');
 }
 
+// Quién atiende un tablero. Vacío significa «nadie lo tiene marcado», no
+// «todos»: aquí se necesita una lista de candidatos para rotar, y rotar entre
+// todo el equipo mandaría arriendos a quien solo lleva ventas.
+export async function asesoresDelTablero(userId, pipelineId) {
+  if (!userId || !pipelineId) return [];
+  try {
+    const filas = await fetch(
+      `${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(userId)}` +
+      `&status=eq.active&pipeline_ids=cs.{${encodeURIComponent(pipelineId)}}&select=member_user_id`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : []));
+    return (filas || []).map(f => f.member_user_id).filter(Boolean);
+  } catch { return []; }
+}
+
 // ── Efectos sobre el lead ───────────────────────────────────────────────────
 // Silencioso a propósito: que falle esto no puede tumbar la respuesta al
 // contacto, que es lo único que la persona del otro lado está esperando.
@@ -326,6 +341,28 @@ export async function aplicarVeredicto({ userId, leadId, regla, veredicto, respu
     if (ruta && ruta.asignar_a) {
       update.assigned_to = ruta.asignar_a;
       update.assigned_name = ruta.asignar_nombre || null;
+    } else if (ruta && ruta.pipeline_id) {
+      // Sin asesor fijo, reparte entre quienes atienden ESE tablero.
+      //
+      // Antes, una ruta sin `asignar_a` dejaba el lead en el tablero correcto y
+      // sin dueño, que es un lead que nadie llama. La salida fácil —elegir un
+      // asesor por ruta— tampoco servía: el tablero de Arriendo de Certain lo
+      // llevan tres personas, y un fijo le habría dado todos los arriendos
+      // nuevos a una sola.
+      //
+      // Si nadie tiene ese tablero marcado, no se fuerza nada: lo recogerá la
+      // regla de la fuente, que es quien decidía hasta ahora.
+      const quienes = await asesoresDelTablero(userId, ruta.pipeline_id);
+      if (quienes.length) {
+        try {
+          const { siguienteComercial } = await import('./_assign.js');
+          const elegido = await siguienteComercial(userId, 'tablero:' + ruta.pipeline_id, quienes, true);
+          if (elegido) {
+            update.assigned_to = elegido.id;
+            update.assigned_name = elegido.nombre || null;
+          }
+        } catch (e) { /* que falle el reparto no puede tumbar la calificación */ }
+      }
     }
 
     await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}`, {

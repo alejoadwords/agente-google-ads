@@ -6210,6 +6210,34 @@ if (window.AGENTES_ACTIVOS) {
   </div>
 </div>
 
+<!-- MODAL: QUÉ TABLEROS ATIENDE ALGUIEN DEL EQUIPO -->
+<div class="crm-modal-overlay" id="tb-modal">
+  <div class="crm-modal-box">
+    <div class="crm-modal-head">
+      <div class="crm-modal-title">Tableros de <span id="tb-quien"></span></div>
+      <button class="crm-modal-close" onclick="teamCerrarTableros()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="crm-modal-body">
+      <div style="font-size:11.5px;color:var(--muted2);line-height:1.55">
+        Cuando el agente de IA califique un lead y decida a qué proceso va, lo repartirá
+        por turnos entre quienes atiendan ese tablero. Si no marcas ninguno, el lead entra
+        igual al tablero y lo reparte la regla de la fuente, como hasta ahora.
+      </div>
+      <div id="tb-lista"></div>
+      <button class="btn-ghost sm" id="tb-sugerir" style="display:none;align-self:flex-start">
+        Marcar donde ya trabaja
+      </button>
+    </div>
+    <div class="crm-modal-foot">
+      <button class="btn-ghost" onclick="teamCerrarTableros()">Cancelar</button>
+      <div style="flex:1"></div>
+      <button class="btn-pri" onclick="teamGuardarTableros(this)">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CONEXIÓN WHATSAPP BUSINESS -->
 <div class="crm-modal-overlay" id="wa-connect-modal">
   <div class="crm-modal-box" style="max-width:520px">
