@@ -3240,6 +3240,26 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
   color:var(--muted2);cursor:pointer;border-bottom:2.5px solid var(--border);text-align:left;transition:.15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ag-pasos button.act{color:var(--blue);border-bottom-color:var(--blue)}
 .ag-pasos button.hecho{color:var(--text);border-bottom-color:var(--blue-md)}
+/* Probador: el chat a la izquierda y la radiografía a la derecha. Lo que en
+   producción va oculto (qué capturó, a qué ruta manda) aquí es la mitad del
+   valor, así que ocupa su propia columna en lugar de esconderse en un menú. */
+.ag-probar{display:grid;grid-template-columns:1fr 220px;gap:14px;align-items:start}
+.ag-prb-chat{display:flex;flex-direction:column;gap:8px;min-height:240px;max-height:46vh;overflow-y:auto;
+  padding:12px;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r)}
+.ag-prb-fila{display:flex;flex-direction:column}
+.ag-prb-envio{display:flex;gap:8px;margin-top:10px}
+.ag-prb-envio input{flex:1}
+.ag-prb-rx{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);padding:11px 12px}
+.ag-prb-rx h5{margin:0 0 3px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.ag-prb-rx-grupo{margin-bottom:11px}
+.ag-prb-rx-grupo:last-child{margin-bottom:0}
+.ag-prb-rx p{margin:0;font-size:11.5px;line-height:1.5;color:var(--text);word-break:break-word}
+.ag-prb-rx .vacio{color:var(--muted2)}
+/* Con .ag-prb-mal a secas, «.ag-prb-rx p» ganaba por especificidad y el aviso
+   salía en negro: la advertencia se perdía justo cuando más hace falta. */
+.ag-prb-rx .ag-prb-mal{color:var(--danger);font-weight:700}
+.ag-prb-rx .ag-prb-bien{color:var(--success);font-weight:700}
+@media(max-width:768px){.ag-probar{grid-template-columns:1fr}}
 .crm-agent-modal-box{max-width:580px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
 .crm-agent-modal-box > .crm-modal-body{max-height:none;flex:1;min-height:0;overflow-y:auto}
 .crm-agent-modal-box > .crm-modal-head,
@@ -6133,6 +6153,30 @@ if (window.AGENTES_ACTIVOS) {
               El agente solo reporta cuál de estas opciones encaja; a qué proceso va cada una lo decides tú aquí.
               Si no lo tiene claro, no la inventa y sigue conversando.</div>
           </div>
+        </div>
+      </div>
+
+      <div class="ag-paso" data-paso="6" style="display:none">
+        <div class="crm-section-divider">Prueba el agente antes de encenderlo</div>
+        <div style="font-size:11.5px;color:var(--muted2);margin-bottom:12px;line-height:1.55">
+          Escríbele como lo haría un cliente. Responde con lo que tiene guardado ahora mismo —su tono,
+          sus preguntas frecuentes, tu catálogo y su calificación— y <strong>no crea ningún lead ni
+          conversación</strong>. Si acabas de cambiar algo, guarda primero.
+        </div>
+        <div class="ag-probar">
+          <div>
+            <div class="ag-prb-chat" id="ag-prb-chat"></div>
+            <div class="ag-prb-envio">
+              <input class="auto-input" id="ag-prb-texto" placeholder="Hola, busco apartamento en arriendo en el norte"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();agPrbEnviar()}">
+              <button class="btn-pri sm" id="ag-prb-btn" onclick="agPrbEnviar()">Enviar</button>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+              <button class="btn-ghost sm" onclick="agPrbReiniciar()">Empezar de nuevo</button>
+              <span style="font-size:11px;color:var(--muted2)" id="ag-prb-restantes"></span>
+            </div>
+          </div>
+          <div class="ag-prb-rx" id="ag-prb-rx"></div>
         </div>
       </div>
     </div>

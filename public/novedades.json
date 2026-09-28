@@ -2,6 +2,12 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-28-probar-agente",
+      "fecha": "2026-09-28",
+      "tipo": "nuevo",
+      "titulo": "Ya puedes probar tu agente de IA antes de encenderlo",
+      "texto": "En el editor del agente hay un paso nuevo, «Probar»: escríbele como lo haría un cliente y responde con lo que tiene guardado —su tono, sus preguntas frecuentes, tu catálogo y su calificación— sin crear ningún lead ni ninguna conversación. Al lado verás lo que normalmente queda oculto: qué datos capturó, a qué proceso de venta te manda, si te califica y qué opciones de tu catálogo llegó a ver. Así ajustas su entrenamiento antes de que hable con alguien de verdad, y no después." },
+    {
       "id": "2026-09-28-movil-mover-cita",
       "fecha": "2026-09-28",
       "tipo": "nuevo",
