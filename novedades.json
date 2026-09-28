@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-28-reservas-bloqueos",
+      "fecha": "2026-09-28",
+      "tipo": "nuevo",
+      "titulo": "Bloquear un rato suelto en las reservas",
+      "texto": "Hasta ahora solo podías cerrar un día entero. Ahora, en Reservas → Horario, puedes bloquear un rato —«el martes de 2 a 4»— y elegir si es para todo el negocio o para una sola persona, dejando al resto atendiendo. Esas horas dejan de ofrecerse en tu página de reservas al instante."
+    },
+    {
       "id": "2026-09-28-token-vencido",
       "fecha": "2026-09-28",
       "tipo": "arreglo",

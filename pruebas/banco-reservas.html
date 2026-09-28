@@ -94,6 +94,14 @@ function escenario(cual) {
       { id: 'r2', nombre: 'Valeria', member_user_id: null, activo: true, horario: { 2: [['10:00', '16:00']] } },
       { id: 'r3', nombre: 'Jhon', member_user_id: null, activo: false, horario: null },
     ],
+    // Dos bloqueos: uno de todo el negocio y otro de una sola persona, que son
+    // los dos casos que la pantalla tiene que distinguir de un vistazo.
+    bloqueos: cual === 'lleno' ? [
+      { id: 'b1', inicio: '2026-10-07T19:00:00.000Z', fin: '2026-10-07T21:00:00.000Z',
+        resource_id: null, motivo: 'Inventario' },
+      { id: 'b2', inicio: '2026-10-09T14:00:00.000Z', fin: '2026-10-09T23:00:00.000Z',
+        resource_id: 'r2', motivo: null },
+    ] : [],
   };
   if (typeof rsvDatos !== 'undefined') { rsvDatos = null; rsvHorarioBorrador = null; rsvCargar(true); }
 }
@@ -168,6 +176,13 @@ async function fetchAuth(url, opts) {
     var r0 = BD.recursos.find(function (x) { return x.id === cuerpo.id; });
     Object.assign(r0, cuerpo); delete r0.que; return respuesta(true, { recurso: r0 });
   }
+  if (que === 'bloqueo') {
+    if (m === 'DELETE') { BD.bloqueos = BD.bloqueos.filter(function (b) { return b.id !== q.get('id'); }); return respuesta(true, { ok: true }); }
+    var nb = Object.assign({ id: 'b' + Date.now() }, cuerpo); delete nb.que;
+    BD.bloqueos.push(nb);
+    BD.bloqueos.sort(function (x, y) { return String(x.inicio).localeCompare(String(y.inicio)); });
+    return respuesta(true, { bloqueo: nb });
+  }
   return respuesta(false, { error: 'no contemplado en el banco: ' + m + ' ' + que });
 }
 `;
@@ -192,7 +207,14 @@ async function fetchAuth(url, opts) {
     trozo('const ICN_PATHS = {', '\n}\n') + '\n}\n',
     trozo('function emptyAgua(', '// ── AUTOMATIZACIONES DEL CRM'),
     STUBS,
-    trozo('// ══ RESERVAS ═'),
+    // Hasta donde ACABA reservas, no hasta el final del fichero.
+    //
+    // Sin el segundo marcador la rebanada se llevaba todo lo que alguien
+    // añadiera después —hoy la ficha del lead a página completa— y el banco
+    // reventaba con «crmRenderNps is not defined», que no tiene nada que ver
+    // con reservas. Un banco roto es un banco que nadie abre, y mirar la
+    // pantalla es de lo poco que caza fallos de verdad.
+    trozo('// ══ RESERVAS ═', '// ══ FICHA DEL LEAD A PÁGINA COMPLETA'),
   ].join('\n');
 
   // Se mete como <script> de verdad y no con eval: así los `let` de arriba del

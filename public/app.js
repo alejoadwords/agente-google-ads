@@ -38596,6 +38596,7 @@ function rsvPintarHorario(puede) {
 
   const excepciones = (cfg.excepciones && typeof cfg.excepciones === 'object') ? cfg.excepciones : {};
   const clavesExc = Object.keys(excepciones).sort();
+  const bloqueos = Array.isArray(rsvDatos.bloqueos) ? rsvDatos.bloqueos : [];
 
   return '<div class="rsv-cols">' +
 
@@ -38625,6 +38626,38 @@ function rsvPintarHorario(puede) {
       (puede ? '<div class="rsv-exc-add">' +
         '<input type="date" class="auto-input" id="rsv-exc-dia">' +
         '<button class="btn-ghost sm" onclick="rsvAgregarExcepcion()">Cerrar ese día</button>' +
+      '</div>' : '') +
+    '</section>' +
+
+    // ── Bloqueos ───────────────────────────────────────────────────────────
+    // «Días especiales» cierra el día entero y vale para todo el negocio. Esto
+    // es lo otro: un rato suelto —«el martes de 2 a 4»— y, si hace falta, de
+    // una sola persona. Son las dos cosas que se piden de verdad: el festivo
+    // se pone una vez al año, el «esa tarde no puedo» es de cada semana.
+    '<section class="rsv-bloque">' +
+      '<h3 class="rsv-h3">Ratos bloqueados</h3>' +
+      '<p class="rsv-p">Un hueco en el que no se atiende, aunque el horario diga que sí. ' +
+        'Puedes bloquear a todo el negocio o a una sola persona.</p>' +
+      (bloqueos.length
+        ? '<div class="rsv-exc">' + bloqueos.map(b =>
+            '<div class="rsv-exc-fila">' +
+              '<b>' + esc(rsvRangoLegible(b.inicio, b.fin)) + '</b>' +
+              '<span>' + esc(rsvQuienBloqueado(b.resource_id)) +
+                (b.motivo ? ' · ' + esc(b.motivo) : '') + '</span>' +
+              (puede ? '<button class="rsv-x" onclick="rsvBorrarBloqueo(\'' + esc(b.id) + '\')">&#10005;</button>' : '') +
+            '</div>').join('') + '</div>'
+        : '<div class="rsv-vacio-chico">Ninguno. Se atiende según el horario.</div>') +
+      (puede ? '<div class="rsv-bloq-add">' +
+        '<input type="date" class="auto-input" id="rsv-bl-dia" aria-label="Día">' +
+        '<input type="time" class="auto-input" id="rsv-bl-desde" value="14:00" aria-label="Desde">' +
+        '<input type="time" class="auto-input" id="rsv-bl-hasta" value="16:00" aria-label="Hasta">' +
+        '<select class="auto-input" id="rsv-bl-recurso" aria-label="A quién">' +
+          '<option value="">Todo el negocio</option>' +
+          (rsvDatos.recursos || []).map(r =>
+            '<option value="' + esc(r.id) + '">' + esc(r.nombre) + '</option>').join('') +
+        '</select>' +
+        '<input type="text" class="auto-input" id="rsv-bl-motivo" placeholder="Motivo (opcional)" maxlength="140">' +
+        '<button class="btn-ghost sm" onclick="rsvAgregarBloqueo()">Bloquear</button>' +
       '</div>' : '') +
     '</section>' +
 
@@ -39339,6 +39372,69 @@ async function rsvGuardarRecurso(id) {
     showToast(String(e.message || e), 'error');
     if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
   }
+}
+
+// ── Bloqueos ────────────────────────────────────────────────────────────────
+
+/** «mar, 7 de octubre · 14:00–16:00», o con los dos días si cruza la medianoche. */
+function rsvRangoLegible(iniISO, finISO) {
+  try {
+    const zona = (rsvDatos.config || {}).zona_horaria || undefined;
+    const f = (d, o) => new Date(d).toLocaleString('es-CO', { timeZone: zona, ...o });
+    const dia = { weekday: 'short', day: 'numeric', month: 'long' };
+    const hora = { hour: '2-digit', minute: '2-digit', hour12: false };
+    // En la zona del NEGOCIO, no en la de quien mira: un dueño de viaje vería
+    // sus bloqueos corridos y creería que se guardaron mal.
+    const d1 = f(iniISO, dia), d2 = f(finISO, dia);
+    return d1 === d2
+      ? d1 + ' · ' + f(iniISO, hora) + '–' + f(finISO, hora)
+      : d1 + ' ' + f(iniISO, hora) + ' → ' + d2 + ' ' + f(finISO, hora);
+  } catch (e) { return String(iniISO) + ' → ' + String(finISO); }
+}
+
+function rsvQuienBloqueado(id) {
+  if (!id) return 'Todo el negocio';
+  const r = (rsvDatos.recursos || []).find(x => String(x.id) === String(id));
+  // Un recurso borrado se lleva sus bloqueos por delante (la clave foránea los
+  // borra en cascada), así que si no está es que la pantalla va desfasada.
+  return r ? r.nombre : 'Alguien que ya no está';
+}
+
+async function rsvAgregarBloqueo() {
+  const v = (id) => (document.getElementById(id) || {}).value || '';
+  const dia = v('rsv-bl-dia'), desde = v('rsv-bl-desde'), hasta = v('rsv-bl-hasta');
+  if (!dia) { showToast('Elige el día', 'error'); return; }
+  if (!desde || !hasta) { showToast('Pon desde qué hora y hasta cuál', 'error'); return; }
+  if (hasta <= desde) { showToast('La hora final va después de la inicial', 'error'); return; }
+  // Se mandan como hora LOCAL del navegador y el servidor las pasa a ISO. La
+  // zona del negocio la aplica el cálculo de huecos, que es donde importa.
+  const cuerpo = {
+    que: 'bloqueo',
+    inicio: new Date(dia + 'T' + desde).toISOString(),
+    fin: new Date(dia + 'T' + hasta).toISOString(),
+    resource_id: v('rsv-bl-recurso') || null,
+    motivo: v('rsv-bl-motivo').trim() || null,
+  };
+  try {
+    const r = await fetchAuth(rsvUrlCon({ que: 'bloqueo' }), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast('Bloqueado');
+    await rsvCargar(true);
+  } catch (e) { showToast(String(e.message || e), 'error'); }
+}
+
+async function rsvBorrarBloqueo(id) {
+  try {
+    const r = await fetchAuth(rsvUrlCon({ que: 'bloqueo', id }), { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast('Quitado');
+    await rsvCargar(true);
+  } catch (e) { showToast(String(e.message || e), 'error'); }
 }
 
 async function rsvBorrarRecurso(id) {

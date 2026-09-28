@@ -109,16 +109,43 @@ async function ocupadoDe(neg, ids, desdeISO, hastaISO) {
   const porRecurso = {};
   ids.forEach(id => { porRecurso[id] = []; });
   if (!ids.length) return porRecurso;
-  const filas = await sb(
-    `/activities?user_id=eq.${encodeURIComponent(neg.user_id)}` +
-    `&resource_id=in.(${ids.map(encodeURIComponent).join(',')})` +
-    `&cancelled_at=is.null&due_at=gte.${encodeURIComponent(desdeISO)}&due_at=lt.${encodeURIComponent(hastaISO)}` +
-    `&select=due_at,end_at,resource_id&limit=1000`
-  ).catch(() => []);
+  const cliente = neg.client_id || null;
+
+  const [filas, bloqueos] = await Promise.all([
+    sb(
+      `/activities?user_id=eq.${encodeURIComponent(neg.user_id)}` +
+      `&resource_id=in.(${ids.map(encodeURIComponent).join(',')})` +
+      `&cancelled_at=is.null&due_at=gte.${encodeURIComponent(desdeISO)}&due_at=lt.${encodeURIComponent(hastaISO)}` +
+      `&select=due_at,end_at,resource_id&limit=1000`
+    ).catch(() => []),
+    // Los bloqueos que alguien puso a mano.
+    //
+    // El filtro es por SOLAPE, no por cuándo empiezan: unas vacaciones de una
+    // semana empiezan antes del rango que se está mirando y aun así lo tapan
+    // entero. Con el filtro de las citas —`inicio` dentro del rango— esa
+    // semana no habría bloqueado nada, que es peor que no tener bloqueos.
+    sb(
+      `/booking_blocks?user_id=eq.${encodeURIComponent(neg.user_id)}` +
+      `&${filtroCliente(cliente)}` +
+      `&inicio=lt.${encodeURIComponent(hastaISO)}&fin=gt.${encodeURIComponent(desdeISO)}` +
+      `&select=inicio,fin,resource_id&limit=500`
+    ).catch(() => []),
+  ]);
+
   for (const f of filas || []) {
     const ini = new Date(f.due_at).getTime();
     const fin = f.end_at ? new Date(f.end_at).getTime() : ini + 3600000;
     if (porRecurso[f.resource_id]) porRecurso[f.resource_id].push({ ini, fin });
+  }
+  for (const b of bloqueos || []) {
+    const ini = new Date(b.inicio).getTime();
+    const fin = new Date(b.fin).getTime();
+    if (!Number.isFinite(ini) || !Number.isFinite(fin)) continue;
+    // Sin recurso, el bloqueo es de TODO el negocio. Se aplica a cada uno al
+    // calcular, y no creando una fila por recurso: así el que se dé de alta
+    // mañana también respeta el cierre de la semana que viene.
+    const destino = b.resource_id ? [b.resource_id] : ids;
+    for (const id of destino) if (porRecurso[id]) porRecurso[id].push({ ini, fin });
   }
   return porRecurso;
 }

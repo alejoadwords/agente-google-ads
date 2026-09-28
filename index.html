@@ -1664,6 +1664,15 @@ a.lf-prop:hover{border-color:var(--blue)}
 .rsv-exc-fila b{font-weight:600;flex:1;min-width:0}
 .rsv-exc-add{display:flex;gap:8px;align-items:center}
 .rsv-exc-add .auto-input{flex:1;padding:7px 10px;font-size:var(--fs-sm)}
+/* El de bloquear lleva cinco campos: en una fila no caben, y forzarlos deja
+   las horas de tres milímetros. Se envuelve y el botón se va al final. */
+.rsv-bloq-add{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.rsv-bloq-add .auto-input{padding:7px 10px;font-size:var(--fs-sm)}
+.rsv-bloq-add #rsv-bl-dia{flex:1 1 140px}
+.rsv-bloq-add #rsv-bl-desde,.rsv-bloq-add #rsv-bl-hasta{flex:0 0 96px}
+.rsv-bloq-add #rsv-bl-recurso{flex:1 1 150px}
+.rsv-bloq-add #rsv-bl-motivo{flex:1 1 100%}
+.rsv-bloq-add .btn-ghost{margin-left:auto}
 .rsv-vacio-chico{font-size:var(--fs-sm);color:var(--muted2);margin-bottom:12px}
 
 .rsv-campo{margin-bottom:14px}

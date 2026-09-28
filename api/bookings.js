@@ -194,6 +194,24 @@ async function traerConfig(userId, cliente) {
   throw new Error('No se pudo preparar la configuración de reservas');
 }
 
+/**
+ * Los bloqueos vigentes: los que aún no han terminado.
+ *
+ * Los pasados no se enseñan ni se borran. No se enseñan porque una lista que
+ * crece para siempre deja de leerse; no se borran porque son la explicación de
+ * por qué aquel martes no hubo citas, y esa pregunta se hace después.
+ */
+async function traerBloqueos(userId, cliente) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/booking_blocks?user_id=eq.${encodeURIComponent(userId)}&${filtroCliente(cliente)}` +
+    `&fin=gte.${encodeURIComponent(new Date().toISOString())}` +
+    `&select=*&order=inicio.asc&limit=200`,
+    { headers: sbHeaders() }
+  );
+  if (!res.ok) throw new Error('bloqueos: HTTP ' + res.status);
+  return await res.json();
+}
+
 async function traerServicios(userId, cliente) {
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/booking_services?user_id=eq.${encodeURIComponent(userId)}&${filtroCliente(cliente)}` +
@@ -290,12 +308,13 @@ export default async function handler(req) {
   try {
     // ── GET — todo lo que la pantalla necesita, de una vez ──────────────────
     if (req.method === 'GET') {
-      const [config, servicios, recursos] = await Promise.all([
+      const [config, servicios, recursos, bloqueos] = await Promise.all([
         traerConfig(userId, cliente),
         traerServicios(userId, cliente),
         traerRecursos(userId, cliente),
+        traerBloqueos(userId, cliente),
       ]);
-      return jsonResp({ config, servicios, recursos, puede_configurar: esAdmin });
+      return jsonResp({ config, servicios, recursos, bloqueos, puede_configurar: esAdmin });
     }
 
     let body = {};
@@ -518,6 +537,55 @@ export default async function handler(req) {
         if (!await mia('booking_resources', id, userId, cliente)) return jsonResp({ error: 'No encontrado' }, 404);
         const res = await fetch(
           `${SUPABASE_URL}/rest/v1/booking_resources?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}`,
+          { method: 'DELETE', headers: sbHeaders('return=minimal') }
+        );
+        if (!res.ok) return jsonResp({ error: await res.text() }, 500);
+        return jsonResp({ ok: true });
+      }
+    }
+
+    // ── Bloqueos: un rato en el que no se atiende ───────────────────────────
+    //
+    // Tabla propia y no una `activity`. Un bloqueo metido ahí lo bloquearía
+    // gratis, pero de las dieciséis consultas que hay sobre `activities`,
+    // catorce no miran el tipo — y dos de ellas filtran solo por `done=false`.
+    // Una es `cron-tasks`: el resumen diario le habría escrito a cada asesor
+    // contándole sus propios bloqueos como tareas pendientes.
+    if (que === 'bloqueo') {
+      if (req.method === 'POST') {
+        const ini = new Date(body.inicio);
+        const fin = new Date(body.fin);
+        if (isNaN(ini.getTime()) || isNaN(fin.getTime())) {
+          return jsonResp({ error: 'Hace falta cuándo empieza y cuándo termina.' }, 400);
+        }
+        if (fin <= ini) return jsonResp({ error: 'El final tiene que ir después del principio.' }, 400);
+        // Un recurso de OTRA cuenta no se puede bloquear: sin esto, mandando un
+        // id por la petición se le podría tapar la agenda a un negocio ajeno.
+        const recurso = body.resource_id || null;
+        if (recurso && !await mia('booking_resources', recurso, userId, cliente)) {
+          return jsonResp({ error: 'Ese recurso no es de esta cuenta' }, 404);
+        }
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/booking_blocks`, {
+          method: 'POST', headers: sbHeaders('return=representation'),
+          body: JSON.stringify({
+            user_id: userId,
+            client_id: cliente,
+            resource_id: recurso,
+            inicio: ini.toISOString(),
+            fin: fin.toISOString(),
+            motivo: String(body.motivo || '').trim().slice(0, 140) || null,
+          }),
+        });
+        if (!res.ok) return jsonResp({ error: await res.text() }, 500);
+        return jsonResp({ bloqueo: (await res.json())?.[0] }, 201);
+      }
+
+      if (req.method === 'DELETE') {
+        const id = url.searchParams.get('id');
+        if (!id) return jsonResp({ error: 'Falta id' }, 400);
+        if (!await mia('booking_blocks', id, userId, cliente)) return jsonResp({ error: 'No encontrado' }, 404);
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/booking_blocks?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}`,
           { method: 'DELETE', headers: sbHeaders('return=minimal') }
         );
         if (!res.ok) return jsonResp({ error: await res.text() }, 500);
