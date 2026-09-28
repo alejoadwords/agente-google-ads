@@ -22384,6 +22384,10 @@ let agPrbOcupado = false;
 function agPrbReiniciar() {
   agPrbHist = [];
   agPrbVista = [];
+  // El enlace es de un agente concreto: al cambiar de agente no puede quedarse
+  // el de antes a la vista, que se copiaría creyendo que es el nuevo.
+  const en = document.getElementById('ag-prb-enlace');
+  if (en) { en.style.display = 'none'; document.getElementById('ag-prb-url').value = ''; }
   agPrbPintar();
   agPrbRadiografia(null);
 }
@@ -22463,6 +22467,42 @@ function agPrbRadiografia(r) {
   if (r.escalar) partes.push(bloque('Escalada', '<p class="ag-prb-bien">Pidió pasar a un asesor</p>'));
 
   el.innerHTML = partes.join('');
+}
+
+// El enlace para que lo pruebe el cliente. Se pide al servidor y no se arma
+// aquí: lleva firma, y una firma que viaja al navegador es una firma que se
+// puede fabricar para el agente de otra cuenta.
+async function agPrbCompartir(btn) {
+  if (!agEditingId) { showToast('Guarda el agente antes de compartirlo', 'error'); return; }
+  const antes = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Generando…';
+  try {
+    const r = await fetchAuth('/api/agent-probar?agent_id=' + encodeURIComponent(agEditingId));
+    const d = await r.json();
+    if (!r.ok || d.error) { showToast(d.error || 'No se pudo crear el enlace', 'error'); return; }
+    document.getElementById('ag-prb-url').value = d.url;
+    document.getElementById('ag-prb-enlace').style.display = '';
+    showToast('Enlace listo, vale ' + d.dias + ' días');
+  } catch (e) {
+    showToast('No se pudo crear el enlace', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = antes;
+  }
+}
+
+async function agPrbCopiar(btn) {
+  const campo = document.getElementById('ag-prb-url');
+  try {
+    await navigator.clipboard.writeText(campo.value);
+    const antes = btn.textContent;
+    btn.textContent = 'Copiado';
+    setTimeout(() => { btn.textContent = antes; }, 1600);
+  } catch (e) {
+    // Sin permiso de portapapeles —pasa en algunos navegadores— al menos queda
+    // seleccionado para copiarlo a mano.
+    campo.select();
+    showToast('Copia el enlace con ⌘C');
+  }
 }
 
 async function agPrbEnviar() {

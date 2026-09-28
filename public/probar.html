@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prueba tu agente · Acuarius</title>
+<!-- Esta página la abre el cliente de un cliente, sin cuenta y casi siempre
+     desde el teléfono. No lleva la aplicación detrás: solo lo necesario para
+     conversar. Lo que el agente entiende por dentro —a qué tablero manda el
+     lead, si lo califica— se queda en el editor: aquí se juzga la
+     conversación, no las tripas. -->
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/favicon.ico">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#1E2BCC; --aqua:#00B8CE; --grad:linear-gradient(135deg,#1E2BCC,#00B8CE);
+  --bg:#F7F8FC; --card:#FFFFFF; --text:#0D0F1C; --muted:#5A607A; --muted2:#9DA3BE;
+  --border:#E4E6F0; --r:12px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:'Outfit',system-ui,sans-serif;background:var(--bg);color:var(--text);
+  display:flex;flex-direction:column}
+header{background:var(--grad);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:11px;flex-shrink:0}
+.ini{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;
+  align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0}
+header h1{margin:0;font-size:15px;font-weight:700;line-height:1.2}
+header p{margin:1px 0 0;font-size:11.5px;opacity:.8}
+.aviso{background:#FFF8E1;border-bottom:1px solid #F0E4B8;color:#6B5A16;
+  font-size:11.5px;padding:8px 16px;text-align:center;line-height:1.45;flex-shrink:0}
+main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:9px}
+.wrap{max-width:620px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:9px}
+.fila{display:flex}
+.fila.yo{justify-content:flex-end}
+.b{max-width:80%;padding:9px 13px;border-radius:14px;font-size:14px;line-height:1.45;
+  white-space:pre-wrap;word-break:break-word}
+.b.yo{background:var(--blue);color:#fff;border-radius:14px 14px 3px 14px}
+.b.el{background:var(--card);border:1px solid var(--border);border-radius:14px 14px 14px 3px}
+.vacio{color:var(--muted2);font-size:13px;text-align:center;padding:40px 16px;line-height:1.6}
+footer{border-top:1px solid var(--border);background:var(--card);padding:11px 16px;flex-shrink:0}
+.barra{max-width:620px;margin:0 auto;display:flex;gap:9px}
+input{flex:1;min-width:0;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;
+  font-family:inherit;font-size:15px;background:var(--bg);color:var(--text);outline:none}
+input:focus{border-color:var(--blue)}
+button{background:var(--blue);color:#fff;border:none;border-radius:10px;padding:0 18px;
+  font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0}
+button:disabled{opacity:.5;cursor:default}
+.pie{max-width:620px;margin:8px auto 0;text-align:center;font-size:10.5px;color:var(--muted2)}
+.error{background:#FDECEC;color:#B91C1C;border:1px solid #F5C6C6;border-radius:var(--r);
+  padding:12px 14px;font-size:13px;line-height:1.5;max-width:620px;margin:16px auto}
+/* El aviso de un envío que falló. Un alert() del sistema en un móvil tapa la
+   pantalla entera y hay que darle a Aceptar para seguir leyendo. */
+#aviso{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:#B91C1C;color:#fff;
+  padding:10px 15px;border-radius:10px;font-size:13px;font-weight:600;line-height:1.4;z-index:9;
+  max-width:88%;box-shadow:0 6px 22px rgba(0,0,0,.2);display:none}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#0E1120;--card:#151930;--text:#E8EAF6;--muted:#A7ACC8;--muted2:#6E7494;--border:#262B47}
+  .aviso{background:#2A2410;border-bottom-color:#3D3518;color:#D6C78A}
+  .error{background:#2A1416;border-color:#4A2226;color:#F87171}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="ini" id="ini">·</div>
+  <div>
+    <h1 id="nombre">Cargando…</h1>
+    <p>Prueba de conversación</p>
+  </div>
+</header>
+<div class="aviso">Esto es una prueba. Escríbele como lo haría un cliente real; nada de lo que digas aquí se guarda como contacto.</div>
+
+<main><div class="wrap" id="chat"></div></main>
+<div id="aviso"></div>
+
+<footer>
+  <div class="barra">
+    <input id="txt" placeholder="Escribe tu mensaje…" autocomplete="off" disabled>
+    <button id="btn" disabled>Enviar</button>
+  </div>
+  <div class="pie">Con tecnología de Acuarius</div>
+</footer>
+
+<script>
+const TOKEN = decodeURIComponent((location.pathname.match(/\/probar\/(.+)$/) || [])[1]
+  || new URLSearchParams(location.search).get('t') || '');
+const chat = document.getElementById('chat');
+const txt = document.getElementById('txt');
+const btn = document.getElementById('btn');
+
+// El historial viaja EN BRUTO: el motor relee los bloques ocultos de sus
+// propios mensajes para acordarse de lo que ya sabe. Si se mandara el texto
+// limpio, el agente volvería a preguntar lo mismo en cada turno.
+let hist = [];
+let vista = [];
+let ocupado = false;
+
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+function pintar() {
+  if (!vista.length && !ocupado) {
+    chat.innerHTML = '<div class="vacio">Escríbele como si fueras un cliente.<br>' +
+      'Por ejemplo: «hola, busco apartamento en arriendo».</div>';
+    return;
+  }
+  chat.innerHTML = vista.map(m =>
+    '<div class="fila ' + m.r + '"><div class="b ' + m.r + '">' + esc(m.t) + '</div></div>'
+  ).join('') + (ocupado ? '<div class="fila el"><div class="b el" style="opacity:.55">Escribiendo…</div></div>' : '');
+  chat.parentElement.scrollTop = chat.parentElement.scrollHeight;
+}
+
+let relojAviso;
+function avisar(msg) {
+  const el = document.getElementById('aviso');
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(relojAviso);
+  relojAviso = setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+function fallo(msg) {
+  document.querySelector('main').innerHTML = '<div class="error">' + esc(msg) + '</div>';
+  txt.disabled = btn.disabled = true;
+  // La cabecera se quedaba en «Cargando…» para siempre encima del error: daba
+  // la impresión de que algo seguía intentándose cuando ya no.
+  document.getElementById('nombre').textContent = 'Prueba no disponible';
+  document.getElementById('ini').textContent = '!';
+  document.querySelector('header p').textContent = 'Acuarius';
+  document.querySelector('.aviso').style.display = 'none';
+}
+
+async function enviar() {
+  const t = txt.value.trim();
+  if (!t || ocupado) return;
+  txt.value = '';
+  hist.push({ role: 'user', content: t });
+  vista.push({ r: 'yo', t });
+  ocupado = true; btn.disabled = true; pintar();
+  try {
+    const r = await fetch('/api/probar-publico', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ t: TOKEN, mensajes: hist }),
+    });
+    const d = await r.json();
+    ocupado = false; btn.disabled = false;
+    if (!r.ok || d.error) {
+      // El turno que falló se retira: si se quedara, el siguiente envío mandaría
+      // dos mensajes seguidos del cliente y el error se repetiría solo.
+      hist.pop(); vista.pop(); pintar();
+      avisar(d.error || 'No se pudo enviar. Reinténtalo.');
+      return;
+    }
+    hist.push({ role: 'assistant', content: d.bruto });
+    vista.push({ r: 'el', t: d.texto });
+    pintar();
+    txt.focus();
+  } catch (e) {
+    ocupado = false; btn.disabled = false;
+    hist.pop(); vista.pop(); pintar();
+    avisar('No se pudo enviar. Revisa tu conexión.');
+  }
+}
+
+btn.addEventListener('click', enviar);
+txt.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); enviar(); } });
+
+(async function arrancar() {
+  if (!TOKEN) return fallo('Este enlace no es válido. Pídele uno nuevo a quien te lo compartió.');
+  try {
+    const r = await fetch('/api/probar-publico?t=' + encodeURIComponent(TOKEN));
+    const d = await r.json();
+    if (!r.ok || d.error) return fallo(d.error || 'Este enlace no es válido.');
+    document.getElementById('nombre').textContent = d.nombre;
+    document.getElementById('ini').textContent = (d.nombre || '?').trim().charAt(0).toUpperCase();
+    document.title = 'Prueba a ' + d.nombre + ' · Acuarius';
+    txt.disabled = btn.disabled = false;
+    pintar();
+    txt.focus();
+  } catch (e) {
+    fallo('No se pudo abrir la prueba. Revisa tu conexión y vuelve a intentarlo.');
+  }
+})();
+</script>
+</body>
+</html>

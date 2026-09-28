@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Enlace público del probador</title>
+<!--
+  Banco de la página que abre el CLIENTE del cliente.
+
+  No es una maqueta: carga public/probar.html tal cual y solo le mete un
+  `fetch` de mentira antes de que arranque su propio script. Así se ve la
+  página de verdad —su CSS, su marcado y su lógica— con los estados que en
+  producción no se pueden provocar a mano: enlace caducado, tope agotado,
+  el servidor caído.
+
+  Arrancar con:  node pruebas/servidor-boceto.mjs
+-->
+<style>
+  body{margin:0;font-family:system-ui,sans-serif;background:#111;color:#fff;
+    display:flex;flex-direction:column;height:100vh}
+  .banco{padding:9px 14px;display:flex;gap:9px;align-items:center;justify-content:center;
+    flex-wrap:wrap;font-size:12px;flex-shrink:0}
+  .banco button{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:7px;
+    padding:5px 10px;font-family:inherit;font-size:12px;cursor:pointer}
+  .banco button:hover{background:rgba(255,255,255,.26)}
+  .banco span{opacity:.55}
+  .marco{flex:1;display:flex;justify-content:center;padding:0 0 14px;min-height:0}
+  iframe{border:none;background:#fff;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.5);
+    width:100%;max-width:860px;height:100%}
+  iframe.tel{max-width:390px}
+</style>
+</head>
+<body>
+<div class="banco">
+  <span>BANCO ·</span>
+  <button onclick="montar('ok')">conversando</button>
+  <button onclick="montar('vacio')">recién abierto</button>
+  <button onclick="montar('invalido')">enlace inválido</button>
+  <button onclick="montar('caducado')">enlace caducado</button>
+  <button onclick="montar('tope')">tope agotado</button>
+  <button onclick="montar('caido')">servidor caído</button>
+  <span>·</span>
+  <button onclick="document.querySelector('iframe').classList.toggle('tel')">teléfono</button>
+  <span style="opacity:.4">(el modo oscuro va por prefers-color-scheme: se mira con el esquema del navegador)</span>
+</div>
+<div class="marco"><iframe id="marco"></iframe></div>
+
+<script>
+let MODO = 'ok';
+
+const RESPUESTAS = {
+  ok:        { get: { nombre: 'Aura' }, post: { texto: 'Con gusto le ayudo. Tengo dos opciones en Buenavista:\n\nCP-1042 — 3 habitaciones, $2.700.000 · admón. $484.000 (por confirmar)\nCP-0988 — 2 habitaciones, $2.100.000\n\n¿Cuál le interesa ver?', bruto: 'x [CAPTURA: {"zona":"Buenavista"}]' } },
+  vacio:     { get: { nombre: 'Aura' } },
+  invalido:  { get: { error: 'Este enlace no es válido.' }, codigo: 403 },
+  caducado:  { get: { error: 'Este enlace caducó. Pídele uno nuevo a quien te lo compartió.' }, codigo: 410 },
+  tope:      { get: { nombre: 'Aura' }, post: { error: 'Se agotaron las pruebas de hoy para este enlace. Vuelve mañana.' }, codigoPost: 429 },
+  caido:     { romper: true },
+};
+
+async function montar(modo) {
+  MODO = modo;
+  const html = await (await fetch('/public/probar.html')).text();
+  const r = RESPUESTAS[modo];
+
+  // El fetch de mentira se instala ANTES del script de la página, justo detrás
+  // de <head>, para que su arranque ya lo encuentre puesto.
+  const stub = `<script>
+    const R = ${JSON.stringify(r)};
+    window.fetch = async (url, opts) => {
+      await new Promise(s => setTimeout(s, 350));
+      if (R.romper) throw new Error('red caída');
+      const esPost = (opts && opts.method === 'POST');
+      const cuerpo = esPost ? (R.post || { error: 'el banco no contempla este caso' }) : R.get;
+      const codigo = esPost ? (R.codigoPost || 200) : (R.codigo || 200);
+      return { ok: codigo < 400, status: codigo, json: async () => cuerpo };
+    };
+  <\/script>`;
+
+  // La página saca el token de la ruta, y dentro de un srcdoc no hay ruta. Se
+  // le pone uno fijo. Si alguien cambia esa línea, este banco deja de montar en
+  // vez de seguir enseñando algo que ya no existe.
+  const iTok = html.indexOf('const TOKEN = ');
+  if (iTok < 0) throw new Error('No encontré la línea del token en probar.html');
+  const finTok = html.indexOf(";\n", iTok);
+  const conToken = html.slice(0, iTok) + "const TOKEN = 'token-de-banco'" + html.slice(finTok);
+
+  const doc = conToken
+    .replace('<head>', '<head>' + stub)
+    .replace('<html lang="es">', '<html lang="es">');
+
+  const marco = document.getElementById('marco');
+  marco.srcdoc = doc;
+
+  // El token sale de la ruta, y dentro de un srcdoc no hay ruta. Se le pone
+  // uno cualquiera por la query, que es el otro camino que la página acepta.
+  marco.addEventListener('load', function una() {
+    marco.removeEventListener('load', una);
+    if (modo === 'ok') {
+      const d = marco.contentDocument;
+      const i = d.getElementById('txt');
+      if (i && !i.disabled) {
+        i.value = 'hola, busco apartamento en arriendo en Buenavista';
+        d.getElementById('btn').click();
+      }
+    }
+  });
+}
+
+montar('ok');
+</script>
+</body>
+</html>

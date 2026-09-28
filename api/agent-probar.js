@@ -16,6 +16,7 @@
 export const config = { runtime: 'edge' };
 
 import { ensayarAgente } from './_inbox-engine.js';
+import { crearToken, DIAS_ENLACE } from './_enlace-probar.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 const CORS = {
@@ -63,7 +64,9 @@ async function ensayosDeHoy(userId) {
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'POST') return jsonResp({ error: 'Método no permitido' }, 405);
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return jsonResp({ error: 'Método no permitido' }, 405);
+  }
 
   const sesion = await verificarSesion(req);
   let userId = sesion.id;
@@ -83,6 +86,27 @@ export default async function handler(req) {
     if (fila?.owner_user_id) userId = fila.owner_user_id;
   } catch {
     return jsonResp({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  }
+
+  // GET — el enlace para que lo pruebe el cliente, sin cuenta.
+  if (req.method === 'GET') {
+    const agentId = new URL(req.url).searchParams.get('agent_id');
+    if (!agentId) return jsonResp({ error: 'Falta el agente' }, 400);
+    // Que el agente sea de esta cuenta se comprueba aquí y no al abrir el
+    // enlace: firmar un token para el agente de otro sería regalar su agente.
+    const suyo = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${encodeURIComponent(agentId)}` +
+      `&user_id=eq.${encodeURIComponent(userId)}&select=id`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
+    if (!suyo) return jsonResp({ error: 'Ese agente no existe en tu cuenta.' }, 404);
+
+    const token = await crearToken(userId, agentId);
+    if (!token) return jsonResp({ error: 'Los enlaces compartidos no están configurados.' }, 503);
+    return jsonResp({
+      url: `${new URL(req.url).origin}/probar/${token}`,
+      dias: DIAS_ENLACE,
+    });
   }
 
   let body;
