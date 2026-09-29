@@ -258,6 +258,10 @@ export async function sincronizarLote(fuente) {
     // Sin precios separados no sirve: es una fila de antes de que existieran y
     // hay que releerla aunque no haya cambiado.
     if (g.precio_arriendo == null && g.precio_venta == null) return null;
+    // Y sin fotos, igual. Son de una vuelta anterior a que se guardaran, y
+    // dándolas por buenas no se rellenarían NUNCA: la fila tiene precio, se
+    // reutiliza, y se queda sin fotos para siempre.
+    if (!g.fotos) return null;
     return g;
   };
 

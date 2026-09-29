@@ -56,6 +56,10 @@ ok(/const fotos = fotosDelHtml\(html, codigo\)/.test(cat),
    'del mismo HTML que ya se descarga: no cuesta ni una petición más');
 ok(/fotos: igual\.fotos/.test(cat),
    'y una ficha reutilizada conserva las suyas, o se perderían en cada vuelta');
+// Una fila de antes de que existieran las fotos tiene precio, así que se
+// reutilizaba… y se quedaba sin fotos para siempre.
+ok(/if \(!g\.fotos\) return null;/.test(cat),
+   'y una fila sin fotos se relee aunque no haya cambiado');
 ok(/fotos: pr\.fotos\?\.length \? pr\.fotos : null/.test(cat), 'se guardan');
 
 console.log('\nEl agente sabe cuáles puede enseñar');
