@@ -24,6 +24,49 @@
   Pendiente aparte: el navegador todavía guarda una copia del token (igual que con
   Google Ads). No bloquea la revisión, pero conviene sacarlo.
 
+### Llamadas de prueba — 28-09-2026
+
+Con la conexión de pruebas (Johana, cuenta demo) se hizo una llamada correcta por
+cada permiso concedido: `pages_show_list` (/me/accounts), `pages_read_engagement`
+(página Acuarius AI), `pages_messaging` (conversaciones de Messenger),
+`pages_manage_metadata` (leer y re-suscribir la página con los MISMOS campos),
+`business_management` (/me/businesses), `ads_read` (insights y campañas),
+`ads_management` (renombrar la campaña de App Review con el MISMO nombre: quedó
+idéntica y activa). Todas OK. Si el panel pide llamadas en los últimos 30 días,
+estas cuentan hasta el 28-10-2026. Faltan las dos de Instagram, cuando se añadan.
+
+### La cuenta del revisor — revisada el 28-09-2026
+
+`acuarius.review@gmail.com` (`user_3HpKaekkDvwRXrweXmEuHpz4hWB`): correo verificado,
+entra con contraseña, **sin 2FA**, sin bloqueos, plan Pro de cortesía hasta
+08-09-2027, 5 leads y un cliente de muestra, **sin ninguna conexión de Meta** (a
+propósito). Se le creó el agente del inbox **«Asistente de prueba»** para que el
+revisor pueda conectar Messenger e Instagram sin pasar por el asistente de creación.
+
+### BLOQUEO: los agentes de chat están apagados
+
+Las instrucciones y el guion usan el **agente de Meta Ads** (analizar y crear una
+campaña), pero los agentes de marketing están apagados para todos desde el
+17-09-2026 (`window.AGENTES_ACTIVOS = false`). Consecuencias:
+
+- `ads_read` **se puede demostrar sin el agente**: Marketing → Plataformas de pauta
+  enseña las campañas de Meta con sus métricas, calculadas en el servidor.
+- `ads_management` **no tiene hoy ninguna pantalla que lo use**: crear, pausar o
+  activar campañas de Meta solo existe dentro del chat del agente, y Plataformas de
+  pauta es de solo lectura. Pedir un permiso que el producto no usa es rechazo casi
+  seguro.
+
+Tres salidas (decide Alejandro):
+1. **Pedir ahora sin `ads_management`** y añadirlo cuando haya una función que lo use.
+   Lo más rápido y lo que menos riesgo tiene de rechazo.
+2. **Añadir «Pausar campaña» en Plataformas de pauta** (solo pausar: pausar no gasta
+   dinero). Es una función útil y justifica `ads_management` con algo real.
+3. **Encender el agente de Meta Ads** (solo para esta cuenta o para todos).
+
+Hasta decidir, las instrucciones de prueba (sección 5) y el guion hay que cambiarlos:
+el panel de datos va por **Marketing → Plataformas de pauta**, y los mensajes por
+**Conversaciones** con el «Asistente de prueba».
+
 ### Lo que falta, en orden
 
 1. **Johana agrega a Alejandro como administrador** de la app (si quiere conectar
