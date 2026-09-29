@@ -1477,7 +1477,7 @@ function briefGoStep(step) {
 async function briefLoadPlatformAccounts() {
   const uid        = clerkInstance?.user?.id || '';
   const adsToken   = sessionStorage.getItem('ads_access_token')   || localStorage.getItem('ads_access_token_persist')   || '';
-  const metaToken  = sessionStorage.getItem('meta_access_token')  || localStorage.getItem('meta_access_token_persist')  || '';
+  const metaToken  = metaConectado();
 
   // ── Google Ads ────────────────────────────────────────────────
   const googleRow    = document.getElementById('plat-google-account-row');
@@ -1536,7 +1536,7 @@ async function briefLoadPlatformAccounts() {
       metaRow.style.display = 'block';
       metaSel.innerHTML = '<option value="">Cargando...</option>';
       try {
-        const r = await fetchAuth('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(metaToken));
+        const r = await fetchAuth('/api/meta-ads?action=get-ad-accounts');
         const data = await r.json();
         const accounts = data.accounts || [];
         if (accounts.length) {
@@ -1650,7 +1650,7 @@ function agencyResetLogoPreview() {
 
 // ── Conectar plataformas desde el brief ───────────────────────────────────────
 function agencyConnectPlatform(platform) {
-  const metaToken = sessionStorage.getItem('meta_access_token');
+  const metaToken = metaConectado();
   const adsToken  = sessionStorage.getItem('ads_access_token');
 
   // Si ya está conectado, no cerrar el modal — solo informar y dejar continuar
@@ -1696,8 +1696,8 @@ function agencyConnectPlatform(platform) {
     const saved = JSON.parse(raw);
     // Descartar si tiene más de 30 min (evitar restaurar un formulario viejo)
     if (Date.now() - saved.ts > 30 * 60 * 1000) { localStorage.removeItem('acuarius_pending_brief'); return; }
-    // Solo restaurar si el OAuth fue exitoso (meta_token en sessionStorage)
-    const metaOK = saved.platform === 'meta' && !!sessionStorage.getItem('meta_access_token');
+    // Solo restaurar si el OAuth fue exitoso (hay marca de Meta conectado)
+    const metaOK = saved.platform === 'meta' && metaConectado();
     const googleOK = saved.platform === 'google' && !!sessionStorage.getItem('ads_access_token');
     if (!metaOK && !googleOK) return;
     localStorage.removeItem('acuarius_pending_brief');
@@ -2594,7 +2594,7 @@ function warBuildMetricsForm() {
     // así que aparecía también para un cliente que no tiene ninguna — y al
     // pulsarlo traía los datos de otro.
     if (plat === 'google' && cuentaGoogleDelCliente(warClientId).id) hasConn = true;
-    if (plat === 'meta'   && (sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist'))) hasConn = true;
+    if (plat === 'meta'   && metaConectado()) hasConn = true;
     if (hasConn) {
       if (plat === 'meta') {
         // Para Meta: selector de cuenta + botón (puede tener múltiples cuentas de clientes)
@@ -2655,15 +2655,14 @@ async function warLoadMetaAccountsForPicker() {
   const sel = document.getElementById('war-meta-account-select');
   if (!sel) return;
 
-  const token = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
-  if (!token) {
-    sel.innerHTML = '<option value="">Sin token Meta — conecta tu cuenta</option>';
+  if (!metaConectado()) {
+    sel.innerHTML = '<option value="">Sin Meta conectado — conecta tu cuenta</option>';
     return;
   }
 
   try {
     const uid = clerkInstance?.user?.id || '';
-    const r = await fetchAuth('/api/meta-ads?action=get-ad-accounts&userId=' + encodeURIComponent(uid) + '&accessToken=' + encodeURIComponent(token));
+    const r = await fetchAuth('/api/meta-ads?action=get-ad-accounts');
     const data = await r.json();
     const accounts = data.accounts || [];
 
@@ -2714,10 +2713,9 @@ async function warAutoFill(plat) {
       // Usar cuenta seleccionada en el picker (o fallback al sessionStorage)
       const pickerSel  = document.getElementById('war-meta-account-select');
       const adAccountId = (pickerSel && pickerSel.value) ? pickerSel.value : sessionStorage.getItem('meta_ad_account_id');
-      const metaToken  = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
       if (!adAccountId) throw new Error('Selecciona una cuenta publicitaria');
-      if (!metaToken)   throw new Error('No hay token. Conecta tu cuenta de Meta Ads.');
-      const r = await fetchAuth('/api/meta-ads?action=get-account-overview&userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&datePreset=' + ranges.meta + '&accessToken=' + encodeURIComponent(metaToken));
+      if (!metaConectado()) throw new Error('No hay Meta conectado. Conecta tu cuenta de Meta Ads.');
+      const r = await fetchAuth('/api/meta-ads?action=get-account-overview&adAccountId=' + encodeURIComponent(adAccountId) + '&datePreset=' + ranges.meta);
       apiData = await r.json();
     }
 
@@ -6957,7 +6955,7 @@ async function restoreConnectionsFromSupabase() {
   const uid = clerkInstance?.user?.id;
   if (!uid) return;
   const hasGoogleToken   = !!sessionStorage.getItem('ads_access_token');
-  const hasMetaToken     = !!sessionStorage.getItem('meta_access_token');
+  const hasMetaToken     = metaConectado();
   const hasLinkedInToken = !!sessionStorage.getItem('linkedin_access_token');
   if (hasGoogleToken && hasMetaToken && hasLinkedInToken) return; // ya restaurado desde sessionStorage
 
@@ -6987,9 +6985,10 @@ async function restoreConnectionsFromSupabase() {
         }
       }
     }
-    if (!hasMetaToken && mConn.connected && mConn.access_token) {
-      sessionStorage.setItem('meta_access_token', mConn.access_token);
-      localStorage.setItem('meta_access_token_persist', mConn.access_token);
+    // El servidor ya no da el token de Meta: basta con saber que hay conexión.
+    if (mConn.connected === false && hasMetaToken) { marcarMeta(false); updateMetaUI(false); }
+    if (!hasMetaToken && mConn.connected) {
+      marcarMeta(true);
       sessionStorage.setItem('meta_user_name', mConn.account_name || '');
       if (mConn.extra_data?.meta_user_id) sessionStorage.setItem('meta_user_id', mConn.extra_data.meta_user_id);
       updateMetaUI(true, mConn.account_name);
@@ -7275,15 +7274,14 @@ async function manageCampaignStatus(campaignId, campaignName, newStatus) {
   const spend  = newStatus === 'ACTIVE' ? '\n\n⚠️ La campaña comenzará a gastar presupuesto inmediatamente.' : '';
   if (!confirm(`¿Quieres ${label} la campaña "${campaignName}"?${spend}`)) return;
 
-  const token     = sessionStorage.getItem('meta_access_token');
   const accountId = sessionStorage.getItem('meta_ad_account_id');
   const uid       = clerkInstance?.user?.id;
-  if (!token) { alert('No hay sesión de Meta Ads. Reconecta tu cuenta.'); return; }
+  if (!metaConectado()) { alert('No hay sesión de Meta Ads. Reconecta tu cuenta.'); return; }
 
   try {
     const r = await fetchAuth('/api/meta-ads?action=update-campaign', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessToken: token, adAccountId: accountId, campaignId, status: newStatus }),
+      body: JSON.stringify({ adAccountId: accountId, campaignId, status: newStatus }),
     });
     const data = await r.json();
     if (!r.ok || data.error) throw new Error(data.error || 'Error');
@@ -11699,23 +11697,17 @@ var campaignWizardData = {};
 var campaignWizardImages = [];
 
 async function launchMetaCampaignFlow() {
-  // 1. Buscar token en sessionStorage → localStorage → Supabase (en ese orden)
-  let token  = sessionStorage.getItem('meta_access_token')
-            || localStorage.getItem('meta_access_token_persist');
-
+  // 1. ¿Hay Meta conectado? El token lo tiene el servidor; aquí solo se
+  //    pregunta si existe, y si la marca local no lo sabe, se le pregunta a él.
+  let token = metaConectado();
   if (!token) {
-    // Intentar desde Supabase directamente (Clerk ya cargó cuando el usuario hizo click)
     try {
-      var uid = clerkInstance?.user?.id;
-      if (uid) {
-        var connRes  = await fetchAuth('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=meta_ads');
-        var connData = await connRes.json();
-        if (connData.connected && connData.access_token) {
-          token = connData.access_token;
-          sessionStorage.setItem('meta_access_token', token);
-          localStorage.setItem('meta_access_token_persist', token);
-          updateMetaUI(true, connData.account_name || '');
-        }
+      var connRes  = await fetchAuth('/api/meta-ads?action=status');
+      var connData = await connRes.json();
+      if (connData.connected) {
+        token = true;
+        marcarMeta(true);
+        updateMetaUI(true, connData.name || '');
       }
     } catch(e) {}
   }
@@ -11739,9 +11731,9 @@ async function launchMetaCampaignFlow() {
   } else {
     // Auto-seleccionar primera cuenta disponible
     try {
-      var accRes  = await fetch('/api/meta-list-accounts', {
+      var accRes  = await fetchAuth('/api/meta-list-accounts', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ accessToken: token }),
+        body: JSON.stringify({}),
       });
       var accData = await accRes.json();
       if (accData.accounts && accData.accounts.length > 0) {
@@ -11764,7 +11756,7 @@ async function launchMetaCampaignFlow() {
   campaignWizardImages = (generatedAdImages || []).slice();
   var acctCurrency = 'USD';
   try { acctCurrency = JSON.parse(sessionStorage.getItem('meta_active_account') || '{}').currency || 'USD'; } catch(e) {}
-  campaignWizardData   = { adAccountId: acctId, token, currency: acctCurrency };
+  campaignWizardData   = { adAccountId: acctId, currency: acctCurrency };
   campaignWizardStep   = 1;
   renderCampaignWizard();
 }
@@ -12041,7 +12033,6 @@ async function cwGenerateCopy() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        accessToken:   campaignWizardData.token,
         adAccountId:   campaignWizardData.adAccountId,
         campaignName:  campaignWizardData.name,
         objective:     campaignWizardData.objective,
@@ -12211,9 +12202,10 @@ async function cwLoadPages() {
   }
   // Llamar al endpoint (usa promote_pages primero, luego me/accounts)
   try {
-    var url = '/api/meta-ads?action=get-pages&accessToken=' + encodeURIComponent(campaignWizardData.token) +
-              '&adAccountId=' + encodeURIComponent(campaignWizardData.adAccountId || '');
-    var r = await fetch(url);
+    // Con sesión: antes iba con fetch pelado y el servidor, que exige sesión, lo
+    // rechazaba siempre — el paso de elegir página nunca cargaba nada.
+    var url = '/api/meta-ads?action=get-pages&adAccountId=' + encodeURIComponent(campaignWizardData.adAccountId || '');
+    var r = await fetchAuth(url);
     var pages = await r.json();
     if (Array.isArray(pages) && pages.length > 0) {
       campaignWizardData.pageId = pages[0].id;
@@ -12270,7 +12262,6 @@ async function cwLaunch() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        accessToken:   campaignWizardData.token,
         adAccountId:   campaignWizardData.adAccountId,
         name:          campaignWizardData.name,
         objective:     campaignWizardData.objective,
@@ -12304,8 +12295,7 @@ async function cwLaunch() {
     if (!isMessagingCampaign && hasCreative && campaignWizardData.pageId) {
       try {
         var adPayload = {
-          accessToken:   campaignWizardData.token,
-          adAccountId:   campaignWizardData.adAccountId,
+            adAccountId:   campaignWizardData.adAccountId,
           adsetId:       data.adsetId,
           pageId:        campaignWizardData.pageId,
           adTitle:       campaignWizardData.adTitle,
@@ -12372,14 +12362,13 @@ async function cwLaunch() {
 async function activateCreatedCampaign() {
   var campaignId = campaignWizardData.createdCampaignId;
   var adsetId    = campaignWizardData.createdAdsetId;
-  var token      = campaignWizardData.token;
-  if (!campaignId || !token) return;
+  if (!campaignId || !metaConectado()) return;
   var btn = document.getElementById('cw-activate-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Activando...'; }
   try {
     var r = await fetchAuth('/api/meta-ads?action=update-campaign', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessToken: token, adAccountId: campaignWizardData.adAccountId, campaignId, adsetId, status: 'ACTIVE' }),
+      body: JSON.stringify({ adAccountId: campaignWizardData.adAccountId, campaignId, adsetId, status: 'ACTIVE' }),
     });
     var data = await r.json();
     if (!r.ok || data.error) throw new Error(data.error || 'Error al activar');
@@ -14448,6 +14437,33 @@ function generateBasicImage() {
 // =============================================
 // META ADS — Conexión OAuth + Selector de cuentas
 // =============================================
+// ── El token de Meta vive en el SERVIDOR ─────────────────────────────────────
+// Antes el navegador guardaba el token de Meta —que gestiona anuncios— en
+// sessionStorage y en localStorage, y lo mandaba en cada petición. Cualquier
+// script de la página podía leerlo. Ahora el servidor usa el suyo y aquí solo
+// queda una marca: SI hay conexión, no cuál es el token.
+function metaConectado() {
+  try { return sessionStorage.getItem('meta_conectado') === '1' || localStorage.getItem('meta_conectado_persist') === '1'; }
+  catch (e) { return false; }
+}
+function marcarMeta(si) {
+  try {
+    if (si) { sessionStorage.setItem('meta_conectado', '1'); localStorage.setItem('meta_conectado_persist', '1'); }
+    else { sessionStorage.removeItem('meta_conectado'); localStorage.removeItem('meta_conectado_persist'); }
+    // Y fuera cualquier token que quedara de antes.
+    sessionStorage.removeItem('meta_access_token');
+    localStorage.removeItem('meta_access_token_persist');
+  } catch (e) {}
+}
+// Al arrancar: el navegador que traiga un token de antes lo pierde, pero
+// conserva el «conectado» para no parpadear la pantalla.
+(function purgarTokenMetaViejo() {
+  try {
+    const viejo = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist');
+    if (viejo) marcarMeta(true);
+  } catch (e) {}
+})();
+
 let metaAccounts = [];
 let metaActiveAccount = null;
 
@@ -14455,21 +14471,13 @@ let metaActiveAccount = null;
   const params = new URLSearchParams(window.location.search);
   if (params.get('meta_connected') === 'true') {
     track('account_connected', { platform: 'meta_ads' });
-    const token    = params.get('meta_token');   // solo en fallback sin userId
     const name     = params.get('meta_name');
-    const email    = params.get('meta_email');
-    const metaUid  = params.get('meta_user_id');
-    const platform = params.get('platform');     // 'meta_ads' cuando se guardó en Supabase
+    const platform = params.get('platform');     // 'meta_ads': quedó guardada en el servidor
     window.history.replaceState({}, '', window.location.pathname);
-    if (token) {
-      sessionStorage.setItem('meta_access_token', token);
-      localStorage.setItem('meta_access_token_persist', token);
-      sessionStorage.setItem('meta_user_name',   name   || '');
-      sessionStorage.setItem('meta_user_email',  email  || '');
-      sessionStorage.setItem('meta_user_id',     metaUid || '');
-      updateMetaUI(true, name);
-      setTimeout(() => { openSettings(); loadMetaAccounts(); }, 400);
-    } else if (platform === 'meta_ads') {
+    // El token ya no viaja en la URL: se quedó en el servidor. Aquí solo se
+    // marca que hay conexión, y se le pregunta a él para confirmarlo.
+    if (platform === 'meta_ads') {
+      marcarMeta(true);
       updateMetaUI(true, name || 'Conectado');
       // Clerk tarda 1-4s en cargar después de un redirect — reintentamos con backoff
       (async function waitForClerkAndLoad() {
@@ -14479,14 +14487,12 @@ let metaActiveAccount = null;
           const uid = clerkInstance?.user?.id;
           if (!uid) continue;
           try {
-            const r = await fetchAuth(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=meta_ads`);
+            const r = await fetchAuth('/api/meta-ads?action=status');
             const conn = await r.json();
-            if (conn.connected && conn.access_token) {
-              sessionStorage.setItem('meta_access_token', conn.access_token);
-              localStorage.setItem('meta_access_token_persist', conn.access_token);
-              sessionStorage.setItem('meta_user_name', conn.account_name || name || '');
-              if (conn.extra_data?.meta_user_id) sessionStorage.setItem('meta_user_id', conn.extra_data.meta_user_id);
-              updateMetaUI(true, conn.account_name || name);
+            if (conn.connected) {
+              marcarMeta(true);
+              sessionStorage.setItem('meta_user_name', conn.name || name || '');
+              updateMetaUI(true, conn.name || name);
               openSettings(); loadMetaAccounts();
               return;
             }
@@ -14530,11 +14536,10 @@ let metaActiveAccount = null;
     }, 1200);
   }
   // Restaurar desde sessionStorage o localStorage (persiste entre sesiones del browser)
-  const savedToken   = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist');
+  const savedToken   = metaConectado();
   const savedName    = sessionStorage.getItem('meta_user_name')    || localStorage.getItem('meta_user_name_persist') || '';
   const savedAccount = sessionStorage.getItem('meta_active_account');
   if (savedToken) {
-    if (!sessionStorage.getItem('meta_access_token')) sessionStorage.setItem('meta_access_token', savedToken);
     if (savedName && !sessionStorage.getItem('meta_user_name')) sessionStorage.setItem('meta_user_name', savedName);
     // El DOM de Ajustes no existe todavía cuando esto corre: app.js se lee 670
     // líneas de HTML antes que esos elementos. Sin esperar, la interfaz se
@@ -14576,6 +14581,7 @@ async function irAConectarMeta() {
 }
 
 function disconnectMetaAds() {
+  marcarMeta(false);
   ['meta_access_token','meta_user_name','meta_user_email','meta_user_id','meta_active_account','meta_ad_account_id']
     .forEach(k => sessionStorage.removeItem(k));
   // Y las copias «persistentes»: sin borrarlas, al recargar la app volvía a
@@ -14597,16 +14603,16 @@ async function loadMetaAccounts() {
     if (typeof errRegistrar === 'function') errRegistrar('loadMetaAccounts llamado antes de que exista el DOM', 'loadMetaAccounts');
     return;
   }
-  const token = sessionStorage.getItem('meta_access_token');
-  if (!token) return;
+  if (!metaConectado()) return;
   document.getElementById('metaAccountsLoading').style.display = 'block';
   document.getElementById('metaAccountsList').style.display    = 'none';
   document.getElementById('metaActiveAccount').style.display   = 'none';
   document.getElementById('metaAccountsError').style.display   = 'none';
   try {
-    const res  = await fetch('/api/meta-list-accounts', {
+    // Con sesión y sin token: el servidor usa el guardado de la cuenta.
+    const res  = await fetchAuth('/api/meta-list-accounts', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ accessToken: token }),
+      body: JSON.stringify({}),
     });
     const data = await res.json();
     document.getElementById('metaAccountsLoading').style.display = 'none';
@@ -14739,9 +14745,8 @@ function updateMetaUI(connected, name) {
 
 // Llamada a Meta Marketing API
 async function callMetaAPI(endpoint, method = 'GET', params = {}) {
-  const token     = sessionStorage.getItem('meta_access_token');
   const accountId = sessionStorage.getItem('meta_ad_account_id');
-  if (!token)     return { error: 'No hay sesión de Meta Ads. Conecta tu cuenta en Configuración.' };
+  if (!metaConectado()) return { error: 'No hay sesión de Meta Ads. Conecta tu cuenta en Configuración.' };
   if (!accountId && endpoint.includes('{AD_ACCOUNT_ID}'))
     return { error: 'No hay cuenta de Meta activa. Selecciona una en Configuración → Conexiones.' };
   const resolvedEndpoint = endpoint.replace('{AD_ACCOUNT_ID}', accountId?.replace('act_','') || '');
@@ -14823,10 +14828,8 @@ function openSettings() {
     if (emailRow) emailRow.textContent = email;
   }
   // Sincronizar estado de conexiones — sessionStorage primero, localStorage como fallback
-  const metaToken = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist');
   const metaName  = sessionStorage.getItem('meta_user_name')    || localStorage.getItem('meta_user_name_persist') || '';
-  if (metaToken && !sessionStorage.getItem('meta_access_token')) sessionStorage.setItem('meta_access_token', metaToken);
-  updateMetaUI(!!metaToken, metaName);
+  updateMetaUI(metaConectado(), metaName);
   const adsToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
   const adsEmail = sessionStorage.getItem('ads_email')        || localStorage.getItem('ads_email_persist') || '';
   if (adsToken && !sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', adsToken);
@@ -15339,7 +15342,7 @@ let adsAccounts = [];       // todas las cuentas accesibles
 
 function connectGoogleAds() {
   if (userPlan === 'free' && !isAdminUser()) {
-    const hasMetaConnected = !!sessionStorage.getItem('meta_access_token');
+    const hasMetaConnected = metaConectado();
     if (hasMetaConnected) {
       openUpgradeFlow('El plan Free incluye 1 conexión API. Ya tienes Meta Ads conectado. Actualiza a Pro para conectar múltiples plataformas.');
       return;
@@ -22880,14 +22883,22 @@ function waEscucharMeta() {
 // Conexión por REDIRECCIÓN, como la de Meta Ads. La vía del SDK abría una
 // ventana emergente que Safari bloqueaba incluso con las emergentes permitidas.
 // Redirigiendo la página entera no hay ventana que bloquear.
-function waConectarConMeta(agentId) {
-  const uid = (window.Clerk && Clerk.user && Clerk.user.id) || '';
-  if (!uid) { waEstado('Vuelve a iniciar sesión para conectar WhatsApp.', true); return; }
+//
+// El enlace lo firma el servidor según la sesión, con el agente y el cliente
+// dentro de la firma. Antes viajaban sueltos en la URL y se podían cambiar.
+async function waConectarConMeta(agentId) {
   waEstado('Llevándote a Facebook…');
-  const p = new URLSearchParams({ userId: uid });
-  if (agentId) p.set('agentId', agentId);
-  if (_canClienteAlConectar) p.set('clientId', _canClienteAlConectar);
-  window.location.href = '/api/whatsapp-auth?' + p.toString();
+  try {
+    const r = await fetchAuth('/api/gcal-enlace?para=whatsapp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentId: agentId || '', clientId: _canClienteAlConectar || '' }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.url) throw new Error(d.error || ('HTTP ' + r.status));
+    window.location.href = d.url;
+  } catch (e) {
+    waEstado('No se pudo empezar la conexión con WhatsApp: ' + String(e.message || e), true);
+  }
 }
 
 // ── Vía antigua por SDK, sin usar ───────────────────────────────────────────
@@ -25556,7 +25567,7 @@ function welcomeConnectShouldShow() {
     if (typeof tourActive !== 'undefined' && tourActive) return false;
     if (document.getElementById('acuarius-conn-modal')) return false;
     const hasGoogle = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
-    const hasMeta = sessionStorage.getItem('meta_access_token');
+    const hasMeta = metaConectado();
     if (hasGoogle || hasMeta) return false;
     return true;
   } catch { return false; }
@@ -25761,10 +25772,9 @@ async function pulsoGoogleCards() {
 async function pulsoMetaCards() {
   const uid = clerkInstance?.user?.id || '';
   const adAccountId = sessionStorage.getItem('meta_ad_account_id') || '';
-  const token = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
-  if (!uid || !adAccountId || !token) return [];
+  if (!uid || !adAccountId || !metaConectado()) return [];
   try {
-    const base = '/api/meta-ads?userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(adAccountId) + '&accessToken=' + encodeURIComponent(token);
+    const base = '/api/meta-ads?adAccountId=' + encodeURIComponent(adAccountId);
     const [d, series] = await Promise.all([
       fetchAuth(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
       fetchAuth(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
@@ -26085,7 +26095,7 @@ async function renderPulso(force) {
   let cards = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
   cards = cards.concat(pulsoStudioCards());
 
-  const hasConn = !!(sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || sessionStorage.getItem('meta_access_token'));
+  const hasConn = !!(sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || metaConectado());
   if (!cards.length) {
     if (hasConn) {
       cards = AGENTES_ACTIVOS ? [{
@@ -26284,11 +26294,10 @@ async function pulsoAgencyMetaCards() {
   if (!uid) return [];
   const connected = (agencyClients || []).filter(c => c.metaAdAccountId).slice(0, 10);
   if (!connected.length) return [];
-  const mToken = sessionStorage.getItem('meta_access_token') || localStorage.getItem('meta_access_token_persist') || '';
-  if (!mToken) return [];
+  if (!metaConectado()) return [];
   const results = await Promise.allSettled(connected.map(async c => {
     const acctId = String(c.metaAdAccountId).startsWith('act_') ? c.metaAdAccountId : 'act_' + c.metaAdAccountId;
-    const base = '/api/meta-ads?userId=' + encodeURIComponent(uid) + '&adAccountId=' + encodeURIComponent(acctId) + '&accessToken=' + encodeURIComponent(mToken);
+    const base = '/api/meta-ads?adAccountId=' + encodeURIComponent(acctId);
     const [d, series] = await Promise.all([
       fetchAuth(base + '&action=get-account-overview&datePreset=last_7d').then(r => r.json()),
       fetchAuth(base + '&action=get-daily-series&datePreset=last_14d').then(r => r.json()).catch(() => null),
@@ -26507,11 +26516,9 @@ async function ensureFreshTokens() {
   } catch {}
   // Meta Ads
   try {
-    const m = await fetchAuth('/api/refresh-meta-token?userId=' + encodeURIComponent(uid)).then(r => r.json());
-    if (m && m.access_token) {
-      sessionStorage.setItem('meta_access_token', m.access_token);
-      localStorage.setItem('meta_access_token_persist', m.access_token);
-    }
+    // Renueva en el servidor; el token no vuelve al navegador.
+    const m = await fetchAuth('/api/refresh-meta-token').then(r => r.json());
+    if (m && m.needsReconnect) { marcarMeta(false); if (typeof updateMetaUI === 'function') updateMetaUI(false); }
   } catch {}
 }
 

@@ -8,8 +8,8 @@
 export const config = { runtime: 'edge' };
 
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
-import { quienPregunta, normalizarPerfil } from './_perfiles.js';
-import { crearEnlaceCuenta } from './_enlace-calendario.js';
+import { quienPregunta, normalizarPerfil, alcanceDeCliente, clienteAjeno } from './_perfiles.js';
+import { crearEnlaceCuenta, crearEnlaceWhatsapp } from './_enlace-calendario.js';
 
 const json = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json' } });
 
@@ -32,10 +32,32 @@ export default async function handler(req) {
   // guardado a su nombre, donde la Agenda no lo buscaba nunca.
   const admin = quien.esDueno || normalizarPerfil(quien.perfil) === 'admin';
   if (!admin) {
-    const esMeta = new URL(req.url).searchParams.get('para') === 'meta';
-    return json({ error: esMeta
+    const para = new URL(req.url).searchParams.get('para');
+    return json({ error: para === 'meta'
       ? 'Solo el administrador de la cuenta conecta Meta Ads.'
-      : 'Solo el administrador de la cuenta conecta el Google Calendar de la Agenda.' }, 403);
+      : para === 'whatsapp'
+        ? 'Solo el administrador de la cuenta conecta números de WhatsApp.'
+        : 'Solo el administrador de la cuenta conecta el Google Calendar de la Agenda.' }, 403);
+  }
+
+  // ?para=whatsapp: el número va a un agente y a un cliente concretos, y los
+  // dos se comprueban AQUÍ, con la sesión, antes de firmarlos.
+  if (new URL(req.url).searchParams.get('para') === 'whatsapp') {
+    const body = await req.json().catch(() => ({}));
+    const pedidoCliente = String(body.clientId || '').trim() || null;
+    if (clienteAjeno(quien, pedidoCliente)) return json({ error: 'No tienes acceso a ese cliente.' }, 403);
+    const cliente = alcanceDeCliente(quien, pedidoCliente);
+    const agentId = String(body.agentId || '').trim();
+    if (agentId) {
+      const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/chat_agents?id=eq.${encodeURIComponent(agentId)}` +
+        `&user_id=eq.${encodeURIComponent(quien.userId)}&select=id&limit=1`,
+        { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } })
+        .then(x => (x.ok ? x.json() : [])).catch(() => []);
+      if (!r?.[0]) return json({ error: 'Ese agente no es de tu cuenta.' }, 404);
+    }
+    const t = await crearEnlaceWhatsapp(quien.userId, agentId, cliente || '');
+    if (!t) return json({ error: 'Falta la clave para firmar enlaces en el servidor.' }, 500);
+    return json({ url: '/api/whatsapp-auth?c=' + t });
   }
 
   // ?para=meta: el mismo enlace firmado para conectar Meta Ads. Mismo criterio

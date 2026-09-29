@@ -1,11 +1,48 @@
 // api/meta-list-accounts.js
-// Lista las cuentas publicitarias accesibles con el token del usuario
+// Lista las cuentas publicitarias de la conexión de Meta de la cuenta.
+//
+// Antes tomaba el token del cuerpo de la petición y no pedía sesión: servía de
+// relé abierto a la Graph API para cualquiera que tuviera un token. Ahora hace
+// falta sesión y el token es el GUARDADO de la cuenta —el navegador ya no lo
+// tiene—.
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+export const config = { runtime: 'edge' };
 
-  const { accessToken, userId } = req.body;
-  if (!accessToken) return res.status(400).json({ error: 'accessToken requerido' });
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+import { abrirConexion } from './_cifrado.js';
+
+async function cuentaDe(actorId) {
+  const r = await fetch(
+    `${process.env.SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(actorId)}` +
+    `&status=eq.active&select=owner_user_id&limit=1`,
+    { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+  ).catch(() => null);
+  if (!r || !r.ok) return null;                 // no se adivina: se corta
+  return (await r.json())?.[0]?.owner_user_id || actorId;
+}
+
+async function tokenDeLaCuenta(userId) {
+  const r = await fetch(
+    `${process.env.SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.meta_ads&select=access_token&limit=1`,
+    { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+  ).catch(() => null);
+  if (!r || !r.ok) return '';
+  return (await abrirConexion((await r.json())?.[0]))?.access_token || '';
+}
+
+const json = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json' } });
+
+export default async function handler(req) {
+  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+
+  const sesion = await verificarSesion(req);
+  // Con el motivo: «tu sesión venció» se arregla volviendo a entrar; un
+  // «no autorizado» a secas no le dice a nadie qué hacer.
+  if (!sesion.id) return json(await cuerpoSinSesion(sesion, 'meta-list-accounts'), 401);
+  const userId = await cuentaDe(sesion.id);
+  if (!userId) return json({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' }, 503);
+  const accessToken = await tokenDeLaCuenta(userId);
+  if (!accessToken) return json({ error: 'No hay Meta conectado en esta cuenta.', needsConnect: true }, 401);
 
   try {
     // Obtener cuentas publicitarias del usuario
@@ -21,7 +58,7 @@ export default async function handler(req, res) {
     const data = await accountsRes.json();
 
     if (data.error) {
-      return res.status(400).json({ error: data.error.message });
+      return json({ error: data.error.message }, 400);
     }
 
     // Mapear cuentas con estado legible
@@ -41,10 +78,10 @@ export default async function handler(req, res) {
       spent:    acc.amount_spent ? (acc.amount_spent / 100).toFixed(2) : '0',
     }));
 
-    return res.status(200).json({ accounts, total: accounts.length });
+    return json({ accounts, total: accounts.length });
 
   } catch (err) {
     console.error('meta-list-accounts error:', err);
-    return res.status(500).json({ error: 'Error consultando cuentas de Meta' });
+    return json({ error: 'Error consultando cuentas de Meta' }, 500);
   }
 }

@@ -15,7 +15,7 @@ const META_BASE           = 'https://graph.facebook.com/v19.0';
 async function getStoredToken(userId) {
   if (!userId || !SUPABASE_URL) return null;
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.meta_ads&select=access_token,token_expires_at,account_id`,
+    `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.meta_ads&select=access_token,token_expires_at,account_id,account_name`,
     { headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } }
   );
   const rows = await res.json();
@@ -326,10 +326,19 @@ export default async function handler(req, res) {
   const datePreset  = req.query.datePreset  || 'last_30d';
 
   try {
-    // Manda el token GUARDADO de la cuenta. El que manda el navegador queda de
-    // respaldo solo para conexiones viejas que nunca llegaron a guardarse.
+    // El token es SOLO el guardado de la cuenta. El navegador ya no lo tiene ni
+    // lo manda; si llegara uno en la petición, se ignora.
     const guardado = await getStoredToken(userId).catch(() => null);
-    let token = guardado?.access_token || req.query.accessToken || (req.body && req.body.accessToken) || '';
+    const token = guardado?.access_token || '';
+
+    // ── status: ¿hay Meta conectado? Sin tocar Meta y sin dar el token ──
+    if (action === 'status') {
+      return res.json({
+        connected: !!token,
+        name: guardado?.account_name || null,
+        expires_at: guardado?.token_expires_at || null,
+      });
+    }
     if (!token) return res.status(401).json({ error: 'No hay token. Conecta tu cuenta de Meta Ads.', needsConnect: true });
 
     // ── get-ad-accounts ──────────────────────────────────────

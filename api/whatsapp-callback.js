@@ -1,3 +1,4 @@
+import { abrirEnlaceWhatsapp } from './_enlace-calendario.js';
 import { cifrar } from './_cifrado.js';
 // api/whatsapp-callback.js
 // Vuelta de la conexión de WhatsApp por redirección.
@@ -36,15 +37,17 @@ function volver(res, params) {
 export default async function handler(req, res) {
   const { code, state, error, error_description } = req.query;
 
+  // Quién, a qué agente y a qué cliente: lo dice la FIRMA, nunca el state suelto.
   let userId = '', agentId = '', clientId = '';
   try {
     const s = JSON.parse(state || '{}');
-    userId = s.userId || ''; agentId = s.agentId || ''; clientId = s.clientId || '';
+    const firma = await abrirEnlaceWhatsapp(s.c);
+    if (firma && !firma.caducado) { userId = firma.userId; agentId = firma.agentId; clientId = firma.clientId; }
   } catch {}
 
   if (error) return volver(res, { wa_error: error_description || error });
   if (!code) return volver(res, { wa_error: 'Meta no devolvió el código de autorización' });
-  if (!userId) return volver(res, { wa_error: 'Se perdió la sesión durante la conexión. Vuelve a intentarlo.' });
+  if (!userId) return volver(res, { wa_error: 'El enlace de conexión no es válido o caducó. Vuelve a pulsar «Conectar».' });
 
   const appId = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;

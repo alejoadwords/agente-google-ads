@@ -36,6 +36,30 @@
 5. **Enviar los siete permisos en UNA solicitud** con los textos de la sección 3.
 6. (Menor) cambiar la categoría de la app de *Utilidades* a *Negocios y páginas*.
 
+### Ojo: Instagram Direct y WhatsApp NO están en la lista de siete
+
+- **Instagram Direct**: la configuración de inicio de sesión (`1570497151241728`)
+  concede `pages_*`, `ads_*` y `business_management`, pero **no**
+  `instagram_basic` ni `instagram_manage_messages`. Sin ellos los mensajes
+  directos de Instagram no llegan al inbox aunque la página esté conectada.
+  Hay que añadirlos a la configuración y a la solicitud de revisión.
+- **WhatsApp** va por su propia configuración (`META_WA_CONFIG_ID`, registro
+  insertado) y pide `whatsapp_business_management` y
+  `whatsapp_business_messaging`. Para números de CLIENTES hacen falta en acceso
+  avanzado —y Meta suele exigir figurar como proveedor de tecnología—: van en la
+  misma solicitud o en una propia.
+- En acceso estándar, Messenger e Instagram solo intercambian mensajes con
+  personas que tengan ROL en la app: sirven para probar escribiendo desde una
+  cuenta con rol, no para atender a clientes reales hasta aprobar.
+
+### Código (28-09-2026, segunda pasada)
+
+El token de Meta ya **no vive en el navegador**: el servidor usa el guardado y
+el navegador solo sabe si hay conexión (`meta-ads?action=status`). Al arrancar,
+se borra cualquier token que un navegador tuviera guardado de antes. También se
+firmó el inicio de la conexión de WhatsApp (cuenta, agente y cliente dentro de
+la firma). Google Ads y LinkedIn todavía dan su token al navegador.
+
 ---
 
 

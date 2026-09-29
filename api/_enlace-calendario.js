@@ -99,3 +99,26 @@ export async function abrirEnlaceCuenta(t, para) {
   if (!(Number(caduca) > Date.now())) return { caducado: true };
   return { userId };
 }
+
+// ── WhatsApp ────────────────────────────────────────────────────────────────
+// Igual que la cuenta, pero la firma lleva también a QUÉ agente y a QUÉ cliente
+// va el número: antes los tres viajaban sueltos en la URL, y con cambiarlos se
+// colgaba un WhatsApp ajeno en tu cuenta —o el tuyo en la de otro—.
+const PREFIJO_WA = 'cuenta-wa';
+const limpio = (x) => String(x || '').replace(/\|/g, '');
+
+export async function crearEnlaceWhatsapp(userId, agentId, clientId, minutos = MINUTOS_ENLACE_CUENTA) {
+  if (!LINK_SECRET || !userId) return null;
+  const datos = [PREFIJO_WA, limpio(userId), Date.now() + minutos * 60000, limpio(agentId), limpio(clientId)].join('|');
+  return encodeURIComponent(datos) + '.' + (await firmar(datos));
+}
+
+/** { userId, agentId, clientId } si vale; { caducado: true } si ya no; null si es falso. */
+export async function abrirEnlaceWhatsapp(t) {
+  const partes = await abrir(t);
+  if (!partes || partes.length !== 5) return null;
+  const [prefijo, userId, caduca, agentId, clientId] = partes;
+  if (prefijo !== PREFIJO_WA || !userId) return null;
+  if (!(Number(caduca) > Date.now())) return { caducado: true };
+  return { userId, agentId: agentId || '', clientId: clientId || '' };
+}

@@ -731,9 +731,13 @@ async function handleGetConnection(req, res) {
   // token utilizable. Que este endpoint lo devuelva en claro es una exposición
   // aparte, anterior a esto, anotada como tal.
   const c = await abrirConexion(rows[0]);
+  // Meta Ads ya NO le da el token al navegador: vive en el servidor, que lo usa
+  // por su cuenta (api/meta-ads.js). Solo el backoffice —con el secreto de
+  // admin— lo sigue recibiendo. Google y LinkedIn aún no se han pasado.
+  const sinToken = platform === 'meta_ads' && !authCheck(req);
   return res.json({
     connected:       true,
-    access_token:    c.access_token,
+    ...(sinToken ? {} : { access_token: c.access_token }),
     account_id:      c.account_id,
     account_name:    c.account_name,
     token_expires_at: c.token_expires_at,

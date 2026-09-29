@@ -61,6 +61,9 @@ async function usuarioAutenticado(req) {
   } catch { return null; }
 }
 
+// Renueva el token de Meta EN EL SERVIDOR. Ya no lo devuelve: el navegador no
+// lo necesita —api/meta-ads.js usa el guardado— y tenerlo allí era dejarlo en
+// localStorage al alcance de cualquier script de la página.
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -86,7 +89,7 @@ export default async function handler(req, res) {
 
     // Le quedan más de 45 días — no hace falta renovar todavía
     if (remaining > 45 * 24 * 60 * 60 * 1000) {
-      return res.status(200).json({ access_token: conn.access_token, expires_at: conn.token_expires_at, refreshed: false });
+      return res.status(200).json({ ok: true, expires_at: conn.token_expires_at, refreshed: false });
     }
 
     // Vigente pero con menos de 45 días — re-exchange para reiniciar los 60 días
@@ -94,7 +97,7 @@ export default async function handler(req, res) {
     const appSecret = process.env.META_APP_SECRET;
     if (!appId || !appSecret) {
       // Sin credenciales de app no se puede renovar — devolver el actual mientras viva
-      return res.status(200).json({ access_token: conn.access_token, expires_at: conn.token_expires_at, refreshed: false });
+      return res.status(200).json({ ok: true, expires_at: conn.token_expires_at, refreshed: false });
     }
 
     const exRes = await fetch(
@@ -111,12 +114,12 @@ export default async function handler(req, res) {
     if (exData.error || !exData.access_token) {
       console.error('Meta re-exchange error:', exData.error);
       // El token actual sigue vigente — devolverlo; se reintentará en la próxima visita
-      return res.status(200).json({ access_token: conn.access_token, expires_at: conn.token_expires_at, refreshed: false });
+      return res.status(200).json({ ok: true, expires_at: conn.token_expires_at, refreshed: false });
     }
 
     const newExpiresAt = await saveToken(userId, exData.access_token, exData.expires_in || 5184000);
     console.log('Meta token renewed for userId:', userId);
-    return res.status(200).json({ access_token: exData.access_token, expires_at: newExpiresAt, refreshed: true });
+    return res.status(200).json({ ok: true, expires_at: newExpiresAt, refreshed: true });
   } catch (err) {
     console.error('refresh-meta-token error:', err);
     return res.status(500).json({ error: 'Error renovando token de Meta' });
