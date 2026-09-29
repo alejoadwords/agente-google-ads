@@ -28,19 +28,36 @@ for (const f of ['api/geo-rank.js','api/seo-rank.js']) {
   ok(s.indexOf('duenoDe') < s.indexOf('const plan ='), f.split('/')[1] + ': el ayudante está definido antes de usarse');
 }
 
-// los siete asesores cuyo plan caduca en días
-const enPrueba = [];
-for (const e of ['asesora','asesora2','asesora3','mpalacios','kmatute','ccomercialoperativa','asesor']) {
-  const r = await fetch(`https://api.clerk.com/v1/users?email_address=${e}@certainpezzano.com`,
-    {headers:{Authorization:'Bearer '+process.env.CLERK_SECRET_KEY}}).then(r=>r.json());
-  if (r[0] && (r[0].public_metadata||{}).plan === 'trial') enPrueba.push(e);
+// Los miembros del equipo de Certain, que no pagan licencia propia.
+//
+// Esto era una foto con fecha —«los siete siguen en prueba, y el 28-29 pasan a
+// free»— y caducó sola: pasado ese día la línea era cierta pasara lo que
+// pasara. Su sustituta escribía los siete correos a mano, y eso también miente
+// en cuanto el equipo cambia: uno de ellos ya no está en el equipo, así que la
+// prueba exigía que heredase un permiso que le toca no tener.
+//
+// Ahora la lista sale de la base. Lo que hay que sostener no tiene fecha: el
+// plan personal de cada uno da igual, porque el permiso lo hereda de la cuenta
+// que paga.
+const equipo = await fetch(
+  `${SB}/rest/v1/team_members?owner_user_id=eq.${DUENA}&status=eq.active` +
+  `&member_user_id=not.is.null&select=member_user_id,member_email`,
+  { headers: H }).then(r => r.json());
+
+// Si la consulta se cayera, la lista vacía dejaría pasar la prueba sin
+// comprobar nada, que es peor que un fallo.
+ok(Array.isArray(equipo) && equipo.length > 0, 'el equipo de la dueña se pudo consultar: ' + (equipo?.length ?? 'error'));
+
+for (const m of equipo || []) {
+  ok(await duenoDe(m.member_user_id) === DUENA, `${m.member_email} hereda el permiso de la cuenta que paga`);
 }
-// Era una foto con fecha: «siguen en prueba y el 28-29 pasan a free». Pasado el
-// 28-09-2026 lo esperado es justo lo contrario, así que ya no se exige el siete;
-// lo que importa —que resuelven al dueño que paga— se comprueba debajo.
-const hoy = new Date().toISOString().slice(0, 10);
-ok(hoy >= '2026-09-28' || enPrueba.length === 7, 'los siete asesores siguen en prueba, y el 28-29 pasan a free: ' + enPrueba.length);
-ok(await duenoDe((await fetch('https://api.clerk.com/v1/users?email_address=asesora@certainpezzano.com',
-  {headers:{Authorization:'Bearer '+process.env.CLERK_SECRET_KEY}}).then(r=>r.json()))[0].id) === DUENA,
-  'y todos resuelven a la cuenta que sí paga');
+
+// Y quien NO está en el equipo no hereda nada, que es la otra mitad: un
+// ayudante que devolviera siempre a la dueña pasaría todo lo de arriba.
+const suelto = await fetch(
+  `${SB}/rest/v1/team_members?member_email=eq.asesora3@certainpezzano.com&select=member_user_id`,
+  { headers: H }).then(r => r.json());
+ok(Array.isArray(suelto) && suelto.length === 0,
+   'asesora3@certainpezzano.com sigue fuera del equipo (tiene cuenta propia en free)');
+
 process.exit(mal?1:0);
