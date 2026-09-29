@@ -30,6 +30,12 @@ const relleno = ['', '   ', 'sin información', 'sin informacion', 'sin datos', 
   // repartió a un comercial sin que nadie hubiera dicho cuánto podía pagar.
   'No especificado', 'no especificada', 'no indicado', 'no mencionado',
   'no proporcionado', 'no definido', 'no confirmado', 'no suministrado', 'no dicho',
+  // Y la FORMA, porque el modelo inventa frases nuevas para decir lo mismo.
+  // Esta salió en una prueba real y volvió a disparar el veredicto en el
+  // primer mensaje: «Sin presupuesto ni horario definidos».
+  'Sin presupuesto ni horario definidos', 'sin presupuesto definido',
+  'sin zona determinada', 'sin monto establecido',
+  'sin horario ni medio de contacto definidos',
   'no sé', 'no se', 'No lo dijo', 'no especificó', 'no indicó', 'no proporcionó',
   'pendiente', 'N/A', 'n/a', 'null', '—', '?', '...', 'ninguna', 'ninguno',
   'No disponible', 'no aplica', 'desconocido',
@@ -42,6 +48,8 @@ const buenas = ['3 millones', 'Buenavista', 'Apartamento', 'Barranquilla',
   // Y lo que la regla general de participios se tragaba: «no amoblado» es una
   // respuesta perfectamente buena a «¿lo quiere amoblado?».
   'no amoblado', 'no remodelado', 'no negociable', 'sin amoblar',
+  // Y lo que la forma general NO puede tragarse: son respuestas de verdad.
+  'sin ascensor', 'sin parqueadero', 'sin remodelar', 'presupuesto flexible',
   // «No» es una respuesta perfectamente válida a un criterio de sí o no.
   'no',
   'no tiene parqueadero', 'Sin ascensor', 'ninguno de los dos le sirve',

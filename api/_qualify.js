@@ -234,13 +234,20 @@ const NO_RESPUESTA = new RegExp(
   ')( (aun|todavia|por ahora|de momento|por el momento|hasta ahora))?$'
 );
 
+// «Sin presupuesto ni horario definidos». El modelo inventa frases nuevas para
+// decir lo mismo, así que además de la lista cerrada se reconoce la FORMA:
+// empieza por «sin» o «no» y termina en un participio de «decir». Eso no se
+// parece a una respuesta de verdad, y deja fuera «sin amoblar» o «sin ascensor»,
+// que sí lo son.
+const NI_DICHO = /^(sin|no)\b[^.]{0,60}\b(definid|especificad|indicad|mencionad|confirmad|aclarad|precisad|informad|proporcionad|suministrad|establecid|determinad|declarad|expresad|comunicad|revelad|compartid)[oa]s?$/;
+
 export function esNoRespuesta(valor) {
   const v = String(valor ?? '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')   // fuera tildes
     .toLowerCase().trim()
     .replace(/^[\s.,;:¿?¡!—–-]+|[\s.,;:¿?¡!—–-]+$/g, '');
   if (!v) return true;
-  return NO_RESPUESTA.test(v);
+  return NO_RESPUESTA.test(v) || NI_DICHO.test(v);
 }
 
 // Veredicto determinista: 'pendiente' mientras falten respuestas,
