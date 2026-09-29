@@ -16,11 +16,16 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 export const UA = { 'User-Agent': 'Acuarius/1.0 (+https://acuarius.app)' };
 
-// Cuántas fichas se leen por ejecución. Cada una tarda ~2s, así que en serie 40
-// serían ~80s y la función se cortaría antes de terminar. Se leen de 5 en 5:
-// ~16s por lote, dentro del límite y sin castigar la web ajena.
-const LOTE = 30;
-const A_LA_VEZ = 5;
+// Cuántos inmuebles se miran por ejecución.
+//
+// Leer una ficha tarda ~2s, así que el tope lo pone cuántas hay que LEER, no
+// cuántas se miran. Y desde que se saltan las que no han cambiado, en una
+// pasada normal no hay casi ninguna que leer: la primera vuelta es la cara, las
+// siguientes salen casi gratis. Por eso el lote sube a 40 y la concurrencia a
+// 8: en el peor caso (todas nuevas) son ~10s, dentro del límite y sin castigar
+// la web ajena.
+const LOTE = 40;
+const A_LA_VEZ = 8;
 
 function sb() {
   return {
@@ -186,8 +191,55 @@ export async function sincronizarLote(fuente) {
     return (p[tax] || []).map(id => mapas[tax].get(id)).filter(Boolean)[0] || null;
   };
 
-  // Los precios, en paralelo: es lo único lento de todo el proceso.
-  const precios = await enTandas(props, (p) => preciosDeFicha(p.link));
+  // ── Solo se releen las fichas que cambiaron ──────────────────────────────
+  // El precio hay que sacarlo de la ficha, y eso es lo único lento: 444
+  // inmuebles a ~2s son doce horas de reloj repartidas en pasadas de una hora.
+  // Releerlas todas cada vuelta es trabajo tirado, porque casi ninguna cambia.
+  //
+  // WordPress dice cuándo se modificó cada una. Si la fecha es la misma que la
+  // guardada Y ya tenemos sus precios separados, se reutiliza lo que hay y solo
+  // se marca como vista. La primera vuelta sigue siendo cara; las siguientes
+  // cuestan una consulta y cuatro fichas.
+  const codigos = props
+    .map(p => String(p.title?.rendered || '').replace(/<[^>]*>/g, '').trim())
+    .filter(Boolean);
+  const guardadas = new Map();
+  if (codigos.length) {
+    const lista = codigos.map(c => `"${c.replace(/"/g, '')}"`).join(',');
+    const filas = await fetch(
+      `${SUPABASE_URL}/rest/v1/client_properties?${alcance}&codigo=in.(${encodeURIComponent(lista)})` +
+      '&select=codigo,modificado,precio,precio_arriendo,precio_venta,administracion',
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    for (const f of filas || []) guardadas.set(f.codigo, f);
+  }
+
+  const sigueIgual = (codigo, modified) => {
+    const g = guardadas.get(codigo);
+    if (!g || !g.modificado || !modified) return null;
+    if (new Date(g.modificado).getTime() !== new Date(modified).getTime()) return null;
+    // Sin precios separados no sirve: es una fila de antes de que existieran y
+    // hay que releerla aunque no haya cambiado.
+    if (g.precio_arriendo == null && g.precio_venta == null) return null;
+    return g;
+  };
+
+  let releidas = 0;
+  const precios = await enTandas(props, async (p) => {
+    const codigo = String(p.title?.rendered || '').replace(/<[^>]*>/g, '').trim();
+    const igual = sigueIgual(codigo, p.modified);
+    if (igual) {
+      return {
+        precio_arriendo: igual.precio_arriendo,
+        precio_venta: igual.precio_venta,
+        administracion: igual.administracion,
+        precio_suelto: igual.precio,
+        reusado: true,
+      };
+    }
+    releidas++;
+    return preciosDeFicha(p.link);
+  });
 
   const ahora = new Date().toISOString();
   const filas = [];
@@ -290,7 +342,8 @@ export async function sincronizarLote(fuente) {
   });
 
   return {
-    guardadas: unicas.length, pagina, de: totalPaginas, terminado,
+    guardadas: unicas.length, releidas, reusadas: unicas.length - releidas,
+    pagina, de: totalPaginas, terminado,
     sin_precio: unicas.filter(f => !f.precio).length,
     codigos_repetidos: repetidos,
     barridos, aviso,

@@ -226,6 +226,35 @@ ok(/administracion \? 'admón\. '/.test(filtro), 'la administración se le pasa 
 ok(/por confirmar/.test(filtro),
    'marcada como no definitiva: se publica aparte del canon y cambia');
 
+// ── 4b. No releer lo que no cambió ──────────────────────────────────────────
+console.log('\nUna ficha que no cambió no se vuelve a leer');
+// Leer la ficha de un inmueble tarda ~2s y es lo único lento: 444 inmuebles son
+// doce horas de reloj. Releerlos todos en cada vuelta es trabajo tirado, porque
+// casi ninguno cambia. WordPress dice cuándo se modificó cada uno.
+ok(/const sigueIgual = \(codigo, modified\)/.test(cat), 'se compara con la fecha de modificación guardada');
+ok(/new Date\(g\.modificado\)\.getTime\(\) !== new Date\(modified\)\.getTime\(\)/.test(cat),
+   'por instante y no por texto: las dos fechas vienen con formatos distintos');
+ok(/if \(g\.precio_arriendo == null && g\.precio_venta == null\) return null;/.test(cat),
+   'y una fila sin precios separados se relee aunque no haya cambiado: es de antes de que existieran');
+ok(/reusado: true/.test(cat), 'lo reutilizado se marca');
+ok(/releidas, reusadas: unicas\.length - releidas/.test(cat),
+   'y se informa de cuántas se releyeron, para poder ver si el ahorro es real');
+// Un instrumento que no llega a donde se lee no mide nada: el cron armaba su
+// propio resumen y se dejaba estos dos campos por el camino.
+const cronSrc = readFileSync(new URL('../api/cron-catalogo.js', import.meta.url), 'utf8');
+ok(/releidas: r\.releidas, reusadas: r\.reusadas/.test(cronSrc),
+   'y el cron los pasa en su resumen, que es donde se leen');
+
+// Con el ahorro, el lote puede ser mayor sin pasarse de tiempo.
+const lote = Number((cat.match(/const LOTE = (\d+)/) || [])[1]);
+const aLaVez = Number((cat.match(/const A_LA_VEZ = (\d+)/) || [])[1]);
+ok(lote >= 30 && lote <= 100, 'el lote es razonable: ' + lote);
+ok(aLaVez >= 5 && aLaVez <= 10, 'y la concurrencia no castiga la web ajena: ' + aLaVez);
+// En el peor caso —todas nuevas— el lote entero tiene que caber en el límite de
+// la función. A ~2s por ficha: lote/concurrencia * 2 segundos.
+ok((lote / aLaVez) * 2 <= 15, 'y en el peor caso el lote cabe en el tiempo de la función: ' +
+   Math.round((lote / aLaVez) * 2) + 's');
+
 // ── 5. Una sola implementación ──────────────────────────────────────────────
 console.log('\nEl botón y el cron hacen lo mismo');
 const endpoint = readFileSync(new URL('../api/knowledge-sync.js', import.meta.url), 'utf8');

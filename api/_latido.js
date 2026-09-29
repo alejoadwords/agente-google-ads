@@ -64,7 +64,7 @@ export const CADA = {
   'cron-integridad': 24 * 60,    // 0 11 * * *
   'cron-knowledge': 31 * 24 * 60,        // 0 12 1 * * — 31 días: el mes más largo
   'cron-monthly-reports': 31 * 24 * 60,  // 0 8 1 * *
-  'cron-catalogo': 60,           // 25 * * * *
+  'cron-catalogo': 30,           // 25,55 * * * *
   'cron-notas': 24 * 60,         // 0 13,20 * * 1-5
   'cron-recordatorios': 10,
   'cron-programados': 5,
