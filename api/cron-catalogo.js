@@ -45,7 +45,8 @@ export default async function handler(req) {
         cliente: f.client_id || '(cuenta)',
         ...(r.error
           ? { error: r.error }
-          : { guardadas: r.guardadas, pagina: r.pagina, de: r.de, terminado: r.terminado, barridos: r.barridos, aviso: r.aviso }),
+          : { guardadas: r.guardadas, releidas: r.releidas, reusadas: r.reusadas,
+              pagina: r.pagina, de: r.de, terminado: r.terminado, barridos: r.barridos, aviso: r.aviso }),
       });
     } catch (e) {
       // Que la web de un cliente se caiga no puede dejar sin sincronizar a los

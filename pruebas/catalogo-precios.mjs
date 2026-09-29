@@ -239,6 +239,11 @@ ok(/if \(g\.precio_arriendo == null && g\.precio_venta == null\) return null;/.t
 ok(/reusado: true/.test(cat), 'lo reutilizado se marca');
 ok(/releidas, reusadas: unicas\.length - releidas/.test(cat),
    'y se informa de cuántas se releyeron, para poder ver si el ahorro es real');
+// Un instrumento que no llega a donde se lee no mide nada: el cron armaba su
+// propio resumen y se dejaba estos dos campos por el camino.
+const cronSrc = readFileSync(new URL('../api/cron-catalogo.js', import.meta.url), 'utf8');
+ok(/releidas: r\.releidas, reusadas: r\.reusadas/.test(cronSrc),
+   'y el cron los pasa en su resumen, que es donde se leen');
 
 // Con el ahorro, el lote puede ser mayor sin pasarse de tiempo.
 const lote = Number((cat.match(/const LOTE = (\d+)/) || [])[1]);
