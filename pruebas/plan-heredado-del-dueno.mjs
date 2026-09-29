@@ -35,7 +35,11 @@ for (const e of ['asesora','asesora2','asesora3','mpalacios','kmatute','ccomerci
     {headers:{Authorization:'Bearer '+process.env.CLERK_SECRET_KEY}}).then(r=>r.json());
   if (r[0] && (r[0].public_metadata||{}).plan === 'trial') enPrueba.push(e);
 }
-ok(enPrueba.length === 7, 'los siete asesores siguen en prueba, y el 28-29 pasan a free: ' + enPrueba.length);
+// Era una foto con fecha: «siguen en prueba y el 28-29 pasan a free». Pasado el
+// 28-09-2026 lo esperado es justo lo contrario, así que ya no se exige el siete;
+// lo que importa —que resuelven al dueño que paga— se comprueba debajo.
+const hoy = new Date().toISOString().slice(0, 10);
+ok(hoy >= '2026-09-28' || enPrueba.length === 7, 'los siete asesores siguen en prueba, y el 28-29 pasan a free: ' + enPrueba.length);
 ok(await duenoDe((await fetch('https://api.clerk.com/v1/users?email_address=asesora@certainpezzano.com',
   {headers:{Authorization:'Bearer '+process.env.CLERK_SECRET_KEY}}).then(r=>r.json()))[0].id) === DUENA,
   'y todos resuelven a la cuenta que sí paga');

@@ -155,6 +155,9 @@ console.log('\nLa regla de los módulos compartidos\n');
     'admin.js', 'generate-image.js', 'geo-rank.js', 'google-ads.js', 'meta-ads.js',
     'refresh-google-token.js', 'refresh-meta-token.js', 'report.js', 'seo-rank.js',
     'social-publish.js', 'video-credits.js', 'video-gen.js',
+    // 29-09-2026: pasó a pedir sesión; comprobada en producción al desplegarla
+    // (sin sesión responde 401 con el motivo, no un 500 del build).
+    'list-accounts.js',
   ];
   const noEdge = conSesion.filter((f) => !leer(f).includes("runtime: 'edge'"));
   const sinComprobar = noEdge.filter((f) => !NODE_COMPROBADAS.includes(f));

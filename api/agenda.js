@@ -39,17 +39,69 @@ function leadCerrado(lead) {
   return ETAPAS_CERRADAS.includes(String(lead.stage || '').toLowerCase());
 }
 
+// Trae TODAS las filas de una consulta, de mil en mil.
+//
+// El calendario pedía `limit=500` ordenado de la más antigua a la más nueva, y
+// Certain & Pezzano tenía 643 actividades en la cuadrícula de septiembre: las
+// 143 últimas —el 29, el 30 y todo octubre, justo lo que viene— no llegaban y
+// la pantalla las pintaba como días vacíos. Mil es lo que PostgREST devuelve
+// como mucho por petición aunque se pida más.
+//
+// El techo existe para que un rango absurdo no se lleve la función por
+// delante; si se alcanza se DICE (`truncado`), no se corta en silencio.
+export const PAGINA = 1000;
+export const TECHO = 10000;
+export async function todasLasFilas(consulta, { pagina = PAGINA, techo = TECHO } = {}) {
+  const filas = [];
+  for (let desde = 0; desde < techo; desde += pagina) {
+    const r = await fetch(`${consulta}&limit=${pagina}&offset=${desde}`, { headers: sbHeaders() });
+    if (!r.ok) return { filas, fallo: 'HTTP ' + r.status, truncado: false };
+    const lote = (await r.json()) || [];
+    filas.push(...lote);
+    if (lote.length < pagina) return { filas, truncado: false };
+  }
+  return { filas, truncado: true };
+}
+
+// Los leads de una lista de ids, por tandas. Con 600 actividades la lista de
+// ids en la URL pasaba de 20 KB, y una URL demasiado larga falla —y el fallo
+// aquí se convertía en «no hay leads», o sea, en actividades sin dueño—.
+export async function leadsPorIds(ids, select, cuenta = null) {
+  const unicos = Array.from(new Set((ids || []).filter(Boolean)));
+  const porId = {};
+  for (let i = 0; i < unicos.length; i += 150) {
+    const tanda = unicos.slice(i, i + 150);
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/leads?id=in.(${tanda.join(',')})` +
+      (cuenta ? `&user_id=eq.${encodeURIComponent(cuenta)}` : '') + `&select=${select}`,
+      { headers: sbHeaders() }
+    );
+    if (!r.ok) throw new Error('No se pudieron leer los leads (HTTP ' + r.status + ')');
+    for (const l of (await r.json()) || []) porId[l.id] = l;
+  }
+  return porId;
+}
+
+// El nombre del asesor tal como se muestra. En Certain hay uno guardado con
+// un tabulador en medio: comparado como texto serían dos personas.
+export function nombreLimpio(n) {
+  return String(n || '').replace(/\s+/g, ' ').trim();
+}
+
+// Cada actividad con el asesor de su lead. La tabla no guarda quién la creó:
+// el dueño de una actividad es el asesor asignado a su lead, que es además el
+// criterio con el que el perfil Ventas ya veía solo lo suyo.
+export function conAsesor(filas, leadsPorId) {
+  return (filas || []).map(a => {
+    const lead = a.lead_id ? leadsPorId[a.lead_id] : null;
+    return { ...a, asesor_id: lead?.assigned_to || null, asesor_nombre: lead?.assigned_to ? nombreLimpio(lead.assigned_name) : null };
+  });
+}
+
 // Deja solo las actividades cuyo lead está asignado a quien pregunta. Las que
 // no cuelgan de ningún lead se quedan: son notas de su propia agenda.
-async function soloDeMisLeads(filas, cuenta, actor) {
-  const ids = Array.from(new Set((filas || []).map(a => a.lead_id).filter(Boolean)));
-  if (!ids.length) return filas || [];
-  const leads = await fetch(
-    `${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&user_id=eq.${encodeURIComponent(cuenta)}&select=id,assigned_to`,
-    { headers: sbHeaders() }
-  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-  const mios = new Set((leads || []).filter(l => l.assigned_to === actor).map(l => l.id));
-  return (filas || []).filter(a => !a.lead_id || mios.has(a.lead_id));
+export function soloDeMisLeads(filas, actor) {
+  return (filas || []).filter(a => !a.lead_id || a.asesor_id === actor);
 }
 
 function jsonResp(data, status = 200) {
@@ -124,19 +176,19 @@ export default async function handler(req) {
     // cliente: una lista de trabajo nunca debe esconder algo pendiente.
     let q = `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}&done=is.false&cancelled_at=is.null`
       + (clientId ? `&or=(client_id.eq.${clientId},client_id.is.null)` : '')
-      + `&due_at=lte.${encodeURIComponent(hasta)}&select=*&order=due_at.asc&limit=400`;
-    const tareas = await fetch(q, { headers: sbHeaders() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      + `&due_at=lte.${encodeURIComponent(hasta)}&select=*&order=due_at.asc,id.asc`;
+    // Sin tope fijo: el de 400 era el mismo corte silencioso del calendario,
+    // esperando a que Certain acumulara unas cuantas semanas más.
+    const { filas: tareas, fallo, truncado } = await todasLasFilas(q);
+    if (fallo) return jsonResp({ error: 'No se pudieron leer las tareas (' + fallo + '). Reintenta en unos segundos.' }, 502);
 
     // No hay FK de activities a leads, así que el lead se resuelve aparte en
     // vez de con un embed de PostgREST.
-    const ids = Array.from(new Set((tareas || []).map(t => t.lead_id).filter(Boolean)));
-    let leadsPorId = {};
-    if (ids.length) {
-      const leads = await fetch(
-        `${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&select=id,name,phone,email,stage,assigned_to,assigned_name,deleted_at,closed_at`,
-        { headers: sbHeaders() }
-      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-      (leads || []).forEach(l => { leadsPorId[l.id] = l; });
+    let leadsPorId;
+    try {
+      leadsPorId = await leadsPorIds(tareas.map(t => t.lead_id), 'id,name,phone,email,stage,assigned_to,assigned_name,deleted_at,closed_at');
+    } catch (e) {
+      return jsonResp({ error: e.message + '. Reintenta en unos segundos.' }, 502);
     }
 
     // «Vencida» se cuenta por DÍA, no por hora.
@@ -183,7 +235,7 @@ export default async function handler(req) {
       else if (vence <= finDeHoy.getTime()) out.hoy.push(item);
       else out.proximas.push(item);
     }
-    return jsonResp({ ...out, total: out.vencidas.length + out.hoy.length + out.proximas.length });
+    return jsonResp({ ...out, total: out.vencidas.length + out.hoy.length + out.proximas.length, truncado });
   }
 
   // GET ?lead_id= — actividades de un lead
@@ -209,15 +261,25 @@ export default async function handler(req) {
   if (req.method === 'GET') {
     const from = url.searchParams.get('from');
     const to = url.searchParams.get('to');
-    let q = `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}${scope}&cancelled_at=is.null&select=*&order=due_at.asc&limit=500`;
+    // El orden lleva el id detrás: paginando, dos filas con la misma hora
+    // podían saltar de página y salir dos veces o ninguna.
+    let q = `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${userId}${scope}&cancelled_at=is.null&select=*&order=due_at.asc,id.asc`;
     if (from) q += `&due_at=gte.${encodeURIComponent(from)}`;
     if (to) q += `&due_at=lte.${encodeURIComponent(to)}`;
-    const res = await fetch(q, { headers: sbHeaders() });
-    let filas = (await res.json()) || [];
+    const { filas: todas, fallo, truncado } = await todasLasFilas(q);
+    // Antes un fallo aquí devolvía el cuerpo del error como si fuera la lista,
+    // y la pantalla lo pintaba como un mes sin nada.
+    if (fallo) return jsonResp({ error: 'No se pudo leer la agenda (' + fallo + '). Reintenta en unos segundos.' }, 502);
+    let filas;
+    try {
+      filas = conAsesor(todas, await leadsPorIds(todas.map(a => a.lead_id), 'id,assigned_to,assigned_name', userId));
+    } catch (e) {
+      return jsonResp({ error: e.message + '. Reintenta en unos segundos.' }, 502);
+    }
     // El calendario es otra puerta a lo mismo: sin este corte, el perfil Ventas
     // veía en el mes las reuniones de los leads de sus compañeros.
-    if (forzarMias) filas = await soloDeMisLeads(filas, userId, yoSoy);
-    return jsonResp({ activities: filas });
+    if (forzarMias) filas = soloDeMisLeads(filas, yoSoy);
+    return jsonResp({ activities: filas, truncado, ...(truncado ? { techo: TECHO } : {}) });
   }
 
   // POST — crear actividad (reunión → evento en Google Calendar)

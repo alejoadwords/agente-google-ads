@@ -1,7 +1,9 @@
 // api/refresh-google-token.js
 // Refresca el access_token de Google Ads usando el refresh_token almacenado en Supabase.
-// El frontend lo llama al iniciar sesión para garantizar un token fresco sin pedir
-// al usuario que se reconecte.
+// El frontend lo llama al iniciar sesión para saber si la conexión sigue viva.
+// El token NO sale de aquí: lo usan solo los endpoints del servidor. Devolverlo
+// era darle al navegador —y a cualquier extensión o script inyectado— una llave
+// de la cuenta publicitaria del cliente.
 
 import { abrirConexion, cifrar } from './_cifrado.js';
 // La sesión se verifica con el módulo común, que lee las cabeceras de las
@@ -95,7 +97,7 @@ export default async function handler(req, res) {
       if (remaining > 5 * 60 * 1000) {
         // Token todavía válido — devolver el actual sin refrescar
         return res.status(200).json({
-          access_token: conn.access_token,
+          ok:           true,
           expires_at:   conn.token_expires_at,
           refreshed:    false,
         });
@@ -132,7 +134,7 @@ export default async function handler(req, res) {
 
     console.log('Google token refreshed for userId:', userId);
     return res.status(200).json({
-      access_token: refreshed.access_token,
+      ok:           true,
       expires_at:   expiresAt,
       refreshed:    true,
     });

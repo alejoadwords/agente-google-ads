@@ -82,6 +82,36 @@ async function updateStoredToken(userId, accessToken, expiresIn) {
   );
 }
 
+// El token con el que se habla con Google, SIEMPRE el guardado de la cuenta.
+// Antes cada ruta aceptaba primero el que mandara el navegador y devolvía el
+// renovado para que lo guardara en sessionStorage: el navegador era dueño de
+// una llave de la cuenta publicitaria. Ahora no la ve nunca.
+//
+// Si al token le quedan menos de 5 minutos se renueva aquí, antes de usarlo:
+// es más barato que dejar que Google conteste 401 y reintentar.
+export async function tokenVigente(userId) {
+  const conn = await getStoredToken(userId).catch(() => null);
+  if (!conn || (!conn.access_token && !conn.refresh_token)) {
+    return { error: 'No hay Google Ads conectado en esta cuenta. Conéctalo en Configuración → Conexiones.', needsConnect: true };
+  }
+  const vence = conn.token_expires_at ? new Date(conn.token_expires_at).getTime() : 0;
+  const sirve = conn.access_token && vence - Date.now() > 5 * 60 * 1000;
+  if (sirve) return { token: conn.access_token };
+  if (!conn.refresh_token) {
+    // Sin forma de renovarlo, el que hay se intenta igual: si ya no vale, la
+    // llamada lo dirá con su 401 y la pantalla pedirá reconectar.
+    return conn.access_token
+      ? { token: conn.access_token }
+      : { error: 'La conexión de Google Ads caducó. Vuelve a conectarla.', needsReconnect: true };
+  }
+  const r = await refreshGoogleToken(conn.refresh_token).catch(() => ({}));
+  if (!r.access_token) {
+    return { error: `Google no renovó el permiso${r.error_description ? ' (' + r.error_description + ')' : ''}. Vuelve a conectar Google Ads.`, needsReconnect: true };
+  }
+  await updateStoredToken(userId, r.access_token, r.expires_in);
+  return { token: r.access_token };
+}
+
 // ── Detected API version cache (per process lifetime) ────────
 let _detectedApiVersion = null;
 
@@ -429,38 +459,33 @@ export default async function handler(req, res) {
   // ── Legacy GAQL proxy (backward compat) ─────────────────────
   if (!action) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-    const { customerId: rawCid, query, accessToken: rawToken } = req.body;
+    const { customerId: rawCid, query } = req.body || {};
     // Esta rama vieja también tomaba el userId del cuerpo. Mismo agujero.
     const bodyUid = await usuarioAutenticado(req);
     if (!bodyUid) return res.status(401).json({ error: 'No autorizado' });
     if (!rawCid || !query) return res.status(400).json({ error: 'customerId y query requeridos' });
 
     const cleanCid = rawCid.replace(/-/g, '');
+    // El token del cuerpo se ignora: solo vale el guardado de la cuenta.
+    const vig = await tokenVigente(bodyUid);
+    if (!vig.token) return res.status(200).json({ error: vig.error, needsConnect: !!vig.needsConnect, needsReconnect: !!vig.needsReconnect });
+    const activeToken = vig.token;
     const makeH = (tok, login) => {
       const h = { 'Authorization': `Bearer ${tok}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
       if (login) h['login-customer-id'] = String(login).replace(/-/g, '');
       return h;
     };
-    const legacyVer = await getApiVersion(cleanCid, rawToken || '');
+    const legacyVer = await getApiVersion(cleanCid, activeToken);
     // Mismo criterio que en el resto: se resuelve una vez para esta cuenta en
     // vez de mandar el administrador a ciegas.
-    const legacyLogin = await loginParaCuenta(cleanCid, rawToken || '', bodyUid);
+    const legacyLogin = await loginParaCuenta(cleanCid, activeToken, bodyUid);
     const doReq = (tok) => fetch(
       `https://googleads.googleapis.com/v${legacyVer}/customers/${cleanCid}/googleAds:search`,
       { method: 'POST', headers: makeH(tok, legacyLogin), body: JSON.stringify({ query }) }
     );
 
-    // Obtener token inicial: del body, o de Supabase como fallback
-    let activeToken = rawToken || '';
-    if (!activeToken && bodyUid) {
-      const conn = await getStoredToken(bodyUid);
-      activeToken = conn?.access_token || '';
-    }
-    if (!activeToken) return res.status(200).json({ error: 'No hay token de Google Ads. Conecta tu cuenta en Configuración.' });
-
     try {
       let r = await doReq(activeToken);
-      let newAccessToken = null; // Si el backend renueva el token, lo devolvemos al frontend
 
       // Auto-refresh en 401
       if (r.status === 401 && bodyUid) {
@@ -469,7 +494,6 @@ export default async function handler(req, res) {
           const refreshed = await refreshGoogleToken(conn.refresh_token);
           if (refreshed.access_token) {
             await updateStoredToken(bodyUid, refreshed.access_token, refreshed.expires_in);
-            newAccessToken = refreshed.access_token; // devolver al frontend para actualizar sessionStorage
             r = await doReq(refreshed.access_token);
           }
         } else {
@@ -501,11 +525,9 @@ export default async function handler(req, res) {
         return res.status(200).json({ error: `Google Ads API [${r.status}]: ${msg}${detail}`, failedQuery: query });
       }
 
-      // /search devuelve { results: [...] } directamente
-      // Si el backend renovó el token, incluirlo en la respuesta para que el frontend actualice sessionStorage
-      const response = { results: data.results || [] };
-      if (newAccessToken) response._refreshedToken = newAccessToken;
-      return res.status(200).json(response);
+      // /search devuelve { results: [...] } directamente. El token renovado,
+      // si lo hubo, ya quedó guardado: no viaja al navegador.
+      return res.status(200).json({ results: data.results || [] });
     } catch (err) {
       console.error('GAQL proxy exception:', err.message);
       return res.status(200).json({ error: `Error interno: ${err.message}` });
@@ -522,23 +544,23 @@ export default async function handler(req, res) {
   const dateRange  = req.query.dateRange  || 'LAST_30_DAYS';
 
   try {
-    // Obtener token: primero del body/query (token fresco de sessionStorage del frontend),
-    // si no, intentar desde Supabase, y si expiró, auto-refrescar con refresh_token.
-    let token = req.query.accessToken || (req.body && req.body.accessToken) || '';
-    if (!token && userId) {
-      const conn = await getStoredToken(userId);
-      if (conn?.access_token) {
-        token = conn.access_token;
-      } else if (conn?.refresh_token) {
-        // Token ausente pero hay refresh_token → renovar automáticamente
-        const refreshed = await refreshGoogleToken(conn.refresh_token);
-        if (refreshed.access_token) {
-          await updateStoredToken(userId, refreshed.access_token, refreshed.expires_in);
-          token = refreshed.access_token;
-        }
-      }
+    // La pantalla pregunta esto en vez de guardarse el token: «conectado» lo
+    // decide el servidor. No renueva nada: solo mira si hay con qué.
+    if (action === 'status') {
+      const conn = await getStoredToken(userId).catch(() => null);
+      const fila = conn ? await getConexionGoogle(userId) : null;
+      return res.status(200).json({
+        connected: !!(conn && (conn.access_token || conn.refresh_token)),
+        puede_renovar: !!conn?.refresh_token,
+        account_id: fila?.account_id || null,
+      });
     }
-    if (!token) return res.status(401).json({ error: 'No hay token. Conecta tu cuenta de Google Ads.', needsConnect: true });
+
+    // Solo el token guardado. Uno que mande el navegador (?accessToken=) se
+    // ignora: ya no tiene ninguno, y si lo tuviera no sería de fiar.
+    const vig = await tokenVigente(userId);
+    if (!vig.token) return res.status(401).json({ error: vig.error, needsConnect: !!vig.needsConnect, needsReconnect: !!vig.needsReconnect });
+    const token = vig.token;
     if (!customerId) return res.status(400).json({ error: 'customerId requerido' });
 
     // ── get-account-overview ───────────────────────────────────

@@ -1,7 +1,15 @@
 // api/list-accounts.js
-// Lista todas las cuentas de Google Ads accesibles con el token del usuario
+// Lista todas las cuentas de Google Ads accesibles con el token de la cuenta.
+//
+// Antes no pedía sesión y tomaba el userId del cuerpo: con el id de cualquier
+// usuario se listaban sus cuentas de Google Ads usando SU token guardado. Y
+// aceptaba un accessToken del navegador, que era un relé abierto. Ahora la
+// cuenta sale de la sesión y el token es solo el guardado.
 
 import { abrirConexion, cifrar } from './_cifrado.js';
+// La sesión se verifica con el módulo común, que lee las cabeceras de las
+// dos formas: `Headers` en edge y objeto plano en Node.
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -49,17 +57,31 @@ async function updateStoredToken(userId, accessToken) {
   ).catch(() => {});
 }
 
+// La cuenta sobre la que se trabaja: la del dueño si quien pregunta es miembro.
+async function cuentaDe(actorId) {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/team_members?member_user_id=eq.${encodeURIComponent(actorId)}&status=eq.active&select=owner_user_id&limit=1`,
+      { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+    );
+    if (!r.ok) return null;                     // no se adivina: se corta
+    return (await r.json())?.[0]?.owner_user_id || actorId;
+  } catch { return null; }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  let { accessToken, userId } = req.body || {};
+  const sesion = await verificarSesion(req);
+  if (!sesion.id) return res.status(401).json(await cuerpoSinSesion(sesion, 'list-accounts'));
+  const userId = await cuentaDe(sesion.id);
+  if (!userId) return res.status(503).json({ error: 'No se pudo verificar tu cuenta. Reintenta en unos segundos.' });
 
-  // Si no hay token en el body, obtenerlo de Supabase
-  if (!accessToken && userId) {
-    const conn = await getStoredConnection(userId);
-    accessToken = conn?.access_token || null;
+  const conn = await getStoredConnection(userId);
+  let accessToken = conn?.access_token || null;
+  if (!accessToken && !conn?.refresh_token) {
+    return res.status(401).json({ error: 'No hay Google Ads conectado en esta cuenta. Conéctalo en Configuración → Conexiones.', needsConnect: true });
   }
-  if (!accessToken) return res.status(400).json({ error: 'accessToken requerido' });
 
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
   const mccId = (process.env.GOOGLE_ADS_MCC_ID || '').replace(/-/g, '');
@@ -182,7 +204,7 @@ export default async function handler(req, res) {
     if (!listData.resourceNames || listData.resourceNames.length === 0) {
       return res.status(200).json({
         accounts: [], isMCC: false,
-        googleError: `El token no tiene acceso a ninguna cuenta. Verifica que la cuenta ${accessToken.slice(0,10)}... esté vinculada al MCC y que el developer token tenga acceso a producción (no test mode).`,
+        googleError: `El token no tiene acceso a ninguna cuenta. Verifica que la cuenta esté vinculada al MCC y que el developer token tenga acceso a producción (no test mode).`,
         debug: { step: 'listAccessibleCustomers', resourceNames: listData.resourceNames },
       });
     }

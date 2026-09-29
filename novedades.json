@@ -13,6 +13,20 @@
       }
     },
     {
+      "id": "2026-09-29-agenda-por-asesor",
+      "fecha": "2026-09-29",
+      "tipo": "nuevo",
+      "titulo": "Agenda: mira el calendario de cada asesor",
+      "texto": "En CRM → Agenda, junto a las flechas del mes, hay un desplegable nuevo: elige a un asesor y el calendario muestra solo sus tareas y citas, con cuántas tiene en el mes. Con «Todo el equipo» ves lo de todos y, en el panel del día, de quién es cada actividad. Además, el calendario ya carga el mes completo: en las cuentas con mucho movimiento, los últimos días del mes podían aparecer vacíos aunque tuvieran citas. Y al agendar una cita desde el embudo, el aviso de «ya hay algo a esa hora» vuelve a funcionar, y compara con las reuniones del asesor que va a atender, no con las de todo el equipo."
+    },
+    {
+      "id": "2026-09-29-google-linkedin-seguros",
+      "fecha": "2026-09-29",
+      "tipo": "mejora",
+      "titulo": "Google Ads y LinkedIn: tus permisos ya no pasan por el navegador",
+      "texto": "El permiso que le das a Acuarius para trabajar con tu cuenta de Google Ads o de LinkedIn se queda guardado y cifrado en nuestros servidores, y desde ahí se usa. Tu navegador solo sabe que la cuenta está conectada, así que ninguna extensión ni página abierta puede llevárselo. Además, el enlace para conectar va firmado a nombre de tu cuenta: nadie puede enviarte un enlace para que tu cuenta publicitaria acabe conectada a la de otra persona. Si ya tenías Google Ads conectado, sigue funcionando igual; no tienes que volver a conectarlo."
+    },
+    {
       "id": "2026-09-29-calificacion-memoria",
       "fecha": "2026-09-29",
       "tipo": "arreglo",

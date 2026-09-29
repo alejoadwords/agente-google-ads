@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Agenda</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  Banco de pruebas de CRM → Agenda con el filtro por asesor.
+
+  Carga el CSS de public/index.html y las FUNCIONES de public/app.js tal cual,
+  y solo cambia el servidor por uno de mentira. El volumen imita a Certain &
+  Pezzano en septiembre de 2026: seis asesores y ~640 actividades.
+
+  Arrancar con:  PUERTO=4183 node pruebas/servidor-boceto.mjs
+  y abrir http://localhost:4183/pruebas/banco-agenda.html
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle,#F7F8FC);color:var(--text,#0D0F1C)}
+  /* Igual que en index.html: con overflow, el contenedor no se ensancha con su contenido. */
+  #crm-agenda-view{padding:18px 22px;max-width:1280px;margin:0 auto 60px;display:flex;flex-direction:column}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:var(--text,#111);color:#fff;padding:8px 14px;
+    display:flex;gap:12px;align-items:center;justify-content:center;font-size:12px;z-index:9000;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:7px;padding:5px 10px;
+    font-family:inherit;font-size:12px;cursor:pointer}
+  .banco span{opacity:.55}
+  #toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--text,#111);color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13px;z-index:9999;display:none}
+  #toast.err{background:var(--danger,#DC2626)}
+</style>
+</head>
+<body>
+<div id="crm-agenda-view"></div>
+<div id="toast"></div>
+<div class="banco">
+  <span>BANCO · agenda:</span>
+  <button onclick="escenario('equipo')">equipo (6 asesores)</button>
+  <button onclick="escenario('veinte')">20 asesores</button>
+  <button onclick="escenario('ventas')">perfil Ventas</button>
+  <button onclick="escenario('uno')">un solo asesor</button>
+  <button onclick="escenario('error')">servidor caído</button>
+  <button onclick="try{localStorage.clear()}catch(e){};location.reload()">olvidar elección</button>
+</div>
+
+<script>
+let ESC = 'equipo';
+const GENTE = [
+  ['u_deysy', 'Deysy Elena Pacheco Torne', 182], ['u_patri', 'Patricia Maria\tPerez Charris', 157],
+  ['u_maira', 'Maira Ballesteros', 139], ['u_jose', 'Jose Javier Hurtado Correa', 96],
+  ['u_moni', 'Monica Palacios Jaramillo', 69], ['u_cami', 'Maria Camila Romero', 7], [null, null, 1],
+];
+const TITULOS = ['Seguimiento', 'Llame no me contestó.', 'Primer contacto', 'Enviar opciones', 'Agendamiento de cita', 'Pendiente de respuesta'];
+function actividades() {
+  const out = []; let n = 0;
+  const personas = ESC === 'uno' ? [GENTE[0]] : ESC === 'ventas' ? [GENTE[2], [null, null, 3]]
+    : ESC === 'veinte' ? Array.from({ length: 20 }, (_, i) => ['u' + i, ['Andrea', 'Bruno', 'Carla', 'Diego', 'Elena', 'Fabián', 'Gloria', 'Hernán', 'Irene', 'Julián'][i % 10] + ' ' + ['Rojas', 'Mejía', 'Castro', 'Vargas'][i % 4] + ' Herrera Castañeda', 10 + i * 3])
+    : GENTE;
+  for (const [id, nombre, total] of personas) {
+    for (let i = 0; i < total; i++) {
+      const dia = 14 + ((i * 7 + n) % 25);                 // del 14-sep al 8-oct, cargado a final de mes
+      const d = new Date(2026, 8, dia, 7 + (i % 11), (i * 13) % 60);
+      out.push({ id: 'a' + (n++), type: i % 9 === 0 ? 'meeting' : 'task', title: TITULOS[i % TITULOS.length],
+        due_at: d.toISOString(), done: d < new Date(2026, 8, 29) && i % 3 !== 0, lead_id: 'l' + (i % 40),
+        asesor_id: id, asesor_nombre: nombre ? nombre.replace(/\s+/g, ' ') : null });
+    }
+  }
+  return out;
+}
+function escenario(e) { ESC = e; if (typeof agnRender === 'function') agnRender(); }
+const resp = (ok, d, s) => Promise.resolve({ ok, status: s || (ok ? 200 : 500), json: () => Promise.resolve(d) });
+
+const STUBS = `
+var crmLeads = Array.from({ length: 40 }, function (_, i) { return { id: 'l' + i, name: ['Natalia Barriga', 'Karol Cantillo', 'Jaider De La Cruz', 'Erick Barraza'][i % 4] }; });
+async function crmLoadLeads() {}
+var agencyActiveClientId = null;
+var crmView = 'agenda';
+function connectGoogleCalendar() {}
+function agnModalOpen() { showToast('(banco) abriría el modal'); }
+function tarMandaEnTodo() { return ESC !== 'ventas'; }
+function showToast(m, t) {
+  var e = document.getElementById('toast');
+  e.textContent = m; e.className = t === 'error' ? 'err' : ''; e.style.display = 'block';
+  clearTimeout(window._tt); window._tt = setTimeout(function () { e.style.display = 'none'; }, 3200);
+}
+async function fetchAuth(url) {
+  await new Promise(function (r) { setTimeout(r, 120); });
+  if (url.indexOf('gcal_status') >= 0) return resp(true, { connected: false });
+  if (ESC === 'error') return resp(false, { error: 'No se pudo leer la agenda (HTTP 503)' }, 502);
+  return resp(true, { activities: actividades(), truncado: false });
+}
+`;
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+  document.getElementById('estilos-reales').textContent = (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+  const trozo = (desde, hasta) => {
+    const a = js.indexOf(desde);
+    const b = hasta ? js.indexOf(hasta, a) : js.length;
+    if (a < 0) throw new Error('No encontré en app.js: ' + desde);
+    return js.slice(a, b > a ? b : js.length);
+  };
+  const s = document.createElement('script');
+  s.textContent = [
+    (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
+    trozo('const ICN_PATHS = {', '\n}\n') + '\n}\n',
+    trozo('function icn(', '\n}\n') + '\n}\n',
+    STUBS,
+    trozo('// ── AGENDA DEL CRM', '// ── MercadoPago'),
+    trozo('let _ddCerrar = null;', '\nfunction ', ) ,
+    trozo('function ddAbrir(', '\n}\n') + '\n}\n',
+    trozo('function ddCerrarMenu(', '\n'),
+    trozo('async function agnRender() {', 'function agnModalOpen('),
+    "agnCursor = new Date(2026, 8, 29); agnSelDay = '2026-09-29'; agnRender();",
+  ].join('\n');
+  document.body.appendChild(s);
+})().catch(e => {
+  document.getElementById('crm-agenda-view').innerHTML = '<pre style="color:#b91c1c">El banco no arrancó: ' + (e && e.message) + '</pre>';
+});
+</script>
+</body>
+</html>

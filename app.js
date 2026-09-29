@@ -1476,7 +1476,7 @@ function briefGoStep(step) {
 // Carga cuentas de Google y Meta en los selectors del paso 8 del brief
 async function briefLoadPlatformAccounts() {
   const uid        = clerkInstance?.user?.id || '';
-  const adsToken   = sessionStorage.getItem('ads_access_token')   || localStorage.getItem('ads_access_token_persist')   || '';
+  const adsToken   = adsConectado();
   const metaToken  = metaConectado();
 
   // ── Google Ads ────────────────────────────────────────────────
@@ -1493,10 +1493,11 @@ async function briefLoadPlatformAccounts() {
       googleRow.style.display = 'block';
       googleSel.innerHTML = '<option value="">Cargando cuentas...</option>';
       try {
-        const r = await fetch('/api/list-accounts', {
+        // Con sesión: la cuenta y el token los pone el servidor.
+        const r = await fetchAuth('/api/list-accounts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken: adsToken || '', userId: uid }),
+          body: '{}',
         });
         const data = await r.json();
         const accounts = data.accounts || [];
@@ -1651,7 +1652,7 @@ function agencyResetLogoPreview() {
 // ── Conectar plataformas desde el brief ───────────────────────────────────────
 function agencyConnectPlatform(platform) {
   const metaToken = metaConectado();
-  const adsToken  = sessionStorage.getItem('ads_access_token');
+  const adsToken  = adsConectado();
 
   // Si ya está conectado, no cerrar el modal — solo informar y dejar continuar
   if (platform === 'meta' && metaToken) {
@@ -1698,7 +1699,7 @@ function agencyConnectPlatform(platform) {
     if (Date.now() - saved.ts > 30 * 60 * 1000) { localStorage.removeItem('acuarius_pending_brief'); return; }
     // Solo restaurar si el OAuth fue exitoso (hay marca de Meta conectado)
     const metaOK = saved.platform === 'meta' && metaConectado();
-    const googleOK = saved.platform === 'google' && !!sessionStorage.getItem('ads_access_token');
+    const googleOK = saved.platform === 'google' && adsConectado();
     if (!metaOK && !googleOK) return;
     localStorage.removeItem('acuarius_pending_brief');
     // Esperar a que la app esté lista antes de abrir el modal
@@ -5027,12 +5028,6 @@ async function runWastedSpendFlow(userMsg) {
     return;
   }
 
-  // Si el backend refrescó el token, actualizarlo
-  if (gaqlResult._refreshedToken) {
-    sessionStorage.setItem('ads_access_token', gaqlResult._refreshedToken);
-    localStorage.setItem('ads_access_token_persist', gaqlResult._refreshedToken);
-  }
-
   const _gaqlResults = gaqlResult.results || [];
   const _currency = sessionStorage.getItem('ads_currency') || localStorage.getItem('ads_currency_persist') || '';
 
@@ -5245,7 +5240,7 @@ let sys;
 // Declarados aquí (no dentro del else) porque se vuelven a usar más abajo,
 // en el bloque de CAMPAIGN_BUILD_RULES — con const dentro del bloque quedaban
 // fuera de alcance y el agente de Google Ads reventaba con ReferenceError.
-let _adsToken = '', _adsCustId = '';
+let _adsToken = false, _adsCustId = '';   // _adsToken: ¿hay Google Ads conectado? (ya no es el token)
 if(currentAgentCtx==='meta-ads'){
   sys=SYSTEM_META.replace('{MEMORY}',memCtx()).replace('{STAGE}',clientStage);
   const metaCtx = await getMetaAdsContext().catch(()=>'');
@@ -5266,7 +5261,7 @@ if(currentAgentCtx==='meta-ads'){
   const gCtx = await getGoogleAdsContext().catch(()=>'');
   if(gCtx) sys = gCtx + '\n\n' + sys;
   // Inyectar estado de conexión + moneda — señal crítica para que el agente sepa si puede usar GAQL
-  _adsToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
+  _adsToken = adsConectado();
   _adsCustId = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist');
   let _adsCurrency = (typeof adsActiveAccount !== 'undefined' && adsActiveAccount && adsActiveAccount.currency)
     ? adsActiveAccount.currency
@@ -5457,14 +5452,11 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
           let refreshed = false;
           if(uid){
             try{
-              const rr = await fetchAuth('/api/refresh-google-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:uid})});
+              // Renueva en el servidor; el token no vuelve al navegador.
+              const rr = await fetchAuth('/api/refresh-google-token',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
               if(rr.ok){
                 const rd = await rr.json();
-                if(rd.access_token && !rd.needsReconnect){
-                  sessionStorage.setItem('ads_access_token',rd.access_token);
-                  localStorage.setItem('ads_access_token_persist',rd.access_token);
-                  refreshed = true;
-                }
+                if(rd.ok && !rd.needsReconnect) refreshed = true;
               }
             }catch{}
           }
@@ -6476,15 +6468,13 @@ async function executeAction(actionData, btn) {
     || '';
   const endpoint = '/api/google-ads?action=' + actionData.action + '&userId=' + encodeURIComponent(userId) + '&customerId=' + encodeURIComponent(_actionCustId);
 
-  // Incluir token desde sessionStorage (igual que queryGoogleAds)
-  // El backend puede tener el token expirado en Supabase; el de sesión es el más fresco.
-  const _actionToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
-
+  // El token lo pone el servidor. Con sesión (fetchAuth): sin ella, el
+  // servidor responde 401 y la acción no se hacía.
   try {
-    const res = await fetch(endpoint, {
+    const res = await fetchAuth(endpoint, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ ...params, userId, confirm: true, accessToken: _actionToken }),
+      body: JSON.stringify({ ...params, userId, confirm: true }),
     });
     const data = await res.json();
 
@@ -6958,10 +6948,12 @@ function isAgencyPlan() {
 async function restoreConnectionsFromSupabase() {
   const uid = clerkInstance?.user?.id;
   if (!uid) return;
-  const hasGoogleToken   = !!sessionStorage.getItem('ads_access_token');
+  // Ya no hay tokens en el navegador, solo marcas de «conectado». Se le
+  // pregunta SIEMPRE al servidor: una marca vieja de hace un mes no puede
+  // seguir diciendo que hay conexión cuando ya no la hay.
+  const hasGoogleToken   = adsConectado();
   const hasMetaToken     = metaConectado();
-  const hasLinkedInToken = !!sessionStorage.getItem('linkedin_access_token');
-  if (hasGoogleToken && hasMetaToken && hasLinkedInToken) return; // ya restaurado desde sessionStorage
+  const hasLinkedInToken = liConectado();
 
   try {
     const [gConn, mConn, liConn] = await Promise.all([
@@ -6970,10 +6962,10 @@ async function restoreConnectionsFromSupabase() {
       fetchAuth('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=linkedin_ads').then(r => r.json()).catch(() => ({})),
     ]);
 
-    if (!hasGoogleToken && gConn.connected && gConn.access_token) {
-      sessionStorage.setItem('ads_access_token', gConn.access_token);
+    if (gConn.connected === false && hasGoogleToken) { marcarAds(false); updateAdsUI(false); }
+    if (!hasGoogleToken && gConn.connected) {
+      marcarAds(true);
       sessionStorage.setItem('ads_email', gConn.account_name || '');
-      localStorage.setItem('ads_access_token_persist', gConn.access_token);
       localStorage.setItem('ads_email_persist', gConn.account_name || '');
       updateAdsUI(true, gConn.account_name);
     }
@@ -7016,10 +7008,10 @@ async function restoreConnectionsFromSupabase() {
     }
 
     // Restaurar LinkedIn Ads
-    if (!hasLinkedInToken && liConn.connected && liConn.access_token) {
-      sessionStorage.setItem('linkedin_access_token', liConn.access_token);
+    if (liConn.connected === false && hasLinkedInToken) { marcarLi(false); if (typeof updateLinkedInUI === 'function') updateLinkedInUI(false); }
+    if (!hasLinkedInToken && liConn.connected) {
+      marcarLi(true);
       sessionStorage.setItem('linkedin_user_name', liConn.account_name || '');
-      localStorage.setItem('linkedin_access_token_persist', liConn.access_token);
       localStorage.setItem('linkedin_user_name_persist', liConn.account_name || '');
       if (typeof updateLinkedInUI === 'function') updateLinkedInUI(true, liConn.account_name);
     }
@@ -12400,7 +12392,7 @@ var googleWizardStep = 1;
 var googleWizardData = {};
 
 async function launchGoogleCampaignFlow() {
-  var token      = sessionStorage.getItem('ads_access_token')  || localStorage.getItem('ads_access_token_persist');
+  var token      = adsConectado();
   var customerId = sessionStorage.getItem('ads_customer_id')   || localStorage.getItem('ads_customer_id_persist');
   var accStr     = sessionStorage.getItem('ads_active_account')|| localStorage.getItem('ads_active_account_persist') || '{}';
   var acc = {}; try { acc = JSON.parse(accStr); } catch(e){}
@@ -12414,7 +12406,7 @@ async function launchGoogleCampaignFlow() {
     openSettings(); return;
   }
 
-  googleWizardData  = { token: token, customerId: customerId, currency: acc.currency || 'USD', accountName: acc.name || '' };
+  googleWizardData  = { customerId: customerId, currency: acc.currency || 'USD', accountName: acc.name || '' };
   googleWizardStep  = 1;
   renderGoogleCampaignWizard();
 }
@@ -12502,7 +12494,6 @@ async function gcwGenerateContent() {
         clientProfile: clientProfile,
         userId:        (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || '',
         customerId:    googleWizardData.customerId,
-        accessToken:   googleWizardData.token,
       }),
     });
     var data = await r.json();
@@ -12713,7 +12704,6 @@ async function gcwLaunch() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        accessToken:      googleWizardData.token,
         customerId:       googleWizardData.customerId,
         userId:           uid,
         name:             googleWizardData.name,
@@ -14560,7 +14550,7 @@ let metaActiveAccount = null;
 
 function connectMetaAds() {
   if (userPlan === 'free' && !isAdminUser()) {
-    const hasGoogleConnected = !!sessionStorage.getItem('ads_access_token');
+    const hasGoogleConnected = adsConectado();
     if (hasGoogleConnected) {
       openUpgradeFlow('El plan Free incluye 1 conexión API. Ya tienes Google Ads conectado. Actualiza a Pro para conectar múltiples plataformas.');
       return;
@@ -14573,16 +14563,18 @@ function connectMetaAds() {
 // solo un administrador). Antes el navegador mandaba su propio userId en la URL
 // y el servidor se lo creía: con un enlace ajeno, tu token de Meta —que
 // gestiona anuncios— acababa en la cuenta de otro.
-async function irAConectarMeta() {
+// Google Ads y LinkedIn van igual desde el 29-09-2026.
+async function irAConectar(para, nombre) {
   try {
-    const r = await fetchAuth('/api/gcal-enlace?para=meta', { method: 'POST' });
+    const r = await fetchAuth('/api/gcal-enlace?para=' + para, { method: 'POST' });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.url) throw new Error(d.error || ('HTTP ' + r.status));
     window.location.href = d.url;
   } catch (e) {
-    showToast('No se pudo empezar la conexión con Meta: ' + String(e.message || e), 'error');
+    showToast('No se pudo empezar la conexión con ' + nombre + ': ' + String(e.message || e), 'error');
   }
 }
+function irAConectarMeta() { return irAConectar('meta', 'Meta'); }
 
 function disconnectMetaAds() {
   marcarMeta(false);
@@ -14834,14 +14826,10 @@ function openSettings() {
   // Sincronizar estado de conexiones — sessionStorage primero, localStorage como fallback
   const metaName  = sessionStorage.getItem('meta_user_name')    || localStorage.getItem('meta_user_name_persist') || '';
   updateMetaUI(metaConectado(), metaName);
-  const adsToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
   const adsEmail = sessionStorage.getItem('ads_email')        || localStorage.getItem('ads_email_persist') || '';
-  if (adsToken && !sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', adsToken);
-  if (typeof updateAdsUI === 'function') updateAdsUI(!!adsToken, adsEmail);
-  const liToken = sessionStorage.getItem('linkedin_access_token') || localStorage.getItem('linkedin_access_token_persist');
+  if (typeof updateAdsUI === 'function') updateAdsUI(adsConectado(), adsEmail);
   const liName  = sessionStorage.getItem('linkedin_user_name')    || localStorage.getItem('linkedin_user_name_persist') || '';
-  if (liToken && !sessionStorage.getItem('linkedin_access_token')) sessionStorage.setItem('linkedin_access_token', liToken);
-  if (typeof updateLinkedInUI === 'function') updateLinkedInUI(!!liToken, liName);
+  if (typeof updateLinkedInUI === 'function') updateLinkedInUI(liConectado(), liName);
   // Show first tab
   capLoad();
   switchSettingsTab('perfil');
@@ -14886,53 +14874,62 @@ function switchSettingsTab(tab) {
 let linkedinAccounts      = [];
 let linkedinActiveAccount = null;
 
+// ── El token de LinkedIn vive en el SERVIDOR ─────────────────────────────────
+// Igual que Meta y Google Ads: el navegador ya no lo guarda ni lo manda. Aquí
+// solo queda la marca de que HAY conexión; quién tiene el token es el servidor.
+function liConectado() {
+  try { return sessionStorage.getItem('linkedin_conectado') === '1' || localStorage.getItem('linkedin_conectado_persist') === '1'; }
+  catch (e) { return false; }
+}
+function marcarLi(si) {
+  try {
+    if (si) { sessionStorage.setItem('linkedin_conectado', '1'); localStorage.setItem('linkedin_conectado_persist', '1'); }
+    else { sessionStorage.removeItem('linkedin_conectado'); localStorage.removeItem('linkedin_conectado_persist'); }
+    sessionStorage.removeItem('linkedin_access_token');
+    localStorage.removeItem('linkedin_access_token_persist');
+  } catch (e) {}
+}
+// Al arrancar: el navegador que traiga un token de antes lo pierde, pero
+// conserva el «conectado» para no parpadear la pantalla.
+(function purgarTokenLinkedInViejo() {
+  try {
+    const viejo = sessionStorage.getItem('linkedin_access_token') || localStorage.getItem('linkedin_access_token_persist');
+    if (viejo) marcarLi(true);
+  } catch (e) {}
+})();
+
 (function checkLinkedInCallback() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('linkedin_connected') === 'true') {
-    const token    = params.get('linkedin_token');
     const name     = params.get('linkedin_name')  || '';
     const email    = params.get('linkedin_email') || '';
-    const platform = params.get('platform');
     window.history.replaceState({}, '', window.location.pathname);
-
-    if (token) {
-      // Fallback: token en URL
-      sessionStorage.setItem('linkedin_access_token', token);
-      sessionStorage.setItem('linkedin_user_name', name || email);
-      localStorage.setItem('linkedin_access_token_persist', token);
-      localStorage.setItem('linkedin_user_name_persist', name || email);
-      updateLinkedInUI(true, name || email);
-      setTimeout(() => { openSettings(); loadLinkedInAccounts(); }, 400);
-    } else if (platform === 'linkedin_ads') {
-      // Token guardado en Supabase
+    // El token ya no viaja en la URL: se quedó en el servidor.
+    marcarLi(true);
+    sessionStorage.setItem('linkedin_user_name', name || email);
+    localStorage.setItem('linkedin_user_name_persist', name || email);
+    alDOMListo(() => {
       updateLinkedInUI(true, name || email || 'Conectado');
-      setTimeout(async () => {
-        const uid = clerkInstance?.user?.id;
-        if (!uid) return;
-        try {
-          const r    = await fetchAuth('/api/admin?action=get-connection&userId=' + encodeURIComponent(uid) + '&platform=linkedin_ads');
-          const conn = await r.json();
-          if (conn.connected && conn.access_token) {
-            sessionStorage.setItem('linkedin_access_token', conn.access_token);
-            sessionStorage.setItem('linkedin_user_name', conn.account_name || name || email || '');
-            localStorage.setItem('linkedin_access_token_persist', conn.access_token);
-            localStorage.setItem('linkedin_user_name_persist', conn.account_name || name || email || '');
-            updateLinkedInUI(true, conn.account_name || name || email);
-            openSettings(); loadLinkedInAccounts();
-          }
-        } catch {}
-      }, 600);
-    }
+      setTimeout(() => { openSettings(); loadLinkedInAccounts(); }, 400);
+    });
   }
   if (params.get('linkedin_error')) {
+    // Antes se limpiaba la URL y ya: quien no llegaba a conectar no veía nada.
+    const motivo = params.get('linkedin_error');
     window.history.replaceState({}, '', window.location.pathname);
+    const texto = ({
+      access_denied: 'No se conectó LinkedIn: no diste permiso.',
+      enlace_caducado: 'El enlace para conectar LinkedIn caducó. Vuelve a pulsar «Conectar».',
+      enlace_invalido: 'Ese enlace para conectar LinkedIn no es válido. Vuelve a conectar desde Configuración.',
+      token_failed: 'LinkedIn no terminó la conexión. Inténtalo otra vez.',
+      save_failed: 'LinkedIn dio permiso, pero no pudimos guardar la conexión. Inténtalo otra vez en unos minutos.',
+    })[motivo] || 'No se pudo conectar LinkedIn. Inténtalo otra vez.';
+    setTimeout(() => showToast(texto, 'error'), 1200);
   }
-  // Restaurar sesión desde sessionStorage / localStorage
-  var savedToken   = sessionStorage.getItem('linkedin_access_token')   || localStorage.getItem('linkedin_access_token_persist');
+  // Restaurar la marca de conexión
   var savedName    = sessionStorage.getItem('linkedin_user_name')       || localStorage.getItem('linkedin_user_name_persist');
   var savedAccount = sessionStorage.getItem('linkedin_active_account') || localStorage.getItem('linkedin_active_account_persist');
-  if (savedToken) {
-    if (!sessionStorage.getItem('linkedin_access_token')) sessionStorage.setItem('linkedin_access_token', savedToken);
+  if (liConectado()) {
     if (savedName && !sessionStorage.getItem('linkedin_user_name'))   sessionStorage.setItem('linkedin_user_name', savedName);
     // El DOM de Ajustes no existe todavía cuando esto corre: app.js se lee 670
     // líneas de HTML antes que esos elementos. Sin esperar, la interfaz se
@@ -14952,11 +14949,11 @@ let linkedinActiveAccount = null;
 })();
 
 function connectLinkedInAds() {
-  const uid = clerkInstance?.user?.id || '';
-  window.location.href = '/api/linkedin-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+  return irAConectar('linkedin', 'LinkedIn');
 }
 
 function disconnectLinkedInAds() {
+  marcarLi(false);
   ['linkedin_access_token','linkedin_user_name','linkedin_active_account','linkedin_account_id']
     .forEach(k => { sessionStorage.removeItem(k); localStorage.removeItem(k + '_persist'); });
   localStorage.removeItem('linkedin_user_name_persist');
@@ -14970,18 +14967,19 @@ function disconnectLinkedInAds() {
 }
 
 async function loadLinkedInAccounts() {
-  const token = sessionStorage.getItem('linkedin_access_token');
-  if (!token) return;
+  if (!liConectado()) return;
   document.getElementById('linkedinAccountsLoading').style.display = 'block';
   document.getElementById('linkedinAccountsList').style.display    = 'none';
   document.getElementById('linkedinActiveAccount').style.display   = 'none';
   document.getElementById('linkedinAccountsError').style.display   = 'none';
   try {
-    const res  = await fetch('/api/linkedin-ads', {
+    const res  = await fetchAuth('/api/linkedin-ads', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ accessToken: token, action: 'list-accounts' }),
+      body: JSON.stringify({ action: 'list-accounts' }),
     });
     const data = await res.json();
+    // El servidor dice que ya no hay conexión: se deja de fingir que la hay.
+    if (data.needsConnect) { marcarLi(false); updateLinkedInUI(false); }
     document.getElementById('linkedinAccountsLoading').style.display = 'none';
     if (data.error === 'PENDING_APPROVAL') {
       showLinkedInPending();
@@ -15121,159 +15119,103 @@ function updateLinkedInUI(connected, name) {
 let adsAccounts = [];       // todas las cuentas accesibles
 // adsActiveAccount declarado al inicio del script para evitar ReferenceError
 
+// ── El token de Google Ads vive en el SERVIDOR ───────────────────────────────
+// Antes volvía del OAuth en la URL —el de acceso y el de renovación, que no
+// caduca—, se guardaba en sessionStorage y localStorage y viajaba en cada
+// petición. Cualquier script de la página podía llevarse una llave de la
+// cuenta publicitaria. Ahora aquí solo queda la marca de que HAY conexión.
+function adsConectado() {
+  try { return sessionStorage.getItem('ads_conectado') === '1' || localStorage.getItem('ads_conectado_persist') === '1'; }
+  catch (e) { return false; }
+}
+function marcarAds(si) {
+  try {
+    if (si) { sessionStorage.setItem('ads_conectado', '1'); localStorage.setItem('ads_conectado_persist', '1'); }
+    else { sessionStorage.removeItem('ads_conectado'); localStorage.removeItem('ads_conectado_persist'); }
+    // Y fuera cualquier token que quedara de antes.
+    ['ads_access_token', 'ads_refresh_token'].forEach(k => {
+      sessionStorage.removeItem(k); localStorage.removeItem(k + '_persist');
+    });
+  } catch (e) {}
+}
+// Al arrancar: el navegador que traiga un token de antes lo pierde, pero
+// conserva el «conectado» para no parpadear la pantalla.
+(function purgarTokenGoogleViejo() {
+  try {
+    const viejo = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist')
+      || sessionStorage.getItem('ads_refresh_token') || localStorage.getItem('ads_refresh_token_persist');
+    if (viejo) marcarAds(true);
+  } catch (e) {}
+})();
+
 (function checkAdsCallback() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('ads_connected') === 'true') {
     track('account_connected', { platform: 'google_ads' });
-    const token    = params.get('ads_token');
-    const refresh  = params.get('ads_refresh');
-    const email    = params.get('ads_email');
-    const platform = params.get('platform');   // 'google_ads' = guardado en Supabase
-    const urlUid   = params.get('uid') || '';
+    const email    = params.get('ads_email') || '';
     window.history.replaceState({}, '', window.location.pathname);
-
-    if (token) {
-      // Guardar token en sessionStorage/localStorage inmediatamente
-      sessionStorage.setItem('ads_access_token', token);
-      sessionStorage.setItem('ads_refresh_token', refresh || '');
-      sessionStorage.setItem('ads_email', email || '');
-      localStorage.setItem('ads_access_token_persist', token);
-      localStorage.setItem('ads_refresh_token_persist', refresh || '');
-      localStorage.setItem('ads_email_persist', email || '');
-
-      // Red de seguridad: reenviar el guardado a Supabase desde el frontend.
-      // El callback OAuth ya lo intenta server-side, pero si falla (fallo que
-      // era silencioso), la conexión quedaba solo en el navegador y el token
-      // moría en 1h sin posibilidad de renovación.
-      (async function ensureConnSaved() {
-        for (let i = 0; i < 20 && !clerkInstance?.user?.id; i++) await new Promise(r => setTimeout(r, 400));
-        const uid = clerkInstance?.user?.id || urlUid;
-        if (!uid) return;
-        try {
-          const sr = await fetchAuth('/api/admin?action=save-connection', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: uid, platform: 'google_ads', access_token: token, refresh_token: refresh || '', account_name: email || '', expires_in: 3600 }),
-          }).then(r => r.json());
-          if (sr && sr.error) console.error('ensureConnSaved:', sr);
-        } catch (e) { console.error('ensureConnSaved:', e); }
-      })();
-
-      if (platform === 'google_ads') {
-        // Flujo con userId: mostrar modal grande y abrir configuración
-        showConnectionModal('google_ads', email || 'Google Ads');
-        // Abrir settings después de que el DOM esté listo
-        setTimeout(() => { updateAdsUI(true, email); openSettings(); loadAdsAccounts(); }, 500);
-      } else {
-        // Flujo legacy sin userId
-        updateAdsUI(true, email);
-        setTimeout(() => { openSettings(); loadAdsAccounts(); }, 400);
-      }
-    } else if (platform === 'google_ads') {
-      // Sin token en URL (backwards compat): intentar recuperar desde Supabase
+    // El token ya no viaja en la URL: el callback lo guardó en el servidor y,
+    // si no hubiera podido, habría vuelto con ?ads_error=save_failed.
+    marcarAds(true);
+    sessionStorage.setItem('ads_email', email);
+    localStorage.setItem('ads_email_persist', email);
+    alDOMListo(() => {
       showConnectionModal('google_ads', email || 'Google Ads');
-      (async function restoreGoogleToken() {
-        const tryFetch = async (uid) => {
-          if (!uid) return false;
-          try {
-            const r = await fetchAuth(`/api/admin?action=get-connection&userId=${encodeURIComponent(uid)}&platform=google_ads`);
-            const conn = await r.json();
-            if (conn.connected && conn.access_token) {
-              sessionStorage.setItem('ads_access_token', conn.access_token);
-              sessionStorage.setItem('ads_email', conn.account_name || email || '');
-              localStorage.setItem('ads_access_token_persist', conn.access_token);
-              localStorage.setItem('ads_email_persist', conn.account_name || email || '');
-              updateAdsUI(true, conn.account_name || email);
-              return true;
-            }
-          } catch {}
-          return false;
-        };
-        if (await tryFetch(urlUid)) { openSettings(); loadAdsAccounts(); return; }
-        for (const delay of [800, 1800, 3000, 5000]) {
-          await new Promise(res => setTimeout(res, delay));
-          const clerkUid = clerkInstance?.user?.id;
-          if (await tryFetch(clerkUid || urlUid)) { openSettings(); loadAdsAccounts(); return; }
-        }
-        openSettings();
-      })();
-    }
+      setTimeout(() => { updateAdsUI(true, email); openSettings(); loadAdsAccounts(); }, 500);
+    });
   }
   if (params.get('ads_error')) {
     const errCode = params.get('ads_error');
     window.history.replaceState({}, '', window.location.pathname);
-    const errMsg = errCode === 'access_denied' ? 'Cancelaste la conexión con Google.'
-      : errCode === 'token_failed' ? 'Error al obtener el token de Google. Intenta de nuevo.'
-      : 'Error al conectar con Google Ads. Intenta de nuevo.';
-    showToast('❌ ' + errMsg, 'error');
+    const errMsg = ({
+      access_denied: 'Cancelaste la conexión con Google.',
+      token_failed: 'Error al obtener el permiso de Google. Intenta de nuevo.',
+      enlace_caducado: 'El enlace para conectar Google Ads caducó. Vuelve a pulsar «Conectar».',
+      enlace_invalido: 'Ese enlace para conectar Google Ads no es válido. Vuelve a conectar desde Configuración.',
+      save_failed: 'Google dio permiso, pero no pudimos guardar la conexión. Inténtalo otra vez en unos minutos.',
+    })[errCode] || 'Error al conectar con Google Ads. Intenta de nuevo.';
+    setTimeout(() => showToast(errMsg, 'error'), 1200);
   }
-  // Restaurar sesión — sessionStorage primero, luego localStorage como fallback
-  var savedToken   = sessionStorage.getItem('ads_access_token')   || localStorage.getItem('ads_access_token_persist');
+  // Restaurar la marca de conexión
   var savedEmail   = sessionStorage.getItem('ads_email')          || localStorage.getItem('ads_email_persist');
   var savedAccount = sessionStorage.getItem('ads_active_account') || localStorage.getItem('ads_active_account_persist');
   var savedCustId  = sessionStorage.getItem('ads_customer_id')    || localStorage.getItem('ads_customer_id_persist');
-  if (savedToken || clerkInstance?.user?.id) {
-    if (savedToken) {
-      if (!sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', savedToken);
-      if (savedEmail  && !sessionStorage.getItem('ads_email'))       sessionStorage.setItem('ads_email', savedEmail);
-      if (savedCustId && !sessionStorage.getItem('ads_customer_id')) sessionStorage.setItem('ads_customer_id', savedCustId);
-      const _savedCurr = localStorage.getItem('ads_currency_persist');
-      if (_savedCurr && !sessionStorage.getItem('ads_currency')) sessionStorage.setItem('ads_currency', _savedCurr);
-      // Esta restauración también corre al leer el archivo, con el DOM de
-      // Ajustes todavía sin construir. Se me pasó al arreglar las otras tres y
-      // lo delató la propia guarda de loadAdsAccounts, que avisó dos veces
-      // desde la app instalada.
-      alDOMListo(() => {
-        updateAdsUI(true, savedEmail);
-        if (savedAccount) {
-          try {
-            adsActiveAccount = JSON.parse(savedAccount);
-            if (!sessionStorage.getItem('ads_active_account')) sessionStorage.setItem('ads_active_account', savedAccount);
-            if (adsActiveAccount && adsActiveAccount.currency && !sessionStorage.getItem('ads_currency')) {
-              sessionStorage.setItem('ads_currency', adsActiveAccount.currency);
-            }
-            renderActiveAccount();
-          } catch {}
-        }
-      });
-    }
-    // Auto-refresh silencioso en background: garantiza que el token no expire
-    async function silentRefreshGoogleToken() {
-      const uid = clerkInstance?.user?.id || (() => { try { return JSON.parse(atob((clerkInstance?.session?.id||'').split('.')[1]||'{}')).sub; } catch { return ''; } })();
-      if (!uid) return;
-      try {
-        const r = await fetchAuth('/api/refresh-google-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: uid }),
-        });
-        const data = await r.json();
-        if (data.access_token && !data.error) {
-          // Token fresco → actualizar storage y UI
-          sessionStorage.setItem('ads_access_token', data.access_token);
-          localStorage.setItem('ads_access_token_persist', data.access_token);
-          if (!savedToken) {
-            // Primera carga sin token local → actualizar UI como conectado
-            const emailFromStorage = sessionStorage.getItem('ads_email') || localStorage.getItem('ads_email_persist') || '';
-            alDOMListo(() => {
-              updateAdsUI(true, emailFromStorage);
-              if (savedAccount) {
-                try { adsActiveAccount = JSON.parse(savedAccount); renderActiveAccount(); } catch {}
-              }
-            });
+  if (adsConectado()) {
+    if (savedEmail  && !sessionStorage.getItem('ads_email'))       sessionStorage.setItem('ads_email', savedEmail);
+    if (savedCustId && !sessionStorage.getItem('ads_customer_id')) sessionStorage.setItem('ads_customer_id', savedCustId);
+    const _savedCurr = localStorage.getItem('ads_currency_persist');
+    if (_savedCurr && !sessionStorage.getItem('ads_currency')) sessionStorage.setItem('ads_currency', _savedCurr);
+    // Esta restauración también corre al leer el archivo, con el DOM de
+    // Ajustes todavía sin construir. Se me pasó al arreglar las otras tres y
+    // lo delató la propia guarda de loadAdsAccounts, que avisó dos veces
+    // desde la app instalada.
+    alDOMListo(() => {
+      updateAdsUI(true, savedEmail);
+      if (savedAccount) {
+        try {
+          adsActiveAccount = JSON.parse(savedAccount);
+          if (!sessionStorage.getItem('ads_active_account')) sessionStorage.setItem('ads_active_account', savedAccount);
+          if (adsActiveAccount && adsActiveAccount.currency && !sessionStorage.getItem('ads_currency')) {
+            sessionStorage.setItem('ads_currency', adsActiveAccount.currency);
           }
-          return true;
-        } else if (data.needsReconnect) {
-          // Solo mostrar "reconectar" si no hubo refresh exitoso — el refresh_token puede ser inválido
-          if (savedToken) updateAdsUI(false);
-          return false;
-        }
-      } catch {} // Silencioso — no interrumpir la carga de la app
-      return false;
-    }
-    silentRefreshGoogleToken();
-    // Refrescar el token cada 45 minutos mientras la app está abierta
-    setInterval(silentRefreshGoogleToken, 45 * 60 * 1000);
+          renderActiveAccount();
+        } catch {}
+      }
+    });
+    // Se le pregunta al servidor si la conexión sigue viva: él renueva el
+    // token si hace falta y dice si hay que reconectar. Ya no hace falta
+    // repetirlo cada 45 minutos: el servidor renueva al usarlo.
+    (async function comprobarGoogleAds() {
+      for (let i = 0; i < 20 && !clerkInstance?.user?.id; i++) await new Promise(r => setTimeout(r, 400));
+      if (!clerkInstance?.user?.id) return;
+      try {
+        const r = await fetchAuth('/api/refresh-google-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await r.json().catch(() => ({}));
+        // 404 = ya no hay conexión guardada; needsReconnect = Google ya no deja
+        // renovarla. En los dos casos se deja de pintar «conectado».
+        if (r.status === 404 || data.needsReconnect) { marcarAds(false); alDOMListo(() => updateAdsUI(false)); }
+      } catch {} // Sin red no se decide nada: la marca se queda como estaba
+    })();
   }
 })();
 
@@ -15352,18 +15294,14 @@ function connectGoogleAds() {
       return;
     }
   }
-  const uid = clerkInstance?.user?.id || '';
-  window.location.href = '/api/google-ads-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+  return irAConectar('google', 'Google Ads');
 }
 
 function disconnectGoogleAds() {
-  sessionStorage.removeItem('ads_access_token');
-  sessionStorage.removeItem('ads_refresh_token');
+  marcarAds(false);
   sessionStorage.removeItem('ads_email');
   sessionStorage.removeItem('ads_active_account');
   sessionStorage.removeItem('ads_customer_id');
-  localStorage.removeItem('ads_access_token_persist');
-  localStorage.removeItem('ads_refresh_token_persist');
   localStorage.removeItem('ads_email_persist');
   localStorage.removeItem('ads_active_account_persist');
   localStorage.removeItem('ads_customer_id_persist');
@@ -15384,9 +15322,7 @@ async function loadAdsAccounts() {
     if (typeof errRegistrar === 'function') errRegistrar('loadAdsAccounts llamado antes de que exista el DOM', 'loadAdsAccounts');
     return;
   }
-  const accessToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
-  if (!accessToken) return;
-  if (!sessionStorage.getItem('ads_access_token')) sessionStorage.setItem('ads_access_token', accessToken);
+  if (!adsConectado()) return;
 
   // Mostrar loading
   document.getElementById('adsAccountsLoading').style.display = 'block';
@@ -15395,13 +15331,15 @@ async function loadAdsAccounts() {
   document.getElementById('adsAccountsError').style.display = 'none';
 
   try {
-    const res = await fetch('/api/list-accounts', {
+    const res = await fetchAuth('/api/list-accounts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessToken }),
+      body: '{}',
     });
     const data = await res.json();
     document.getElementById('adsAccountsLoading').style.display = 'none';
+    // El servidor dice que ya no hay conexión: se deja de fingir que la hay.
+    if (data.needsConnect) { marcarAds(false); updateAdsUI(false); }
 
     if (data.error || !data.accounts?.length) {
       const detail = data.googleError || data.details || data.error || '';
@@ -15737,24 +15675,19 @@ function updateAdsUI(connected, email) {
 }
 
 async function queryGoogleAds(gaqlQuery) {
-  const accessToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
   const customerId  = sessionStorage.getItem('ads_customer_id')  || localStorage.getItem('ads_customer_id_persist');
   const userId      = clerkInstance?.user?.id || '';
-  if (!accessToken && !userId) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta en Configuración.' };
+  if (!userId) return { error: 'No hay sesión de Google Ads. Conecta tu cuenta en Configuración.' };
   if (!customerId)  return { error: 'No hay cuenta activa seleccionada. Ve a Configuración → Conexiones y selecciona una cuenta.' };
   try {
     const res = await fetchAuth('/api/google-ads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customerId, query: gaqlQuery, accessToken: accessToken || '', userId }),
+      body: JSON.stringify({ customerId, query: gaqlQuery }),
     });
     const data = await res.json();
-    // Si el backend renovó el token automáticamente, actualizar sessionStorage y localStorage
-    if (data._refreshedToken) {
-      sessionStorage.setItem('ads_access_token', data._refreshedToken);
-      localStorage.setItem('ads_access_token_persist', data._refreshedToken);
-      delete data._refreshedToken; // limpiar antes de devolver
-    }
+    // El servidor dice que ya no hay conexión: se deja de pintar «conectado».
+    if (data.needsConnect) { marcarAds(false); if (typeof updateAdsUI === 'function') updateAdsUI(false); }
     return data;
   } catch (err) {
     return { error: err.message };
@@ -25618,7 +25551,7 @@ function welcomeConnectShouldShow() {
     if (!clerkInstance?.user?.id) return false;
     if (typeof tourActive !== 'undefined' && tourActive) return false;
     if (document.getElementById('acuarius-conn-modal')) return false;
-    const hasGoogle = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist');
+    const hasGoogle = adsConectado();
     const hasMeta = metaConectado();
     if (hasGoogle || hasMeta) return false;
     return true;
@@ -25776,10 +25709,9 @@ function pulsoDailyAlertText(anom, platform) {
 async function pulsoGoogleCards() {
   const uid = clerkInstance?.user?.id || '';
   const customerId = sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || '';
-  const token = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
-  if (!uid || !customerId || !token) return [];
+  if (!uid || !customerId || !adsConectado()) return [];
   try {
-    const base = '/api/google-ads?userId=' + encodeURIComponent(uid) + '&customerId=' + customerId + '&accessToken=' + encodeURIComponent(token);
+    const base = '/api/google-ads?customerId=' + customerId;
     const [d, series] = await Promise.all([
       fetchAuth(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
       fetchAuth(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
@@ -26147,7 +26079,7 @@ async function renderPulso(force) {
   let cards = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
   cards = cards.concat(pulsoStudioCards());
 
-  const hasConn = !!(sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || metaConectado());
+  const hasConn = adsConectado() || metaConectado();
   if (!cards.length) {
     if (hasConn) {
       cards = AGENTES_ACTIVOS ? [{
@@ -26273,12 +26205,10 @@ async function pulsoAgencyAdsCards() {
   if (!uid) return [];
   const connected = (agencyClients || []).filter(c => c.googleCustomerId).slice(0, 10);
   if (!connected.length) return [];
-  // El endpoint acepta token por query (la conexión puede ser solo de sesión,
-  // sin registro en Supabase) — sin él responde 401
-  const gToken = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
+  // El token lo pone el servidor: el guardado de la cuenta.
   const results = await Promise.allSettled(connected.map(async c => {
     const custId = String(c.googleCustomerId).replace(/-/g, '');
-    const base = '/api/google-ads?userId=' + encodeURIComponent(uid) + '&customerId=' + custId + (gToken ? '&accessToken=' + encodeURIComponent(gToken) : '');
+    const base = '/api/google-ads?customerId=' + custId;
     const [d, series] = await Promise.all([
       fetchAuth(base + '&action=get-account-overview&dateRange=LAST_7_DAYS').then(r => r.json()),
       fetchAuth(base + '&action=get-daily-series&dateRange=LAST_14_DAYS').then(r => r.json()).catch(() => null),
@@ -26556,15 +26486,13 @@ async function ensureFreshTokens() {
   if (!uid) return;
   // Google Ads
   try {
+    // Renueva en el servidor; el token no vuelve al navegador.
     const g = await fetchAuth('/api/refresh-google-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: uid }),
+      body: '{}',
     }).then(r => r.json());
-    if (g && g.access_token) {
-      sessionStorage.setItem('ads_access_token', g.access_token);
-      localStorage.setItem('ads_access_token_persist', g.access_token);
-    }
+    if (g && g.needsReconnect) { marcarAds(false); if (typeof updateAdsUI === 'function') updateAdsUI(false); }
   } catch {}
   // Meta Ads
   try {
@@ -28015,6 +27943,37 @@ let agnCursor = new Date();      // mes visible
 let agnActivities = [];          // actividades del mes cargado
 let agnSelDay = null;            // 'YYYY-MM-DD' seleccionado
 let agnGcal = { connected: false, email: null, checked: false };
+// De quién se ve el calendario: '' = todo el equipo, un id de asesor, o
+// '__nadie__' para lo que no tiene asesor. Se recuerda entre visitas: quien
+// dirige suele revisar a la misma persona varias veces seguidas.
+let agnAsesor = (function () { try { return localStorage.getItem('agn_asesor') || ''; } catch (e) { return ''; } })();
+
+function agnElegirAsesor(id, nombre) {
+  agnAsesor = id || '';
+  try {
+    if (agnAsesor) { localStorage.setItem('agn_asesor', agnAsesor); localStorage.setItem('agn_asesor_nombre', nombre || ''); }
+    else { localStorage.removeItem('agn_asesor'); localStorage.removeItem('agn_asesor_nombre'); }
+  } catch (e) {}
+  agnRender();
+}
+
+// Quién tiene qué en el mes visible. Agrupa por id —el mismo criterio que el
+// filtro de Tareas—: hay asesores que se llaman parecido y un nombre guardado
+// con un tabulador dentro.
+function agnPorAsesor(acts, y, m) {
+  const mapa = new Map();
+  for (const a of acts || []) {
+    const d = new Date(a.due_at);
+    if (d.getFullYear() !== y || d.getMonth() !== m) continue;
+    const id = a.asesor_id || '__nadie__';
+    if (!mapa.has(id)) mapa.set(id, { id, nombre: a.asesor_id ? (a.asesor_nombre || 'Sin nombre') : 'Sin asignar', total: 0 });
+    mapa.get(id).total++;
+  }
+  // Por orden alfabético: con veinte asesores, buscar un nombre en una lista
+  // ordenada por volumen obliga a leerla entera.
+  return [...mapa.values()].sort((a, b) =>
+    (a.id === '__nadie__') - (b.id === '__nadie__') || a.nombre.localeCompare(b.nombre, 'es'));
+}
 
 function agnDayKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function agnKeyOf(iso) { const d = new Date(iso); return agnDayKey(d); }
@@ -28027,12 +27986,19 @@ async function agnLoad() {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const cq = clientId ? '&client_id=' + encodeURIComponent(clientId) : '';
     const res = await fetchAuth('/api/agenda?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + cq);
-    agnActivities = (await res.json()).activities || [];
-  } catch {
+    const d = await res.json().catch(() => ({}));
+    // Un error del servidor también llega con cuerpo JSON: sin mirar `ok`, se
+    // leía como «este mes no hay nada».
+    if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
+    agnActivities = d.activities || [];
+    if (d.truncado) showToast('Este mes tiene más de ' + (d.techo || 'muchas') + ' actividades: se muestran solo las primeras.', 'error');
+  } catch (e) {
     // Un calendario vacío por un fallo de red se lee como «no tengo nada
     // agendado», que es justo lo contrario de lo que hay que entender.
     agnActivities = [];
-    showToast('No se pudo cargar la agenda. Reintenta en unos segundos.', 'error');
+    // El servidor ya explica qué falló y qué hacer; un fallo de red no dice nada útil.
+    const motivo = String((e && e.message) || '');
+    showToast(/agenda/i.test(motivo) ? motivo : 'No se pudo cargar la agenda. Reintenta en unos segundos.', 'error');
   }
   // El estado de Google Calendar sale de una llamada a Google y tardaba ~2s:
   // se consulta en segundo plano y la agenda se pinta sin esperarlo.
@@ -28142,9 +28108,25 @@ async function agnRender() {
   const todayKey = agnDayKey(new Date());
   if (!agnSelDay) agnSelDay = todayKey;
 
+  // Filtro por asesor: solo para quien ve el trabajo de todos. Al perfil
+  // Ventas el servidor ya le manda solo lo suyo.
+  const mandaEnTodo = typeof tarMandaEnTodo === 'function' ? tarMandaEnTodo() : true;
+  const gente = mandaEnTodo ? agnPorAsesor(agnActivities, y, m) : [];
+  const elegido = mandaEnTodo ? agnAsesor : '';
+  if (elegido && !gente.some(p => p.id === elegido)) {
+    // Quien se eligió no tiene nada este mes: se sigue mostrando, con su cero,
+    // para que se entienda por qué el calendario está vacío y se pueda quitar.
+    let nombre = 'Asesor elegido';
+    try { nombre = localStorage.getItem('agn_asesor_nombre') || nombre; } catch (e) {}
+    gente.push({ id: elegido, nombre: elegido === '__nadie__' ? 'Sin asignar' : nombre, total: 0 });
+  }
+  // Viendo a todo el equipo junto, cada actividad dice de quién es.
+  const conAsesorVisible = !elegido && gente.length > 1;
+  const visibles = elegido ? agnActivities.filter(a => (a.asesor_id || '__nadie__') === elegido) : agnActivities;
+
   // Agrupar actividades por día
   const byDay = {};
-  agnActivities.forEach(a => { const k = agnKeyOf(a.due_at); (byDay[k] = byDay[k] || []).push(a); });
+  visibles.forEach(a => { const k = agnKeyOf(a.due_at); (byDay[k] = byDay[k] || []).push(a); });
 
   // Grid del mes (lunes primero)
   const first = new Date(y, m, 1);
@@ -28174,7 +28156,10 @@ async function agnRender() {
       '<span class="agn-item-ico ' + a.type + '">' + icn(a.type === 'meeting' ? 'users' : 'check', 12) + '</span>' +
       '<div style="min-width:0;flex:1">' +
         '<div class="agn-item-title">' + esc(a.title) + '</div>' +
-        '<div class="agn-item-meta">' + hora + (lead ? ' · ' + esc(lead.name) : '') + (a.gcal_event_id ? ' · 📅 en Google' : '') + '</div>' +
+        '<div class="agn-item-meta">' + hora + (lead ? ' · ' + esc(lead.name) : '') +
+          // Viendo a todo el equipo, de quién es cada cosa; filtrado, sobra.
+          (conAsesorVisible ? ' · ' + esc(a.asesor_id ? (a.asesor_nombre || 'Sin nombre') : 'Sin asignar') : '') +
+          (a.gcal_event_id ? ' · 📅 en Google' : '') + '</div>' +
       '</div>' +
       '<div class="agn-item-acts">' +
         '<button class="btn-ghost sm" title="' + (a.done ? 'Reabrir' : 'Completar') + '" onclick="agnToggleDone(\'' + a.id + '\',' + (!a.done) + ')">' + (a.done ? '↺' : '✓') + '</button>' +
@@ -28185,7 +28170,8 @@ async function agnRender() {
   const sidePanel =
     '<div class="agn-side-title">' + selDate.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }) + '</div>' +
     (selActs.length ? selActs.map(itemHtml).join('') :
-      '<div style="font-size:var(--fs-sm);color:var(--muted2);padding:6px 2px">Sin actividades este día.</div>') +
+      '<div style="font-size:var(--fs-sm);color:var(--muted2);padding:6px 2px">' +
+        (elegido ? 'Sin actividades de ' + esc((gente.find(p => p.id === elegido) || {}).nombre || 'este asesor') + ' este día.' : 'Sin actividades este día.') + '</div>') +
     '<button class="btn-sec" style="margin-top:4px" onclick="agnModalOpen(null,\'' + agnSelDay + '\')">' + icn('plus', 12) + ' Agregar en este día</button>';
 
   const gcalBadge = agnGcal.connected
@@ -28198,6 +28184,7 @@ async function agnRender() {
       '<button class="btn-sec sm" onclick="agnCursor=new Date();agnSelDay=null;agnRender()">Hoy</button>' +
       '<button class="btn-ghost sm" onclick="agnCursor=new Date(agnCursor.getFullYear(),agnCursor.getMonth()-1,1);agnRender()">←</button>' +
       '<button class="btn-ghost sm" onclick="agnCursor=new Date(agnCursor.getFullYear(),agnCursor.getMonth()+1,1);agnRender()">→</button>' +
+      agnFiltroAsesores(gente, elegido) +
       '<div style="flex:1"></div>' +
       gcalBadge +
       '<button class="btn-pri" onclick="agnModalOpen()">' + icn('plus', 13) + ' Agregar actividad</button>' +
@@ -28206,6 +28193,36 @@ async function agnRender() {
       '<div class="agn-cal"><div class="agn-grid">' + cells + '</div></div>' +
       '<div class="agn-side">' + sidePanel + '</div>' +
     '</div>';
+}
+
+// El filtro de asesores, con el desplegable propio de la app (ddAbrir), el
+// mismo del filtro de fuentes y del selector de procesos. El <select> nativo
+// abría la lista del sistema operativo, que no se parece en nada al resto.
+// Desplegable y no fila de botones: con veinte asesores la fila no cabe. Con
+// una sola persona no aporta nada y no se pinta.
+let _agnGente = [];
+function agnFiltroAsesores(gente, elegido) {
+  _agnGente = gente;
+  if (gente.length < 2 && !elegido) return '';
+  const p = gente.find(x => x.id === elegido);
+  const txt = p ? p.nombre + ' (' + p.total + ')' : 'Todo el equipo (' + gente.reduce((n, x) => n + x.total, 0) + ')';
+  return '<button class="dd-btn agn-asesor-btn' + (elegido ? ' activo' : '') + '" id="agn-f-asesor" ' +
+      'aria-label="Ver el calendario de" onclick="agnAbrirAsesores(this)">' +
+    icn('users', 12) +
+    '<span class="dd-btn-txt">' + esc(txt) + '</span>' +
+    '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>' +
+  '</button>';
+}
+function agnOpcionesAsesores() {
+  const total = _agnGente.reduce((n, x) => n + x.total, 0);
+  return [{ id: '', name: 'Todo el equipo (' + total + ')' }, { sep: true }]
+    .concat(_agnGente.map(p => ({ id: p.id, name: p.nombre + ' (' + p.total + ')' })));
+}
+function agnAbrirAsesores(btn) {
+  ddAbrir(btn, agnOpcionesAsesores(), agnAsesor, id => {
+    const p = _agnGente.find(x => x.id === id);
+    agnElegirAsesor(id, p ? p.nombre : '');
+  });
 }
 
 async function agnToggleDone(id, done) {
@@ -30464,7 +30481,6 @@ async function cbCreate() {
   const plan = cbCollect();
   const btn = document.getElementById('cb-create-btn');
   const result = document.getElementById('cb-result');
-  const token = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
   const custId = (sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || '').replace(/-/g, '');
   const uid = (window.Clerk && Clerk.user && Clerk.user.id) || '';
   if (!custId) { showToast('Conecta tu cuenta de Google Ads primero', 'error'); return; }
@@ -30478,7 +30494,7 @@ async function cbCreate() {
   try {
     const d = await fetchAuth('/api/google-ads?action=create-campaign', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: uid, customerId: custId, accessToken: token, confirm: true, plan }),
+      body: JSON.stringify({ userId: uid, customerId: custId, confirm: true, plan }),
     }).then(r => r.json());
     result.style.display = 'block';
     if (d.error) {
@@ -30502,13 +30518,12 @@ async function cbCreate() {
 
 async function cbActivate(campaignId) {
   if (!confirm('¿Activar la campaña? Empezará a gastar presupuesto real en Google Ads.')) return;
-  const token = sessionStorage.getItem('ads_access_token') || localStorage.getItem('ads_access_token_persist') || '';
   const custId = (sessionStorage.getItem('ads_customer_id') || localStorage.getItem('ads_customer_id_persist') || '').replace(/-/g, '');
   const uid = (window.Clerk && Clerk.user && Clerk.user.id) || '';
   try {
     const d = await fetchAuth('/api/google-ads?action=update-campaign-status', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: uid, customerId: custId, accessToken: token, campaignId, status: 'ENABLED', confirm: true }),
+      body: JSON.stringify({ userId: uid, customerId: custId, campaignId, status: 'ENABLED', confirm: true }),
     }).then(r => r.json());
     if (d.error) { showToast('⚠️ ' + (d.error.message || d.error), 'error'); return; }
     showToast('🟢 Campaña "' + (d.campaignName || '') + '" activada', 'success');
@@ -41308,11 +41323,21 @@ async function citaRevisarChoque() {
   if (!c) { box.innerHTML = ''; return; }
   try {
     const cli = crmAmbitoCliente();
-    const r = await fetchAuth('/api/agenda?desde=' + c.ini.toISOString().slice(0, 10) +
-      '&hasta=' + c.ini.toISOString().slice(0, 10) + (cli ? '&client_id=' + encodeURIComponent(cli) : ''));
+    // El servidor lee `from`/`to`. Esto mandaba `desde`/`hasta`, que ignoraba,
+    // así que comparaba con las actividades más antiguas de la cuenta y no con
+    // las de ese día: el aviso no saltaba nunca.
+    const dia0 = new Date(c.ini); dia0.setHours(0, 0, 0, 0);
+    const dia1 = new Date(c.ini); dia1.setHours(23, 59, 59, 999);
+    const r = await fetchAuth('/api/agenda?from=' + encodeURIComponent(dia0.toISOString()) +
+      '&to=' + encodeURIComponent(dia1.toISOString()) + (cli ? '&client_id=' + encodeURIComponent(cli) : ''));
     const d = await r.json();
+    // Choca con las REUNIONES de quien va a atender la cita, no con las de
+    // todo el equipo: en Certain hay unas setenta actividades al día y el
+    // aviso saltaría siempre, que es lo mismo que no avisar.
+    const suAsesor = (_citaCtx && _citaCtx.lead && _citaCtx.lead.assigned_to) || null;
     const choques = (d.activities || []).filter(a => {
       if (a.done || a.cancelled_at || !a.due_at) return false;
+      if (a.type !== 'meeting' || (a.asesor_id || null) !== suAsesor) return false;
       const ai = new Date(a.due_at).getTime();
       const af = a.end_at ? new Date(a.end_at).getTime() : ai + 3600000;
       return ai < c.fin.getTime() && af > c.ini.getTime();
