@@ -1381,6 +1381,10 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // ya lo leyó.
   const citable = loQuePuedeCitar(agent, inventario, hist);
   let invento = inventos(cleanForUser(reply), citable);
+  // Lo que se inventó la PRIMERA vez, para el registro. `invento` se vacía al
+  // corregirse, y al escribirlo después quedaba la nota sin ningún dato: un
+  // instrumento que no mide nada.
+  const inventoOriginal = [...invento];
   let inventoForzado = false;
   if (invento.length) {
     const otra = await responderViendo(system, hist, [
@@ -1400,10 +1404,11 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     }
     await registrarError({
       origen: 'inbox', donde: 'el agente se inventó datos',
-      error: new Error('Datos que no están en el inventario: ' + invento.concat(segundo).join(', ')),
+      error: new Error('Datos que no están en el inventario: ' + inventoOriginal.join(', ')),
       usuario: connection.user_id,
       detalle: (inventoForzado ? 'NO se pudo corregir, se escaló' : 'corregido al segundo intento') +
-        ' · inventario a la vista: ' + (inventario?.total ?? 0),
+        ' · inventario a la vista: ' + (inventario?.total ?? 0) +
+        (segundo.length ? ' · al reintentar: ' + segundo.join(', ') : ''),
     }).catch(() => {});
   }
 

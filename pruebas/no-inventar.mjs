@@ -94,6 +94,11 @@ ok(/inventoForzado = true;/.test(g) && /\[ESCALAR\]/.test(g),
    'y si vuelve a inventar, se manda un texto seguro y lo coge una persona');
 ok(/registrarError\(\{[\s\S]*?donde: 'el agente se inventó datos'/.test(g),
    'queda registrado: si pasa a menudo, hay que verlo');
+// Y con QUÉ se inventó. La lista se vacía al corregirse, así que hay que
+// guardarla antes: la nota quedaba sin un solo dato, midiendo nada.
+ok(/const inventoOriginal = \[\.\.\.invento\];/.test(g),
+   'y con lo que se inventó, no con la lista ya vaciada');
+ok(/inventoOriginal\.join/.test(g), 'que es lo que se escribe');
 // El orden importa: comprobar DESPUÉS de enviar no sirve de nada.
 ok(eng.indexOf("donde: 'el agente se inventó datos'") < eng.indexOf("await send(connection, contactId, visible)"),
    'la comprobación va antes del envío, que es lo único que la hace servir de algo');
