@@ -1143,7 +1143,20 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   if (Object.values(newCapture).some(v => v) || veredicto.estado === 'calificado') {
     leadId = await upsertLeadFromConversation(
       connection.user_id, clienteDelCanal, conv, newCapture, politicaEfectiva,
-      reglaCal.activo && veredicto.estado !== 'calificado',
+      // Esperar al veredicto TAMBIÉN cuando hay enrutado, aunque el lead ya
+      // venga calificado en este mismo mensaje.
+      //
+      // Si no, la regla de la fuente asigna primero y gana siempre: en una
+      // conversación corta el lead se crea ya calificado, se repartía entre
+      // TODO el equipo y le tocaba a quien no atiende ese tablero. Luego el
+      // reparto por tablero no podía corregirlo sin quitárselo a alguien, que
+      // es peor. Lo vimos con un lead de prueba: cayó en Arriendo y se lo
+      // llevó una administradora que no lleva arriendos.
+      //
+      // Quien decide entonces es `aplicarVeredicto`, que si no encuentra a
+      // nadie marcado para ese tablero cae en la regla de la fuente de todas
+      // formas. El lead nunca se queda sin dueño.
+      reglaCal.activo && (reglaCal.enrutado?.activo || veredicto.estado !== 'calificado'),
       connection.pipeline_id || null
     ).catch(() => leadId);
   }
