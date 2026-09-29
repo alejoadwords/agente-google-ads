@@ -20,7 +20,7 @@ const ok = (c, m, extra) => {
 
 // ── `ocupadoDe`, ejecutada contra una base de mentira ───────────────────────
 const fuente = readFileSync(new URL('../api/_reservas.js', import.meta.url), 'utf8');
-const firma = 'async function ocupadoDe(neg, ids, desdeISO, hastaISO) {';
+const firma = 'async function ocupadoDe(neg, ids, desdeISO, hastaISO, ignorar = null) {';
 const i = fuente.indexOf(firma);
 if (i < 0) throw new Error('No encontré ocupadoDe en _reservas.js: revisa esta prueba');
 let prof = 0, j = i + firma.length - 1;

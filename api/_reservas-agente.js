@@ -21,7 +21,7 @@
 // Solo se importa desde funciones EDGE (ver CLAUDE.md).
 
 import { franjasLibres, instanteDe, diaLocal, diaDeLaSemana } from './_disponibilidad.js';
-import { negocioDe, cargarCatalogo, ocupadoDe, reglasDe, elegibles, guardarCita, fechaLarga } from './_reservas.js';
+import { negocioDe, cargarCatalogo, ocupadoDe, reglasDe, elegibles, guardarCita, fechaLarga, cancelarCita, moverCita, comprobarHueco } from './_reservas.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -175,12 +175,30 @@ export function pideConfirmacion(textoVisible) {
   const t = String(textoVisible || '').trim();
   if (!t.endsWith('?')) return false;
   const ultima = t.slice(t.lastIndexOf('¿') >= 0 ? t.lastIndexOf('¿') : 0);
-  return /(te|le|les) (parece|sirve|queda|va|viene|funciona)|est[aá] bien|confirm|de acuerdo|te (la|lo) (agendo|dejo|reservo)|(agendo|reservo|dejo)\b|(la|lo) agendamos|procedo|seguimos|as[ií] est[aá]/i.test(ultima);
+  return /(te|le|les) (parece|sirve|queda|va|viene|funciona)|est[aá] bien|confirm|de acuerdo|te (la|lo) (agendo|dejo|reservo|cancelo|cambio|paso|muevo)|(agendo|reservo|dejo|cancelo|cambio|muevo|cancelamos|cambiamos)\b|(la|lo) agendamos|procedo|seguimos|as[ií] est[aá]/i.test(ultima);
+}
+
+/**
+ * ¿El agente ANUNCIA que está agendando, cambiando o cancelando?
+ *
+ * Con Claude de verdad pasó: «Listo, te estoy agendando… en un momento te llega
+ * la confirmación» y ningún bloque. La persona se queda esperando algo que no
+ * va a llegar. Si esto da verdadero y no hay bloque, el motor le pide al
+ * modelo que lo escriba.
+ */
+export function prometeAccion(textoVisible) {
+  return /(estoy|voy a|vamos a) (agend|cambi|cancel|reserv)|te (llega|llegar[aá]) la confirmaci|recib(es|ir[aá]s) la confirmaci|(queda|qued[oó]) (agendad|reservad|cambiad|cancelad)/i
+    .test(String(textoVisible || ''));
+}
+
+/** ¿Trae alguno de los bloques de cita? */
+export function traeBloqueDeCita(texto) {
+  return /\[(RESERVA|CANCELAR_CITA|CAMBIAR_CITA):/.test(String(texto || ''));
 }
 
 /** Los bloques ocultos de una respuesta, para conservarlos si se cambia el texto. */
 export function bloquesOcultos(texto) {
-  return (String(texto || '').match(/\[(?:CAPTURA|CALIFICACION|RESERVA):\s*\{.*?\}\]|\[ESCALAR\]/gs) || []).join('\n');
+  return (String(texto || '').match(/\[(?:CAPTURA|CALIFICACION|RESERVA|CANCELAR_CITA|CAMBIAR_CITA):\s*\{.*?\}\]|\[ESCALAR\]/gs) || []).join('\n');
 }
 
 function horaCorta(iso, zona) {
@@ -269,11 +287,7 @@ export async function ejecutarReserva({ info, pedido, contacto = {}, leadId = nu
   const inicio = instanteDe(zona, pedido.dia, hora);
   // A quién pidió, si pidió a alguien y ese alguien presta el servicio. Si el
   // nombre no casa con nadie, se ignora: mejor cualquiera libre que ninguno.
-  const candidatos = elegibles(servicio, info.catalogo.recursos);
-  const pedidoRecurso = pedido.con
-    ? (candidatos.find(r => normal(r.nombre) === normal(pedido.con)) ||
-       candidatos.find(r => normal(r.nombre).split(' ')[0] === normal(pedido.con).split(' ')[0]) || null)
-    : null;
+  const pedidoRecurso = recursoPedido(servicio, info.catalogo.recursos, pedido.con);
 
   // Si el mismo mensaje llega dos veces —o el modelo repite el bloque en el
   // turno siguiente—, la cita ya está: se confirma otra vez, no se duplica con
@@ -312,8 +326,176 @@ export async function ejecutarReserva({ info, pedido, contacto = {}, leadId = nu
     texto: confirmacion(servicio, r.cita.due_at, zona, r.recurso.nombre, r.citaToken) };
 }
 
+function recursoPedido(servicio, recursos, con) {
+  if (!con) return null;
+  const candidatos = elegibles(servicio, recursos);
+  return candidatos.find(r => normal(r.nombre) === normal(con)) ||
+    candidatos.find(r => normal(r.nombre).split(' ')[0] === normal(con).split(' ')[0]) || null;
+}
+
 function confirmacion(servicio, iso, zona, con, token) {
   return 'Cita confirmada: ' + servicio.nombre + ', ' + fechaLarga(new Date(iso), zona) +
     (con ? ', con ' + con : '') + '.' +
     (token ? '\nSi necesitas cancelarla: https://app.acuarius.app/cita/' + token : '');
+}
+
+// ── Cancelar y cambiar una cita que ya existe ───────────────────────────────
+//
+// El agente solo ve —y solo puede tocar— las citas del contacto de ESTA
+// conversación. No hay forma de nombrar otra: la clave se busca dentro de esa
+// lista, que se arma en el servidor a partir del lead de la conversación, nunca
+// de algo que escriba el modelo o la persona.
+//
+//   [CANCELAR_CITA: {"cita": "ab12cd34"}]
+//   [CAMBIAR_CITA: {"cita": "ab12cd34", "dia": "2026-10-02", "hora": "15:00", "con": "Ana"}]
+//
+// Cancelar se puede siempre, igual que con el enlace que ya tiene la persona.
+// Cambiar, solo en los servicios que el agente puede agendar: mover una cita es
+// volver a agendarla, y lo que el negocio no quiere cerrar solo tampoco lo
+// quiere mover solo.
+
+const MAX_CITAS = 5;
+
+/** Las próximas citas vivas del contacto, con lo que hace falta para nombrarlas. */
+export async function citasDelContacto(userId, clientId, leadId, ahora = new Date()) {
+  if (!leadId) return null;
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${encodeURIComponent(userId)}&lead_id=eq.${encodeURIComponent(leadId)}` +
+    `&resource_id=not.is.null&cancelled_at=is.null&due_at=gte.${encodeURIComponent(ahora.toISOString())}` +
+    `&select=id,user_id,client_id,title,due_at,end_at,service_id,resource_id,booking_token,gcal_event_id` +
+    `&order=due_at.asc&limit=${MAX_CITAS}`,
+    { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+  );
+  if (!r.ok) throw new Error('citas del contacto: HTTP ' + r.status);
+  const filas = await r.json();
+  if (!filas.length) return null;
+  const neg = await negocioDe(userId, clientId);
+  if (!neg) return null;
+  const { servicios, recursos } = await cargarCatalogo(neg, { conAgente: true });
+  return {
+    neg, zona: neg.zona_horaria || 'America/Bogota', catalogo: { servicios, recursos },
+    citas: filas.map(c => {
+      const servicio = servicios.find(s => s.id === c.service_id) || null;
+      return {
+        ...c, clave: claveDe(c.id), servicio,
+        // Un servicio borrado o apagado ya no está en el catálogo: su nombre
+        // sale del título de la cita («Corte · Laura»).
+        nombreServicio: servicio ? servicio.nombre : String(c.title || 'Cita').split(' · ')[0],
+        con: (recursos.find(r => r.id === c.resource_id) || {}).nombre || null,
+        movible: !!(servicio && servicio.agente_reserva === true),
+      };
+    }),
+  };
+}
+
+/** El trozo del prompt con sus citas. Sin backticks: vive dentro de un template literal. */
+export function bloqueCitas(suyas) {
+  if (!suyas || !suyas.citas.length) return '';
+  const lineas = suyas.citas.map(c =>
+    '[' + c.clave + '] ' + c.nombreServicio + ' · ' + fechaLarga(new Date(c.due_at), suyas.zona) +
+    (c.con ? ' · con ' + c.con : '') +
+    (c.movible ? ' · se puede cambiar de hora' : ' · cambiarla de hora lo confirma un asesor')).join('\n');
+  const ej = suyas.citas[0].clave;
+  return `CITAS QUE YA TIENE ESTA PERSONA:
+${lineas}
+
+Si quiere cancelar o cambiar una:
+- Confírmale cuál y qué quiere hacer en una frase. Solo cuando diga que sí, escribe al final de tu mensaje, invisible para ella:
+  para cancelar: [CANCELAR_CITA: {"cita": "${ej}"}]
+  para cambiarla: [CAMBIAR_CITA: {"cita": "${ej}", "dia": "AAAA-MM-DD", "hora": "HH:MM"}]
+- "cita" es la clave entre corchetes de arriba. Para cambiarla, ofrécele horas de la lista de huecos de ese servicio; si pide a alguien concreto, añade "con".
+- Si la cita dice que cambiarla lo confirma un asesor, no escribas el bloque de cambiar: dilo e incluye [ESCALAR]. Cancelar sí puedes.
+- El bloque va solo en el mensaje que responde a su «sí», nunca en el que le preguntas. El sistema le manda debajo la confirmación: no la des por hecha.
+
+`;
+}
+
+/** { tipo: 'cancelar'|'cambiar', cita, dia?, hora?, con? } o null. */
+export function extraerCambio(texto) {
+  const t = String(texto || '');
+  const m = t.match(/\[(CANCELAR_CITA|CAMBIAR_CITA):\s*(\{.*?\})\]/s);
+  if (!m) return null;
+  try {
+    const o = JSON.parse(m[2]);
+    if (!o || typeof o !== 'object') return null;
+    return {
+      tipo: m[1] === 'CANCELAR_CITA' ? 'cancelar' : 'cambiar',
+      cita: String(o.cita || '').trim().toLowerCase(),
+      dia: String(o.dia || '').trim(),
+      hora: String(o.hora || '').trim(),
+      con: String(o.con || '').trim().slice(0, 80),
+    };
+  } catch { return null; }
+}
+
+/**
+ * Ejecuta un cancelar o un cambiar. Misma forma de respuesta que
+ * `ejecutarReserva`: { ok: true, texto } —la confirmación que va debajo— o
+ * { ok: false, texto, escalar? } —el texto que SUSTITUYE al del agente—.
+ *
+ * `info` son los huecos del agente (null si no puede agendar nada): hacen
+ * falta para cambiar de hora, no para cancelar.
+ */
+export async function ejecutarCambio({ suyas, info, pedido, simular = false }) {
+  const cita = suyas && suyas.citas.find(c => c.clave === claveDe(pedido.cita));
+  if (!cita) {
+    return { ok: false, motivo: 'cita_desconocida',
+      texto: 'No encuentro esa cita entre las tuyas. ¿Me dices qué día la tenías?' };
+  }
+  const zona = suyas.zona;
+  const cuando = fechaLarga(new Date(cita.due_at), zona);
+
+  if (pedido.tipo === 'cancelar') {
+    if (simular) return { ok: true, simulada: true, texto: '(Ensayo: no se canceló nada) Cita cancelada: ' + cita.nombreServicio + ', ' + cuando + '.' };
+    const r = await cancelarCita(cita);
+    if (r.error) {
+      return { ok: false, escalar: true, motivo: 'error',
+        texto: 'No pude cancelarla por un problema de nuestro lado. Ya le aviso a un asesor para que lo haga.' };
+    }
+    return { ok: true, motivo: 'cancelada',
+      texto: 'Cita cancelada: ' + cita.nombreServicio + ', ' + cuando + '. Ese turno queda libre para otra persona.' };
+  }
+
+  // Cambiar
+  const serv = info && info.catalogo.servicios.find(s => s.id === cita.service_id);
+  if (!cita.movible || !serv) {
+    return { ok: false, escalar: true, motivo: 'no_movible',
+      texto: 'El cambio de esa cita prefiero confirmártelo con un asesor. Ya le paso tu conversación.' };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(pedido.dia) || !/^([01]?\d|2[0-3]):[0-5]\d$/.test(pedido.hora)) {
+    return { ok: false, motivo: 'fecha', texto: '¿A qué día y hora exactos quieres pasarla? Así te la cambio.' };
+  }
+  const inicio = instanteDe(zona, pedido.dia, pedido.hora.padStart(5, '0'));
+  const pedidoRecurso = recursoPedido(serv, info.catalogo.recursos, pedido.con);
+
+  if (inicio.toISOString() === new Date(cita.due_at).toISOString() && !pedidoRecurso) {
+    return { ok: true, motivo: 'igual', texto: 'Tu cita sigue igual: ' + cita.nombreServicio + ', ' + cuando + '.' };
+  }
+
+  const r = simular
+    // El ensayo mira el hueco igual y se para ahí.
+    ? await comprobarHueco(info.neg, {
+        servicio: serv, recursos: info.catalogo.recursos, inicio, pedido: pedidoRecurso ? pedidoRecurso.id : null, ignorar: cita.id })
+    : await moverCita(info.neg, cita, {
+        servicio: serv, recursos: info.catalogo.recursos, inicio, pedido: pedidoRecurso ? pedidoRecurso.id : null });
+
+  if (r.error) {
+    const otras = r.ocupada || r.lejos ? alternativas(info, serv, inicio.toISOString()) : [];
+    const lista = otras.map(iso => horaCorta(iso, zona)).join('\n');
+    // Lo primero que tiene que oír: su cita de antes NO se ha tocado.
+    const texto = 'Tu cita del ' + cuando + ' sigue en pie. ' +
+      (r.lejos ? 'Esa fecha queda muy lejos para pasarla allí todavía.'
+        : r.ocupada ? (pedidoRecurso ? 'Esa hora con ' + pedidoRecurso.nombre + ' no está libre.' : 'Esa hora no está libre.')
+        : 'No pude cambiarla por un problema de nuestro lado.') +
+      (otras.length ? ' Te la puedo pasar a:\n' + lista + '\n¿Cuál te sirve?' : ' ¿Te sirve otro día u otra hora?');
+    return { ok: false, motivo: r.ocupada ? 'ocupada' : r.lejos ? 'lejos' : 'error', texto };
+  }
+  const nuevo = fechaLarga(inicio, zona);
+  const con = (r.recurso || r.libre || {}).nombre;
+  if (simular) {
+    return { ok: true, simulada: true, texto: '(Ensayo: no se cambió nada) Cita cambiada: ' + serv.nombre + ', ' + nuevo + (con ? ', con ' + con : '') + '.' };
+  }
+  return { ok: true, motivo: 'cambiada', cerrar: r.cerrar,
+    texto: 'Cita cambiada: ' + serv.nombre + ', ahora ' + nuevo + (con ? ', con ' + con : '') + '.' +
+      (cita.booking_token ? '\nTu enlace para cancelarla sigue siendo el mismo: https://app.acuarius.app/cita/' + cita.booking_token : '') };
 }

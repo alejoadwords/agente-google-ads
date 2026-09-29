@@ -173,7 +173,7 @@ function funcion(firma) {
   }
   return fuente.slice(i, j + 1);
 }
-const srcOcupadoDe = funcion('async function ocupadoDe(neg, ids, desdeISO, hastaISO) {');
+const srcOcupadoDe = funcion('async function ocupadoDe(neg, ids, desdeISO, hastaISO, ignorar = null) {');
 const srcOcupadoGoogle = funcion('async function ocupadoGoogle(neg, ids, desdeISO, hastaISO) {');
 
 async function correOcupadoGoogle(lecturas, ids) {

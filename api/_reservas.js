@@ -11,7 +11,7 @@
 
 import { sigueLibre } from './_disponibilidad.js';
 import { intakeLead } from './_lead-intake.js';
-import { getGcalToken, gcalEventBody, gcalRequest, tokenDeRecurso, ocupadoDeCalendarios } from './_gcal.js';
+import { getGcalToken, gcalEventBody, gcalRequest, tokenDeRecurso, ocupadoDeCalendarios, gcalEnSuCalendario } from './_gcal.js';
 import { emailHtml, bloque, RESPONDER_A, esc } from './_email-layout.js';
 import { registrarError } from './_registro-errores.js';
 import { enviarResend } from './_correo.js';
@@ -76,7 +76,10 @@ export async function cargarCatalogo(neg, { conAgente = false } = {}) {
 }
 
 /** Lo que ya tiene cogido cada recurso en ese rango. */
-export async function ocupadoDe(neg, ids, desdeISO, hastaISO) {
+// `ignorar`: el id de una cita que NO cuenta como ocupada. Al cambiar una cita
+// de hora, la propia cita no puede taparse a sí misma: moverla media hora
+// más tarde solapa con donde estaba y saldría «ocupado» siempre.
+export async function ocupadoDe(neg, ids, desdeISO, hastaISO, ignorar = null) {
   const porRecurso = {};
   ids.forEach(id => { porRecurso[id] = []; });
   if (!ids.length) return porRecurso;
@@ -87,7 +90,7 @@ export async function ocupadoDe(neg, ids, desdeISO, hastaISO) {
       `/activities?user_id=eq.${encodeURIComponent(neg.user_id)}` +
       `&resource_id=in.(${ids.map(encodeURIComponent).join(',')})` +
       `&cancelled_at=is.null&due_at=gte.${encodeURIComponent(desdeISO)}&due_at=lt.${encodeURIComponent(hastaISO)}` +
-      `&select=due_at,end_at,resource_id&limit=1000`
+      `&select=id,due_at,end_at,resource_id&limit=1000`
     ).catch(() => []),
     // Los bloqueos que alguien puso a mano.
     //
@@ -106,6 +109,7 @@ export async function ocupadoDe(neg, ids, desdeISO, hastaISO) {
   ]);
 
   for (const f of filas || []) {
+    if (ignorar && f.id === ignorar) continue;
     const ini = new Date(f.due_at).getTime();
     const fin = f.end_at ? new Date(f.end_at).getTime() : ini + 3600000;
     if (porRecurso[f.resource_id]) porRecurso[f.resource_id].push({ ini, fin });
@@ -205,8 +209,14 @@ export function elegibles(servicio, recursos, pedido) {
  * `cerrar` es la promesa de lo de después —Google y el correo—, que quien
  * llama decide si esperar: el cliente ya tiene su cita y no tiene por qué.
  */
-export async function guardarCita(neg, { servicio, recursos, inicio, pedido, contacto, leadId, fuente, simular }) {
-  const zona = neg.zona_horaria || 'America/Bogota';
+/**
+ * ¿Hay hueco para este servicio a esa hora? Devuelve { libre } —el recurso que
+ * lo atendería— o { error, status, ocupada?, lejos? }.
+ *
+ * Lo comparten reservar y cambiar de hora: las dos cosas tienen que mirar lo
+ * mismo, y en el mismo instante en que se va a escribir.
+ */
+export async function comprobarHueco(neg, { servicio, recursos, inicio, pedido, ignorar }) {
   const puede = elegibles(servicio, recursos, pedido || null);
   if (!puede.length) return { error: 'Nadie presta ese servicio ahora mismo', status: 410 };
 
@@ -220,13 +230,21 @@ export async function guardarCita(neg, { servicio, recursos, inicio, pedido, con
 
   const desdeISO = new Date(inicio.getTime() - 86400000).toISOString();
   const hastaISO = new Date(inicio.getTime() + 2 * 86400000).toISOString();
-  const ocupado = await ocupadoDe(neg, puede.map(r => r.id), desdeISO, hastaISO);
+  const ocupado = await ocupadoDe(neg, puede.map(r => r.id), desdeISO, hastaISO, ignorar || null);
 
   // Se vuelve a comprobar AHORA, no cuando el cliente vio las horas. Entre una
   // cosa y otra pasan minutos y en ese rato otra persona puede haber cogido la
   // misma hora.
   const libre = puede.find(r => sigueLibre(inicio.toISOString(), reglasDe(neg, r, servicio, ocupado[r.id], new Date())));
   if (!libre) return { error: 'Esa hora se acaba de ocupar. Elige otra, por favor.', ocupada: true, status: 409 };
+  return { libre };
+}
+
+export async function guardarCita(neg, { servicio, recursos, inicio, pedido, contacto, leadId, fuente, simular }) {
+  const zona = neg.zona_horaria || 'America/Bogota';
+  const hueco = await comprobarHueco(neg, { servicio, recursos, inicio, pedido });
+  if (hueco.error) return hueco;
+  const libre = hueco.libre;
   // El ensayo del agente pregunta lo mismo y se para aquí: sin contacto, sin
   // cita, sin Google y sin correo.
   if (simular) return { simulada: true, recurso: libre };
@@ -309,6 +327,87 @@ export async function guardarCita(neg, { servicio, recursos, inicio, pedido, con
   }));
 
   return { cita, recurso: libre, citaToken, cerrar, lead };
+}
+
+// ── Cancelar y cambiar de hora ──────────────────────────────────────────────
+
+/**
+ * Cancela una cita. Lo usan el enlace /cita/:token y el agente del chat.
+ *
+ * Solo toca la fila si sigue viva (`cancelled_at=is.null`): dos cancelaciones
+ * a la vez no pisan la fecha de la primera. Cancelar deja el hueco libre otra
+ * vez, porque el índice único solo cuenta las citas no canceladas.
+ *
+ * Devuelve { ok } o { error }. Que falle Google no la invalida: la cita ya está
+ * cancelada en Acuarius y lo que queda es un evento huérfano, que se anota.
+ */
+export async function cancelarCita(cita) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/activities?id=eq.${encodeURIComponent(cita.id)}&cancelled_at=is.null`, {
+    method: 'PATCH', headers: sbHeaders('return=minimal'),
+    body: JSON.stringify({ cancelled_at: new Date().toISOString(), booking_status: 'cancelada' }),
+  });
+  if (!res.ok) return { error: 'No se pudo cancelar. Inténtalo otra vez.' };
+  if (cita.gcal_event_id) {
+    try {
+      await gcalEnSuCalendario(cita.user_id, cita.resource_id, 'DELETE', '/' + cita.gcal_event_id, null, true);
+    } catch (e) {
+      await registrarError({ origen: 'reservas', donde: 'cancelar en google', error: e, detalle: 'Cita ' + cita.id });
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * Cambia una cita de día u hora (y, si se pide, de persona).
+ *
+ * Se MUEVE la misma fila en vez de cancelar y crear otra: así el enlace para
+ * cancelar que la persona ya tiene sigue valiendo, y la cita no se queda un
+ * instante sin existir ni se duplica si algo falla a medias. Su hueco se mira
+ * sin contarla a ella misma, y el índice único cierra la carrera igual que al
+ * reservar.
+ *
+ * Devuelve { cita, recurso } o { error, status, ocupada?, lejos? }.
+ */
+export async function moverCita(neg, cita, { servicio, recursos, inicio, pedido }) {
+  const hueco = await comprobarHueco(neg, { servicio, recursos, inicio, pedido, ignorar: cita.id });
+  if (hueco.error) return hueco;
+  const libre = hueco.libre;
+  const fin = new Date(inicio.getTime() + servicio.minutos * 60000);
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/activities?id=eq.${encodeURIComponent(cita.id)}&cancelled_at=is.null`, {
+    method: 'PATCH', headers: sbHeaders(),
+    body: JSON.stringify({
+      due_at: inicio.toISOString(),
+      end_at: fin.toISOString(),
+      resource_id: libre.id,
+      // Los recordatorios que ya salieron eran de la hora vieja. Sin vaciar esto,
+      // mover una cita de mañana a la semana que viene dejaba sin el aviso de 24 h.
+      recordatorios_enviados: [],
+      gcal_event_id: null,
+    }),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    if (res.status === 409 || /23505|duplicate key/i.test(txt)) {
+      return { error: 'Esa hora se acaba de ocupar. Elige otra, por favor.', ocupada: true, status: 409 };
+    }
+    await registrarError({ origen: 'reservas', donde: 'mover cita', error: new Error(txt.slice(0, 300)), detalle: 'Cita ' + cita.id });
+    return { error: 'No se pudo cambiar la cita. Inténtalo otra vez.', status: 500 };
+  }
+  const movida = (await res.json())?.[0];
+  // Si la fila ya estaba cancelada, el PATCH no toca nada y vuelve vacío.
+  if (!movida) return { error: 'Esa cita ya no está activa.', status: 410 };
+
+  // En Google: el evento viejo fuera (puede estar en el calendario de otra
+  // persona si cambió quién atiende) y uno nuevo donde toca.
+  const cerrar = (async () => {
+    if (cita.gcal_event_id) {
+      await gcalEnSuCalendario(cita.user_id, cita.resource_id, 'DELETE', '/' + cita.gcal_event_id, null, true).catch(() => {});
+    }
+    await sincronizarGcal(neg, movida, null);
+  })().catch(e => registrarError({ origen: 'reservas', donde: 'mover cita en google', error: e, detalle: 'Cita ' + cita.id }));
+
+  return { cita: movida, recurso: libre, cerrar };
 }
 
 export async function sincronizarGcal(neg, cita, correoCliente) {

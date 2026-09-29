@@ -58,8 +58,10 @@ console.log('\nLo que impide citar a dos personas a la vez\n');
   chk('se vuelve a comprobar justo antes de guardar', /sigueLibre\(inicio\.toISOString\(\)/.test(api));
   chk('y el choque de la base se traduce a un mensaje, no a un 500',
       /23505\|duplicate key/.test(api) && /ocupada: true/.test(api));
-  chk('el aviso al cliente es el mismo en los dos caminos',
-      (api.match(/Esa hora se acaba de ocupar/g) || []).length === 2);
+  // Tres caminos llegan a «ocupada»: la comprobación previa, el choque de la
+  // base al reservar y el choque de la base al CAMBIAR de hora (el agente).
+  chk('el aviso al cliente es el mismo en los tres caminos',
+      (api.match(/Esa hora se acaba de ocupar/g) || []).length === 3);
   chk('la página devuelve a las horas cuando se la quitaron',
       /r\.d\.ocupada/.test(pag) && /elegirDia\(indiceDe\(sel\.dia\)\)/.test(pag));
 }

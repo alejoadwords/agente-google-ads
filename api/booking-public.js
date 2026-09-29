@@ -20,11 +20,9 @@
 export const config = { runtime: 'edge' };
 
 import { franjasLibres, diasConCupo, diaLocal } from './_disponibilidad.js';
-import { gcalEnSuCalendario } from './_gcal.js';
-import { registrarError } from './_registro-errores.js';
 // Lo que decide si hay hueco y cómo se guarda una cita vive en _reservas.js:
 // el agente del chat reserva por el mismo camino.
-import { cargarCatalogo, ocupadoDe, reglasDe, elegibles, guardarCita } from './_reservas.js';
+import { cargarCatalogo, ocupadoDe, reglasDe, elegibles, guardarCita, cancelarCita } from './_reservas.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -273,22 +271,8 @@ async function manejarCita(req, url, citaTok) {
   if (cita.cancelled_at) return jsonResp({ ok: true, cita: { ...vista, estado: 'cancelada' } });
   if (vista.pasada) return jsonResp({ error: 'Esa cita ya pasó.' }, 400);
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/activities?id=eq.${cita.id}`, {
-    method: 'PATCH', headers: sbHeaders('return=minimal'),
-    // Cancelar deja el hueco libre otra vez: el índice único solo cuenta las
-    // citas con `cancelled_at` nulo.
-    body: JSON.stringify({ cancelled_at: new Date().toISOString(), booking_status: 'cancelada' }),
-  });
-  if (!res.ok) return jsonResp({ error: 'No se pudo cancelar. Inténtalo otra vez.' }, 500);
-
-  if (cita.gcal_event_id) {
-    try {
-      await gcalEnSuCalendario(cita.user_id, cita.resource_id, 'DELETE', '/' + cita.gcal_event_id, null, true);
-    } catch (e) {
-      // La cita ya está cancelada y el hueco libre en Acuarius; lo que queda
-      // es un evento huérfano en Google. Se anota para que alguien lo vea.
-      await registrarError({ origen: 'booking-public', donde: 'cancelar en google', error: e, detalle: 'Cita ' + cita.id });
-    }
-  }
+  // El mismo cancelar que usa el agente del chat.
+  const r = await cancelarCita(cita);
+  if (r.error) return jsonResp({ error: r.error }, 500);
   return jsonResp({ ok: true, cita: { ...vista, estado: 'cancelada' } });
 }

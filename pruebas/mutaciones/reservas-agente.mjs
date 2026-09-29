@@ -60,16 +60,15 @@ export const MUTACIONES = [
 
   // Agendar sin el sí
   { nombre: 'se agenda aunque el agente esté preguntando', archivo: 'motor',
-    romper: cambiar("const pedidoCita = reservas && !pideConfirmacion(cleanForUser(reply)) ? extraerReserva(reply) : null;",
-                    "const pedidoCita = reservas ? extraerReserva(reply) : null;") },
+    romper: cambiar("const conSi = !pideConfirmacion(cleanForUser(reply));", "const conSi = true;") },
   { nombre: 'cualquier pregunta frena la cita', archivo: 'agente',
     romper: cambiar("  if (!t.endsWith('?')) return false;", "  if (t.endsWith('?')) return true;") },
 
   // El motor
   { nombre: 'con la hora ocupada sale igual el «te agendo»', archivo: 'motor',
-    romper: cambiar("      visible = r.texto;\n", '') },
+    romper: cambiar("      // son lo que el motor relee en el siguiente mensaje.\n      visible = r.texto;\n", "      // son lo que el motor relee en el siguiente mensaje.\n") },
   { nombre: 'al cambiar el texto se pierden los bloques ocultos', archivo: 'motor',
-    romper: cambiar("      guardado = r.texto + '\\n' + bloquesOcultos(reply);", "      guardado = r.texto;") },
+    romper: cambiar("      visible = r.texto;\n      guardado = r.texto + '\\n' + bloquesOcultos(reply);\n      escalarPorReserva = !!r.escalar;\n    }\n  }\n\n", "      visible = r.texto;\n      guardado = r.texto;\n      escalarPorReserva = !!r.escalar;\n    }\n  }\n\n") },
   { nombre: 'la confirmación no se manda', archivo: 'motor',
     romper: cambiar("      try { await send(connection, contactId, confirmacionCita); } catch (e) { console.error('send error', e); }", '') },
   { nombre: 'la confirmación no queda en el historial', archivo: 'motor',
@@ -81,7 +80,7 @@ export const MUTACIONES = [
 
   // Lo que se ve
   { nombre: 'el canal ve el bloque', archivo: 'motor',
-    romper: cambiar("    .replace(/\\[RESERVA:.*?\\]/gs, '')\n    // Si la respuesta", "    // Si la respuesta") },
+    romper: cambiar("    .replace(/\\[(RESERVA|CANCELAR_CITA|CAMBIAR_CITA):.*?\\]/gs, '')\n    // Si la respuesta", "    // Si la respuesta") },
   { nombre: 'el inbox enseña el bloque', archivo: 'app',
-    romper: cambiar("    .replace(/\\[RESERVA:.*?\\]/gs, '')\n    .replace(/\\[ESCALAR\\]/g, '')", "    .replace(/\\[ESCALAR\\]/g, '')") },
+    romper: cambiar("    .replace(/\\[(RESERVA|CANCELAR_CITA|CAMBIAR_CITA):.*?\\]/gs, '')\n    .replace(/\\[ESCALAR\\]/g, '')", "    .replace(/\\[ESCALAR\\]/g, '')") },
 ];

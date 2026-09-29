@@ -45,6 +45,17 @@
       "texto": "Cuando el agente aún no tenía una respuesta —el presupuesto, por ejemplo— a veces la apuntaba como «sin información» y el sistema la contaba como respondida. Eso adelantaba el veredicto: un contacto podía llegarle a tu comercial marcado como calificado sin haber dado los datos, o descartado sin haber dicho nada. Ahora lo que falta se sigue preguntando, y el veredicto espera a tenerlo todo."
     },
     {
+      "id": "2026-09-28-agente-cambia-cancela",
+      "fecha": "2026-09-28",
+      "tipo": "nuevo",
+      "titulo": "Por WhatsApp también se cambia o se cancela la cita",
+      "texto": "Si alguien te escribe «no puedo ir, ¿me la pasas al jueves?», tu agente ya lo resuelve: ve las citas que esa persona tiene contigo, le confirma el cambio y la pasa a la nueva hora, o la cancela si ya no va a venir. El turno que queda libre vuelve a ofrecerse en tu página, y el calendario de quien atiende se actualiza solo. El enlace para cancelar que la persona ya tenía sigue sirviendo. El agente solo toca las citas de quien le está escribiendo, y cambia de hora únicamente los servicios que tú marcaste para que agende solo; en los demás, pasa la conversación a tu equipo. Si la hora nueva ya no está libre, se lo dice y su cita sigue en pie.",
+      "accion": {
+        "texto": "Ver mis reservas",
+        "ir": "reservas"
+      }
+    },
+    {
       "id": "2026-09-28-gcal-cuenta-segura",
       "fecha": "2026-09-28",
       "tipo": "arreglo",

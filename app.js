@@ -24142,10 +24142,10 @@ function inboxLimpiar(txt) {
   return String(txt || '')
     .replace(/\[CAPTURA:.*?\]/gs, '')
     .replace(/\[CALIFICACION:.*?\]/gs, '')
-    .replace(/\[RESERVA:.*?\]/gs, '')
+    .replace(/\[(RESERVA|CANCELAR_CITA|CAMBIAR_CITA):.*?\]/gs, '')
     .replace(/\[ESCALAR\]/g, '')
     // Si la respuesta se cortó a mitad de un bloque, fuera igual
-    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR|RESERVA)\b[\s\S]*$/, '')
+    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR|RESERVA|CANCELAR_CITA|CAMBIAR_CITA)\b[\s\S]*$/, '')
     .trim();
 }
 

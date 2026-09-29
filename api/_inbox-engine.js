@@ -14,7 +14,8 @@ import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredict
 import { pautaDeReferral } from './_lead-intake.js';
 import { registrarUso } from './_uso-ia.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
-import { reservasParaAgente, bloqueReservas, extraerReserva, ejecutarReserva, bloquesOcultos, pideConfirmacion } from './_reservas-agente.js';
+import { reservasParaAgente, bloqueReservas, extraerReserva, ejecutarReserva, bloquesOcultos, pideConfirmacion,
+  citasDelContacto, bloqueCitas, extraerCambio, ejecutarCambio, prometeAccion, traeBloqueDeCita } from './_reservas-agente.js';
 import { registrarError } from './_registro-errores.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -44,9 +45,9 @@ export function cleanForUser(text) {
     .replace(/\[CAPTURA:.*?\]/gs, '')
     .replace(/\[ESCALAR\]/g, '')
     .replace(/\[CALIFICACION:.*?\]/gs, '')
-    .replace(/\[RESERVA:.*?\]/gs, '')
+    .replace(/\[(RESERVA|CANCELAR_CITA|CAMBIAR_CITA):.*?\]/gs, '')
     // Si la respuesta se cortó a mitad de un bloque, fuera igual
-    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR|RESERVA)\b[\s\S]*$/, '')
+    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR|RESERVA|CANCELAR_CITA|CAMBIAR_CITA)\b[\s\S]*$/, '')
     .trim();
 }
 
@@ -392,7 +393,7 @@ ${titular ? `Titular: ${titular}` : ''}${cuerpo ? `\nTexto: ${cuerpo}` : ''}
 `;
 }
 
-export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null, canal = 'whatsapp', referral = null, reservas = null) {
+export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null, canal = 'whatsapp', referral = null, reservas = null, suyas = null) {
   const faqs = (agent.faqs || []).map(f => `P: ${f.q}\nR: ${f.a}`).join('\n\n');
   const captured = Object.entries(capturedData || {})
     .filter(([, v]) => v)
@@ -445,7 +446,7 @@ SI TE MANDAN UNA FOTO:
 - Que se parezca a algo del listado NO significa que sea eso. No afirmes que es una propiedad concreta salvo que te lo diga la persona; si crees reconocerla, preguntale
 - Si la foto no se entiende o no tiene que ver, dilo con amabilidad y pide lo que necesitas
 
-${bloqueDeAnuncio(referral)}${bloqueReservas(reservas, canal)}DATOS CAPTURADOS HASTA AHORA:
+${bloqueDeAnuncio(referral)}${bloqueReservas(reservas, canal)}${bloqueCitas(suyas)}DATOS CAPTURADOS HASTA AHORA:
 ${captured}
 
 Cuando detectes un dato nuevo en la conversación, incluye al final de tu respuesta (invisible para el usuario):
@@ -616,7 +617,10 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   // Las mismas citas que en la conversación real, pero en el ensayo NUNCA se
   // guarda nada: se comprueba el hueco y se para ahí.
   const reservas = await reservasParaAgente(userId, agent.client_id || null).catch(() => null);
-  const system = buildSystemPrompt(agent, capturado, regla, inventario, canal, null, reservas);
+  // Sin citas propias (null): el ensayo no tiene contacto en el CRM. Se pasa a
+  // propósito para que el prompt se arme con los mismos argumentos que en la
+  // conversación real.
+  const system = buildSystemPrompt(agent, capturado, regla, inventario, canal, null, reservas, null);
 
   let bruto;
   try {
@@ -1123,11 +1127,36 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     await registrarError({ origen: 'inbox', donde: 'huecos para el agente', error: e, usuario: connection.user_id });
     return null;
   });
+  // Las citas que YA tiene esta persona, para que pueda cancelarlas o
+  // cambiarlas desde el chat. Solo las de SU contacto: el lead lo decide la
+  // conversación, no nada que escriba el modelo.
+  const suyas = conv.lead_id
+    ? await citasDelContacto(connection.user_id, clienteDelCanal, conv.lead_id).catch(async (e) => {
+        await registrarError({ origen: 'inbox', donde: 'citas del contacto', error: e, usuario: connection.user_id });
+        return null;
+      })
+    : null;
 
-  const reply = await responderViendo(
-    buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas),
-    hist, [], { userId: connection.user_id, origen: 'whatsapp' }
-  );
+  const system = buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas);
+  let reply = await responderViendo(system, hist, [], { userId: connection.user_id, origen: 'whatsapp' });
+
+  // «Te estoy agendando, en un momento te llega la confirmación»… sin el
+  // bloque. Pasó con Claude de verdad: la persona se quedaría esperando una
+  // confirmación que nunca sale. Se le pide al modelo UNA vez que lo escriba;
+  // si tampoco, la conversación pasa a una persona (más abajo).
+  let promesaSinBloque = false;
+  if ((reservas || suyas) && !reply.includes('[ESCALAR]') && prometeAccion(cleanForUser(reply)) && !traeBloqueDeCita(reply) && !pideConfirmacion(cleanForUser(reply))) {
+    const otra = await responderViendo(system, hist, [
+      { role: 'assistant', content: reply },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) En tu mensaje anterior dijiste que estabas haciendo la cita, pero no escribiste el bloque, así que no se hizo nada. Repite tu mensaje y añade al final el bloque [RESERVA], [CAMBIAR_CITA] o [CANCELAR_CITA] que corresponde. Si en realidad la persona todavía no te ha dicho que sí, reescríbelo como pregunta.' },
+    ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
+    if (otra && (traeBloqueDeCita(otra) || pideConfirmacion(cleanForUser(otra)))) reply = otra;
+    else {
+      promesaSinBloque = true;
+      await registrarError({ origen: 'inbox', donde: 'cita prometida sin bloque', error: new Error('El agente anunció una cita sin escribir el bloque'),
+        usuario: connection.user_id, detalle: cleanForUser(reply).slice(0, 400) });
+    }
+  }
 
   // ── La cita, si el agente la pidió ──────────────────────────────────────
   // Se ejecuta ANTES de guardar y enviar su mensaje, porque de lo que pase
@@ -1139,7 +1168,26 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   let escalarPorReserva = false;
   // Si el mismo mensaje pregunta «¿te parece bien?», la persona aún no ha
   // dicho que sí: no se agenda. En su «sí» el agente volverá a pedirla.
-  const pedidoCita = reservas && !pideConfirmacion(cleanForUser(reply)) ? extraerReserva(reply) : null;
+  const conSi = !pideConfirmacion(cleanForUser(reply));
+  // Una sola acción por mensaje. Cancelar o cambiar va antes que reservar: si
+  // el modelo mezclara las dos, lo que la persona tenía es lo que manda.
+  const pedidoCambio = suyas && conSi ? extraerCambio(reply) : null;
+  const pedidoCita = !pedidoCambio && reservas && conSi ? extraerReserva(reply) : null;
+  if (pedidoCambio) {
+    const r = await ejecutarCambio({ suyas, info: reservas, pedido: pedidoCambio })
+      .catch(async (e) => {
+        await registrarError({ origen: 'inbox', donde: 'cambio de cita del agente', error: e, usuario: connection.user_id });
+        return { ok: false, texto: 'No pude hacer ese cambio por un problema de nuestro lado. Tu cita sigue como estaba; ya le aviso a un asesor.', escalar: true };
+      });
+    if (r.ok) {
+      confirmacionCita = r.texto;
+      if (r.cerrar) await r.cerrar;
+    } else {
+      visible = r.texto;
+      guardado = r.texto + '\n' + bloquesOcultos(reply);
+      escalarPorReserva = !!r.escalar;
+    }
+  }
   if (pedidoCita) {
     const captura = { ...capturedData, ...extractCapturedData(reply) };
     const contacto = {
@@ -1202,7 +1250,9 @@ export async function processIncoming({ channel, externalId, contactId, contactN
 
   // Pedir un humano siempre manda: si alguien lo pide, lo pide. Y un lead que
   // califica pasa al comercial, que es justo el objetivo de calificar.
-  const needsEscalation = reply.includes('[ESCALAR]') || escalarPorReserva
+  // Si prometió una cita sin hacerla, que la confirme una persona: es mejor que
+  // la conversación le llegue a alguien que dejar al cliente esperando.
+  const needsEscalation = reply.includes('[ESCALAR]') || escalarPorReserva || promesaSinBloque
     || (veredicto.estado === 'calificado' && reglaCal.al_calificar.escalar);
   await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
     method: 'PATCH', headers: sb(),
