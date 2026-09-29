@@ -102,8 +102,14 @@ ok(/const pauta = pautaDeReferral\(conv\.referral\);/.test(js),
 
 // ── El agente se entera, pero advertido ────────────────────────────────────
 console.log('\nY el agente lo sabe');
-const src = js.slice(js.indexOf('function bloqueDeAnuncio'), js.indexOf('export function buildSystemPrompt'));
-const bloqueDeAnuncio = new Function(src + '; return bloqueDeAnuncio;')();
+// El corte va hasta el siguiente `export`, sea cual sea: antes apuntaba a
+// `buildSystemPrompt` y el día que apareció otra función exportada en medio, el
+// trozo se llevó un `export` por delante y `new Function` no lo pudo compilar.
+const iBloque = js.indexOf('function bloqueDeAnuncio');
+const src = js.slice(iBloque, js.indexOf('\nexport ', iBloque));
+// El salto de línea antes del return no es cosmético: el trozo puede terminar
+// en una línea de comentario, y sin él el return quedaría comentado.
+const bloqueDeAnuncio = new Function(src + '\n; return bloqueDeAnuncio;')();
 const b = bloqueDeAnuncio(ANUNCIO);
 ok(/Apartamentos en arriendo en Villa Santos/.test(b), 'se le pasa el titular del anuncio');
 ok(/no lo que la persona te ha dicho/.test(b),
