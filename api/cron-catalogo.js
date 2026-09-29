@@ -7,10 +7,11 @@
 // estaban publicados. En una inmobiliaria de arriendos, lo que se quita de la
 // web es justo lo que se acaba de arrendar.
 //
-// Va de 30 en 30 porque el precio hay que leerlo de cada ficha y eso tarda
-// ~2s. Cada ejecución avanza un lote por fuente, así que un catálogo de 450
-// inmuebles da una vuelta completa en unas quince horas. Suficiente: el
-// objetivo es que no envejezca, no que sea instantáneo.
+// Cada ejecución avanza un lote por fuente. Lo lento es leer la ficha de cada
+// inmueble para sacarle el precio, pero eso solo se hace con los que cambiaron:
+// la primera vuelta es la cara y las siguientes salen casi gratis. Con lotes de
+// 40 y dos pasadas por hora, un catálogo de 450 inmuebles se recorre entero
+// cada seis horas sin pedirle nada raro a la web del cliente.
 //
 // Al cerrar la vuelta, _catalogo.js borra lo que no vio. Por eso el cron no
 // puede saltarse fuentes en silencio: si una web falla, se anota en la fuente y

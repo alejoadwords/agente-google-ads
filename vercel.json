@@ -187,7 +187,7 @@
     },
     {
       "path": "/api/cron-catalogo",
-      "schedule": "25 * * * *"
+      "schedule": "25,55 * * * *"
     }
   ]
 }
