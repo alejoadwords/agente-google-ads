@@ -634,7 +634,13 @@ export default async function handler(req, contexto) {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     if (!body.id) return jsonResp({ error: 'Falta id' }, 400);
-    const perfil = normalizarPerfil(body.perfil || body.role);
+    // El perfil solo se toca si lo mandan. La pantalla de tableros reenviaba el
+    // perfil actual «para no perderlo» y, de paso, `normalizarPerfil` convertía
+    // el nombre viejo: cinco personas pasaron de «vendedor» a «ventas» sin que
+    // nadie tocara su perfil. Daba igual —el permiso ya se calculaba así— pero
+    // guardar una cosa no puede cambiar otra a la espalda de quien guarda.
+    const tocaPerfil = 'perfil' in (body || {}) || 'role' in (body || {});
+    const perfil = tocaPerfil ? normalizarPerfil(body.perfil || body.role) : null;
 
     const fila = await filaDelEquipo(cuenta, body.id);
     if (!fila) return jsonResp({ error: 'Esa persona no está en tu equipo' }, 404);
@@ -652,7 +658,7 @@ export default async function handler(req, contexto) {
       `${SUPABASE_URL}/rest/v1/team_members?id=eq.${encodeURIComponent(body.id)}&owner_user_id=eq.${encodeURIComponent(cuenta)}`,
       { method: 'PATCH', headers: sbHeaders(),
         body: JSON.stringify({
-          role: perfil,
+          ...(tocaPerfil ? { role: perfil } : {}),
           // 'client_id' in body distingue «no lo mandes» de «ponlo vacío»:
           // sin eso no habría forma de quitarle el acote a alguien.
           ...('client_id' in (body || {}) ? { client_id: alcanceQuePuedeDar(quien, body.client_id) } : {}),

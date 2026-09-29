@@ -31425,7 +31425,10 @@ async function teamGuardarTableros(btn) {
     const r = await fetchAuth('/api/team', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: _tbEditando.id, perfil: _tbEditando.role, pipeline_ids: _tbElegidos }),
+      // Sin el perfil: aquí se cambian los tableros y nada más. Mandándolo
+      // «para no perderlo», el servidor lo normalizaba y cinco personas
+      // pasaron de «vendedor» a «ventas» al guardar unos tableros.
+      body: JSON.stringify({ id: _tbEditando.id, pipeline_ids: _tbElegidos }),
     });
     const d = await r.json();
     if (!r.ok || d.error) { showToast(d.error || 'No se pudo guardar', 'error'); return; }

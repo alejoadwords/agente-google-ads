@@ -49,22 +49,40 @@ console.log('\nSin asesor fijo, rota entre los del tablero');
 // Anclado por estructura: desde el reparto hasta el guardado del lead. El
 // `leads?id=eq.` aparece antes también —al leer el lead—, así que se busca a
 // partir del reparto y no desde el principio del fichero.
-const iReparto = qual.indexOf('if (ruta && ruta.asignar_a)');
-const trozo = qual.slice(iReparto, qual.indexOf('rest/v1/leads?id=eq.', iReparto));
-ok(/else if \(ruta && ruta\.pipeline_id\)/.test(trozo),
-   'cuando la ruta no trae asesor pero sí tablero, se reparte');
+const iReparto = qual.indexOf('if (ruta && !lead.assigned_to)');
+const trozo = qual.slice(iReparto, qual.indexOf('lead_activities', iReparto));
+ok(iReparto > 0, 'cuando la ruta decide un destino, el lead recibe dueño');
 ok(/asesoresDelTablero\(userId, ruta\.pipeline_id\)/.test(trozo),
    'entre quienes atienden ESE tablero, no entre todo el equipo');
-ok(/siguienteComercial\(userId, 'tablero:' \+ ruta\.pipeline_id, quienes, true\)/.test(trozo),
-   'con el repartidor por turnos que ya existía, y su propio turno por tablero');
-ok(/if \(quienes\.length\)/.test(trozo),
+
+// Esto empezó escribiendo `assigned_to` a mano y era una regresión servida: el
+// lead cambiaba de dueño EN SILENCIO —sin correo al comercial, sin tarea de
+// primer contacto y sin nota en el historial—. Exactamente el «no me llegan
+// las notificaciones» que se reporta al día siguiente.
+ok(/asignarLead\(userId, \{ \.\.\.lead, \.\.\.update \}, canal, ruta\.asignar_a \|\| null, quienes, true\)/.test(trozo),
+   'y por el mismo camino de siempre, que avisa y crea la tarea de primer contacto');
+// Los DOS caminos —asesor fijo y reparto— van por ahí. El fijo escribía
+// `assigned_to` a mano: nadie lo usa todavía, pero el día que alguien elija un
+// asesor en el paso 5, ese lead se habría asignado en silencio.
+ok(!/assigned_to =/.test(qual),
+   'nunca escribiendo el dueño a mano: eso se salta el aviso y la tarea');
+ok(/ruta\.asignar_a \? null : await asesoresDelTablero/.test(trozo),
+   'el asesor fijo de la ruta manda sobre el reparto');
+
+// asignarLead no toca un lead que ya tenga dueño, pero se comprueba también
+// aquí: quitarle un lead a quien ya lo estaba trabajando es peor que no
+// asignarlo.
+ok(/if \(ruta && !lead\.assigned_to\)/.test(qual),
+   'y solo si el lead no tiene ya dueño: a nadie se le quita lo suyo');
+ok(/quienes, true\)/.test(trozo),
+   'con turnos forzados, para que un «fijo» de la fuente no se salte la lista del tablero');
+ok(/quienes\?\.length/.test(trozo),
    'si nadie tiene marcado ese tablero no se fuerza nada: decide la regla de la fuente');
 ok(/catch \(e\) \{ \/\* que falle el reparto no puede tumbar la calificación/.test(trozo),
    'y si el reparto falla, la calificación se guarda igual');
 
-// El orden importa: un asesor fijo puesto a mano tiene que ganarle al reparto.
-ok(qual.indexOf('if (ruta && ruta.asignar_a)') < qual.indexOf('else if (ruta && ruta.pipeline_id)'),
-   'un asesor fijo sigue mandando sobre el reparto');
+ok(/ruta\.asignar_a \|\| quienes\?\.length/.test(trozo),
+   'y si no hay ni fijo ni nadie en el tablero, no se toca nada');
 
 console.log('\nY se busca con el filtro correcto');
 const busca = qual.slice(qual.indexOf('export async function asesoresDelTablero'), qual.indexOf('// ── Efectos sobre el lead'));
@@ -81,6 +99,18 @@ ok(/pipelines: pipelines \|\| \[\]/.test(team),
    'y el catálogo de tableros, para pintar nombres en vez de uuids');
 ok(/'pipeline_ids' in \(body \|\| \{\}\)/.test(team),
    'al guardar se distingue «no lo mandes» de «déjalo vacío»: si no, no habría forma de quitárselos');
+
+// Guardar una cosa no puede cambiar otra a la espalda de quien guarda. La
+// pantalla reenviaba el perfil «para no perderlo» y el servidor lo
+// normalizaba: cinco personas pasaron de «vendedor» a «ventas» al guardar unos
+// tableros. Era inofensivo —el permiso ya se calculaba así— y aun así no puede
+// volver a pasar.
+ok(/const tocaPerfil = 'perfil' in \(body \|\| \{\}\) \|\| 'role' in \(body \|\| \{\}\)/.test(team),
+   'el perfil solo se toca si lo mandan');
+ok(/\.\.\.\(tocaPerfil \? \{ role: perfil \} : \{\}\)/.test(team),
+   'y si no, la columna del perfil ni se escribe');
+ok(!/perfil: _tbEditando\.role/.test(app),
+   'la pantalla de tableros ya no manda el perfil');
 
 console.log('\nDónde trabaja hoy, contado bien');
 const donde = team.slice(team.indexOf("url.searchParams.get('donde')"), team.indexOf("url.searchParams.get('carga')"));
