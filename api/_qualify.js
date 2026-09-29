@@ -129,10 +129,47 @@ export async function saveRegla(userId, agentId, regla) {
 // No le pedimos al modelo que decida si el lead sirve: le pedimos que averigüe
 // y reporte. Quién pasa al comercial se decide abajo, en código, que es
 // auditable y no cambia de opinión entre mensajes.
+// Lo que va debajo de cada criterio.
+//
+// El segundo campo se llama «se considera que cumple si» y significa qué
+// respuesta da el criterio por bueno. Pero en la pantalla es un recuadro sin
+// etiqueta —solo un texto de ejemplo que desaparece al escribir— y la gente
+// escribe ahí OTRA PREGUNTA. Visto en una cuenta real: «averigua: qué
+// presupuesto maneja. Se considera que cumple si: cuál es el mejor horario
+// para contactarlo». Eso no tiene sentido, y el modelo lo resolvía metiendo la
+// respuesta del horario en la casilla del presupuesto: el resumen que le
+// llegaba al comercial decía que el presupuesto era «Celular: 321…».
+//
+// Si lo que hay escrito es una pregunta, se trata como lo que evidentemente
+// quiso ser: otra cosa que averiguar.
+// Lo que distingue una pregunta de una condición es la TILDE: «qué» pregunta y
+// «que» no. Sin eso, «En qué ciudad busca» no se reconocía —no empieza por la
+// palabra interrogativa— y «que sea en el norte», que es una condición
+// perfectamente buena, sí se marcaba.
+//
+// Y sin tilde solo cuentan al principio, porque nadie escribe una condición que
+// empiece por «cual» o «donde». «Como» se queda fuera a propósito: «como máximo
+// 3 millones» es una condición de las de verdad.
+//
+// Ojo con `\b`: en JavaScript no cuenta la «é» como letra, así que `\bqué\b`
+// no casa nunca. Los límites van a mano.
+const LETRA = 'a-záéíóúüñ';
+const ES_PREGUNTA = new RegExp(
+  '^\\s*¿|\\?\\s*$' +
+  `|(^|[^${LETRA}])(qué|cuál|cuáles|cuándo|dónde|cómo|cuánto|cuánta|cuántos|cuántas|quién|quiénes)([^${LETRA}]|$)` +
+  `|^\\s*(cual|cuales|cuando|donde|cuanto|cuantos|quien|quienes)([^${LETRA}]|$)`, 'i');
+
+export function lineaCondicion(condicion) {
+  const c = String(condicion || '').trim();
+  if (!c) return '';
+  if (ES_PREGUNTA.test(c)) return `\n   Y también: ${c}. Apunta las dos cosas en el valor`;
+  return `\n   Se considera que cumple si: ${c}`;
+}
+
 export function bloqueDePrompt(regla) {
   if (!regla?.activo) return '';
   const lista = regla.criterios
-    .map((c, i) => `${i + 1}. ${c.clave} — averigua: ${c.pregunta}${c.condicion ? `\n   Se considera que cumple si: ${c.condicion}` : ''}`)
+    .map((c, i) => `${i + 1}. ${c.clave} — averigua: ${c.pregunta}${lineaCondicion(c.condicion)}`)
     .join('\n');
   const json = regla.criterios
     .map(c => `"${c.clave}": {"valor": "lo que te dijo", "cumple": true|false}`)

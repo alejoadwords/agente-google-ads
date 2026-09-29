@@ -51,7 +51,7 @@ let MODO = 'ok';
 
 const RESPUESTAS = {
   ok: { get: { nombre: 'Aura' }, post: {
-    texto: 'En Buenavista no tengo nada ahora mismo, pero sí en otras zonas de Barranquilla:\n\nRiomar · 3 hab · 2 baños · $1.800.000 (121513056)\nAlto Prado · 3 hab · 2 baños · $1.880.000 (121513470)\n\n*¿Cuál le interesa ver?*',
+    texto: 'Claro, le mando unas fotos del apartamento en Riomar para que lo vea.\n\n*¿Cuál es su nombre, por favor?*',
     bruto: 'x',
     capturado: { nombre: 'Alejandro González', celular: '3219972333', habitaciones: '3' },
     escalar: false,
@@ -59,6 +59,12 @@ const RESPUESTAS = {
       resumen: '¿Qué tipo de inmueble necesita? → Apartamento de 3 habitaciones ✅' },
     ruta: { clave: 'arriendo', etiqueta: 'Arriendo', reconocida: true, asignada: true, asignar_nombre: null, por_turnos: 3 },
     catalogo: { pistas: { operacion: 'arriendo', ciudad: 'Barranquilla', presupuesto: 3000000, habitaciones: 3 }, ofrecidas: 7 },
+    fotos: [
+      'https://certainpezzano.com/wp-content/uploads/2026/05/121513056_15_1778259653.jpg',
+      'https://certainpezzano.com/wp-content/uploads/2026/05/121513056_12_1778259652.jpg',
+      'https://certainpezzano.com/wp-content/uploads/2026/05/121513056_11_1778259651.jpg',
+      'https://certainpezzano.com/wp-content/uploads/2026/05/121513056_10_1778259652.jpg',
+    ],
   } },
   vacio:     { get: { nombre: 'Aura' } },
   invalido:  { get: { error: 'Este enlace no es válido.' }, codigo: 403 },

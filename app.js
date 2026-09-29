@@ -34154,10 +34154,16 @@ function calRenderCriterios() {
   const box = document.getElementById('cal-criterios');
   if (!box) return;
   box.innerHTML = calCriterios.map(function (c, i) {
+    // Con solo el texto de ejemplo, en cuanto se escribe algo ya no hay forma de
+    // saber cuál campo es cuál. Y el segundo se prestaba a escribir OTRA
+    // pregunta: pasó en una cuenta real y el resumen que le llegaba al comercial
+    // decía que el presupuesto del cliente era su número de celular.
     return '<div class="crm-faq-item">' +
       '<div style="flex:1;display:flex;flex-direction:column;gap:5px">' +
-        '<input class="crm-faq-input" placeholder="Qué averiguar (ej: ¿en qué zona busca?)" value="' + esc(c.pregunta || '') + '" oninput="calCriterios[' + i + '].pregunta=this.value">' +
-        '<input class="crm-faq-input" placeholder="Se considera que cumple si… (ej: Chapinero o Usaquén)" value="' + esc(c.condicion || '') + '" oninput="calCriterios[' + i + '].condicion=this.value">' +
+        '<div class="cal-crit-lbl">Qué debe averiguar</div>' +
+        '<input class="crm-faq-input" placeholder="Ej: en qué zona busca" value="' + esc(c.pregunta || '') + '" oninput="calCriterios[' + i + '].pregunta=this.value">' +
+        '<div class="cal-crit-lbl">Qué respuesta lo da por bueno <span>· opcional — vacío = cualquiera vale</span></div>' +
+        '<input class="crm-faq-input" placeholder="Ej: Chapinero o Usaquén" value="' + esc(c.condicion || '') + '" oninput="calCriterios[' + i + '].condicion=this.value">' +
       '</div>' +
       '<button class="crm-faq-del" onclick="calRemoveCriterio(' + i + ')">' +
         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +

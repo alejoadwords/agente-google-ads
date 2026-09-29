@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-criterios-condicion",
+      "fecha": "2026-09-29",
+      "tipo": "mejora",
+      "titulo": "Criterios de calificación: ahora se ve qué va en cada campo",
+      "texto": "Cada criterio del agente tiene dos casillas y la segunda no decía lo que era, así que era fácil escribir ahí una segunda pregunta. Cuando eso pasaba, el resumen que le llegaba al asesor mezclaba las respuestas: en «qué presupuesto maneja» aparecía el teléfono del cliente. Ahora cada casilla lleva su nombre a la vista —«Qué debe averiguar» y «Qué respuesta lo da por bueno», que es opcional— y si ya tenías una pregunta escrita en la segunda, el agente la trata como lo que es y apunta las dos respuestas por separado."
+    },
+    {
       "id": "2026-09-29-pauta-diagnostico",
       "fecha": "2026-09-29",
       "tipo": "nuevo",
