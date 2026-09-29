@@ -45,9 +45,9 @@ export function cleanForUser(text) {
     .replace(/\[CAPTURA:.*?\]/gs, '')
     .replace(/\[ESCALAR\]/g, '')
     .replace(/\[CALIFICACION:.*?\]/gs, '')
-    .replace(/\[(RESERVA|CANCELAR_CITA|CAMBIAR_CITA):.*?\]/gs, '')
+    .replace(/\[(RESERVA|CANCELAR_CITA|CAMBIAR_CITA|FOTOS):.*?\]/gs, '')
     // Si la respuesta se cortó a mitad de un bloque, fuera igual
-    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR|RESERVA|CANCELAR_CITA|CAMBIAR_CITA)\b[\s\S]*$/, '')
+    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR|RESERVA|CANCELAR_CITA|CAMBIAR_CITA|FOTOS)\b[\s\S]*$/, '')
     .trim();
 }
 
@@ -97,7 +97,7 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
   let q = `${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
     (clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null') +
     '&select=codigo,operacion,tipo,ciudad,barrio,habitaciones,banos,precio,' +
-    `precio_arriendo,precio_venta,administracion,url&limit=${TOPE_PROPIEDADES}`;
+    `precio_arriendo,precio_venta,administracion,fotos,url&limit=${TOPE_PROPIEDADES}`;
 
   // La operacion sale del enrutado: si el agente ya dedujo 'arriendo', no tiene
   // sentido ofrecerle ventas. 'Arriendo/Venta' vale para las dos.
@@ -124,6 +124,9 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
   // `gte` y no `eq`: nunca se ofrece menos de lo que pidió, y si algo más
   // grande le cabe en el presupuesto, que lo vea.
   if (pistas.habitaciones) q += `&habitaciones=gte.${pistas.habitaciones}`;
+  // Y por tipo. Alguien que pide una casa no quiere que le ofrezcan un local:
+  // pasó, y el agente lo presentó como «lo más cercano que tengo».
+  if (pistas.tipo) q += `&tipo=eq.${encodeURIComponent(pistas.tipo)}`;
   if (pistas.presupuesto) {
     const tope = Math.round(pistas.presupuesto * 1.15);   // 15% de margen
     const col = esArriendo ? 'precio_arriendo' : esVenta ? 'precio_venta' : null;
@@ -169,6 +172,8 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
         // La administracion se publica aparte del canon y cambia: se le pasa
         // marcada para que no la sume ni la presente como definitiva.
         esArriendo && f.administracion ? 'admón. ' + plata(f.administracion) + ' (por confirmar)' : null,
+        // Para que el agente sepa de cuáles PUEDE ofrecer fotos y de cuáles no.
+        f.fotos?.length ? 'con fotos' : null,
       ].filter(Boolean).join(' · ');
     });
     return { lineas, total: lineas.length, ampliado, barrioPedido: pistas.barrio || null };
@@ -215,17 +220,19 @@ export async function zonasDelCliente(userId, clientId) {
     const filas = await fetch(
       `${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
       (clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null') +
-      '&select=ciudad,barrio',
+      '&select=ciudad,barrio,tipo',
       { headers: sb() }
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     const ciudades = new Map();
     const barrios = new Map();
+    const tipos = new Map();
     for (const f of filas || []) {
       if (f.ciudad) ciudades.set(sinTildes(f.ciudad), f.ciudad);
       if (f.barrio) barrios.set(sinTildes(f.barrio), f.barrio);
+      if (f.tipo) tipos.set(sinTildes(f.tipo), f.tipo);
     }
-    return { ciudades, barrios };
-  } catch { return { ciudades: new Map(), barrios: new Map() }; }
+    return { ciudades, barrios, tipos };
+  } catch { return { ciudades: new Map(), barrios: new Map(), tipos: new Map() }; }
 }
 
 // El nombre más largo que aparezca en el texto. El más largo y no el primero
@@ -236,7 +243,12 @@ function nombreEnTexto(texto, mapa) {
   let mejor = null;
   for (const [clave, original] of mapa) {
     if (clave.length < 4) continue;
-    if (!new RegExp('(^|[^a-z0-9])' + clave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])').test(t)) continue;
+    // Con la «s» del plural opcional: la gente escribe «apartamentos» y el
+    // catálogo dice «Apartamento». Sin esto, pedir «apartamentos de 4
+    // habitaciones» después de haber dicho «casa» dejaba el tipo en Casa y el
+    // agente seguía buscando casas toda la conversación.
+    const esc = clave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!new RegExp('(^|[^a-z0-9])' + esc + '(e?s)?($|[^a-z0-9])').test(t)) continue;
     if (!mejor || clave.length > mejor.clave.length) mejor = { clave, original };
   }
   return mejor?.original || null;
@@ -252,8 +264,14 @@ export function habitacionesDelTexto(texto) {
 
 // Cuánto dijo que podía pagar. Solo si la frase habla de dinero: un «3
 // habitaciones» suelto no es un presupuesto, y un código de inmueble tampoco.
+// «cualquier rango de precio», «sin límite», «no importa cuánto». No es que no
+// lo haya dicho: es que ha dicho que da igual, y eso tiene que BORRAR el
+// presupuesto anterior en vez de dejarlo puesto.
+const SIN_TOPE = /cualquier (rango|precio|valor)|sin (limite|tope|presupuesto)|no importa (el|cuanto)|el que sea|lo que sea/;
+
 export function presupuestoDelTexto(texto) {
   const t = sinTildes(texto);
+  if (SIN_TOPE.test(t)) return 'libre';
   // Las frases se cortan por punto y coma, salto de línea o punto SEGUIDO DE
   // ESPACIO. Cortando por cualquier punto, «$4.000.000» se partía en tres y el
   // presupuesto desaparecía.
@@ -269,18 +287,62 @@ export function presupuestoDelTexto(texto) {
 }
 
 export async function pistasDelContacto(userId, clientId, mensajes = []) {
-  const texto = (mensajes || [])
+  const suyos = (mensajes || [])
     .filter(m => m && m.role === 'user')
     .map(m => String(m.content || ''))
-    .join(' \n ');
-  if (!texto.trim()) return {};
-  const { ciudades, barrios } = await zonasDelCliente(userId, clientId);
-  return {
-    ciudad: nombreEnTexto(texto, ciudades),
-    barrio: nombreEnTexto(texto, barrios),
-    presupuesto: presupuestoDelTexto(texto),
-    habitaciones: habitacionesDelTexto(texto),
+    .filter(t => t.trim());
+  if (!suyos.length) return {};
+  const { ciudades, barrios, tipos } = await zonasDelCliente(userId, clientId);
+
+  // Del ÚLTIMO mensaje hacia atrás, y gana el primero que diga algo de cada
+  // cosa.
+  //
+  // Antes se leía todo el historial de golpe y ganaba la primera mención. Una
+  // conversación real: «busco una casa de 4 habitaciones»… «¿y de 3
+  // habitaciones?»… «¿y en cualquier rango de precio?». El filtro se quedó en
+  // cuatro habitaciones y cinco millones toda la conversación, y el agente
+  // contestó tres veces «no tengo» teniendo SEIS apartamentos de tres
+  // habitaciones en Barranquilla. Decía la verdad sobre una pregunta que nadie
+  // le había hecho.
+  //
+  // Una persona corrige sobre la marcha; lo último que dijo es lo que quiere.
+  const buscar = (fn) => {
+    for (let i = suyos.length - 1; i >= 0; i--) {
+      const v = fn(suyos[i]);
+      if (v != null) return v;
+    }
+    return null;
   };
+
+  const plata = buscar(presupuestoDelTexto);
+  return {
+    ciudad: buscar(t => nombreEnTexto(t, ciudades)),
+    barrio: buscar(t => nombreEnTexto(t, barrios)),
+    tipo: buscar(t => nombreEnTexto(t, tipos)),
+    // «cualquier rango de precio» no es un presupuesto: es quitarlo.
+    presupuesto: plata === 'libre' ? null : plata,
+    habitaciones: buscar(habitacionesDelTexto),
+  };
+}
+
+// Las fotos que el agente pidió mandar.
+//
+// El modelo escribe [FOTOS: 121514301] al final de su mensaje y aquí se
+// traducen a las URLs guardadas. El código se comprueba contra el catálogo del
+// cliente: si el modelo se inventa uno, no hay fotos y no se manda nada — lo
+// que NO puede pasar es que le llegue al contacto la foto de otro inmueble.
+export async function fotosPedidas(texto, userId, clientId) {
+  const m = String(texto || '').match(/\[FOTOS:\s*([A-Za-z0-9_-]{1,40})\s*\]/);
+  if (!m) return [];
+  try {
+    const filas = await fetch(
+      `${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
+      (clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null') +
+      `&codigo=eq.${encodeURIComponent(m[1])}&select=fotos&limit=1`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    return (filas?.[0]?.fotos || []).slice(0, 4);
+  } catch { return []; }
 }
 
 // Las pistas con las que se filtra el inventario, sacadas de los dos sitios
@@ -315,6 +377,7 @@ export function pistasDeBusqueda(capturado = {}, respuestas = {}, delContacto = 
   return {
     operacion: respuestas?._ruta || null,
     ciudad: delContacto.ciudad || capturado.ciudad || deCriterio('ciudad') || null,
+    tipo: delContacto.tipo || null,
     barrio: delContacto.barrio || capturado.zona || capturado.barrio || deCriterio('zona', 'barrio', 'sector') || null,
     presupuesto: delContacto.presupuesto || aPlata(capturado.presupuesto) || aPlata(deCriterio('presupuesto', 'canon', 'precio')),
     habitaciones: delContacto.habitaciones || cuantas(capturado.habitaciones) || cuantas(deCriterio('habitacion', 'alcoba', 'cuarto', 'dormitorio')),
@@ -436,6 +499,13 @@ Sobre esta lista:${propiedades.ampliado ? `
 - Cada opcion va en SU PROPIA LINEA, no seguidas dentro de un parrafo. Una linea de presentacion, las opciones debajo separadas por salto de linea, y la pregunta al final. Asi se lee de un vistazo en el movil
 - En cada linea: el barrio, las habitaciones, el precio y el codigo entre parentesis
 - Los precios son los de la lista, sin redondear ni estimar` : ''}
+
+PUEDES ENSEÑAR FOTOS:
+- Las opciones marcadas «con fotos» las tienes en imágenes y se las puedes mandar por aquí
+- No las mandes de golpe. Ofrécelas primero —«¿le mando unas fotos?»— y espera a que diga que sí: son datos de su teléfono y no todo el mundo quiere el chat lleno
+- Cuando diga que sí, escribe al final de tu mensaje el bloque [FOTOS: codigo] con el código del inmueble, y las envío yo. No pongas enlaces a mano
+- De una opción que NO esté marcada «con fotos», no las ofrezcas ni prometas mandarlas: dile que se las hace llegar un asesor
+- Videos no tienes de ninguna. Si los piden, eso lo ve un asesor
 
 SI TE MANDAN UN PDF:
 - Lo lees. Usa lo que dice para responder: si trae un pago, una cedula, un certificado o una ficha, dilo con sus datos
@@ -1330,6 +1400,13 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     if (faltan > 0) await new Promise(r => setTimeout(r, faltan));
     if (visible) {
       try { await send(connection, contactId, visible); } catch (e) { console.error('send error', e); }
+    }
+    // Las fotos, detrás del mensaje. Si el envío de una falla, se sigue con las
+    // demás: media galería es mejor que ninguna, y el texto ya salió.
+    const fotos = await fotosPedidas(reply, connection.user_id, clienteDelCanal).catch(() => []);
+    for (const url of fotos) {
+      try { await send(connection, contactId, '', { tipo: 'image', url }); }
+      catch (e) { console.error('foto no enviada', e); }
     }
     if (confirmacionCita) {
       try { await send(connection, contactId, confirmacionCita); } catch (e) { console.error('send error', e); }

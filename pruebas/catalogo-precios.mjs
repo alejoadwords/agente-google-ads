@@ -206,6 +206,38 @@ ok(conAmbos.presupuesto === 3000000, 'y el presupuesto también', conAmbos.presu
 ok(pistasDeBusqueda({ zona: 'El Prado' }, {}, {}).barrio === 'El Prado',
    'pero si no se pudo leer nada, lo del modelo sigue valiendo');
 
+// ── Lo ÚLTIMO que dijo, no lo primero ───────────────────────────────────────
+console.log('\nUna persona corrige sobre la marcha');
+// Conversación real: «busco una casa de 4 habitaciones» … «¿y de 3
+// habitaciones?» … «¿y en cualquier rango de precio?». Las pistas se leían de
+// todo el historial de golpe y ganaba la PRIMERA mención, así que el filtro se
+// quedó en cuatro habitaciones y cinco millones toda la conversación. El agente
+// contestó tres veces «no tengo» teniendo SEIS apartamentos de tres
+// habitaciones en Barranquilla: decía la verdad sobre una pregunta que nadie le
+// había hecho.
+const iBuscar = eng.indexOf('  const buscar = (fn) => {');
+const buscar = eng.slice(iBuscar, eng.indexOf('const plata = buscar(', iBuscar));
+ok(/for \(let i = suyos\.length - 1; i >= 0; i--\)/.test(buscar),
+   'se lee del último mensaje hacia atrás');
+ok(/if \(v != null\) return v;/.test(buscar), 'y gana el primero que diga algo: lo más reciente');
+
+// «cualquier rango de precio» no es «no lo dijo»: es quitarlo. Dejando el
+// presupuesto anterior puesto, la pregunta se respondía con el tope de antes.
+ok(/const SIN_TOPE = /.test(eng), 'se reconoce «sin tope»');
+ok(/plata === 'libre' \? null : plata/.test(eng),
+   'y borra el presupuesto anterior en vez de dejarlo');
+for (const t of ['en cualquier rango de precio', 'sin limite', 'no importa el precio']) {
+  ok(presupuestoDelTexto(t) === 'libre', JSON.stringify(t) + ' quita el tope');
+}
+ok(presupuestoDelTexto('hasta 3 millones') === 3000000, 'y un tope de verdad sigue siendo un número');
+
+// El tipo: pidió una casa y le ofrecieron un local «como lo más cercano».
+console.log('\nY el tipo de inmueble también filtra');
+ok(/if \(pistas\.tipo\) q \+= `&tipo=eq\./.test(eng),
+   'quien pide una casa no ve locales');
+ok(/'\(e\?s\)\?'/.test(eng) || /\(e\?s\)\?/.test(eng),
+   'y «apartamentos» en plural reconoce el tipo «Apartamento» del catálogo');
+
 console.log('\nY si en ese barrio no hay nada, se amplía a la ciudad');
 const amp = eng.slice(eng.indexOf('let ampliado = false;'), eng.indexOf('const lineas = (filas || []).map'));
 ok(/if \(!filas\.length && pistas\.barrio\)/.test(amp),

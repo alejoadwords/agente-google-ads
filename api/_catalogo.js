@@ -96,10 +96,37 @@ export function textoDeFicha(html) {
     .replace(/&nbsp;/g, ' ');
 }
 
-async function preciosDeFicha(url) {
+// Cuántas fotos se guardan por inmueble. Cuatro: las que el cliente pidió
+// enseñar, y unas pocas más no ayudan a decidir y sí llenan el chat.
+const TOPE_FOTOS = 4;
+
+// Las fotos del inmueble, de su propia ficha.
+//
+// Se reconocen porque el nombre del archivo lleva el código —
+// «121514301_1_1776116684_1.jpg»—. Es una señal determinista: nunca se cuela la
+// foto de otro inmueble, ni el logo, ni un icono. Si una ficha no las nombra
+// así, se queda sin fotos y el agente lo dirá, que es el fallo correcto.
+export function fotosDelHtml(html, codigo) {
+  if (!codigo) return [];
+  const vistas = [];
+  for (const m of String(html || '').matchAll(/https?:\/\/[^"'\s)]+\.(?:jpg|jpeg|png|webp)/gi)) {
+    const u = m[0];
+    if (!u.includes(codigo)) continue;
+    // WordPress publica la misma foto en varios tamaños («-768x576.jpg»). Se
+    // queda la original: en WhatsApp se ve en grande.
+    if (/-\d{2,4}x\d{2,4}\.(?:jpg|jpeg|png|webp)$/i.test(u)) continue;
+    if (!vistas.includes(u)) vistas.push(u);
+    if (vistas.length >= TOPE_FOTOS) break;
+  }
+  return vistas;
+}
+
+async function preciosDeFicha(url, codigo) {
   try {
-    const texto = textoDeFicha(await fetch(url, { headers: UA }).then(r => r.text()));
-    const p = preciosDeTexto(texto);
+    const html = await fetch(url, { headers: UA }).then(r => r.text());
+    const fotos = fotosDelHtml(html, codigo);
+    const texto = textoDeFicha(html);
+    const p = { ...preciosDeTexto(texto), fotos };
     if (p.precio_arriendo || p.precio_venta) return p;
 
     // Ninguna etiqueta reconocible: se vuelve al método viejo para no dejar la
@@ -218,7 +245,7 @@ export async function sincronizarLote(fuente) {
     const lista = codigos.map(c => `"${c.replace(/"/g, '')}"`).join(',');
     const filas = await fetch(
       `${SUPABASE_URL}/rest/v1/client_properties?${alcance}&codigo=in.(${encodeURIComponent(lista)})` +
-      '&select=codigo,modificado,precio,precio_arriendo,precio_venta,administracion',
+      '&select=codigo,modificado,precio,precio_arriendo,precio_venta,administracion,fotos',
       { headers: sb() }
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     for (const f of filas || []) guardadas.set(f.codigo, f);
@@ -246,11 +273,12 @@ export async function sincronizarLote(fuente) {
         precio_venta: igual.precio_venta,
         administracion: igual.administracion,
         precio_suelto: igual.precio,
+        fotos: igual.fotos,
         reusado: true,
       };
     }
     releidas++;
-    return preciosDeFicha(p.link);
+    return preciosDeFicha(p.link, codigo);
   });
 
   const ahora = new Date().toISOString();
@@ -273,6 +301,7 @@ export async function sincronizarLote(fuente) {
       precio_arriendo: pr.precio_arriendo ?? null,
       precio_venta: pr.precio_venta ?? null,
       administracion: pr.administracion ?? null,
+      fotos: pr.fotos?.length ? pr.fotos : null,
       url: p.link,
       modificado: p.modified ? new Date(p.modified).toISOString() : null,
       visto_en: ahora,

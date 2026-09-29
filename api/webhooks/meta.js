@@ -55,12 +55,16 @@ function sb() {
 }
 
 // ── Envío de respuesta por canal ──────────────────────────────────────────────
-async function sendMeta(channel, connection, contactId, text) {
+async function sendMeta(channel, connection, contactId, text, adjunto = null) {
   if (channel === 'whatsapp') {
+    // Con adjunto va como imagen; el texto, si lo hay, como pie de foto.
+    const cuerpo = adjunto?.url
+      ? { type: 'image', image: { link: adjunto.url, ...(text ? { caption: text } : {}) } }
+      : { type: 'text', text: { body: text } };
     await fetch(`https://graph.facebook.com/v19.0/${connection.external_id}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${connection.access_token}` },
-      body: JSON.stringify({ messaging_product: 'whatsapp', to: contactId, type: 'text', text: { body: text } }),
+      body: JSON.stringify({ messaging_product: 'whatsapp', to: contactId, ...cuerpo }),
     });
   } else {
     // Messenger e Instagram usan el mismo endpoint
@@ -150,7 +154,7 @@ function mediaDeMessenger(message) {
 
 const processMessage = args => processIncoming({
   ...args,
-  send: (connection, contactId, text) => sendMeta(args.channel, connection, contactId, text),
+  send: (connection, contactId, text, adjunto) => sendMeta(args.channel, connection, contactId, text, adjunto),
   escribiendo: (connection, messageId) => marcarEscribiendo(args.channel, connection, messageId),
   resolverNombre: nombreDelContacto,
 });
