@@ -18,6 +18,7 @@ import { normalizarTableros } from '../api/team.js';
 const team = readFileSync(new URL('../api/team.js', import.meta.url), 'utf8');
 const qual = readFileSync(new URL('../api/_qualify.js', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+const eng = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
 const htm = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 
 let mal = 0;
@@ -49,7 +50,7 @@ console.log('\nSin asesor fijo, rota entre los del tablero');
 // Anclado por estructura: desde el reparto hasta el guardado del lead. El
 // `leads?id=eq.` aparece antes también —al leer el lead—, así que se busca a
 // partir del reparto y no desde el principio del fichero.
-const iReparto = qual.indexOf('if (ruta && !lead.assigned_to)');
+const iReparto = qual.indexOf('if (ruta && califica && !lead.assigned_to)');
 const trozo = qual.slice(iReparto, qual.indexOf('lead_activities', iReparto));
 ok(iReparto > 0, 'cuando la ruta decide un destino, el lead recibe dueño');
 ok(/asesoresDelTablero\(userId, ruta\.pipeline_id\)/.test(trozo),
@@ -59,8 +60,26 @@ ok(/asesoresDelTablero\(userId, ruta\.pipeline_id\)/.test(trozo),
 // lead cambiaba de dueño EN SILENCIO —sin correo al comercial, sin tarea de
 // primer contacto y sin nota en el historial—. Exactamente el «no me llegan
 // las notificaciones» que se reporta al día siguiente.
-ok(/asignarLead\(userId, \{ \.\.\.lead, \.\.\.update \}, canal, ruta\.asignar_a \|\| null, quienes, true\)/.test(trozo),
+ok(/asignarLead\(userId, \{ \.\.\.lead, \.\.\.update \}, canal,\s*ruta\.asignar_a \|\| null, hayLista \? quienes : null, hayLista\)/.test(trozo),
    'y por el mismo camino de siempre, que avisa y crea la tarea de primer contacto');
+
+// Si nadie tiene marcado ese tablero, decide la regla de la fuente igual que
+// antes de existir todo esto. Un lead sin dueño es peor que un lead con el
+// dueño de siempre.
+ok(/hayLista \? quienes : null, hayLista\)/.test(trozo),
+   'y si el tablero no tiene a nadie, cae en la regla de la fuente');
+
+// Un lead descartado no se le echa encima a un comercial: hasta ahora se
+// quedaba sin dueño a propósito.
+ok(/if \(ruta && califica && !lead\.assigned_to\)/.test(qual),
+   'solo se asigna si califica, no si se descarta');
+
+// El orden lo destapó una prueba real: en una conversación corta el lead se
+// crea YA calificado, la regla de la fuente asignaba primero y ganaba siempre.
+// El lead cayó en Arriendo y se lo llevó una administradora que no lleva
+// arriendos; el reparto por tablero ya no podía corregirlo sin quitárselo.
+ok(/reglaCal\.activo && \(reglaCal\.enrutado\?\.activo \|\| veredicto\.estado !== 'calificado'\)/.test(eng),
+   'con enrutado activo, la creación del lead NO asigna: espera al veredicto');
 // Los DOS caminos —asesor fijo y reparto— van por ahí. El fijo escribía
 // `assigned_to` a mano: nadie lo usa todavía, pero el día que alguien elija un
 // asesor en el paso 5, ese lead se habría asignado en silencio.
@@ -72,17 +91,16 @@ ok(/ruta\.asignar_a \? null : await asesoresDelTablero/.test(trozo),
 // asignarLead no toca un lead que ya tenga dueño, pero se comprueba también
 // aquí: quitarle un lead a quien ya lo estaba trabajando es peor que no
 // asignarlo.
-ok(/if \(ruta && !lead\.assigned_to\)/.test(qual),
+ok(/if \(ruta && califica && !lead\.assigned_to\)/.test(qual),
    'y solo si el lead no tiene ya dueño: a nadie se le quita lo suyo');
-ok(/quienes, true\)/.test(trozo),
+ok(/hayLista\)/.test(trozo),
    'con turnos forzados, para que un «fijo» de la fuente no se salte la lista del tablero');
-ok(/quienes\?\.length/.test(trozo),
+ok(/const hayLista = !!quienes\?\.length/.test(trozo),
    'si nadie tiene marcado ese tablero no se fuerza nada: decide la regla de la fuente');
 ok(/catch \(e\) \{ \/\* que falle el reparto no puede tumbar la calificación/.test(trozo),
    'y si el reparto falla, la calificación se guarda igual');
 
-ok(/ruta\.asignar_a \|\| quienes\?\.length/.test(trozo),
-   'y si no hay ni fijo ni nadie en el tablero, no se toca nada');
+
 
 console.log('\nY se busca con el filtro correcto');
 const busca = qual.slice(qual.indexOf('export async function asesoresDelTablero'), qual.indexOf('// ── Efectos sobre el lead'));

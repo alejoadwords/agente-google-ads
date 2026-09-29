@@ -362,17 +362,21 @@ export async function aplicarVeredicto({ userId, leadId, regla, veredicto, respu
     // `asignarLead` además no toca un lead que ya tenga dueño, así que no le
     // quita a nadie lo suyo. Cuando hay calificación activa el lead se crea a
     // propósito sin asignar, esperando este momento.
-    if (ruta && !lead.assigned_to) {
+    // Solo si CALIFICA. Un lead descartado no se le echa encima a un comercial:
+    // hasta ahora se quedaba sin dueño a propósito y así sigue.
+    if (ruta && califica && !lead.assigned_to) {
       try {
         const quienes = ruta.asignar_a ? null : await asesoresDelTablero(userId, ruta.pipeline_id);
-        // Si nadie tiene ese tablero marcado no se fuerza nada: sigue decidiendo
-        // la regla de la fuente, que es quien decidía hasta ahora.
-        if (ruta.asignar_a || quienes?.length) {
-          const { asignarLead } = await import('./_assign.js');
-          // `forzarTurnos` para que la regla de la fuente —que en varias cuentas
-          // es «fijo a una persona»— no se salte la lista del tablero.
-          await asignarLead(userId, { ...lead, ...update }, canal, ruta.asignar_a || null, quienes, true);
-        }
+        const hayLista = !!quienes?.length;
+        const { asignarLead } = await import('./_assign.js');
+        // Si nadie tiene ese tablero marcado, `entre` va vacío y `forzarTurnos`
+        // en false: decide la regla de la fuente, igual que antes de existir
+        // todo esto. El lead nunca se queda sin dueño por no haber marcado.
+        //
+        // Con lista, `forzarTurnos` evita que un «fijo a una persona» de la
+        // fuente se salte a quienes de verdad atienden el tablero.
+        await asignarLead(userId, { ...lead, ...update }, canal,
+          ruta.asignar_a || null, hayLista ? quienes : null, hayLista);
       } catch (e) { /* que falle el reparto no puede tumbar la calificación */ }
     }
 
