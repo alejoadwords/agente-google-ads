@@ -9,6 +9,13 @@
       "texto": "El permiso que le das a Acuarius para trabajar con tu cuenta de Google Ads o de LinkedIn se queda guardado y cifrado en nuestros servidores, y desde ahí se usa. Tu navegador solo sabe que la cuenta está conectada, así que ninguna extensión ni página abierta puede llevárselo. Además, el enlace para conectar va firmado a nombre de tu cuenta: nadie puede enviarte un enlace para que tu cuenta publicitaria acabe conectada a la de otra persona. Si ya tenías Google Ads conectado, sigue funcionando igual; no tienes que volver a conectarlo."
     },
     {
+      "id": "2026-09-29-calificacion-memoria",
+      "fecha": "2026-09-29",
+      "tipo": "arreglo",
+      "titulo": "La calificación ya no se le olvida al agente a mitad de la charla",
+      "texto": "Un contacto que ya había respondido todas las preguntas podía volver a «pendiente» si el agente emitía después un resumen corto —al contestar un «gracias», por ejemplo—, y en pendiente no se le asigna asesor a nadie: el contacto se quedaba quieto. Lo mismo pasaba con los datos capturados, que podían aparecer incompletos en la ficha aunque el cliente los hubiera dado. Ahora todo lo respondido se va acumulando a lo largo de la conversación y lo último que diga el cliente es lo que manda."
+    },
+    {
       "id": "2026-09-29-criterios-condicion",
       "fecha": "2026-09-29",
       "tipo": "mejora",

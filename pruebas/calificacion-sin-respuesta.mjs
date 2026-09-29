@@ -16,6 +16,7 @@
 // y que no se lleve por delante respuestas de verdad. «No» es una respuesta.
 
 import { esNoRespuesta, extraerCalificacion, evaluar } from '../api/_qualify.js';
+import { extractCapturedData } from '../api/_inbox-engine.js';
 
 let mal = 0;
 const ok = (c, m, extra) => {
@@ -102,6 +103,63 @@ ok(extraerCalificacion('[CALIFICACION: {"_ruta": "arriendo"}]')._ruta === 'arrie
 // criterio, y perderla dejaría el lead en el tablero que no toca.
 ok(extraerCalificacion('[CALIFICACION: {"_ruta": {"valor": "venta"}}]')._ruta === 'venta',
    'venga como cadena o como objeto');
+
+// ── El historial entero, no el primer bloque ────────────────────────────────
+//
+// A extraerCalificacion se le pasa tanto UN mensaje como todo el historial
+// concatenado. Leyendo solo el primer bloque se quedaba con la foto del primer
+// turno —un criterio respondido— y un lead que ya había contestado las cuatro
+// preguntas retrocedía a «pendiente» en cuanto el modelo emitía un bloque
+// corto. En pendiente no se le asigna asesor a nadie: el lead se queda quieto.
+console.log('\nDel historial se acumulan todos los bloques');
+{
+  const b = (o) => 'texto [CALIFICACION: ' + JSON.stringify(o) + ']';
+  const uno = { tipo: { valor: 'apartamento', cumple: true } };
+  const todo = {
+    tipo: { valor: 'apartamento', cumple: true },
+    zona: { valor: 'Buenavista', cumple: true },
+    presupuesto: { valor: '3 millones', cumple: true },
+    horario: { valor: 'tarde', cumple: true },
+  };
+  const hist = [b(uno), b(todo), b(uno)].join('\n');
+  const r = extraerCalificacion(hist);
+  ok(Object.keys(r).length === 4,
+     'un bloque corto al final no borra lo ya respondido', Object.keys(r).join(','));
+  ok(r.presupuesto?.valor === '3 millones', 'y el valor que se conserva es el bueno', r.presupuesto?.valor);
+
+  // Gana el último: si el cliente se corrige, vale lo que dijo después.
+  const corregido = [b({ presupuesto: { valor: '2 millones', cumple: true } }),
+                     b({ presupuesto: { valor: '4 millones', cumple: true } })].join('\n');
+  ok(extraerCalificacion(corregido).presupuesto?.valor === '4 millones',
+     'y si se corrige, manda lo último que dijo');
+
+  ok(Object.keys(extraerCalificacion(b(todo))).length === 4,
+     'un solo mensaje sigue funcionando igual');
+  ok(Object.keys(extraerCalificacion('sin bloque ninguno')).length === 0, 'y sin bloque, nada');
+
+  // Un JSON a medias —el modelo se quedó sin tokens a mitad del bloque— no
+  // puede seguir buscando su llave de cierre dentro del bloque siguiente: se
+  // llevaría por delante las respuestas buenas que venían después.
+  const conRoto = [b(uno), 'x [CALIFICACION: {"zona":{"valor":] ', b(todo)].join('\n');
+  ok(Object.keys(extraerCalificacion(conRoto)).length === 4,
+     'un bloque roto no se lleva por delante a los buenos',
+     Object.keys(extraerCalificacion(conRoto)).join(','));
+}
+// Y lo mismo con el bloque de datos capturados, que viaja por el mismo sitio.
+console.log('\nLos datos capturados también se acumulan');
+{
+  const b = (o) => 'hola [CAPTURA: ' + JSON.stringify(o) + ']';
+  const hist = [b({ nombre: 'Andrés' }),
+                b({ nombre: 'Andrés', celular: '3012457788', presupuesto: '3000000', zona: 'Buenavista' }),
+                b({ nombre: 'Andrés' })].join('\n');
+  const r = extractCapturedData(hist);
+  ok(Object.keys(r).length === 4, 'un bloque corto al final no borra lo capturado', Object.keys(r).join(','));
+  ok(extractCapturedData([b({ celular: '300' }), b({ celular: '301' })].join('\n')).celular === '301',
+     'y si el cliente se corrige, vale lo último');
+  ok(Object.keys(extractCapturedData('nada de nada')).length === 0, 'sin bloque, nada');
+  ok(Object.keys(extractCapturedData([b({ a: 1 }), 'x [CAPTURA: {roto]', b({ c: 3 })].join('\n'))).length === 2,
+     'y un bloque roto no se lleva por delante a los buenos');
+}
 
 console.log('');
 process.exit(mal ? 1 : 0);

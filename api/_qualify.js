@@ -208,10 +208,30 @@ Reglas del bloque, importantes:
 }
 
 export function extraerCalificacion(text) {
-  const match = String(text || '').match(/\[CALIFICACION:\s*(\{.*?\})\]/s);
-  if (!match) return {};
+  // TODOS los bloques del texto, no el primero.
+  //
+  // A esta función se le pasa tanto UN mensaje como el historial entero
+  // concatenado. Con `match` a secas se quedaba con el primer bloque, que es el
+  // del primer turno: el que tiene un solo criterio respondido. Un lead que ya
+  // había contestado las cuatro preguntas retrocedía a «pendiente» en cuanto el
+  // modelo emitía un bloque corto —al responder «gracias», por ejemplo— y con
+  // el veredicto en pendiente no se le asigna asesor a nadie.
+  //
+  // Se fusionan en orden y gana el último: el bloque más reciente es la foto
+  // más completa, y lo que no repita se conserva de los anteriores.
+  // Un solo nivel de anidamiento —{clave:{valor,cumple}}— y ni una llave más:
+  // con `.*?` un bloque con el JSON roto seguía buscando el cierre dentro del
+  // bloque siguiente y se llevaba por delante lo bueno que venía después.
+  const bloques = [...String(text || '').matchAll(/\[CALIFICACION:\s*(\{(?:[^{}]|\{[^{}]*\})*\})\]/g)];
+  if (!bloques.length) return {};
+  const acumulado = {};
+  for (const b of bloques) Object.assign(acumulado, unBloque(b[1]));
+  return acumulado;
+}
+
+function unBloque(json) {
   try {
-    const raw = JSON.parse(match[1]);
+    const raw = JSON.parse(json);
     const out = {};
     for (const k of Object.keys(raw || {})) {
       const v = raw[k];
