@@ -84,9 +84,20 @@ export function datosDelTexto(texto) {
 }
 
 export function extractCapturedData(text) {
-  const match = String(text || '').match(/\[CAPTURA:\s*(\{.*?\})\]/s);
-  if (!match) return {};
-  try { return JSON.parse(match[1]); } catch { return {}; }
+  // TODOS los bloques, no el primero. A esta función se le pasa tanto UN
+  // mensaje como el historial entero concatenado, y quedarse con el primero
+  // devolvía la foto del primer turno: el nombre y el celular que aún no había
+  // dado nadie. Se fusionan en orden y gana el último, que es el más completo y
+  // el que recoge una corrección del cliente.
+  // El objeto se acota a un nivel (`[^{}]`) para que un bloque con el JSON roto
+  // no siga buscando la llave de cierre dentro del bloque siguiente y se lleve
+  // por delante los datos buenos que venían después.
+  const bloques = [...String(text || '').matchAll(/\[CAPTURA:\s*(\{[^{}]*\})\]/g)];
+  const out = {};
+  for (const b of bloques) {
+    try { Object.assign(out, JSON.parse(b[1])); } catch { /* un bloque roto no tumba los buenos */ }
+  }
+  return out;
 }
 
 // ── Inventario del cliente en el contexto ───────────────────────────────────

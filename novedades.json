@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-calificacion-memoria",
+      "fecha": "2026-09-29",
+      "tipo": "arreglo",
+      "titulo": "La calificación ya no se le olvida al agente a mitad de la charla",
+      "texto": "Un contacto que ya había respondido todas las preguntas podía volver a «pendiente» si el agente emitía después un resumen corto —al contestar un «gracias», por ejemplo—, y en pendiente no se le asigna asesor a nadie: el contacto se quedaba quieto. Lo mismo pasaba con los datos capturados, que podían aparecer incompletos en la ficha aunque el cliente los hubiera dado. Ahora todo lo respondido se va acumulando a lo largo de la conversación y lo último que diga el cliente es lo que manda."
+    },
+    {
       "id": "2026-09-29-criterios-condicion",
       "fecha": "2026-09-29",
       "tipo": "mejora",
