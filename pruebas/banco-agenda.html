@@ -108,6 +108,9 @@ async function fetchAuth(url) {
     trozo('function icn(', '\n}\n') + '\n}\n',
     STUBS,
     trozo('// ── AGENDA DEL CRM', '// ── MercadoPago'),
+    trozo('let _ddCerrar = null;', '\nfunction ', ) ,
+    trozo('function ddAbrir(', '\n}\n') + '\n}\n',
+    trozo('function ddCerrarMenu(', '\n'),
     trozo('async function agnRender() {', 'function agnModalOpen('),
     "agnCursor = new Date(2026, 8, 29); agnSelDay = '2026-09-29'; agnRender();",
   ].join('\n');

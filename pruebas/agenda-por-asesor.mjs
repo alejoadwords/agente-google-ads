@@ -167,14 +167,30 @@ const cuerpo = (firma) => {
   ok(g.length === 3 && g.find(p => p.id === 'patri').total === 2, 'cuenta por asesor solo el mes visible', JSON.stringify(g));
   ok(g[0].id === 'deysy' && g[1].id === 'patri' && g[2].id === '__nadie__', 'en orden alfabético y «Sin asignar» al final');
 
-  const filtro = new Function('esc', cuerpo('function agnFiltroAsesores(gente, elegido) {') + '; return agnFiltroAsesores;')(x => String(x));
-  ok(filtro([g[0]], '') === '', 'con una sola persona no se pinta el desplegable');
-  const html = filtro(g, 'patri');
-  ok(/<select id="agn-f-asesor"/.test(html) && !/tar-chip/.test(html), 'es un desplegable, no una fila de botones (con 20 asesores no cabría)');
-  ok(/<option value="">Todo el equipo \(4\)<\/option>/.test(html), '«Todo el equipo» con su total', html.slice(0, 300));
-  ok(/<option value="patri" data-nombre="Patricia Perez" selected>Patricia Perez \(2\)<\/option>/.test(html), 'y la elegida marcada, con su número');
+  // El filtro usa el desplegable propio de la app, no un <select> nativo:
+  // ese abre la lista del sistema operativo, que no se parece al resto.
+  const pieza = new Function('esc', 'icn', 'ddAbrir', 'agnAsesor', 'agnElegirAsesor',
+    cuerpo('function agnFiltroAsesores(gente, elegido) {') + '\n' + cuerpo('function agnOpcionesAsesores() {') + '\n' +
+    cuerpo('function agnAbrirAsesores(btn) {') + '; return { agnFiltroAsesores, agnOpcionesAsesores, agnAbrirAsesores };');
+  let abierto = null, elegida = null;
+  const f = pieza(x => String(x), () => '<svg/>', (btn, ops, valor, cb) => { abierto = { ops, valor, cb }; }, 'patri', (id, n) => { elegida = [id, n]; });
+  const sinFila = 'let _agnGente = [];';
+  ok(js.includes(sinFila), 'la lista de asesores vive en _agnGente');
+  globalThis._agnGente = [];
+  ok(f.agnFiltroAsesores([g[0]], '') === '', 'con una sola persona no se pinta el filtro');
+  const html = f.agnFiltroAsesores(g, 'patri');
+  ok(/class="dd-btn agn-asesor-btn activo"/.test(html) && !/<select/.test(html), 'es el botón dd-btn de la app, no un <select> nativo', html.slice(0, 200));
+  ok(/Patricia Perez \(2\)/.test(html), 'y dice a quién se está viendo, con su número');
+  ok(/Todo el equipo \(4\)/.test(f.agnFiltroAsesores(g, '')), 'sin elegir, «Todo el equipo» con el total');
+  f.agnFiltroAsesores(g, 'patri');
+  f.agnAbrirAsesores({});
+  ok(abierto && abierto.ops[0].name === 'Todo el equipo (4)' && abierto.ops[1].sep && abierto.ops.length === 5 && abierto.valor === 'patri',
+     'abre el menú de la app con «Todo el equipo», un separador y cada asesor', JSON.stringify(abierto && abierto.ops));
+  abierto.cb('deysy');
+  ok(elegida && elegida[0] === 'deysy' && elegida[1] === 'Deysy Pacheco', 'elegir guarda el id y el nombre');
   const veinte = Array.from({ length: 20 }, (_, i) => ({ id: 'u' + i, nombre: 'Asesor ' + i, total: i }));
-  ok((filtro(veinte, '').match(/<option/g) || []).length === 21, 'con veinte asesores, veinte opciones y «Todo el equipo»');
+  f.agnFiltroAsesores(veinte, ''); f.agnAbrirAsesores({});
+  ok(abierto.ops.filter(o => !o.sep).length === 21, 'con veinte asesores, veinte opciones y «Todo el equipo» (el menú hace scroll)');
 }
 {
   // agnLoad: un error del servidor se dice, no se pinta como un mes vacío.

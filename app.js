@@ -28149,19 +28149,34 @@ async function agnRender() {
     '</div>';
 }
 
-// El desplegable de asesores, con el mismo aspecto que el filtro de Tareas.
-// Un desplegable y no una fila de botones: con veinte asesores la fila no
-// cabe. Con una sola persona no aporta nada y no se pinta.
+// El filtro de asesores, con el desplegable propio de la app (ddAbrir), el
+// mismo del filtro de fuentes y del selector de procesos. El <select> nativo
+// abría la lista del sistema operativo, que no se parece en nada al resto.
+// Desplegable y no fila de botones: con veinte asesores la fila no cabe. Con
+// una sola persona no aporta nada y no se pinta.
+let _agnGente = [];
 function agnFiltroAsesores(gente, elegido) {
+  _agnGente = gente;
   if (gente.length < 2 && !elegido) return '';
-  const total = gente.reduce((n, p) => n + p.total, 0);
-  return '<span class="tar-f agn-f">' +
-    '<select id="agn-f-asesor" aria-label="Ver el calendario de" ' +
-      'onchange="agnElegirAsesor(this.value, this.options[this.selectedIndex].dataset.nombre || \'\')">' +
-      '<option value=""' + (!elegido ? ' selected' : '') + '>Todo el equipo (' + total + ')</option>' +
-      gente.map(p => '<option value="' + esc(p.id) + '" data-nombre="' + esc(p.nombre) + '"' +
-        (elegido === p.id ? ' selected' : '') + '>' + esc(p.nombre) + ' (' + p.total + ')</option>').join('') +
-    '</select></span>';
+  const p = gente.find(x => x.id === elegido);
+  const txt = p ? p.nombre + ' (' + p.total + ')' : 'Todo el equipo (' + gente.reduce((n, x) => n + x.total, 0) + ')';
+  return '<button class="dd-btn agn-asesor-btn' + (elegido ? ' activo' : '') + '" id="agn-f-asesor" ' +
+      'aria-label="Ver el calendario de" onclick="agnAbrirAsesores(this)">' +
+    icn('users', 12) +
+    '<span class="dd-btn-txt">' + esc(txt) + '</span>' +
+    '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>' +
+  '</button>';
+}
+function agnOpcionesAsesores() {
+  const total = _agnGente.reduce((n, x) => n + x.total, 0);
+  return [{ id: '', name: 'Todo el equipo (' + total + ')' }, { sep: true }]
+    .concat(_agnGente.map(p => ({ id: p.id, name: p.nombre + ' (' + p.total + ')' })));
+}
+function agnAbrirAsesores(btn) {
+  ddAbrir(btn, agnOpcionesAsesores(), agnAsesor, id => {
+    const p = _agnGente.find(x => x.id === id);
+    agnElegirAsesor(id, p ? p.nombre : '');
+  });
 }
 
 async function agnToggleDone(id, done) {

@@ -18,8 +18,10 @@ export const MUTACIONES = [
   { nombre: 'Ventas ve lo de sus compañeras', archivo: 'agenda', romper: cambiar("    if (forzarMias) filas = soloDeMisLeads(filas, yoSoy);", "") },
   // La pantalla
   { nombre: 'cuenta también los días de otro mes', archivo: 'app', romper: cambiar("    if (d.getFullYear() !== y || d.getMonth() !== m) continue;\n", '') },
-  { nombre: 'el desplegable sale con una sola persona', archivo: 'app', romper: cambiar("  if (gente.length < 2 && !elegido) return '';\n  const total", "  if (!gente.length && !elegido) return '';\n  const total") },
-  { nombre: 'la opción elegida no se marca', archivo: 'app', romper: cambiar("        (elegido === p.id ? ' selected' : '') + '>' + esc(p.nombre) + ' (' + p.total", "        '' + '>' + esc(p.nombre) + ' (' + p.total") },
+  { nombre: 'el filtro sale con una sola persona', archivo: 'app', romper: cambiar("  if (gente.length < 2 && !elegido) return '';\n  const p = gente", "  if (!gente.length && !elegido) return '';\n  const p = gente") },
+  { nombre: 'el botón no dice a quién se ve', archivo: 'app', romper: cambiar("  const p = gente.find(x => x.id === elegido);\n  const txt", "  const p = null;\n  const txt") },
+  { nombre: 'el menú no marca la elegida', archivo: 'app', romper: cambiar("  ddAbrir(btn, agnOpcionesAsesores(), agnAsesor, id => {", "  ddAbrir(btn, agnOpcionesAsesores(), '', id => {") },
+  { nombre: 'elegir pierde el nombre', archivo: 'app', romper: cambiar("    agnElegirAsesor(id, p ? p.nombre : '');", "    agnElegirAsesor(id, '');") },
   { nombre: 'agnLoad no mira ok', archivo: 'app', romper: cambiar("    if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));\n    agnActivities", "    agnActivities") },
   { nombre: 'el choque vuelve a desde/hasta', archivo: 'app', romper: cambiar("    const r = await fetchAuth('/api/agenda?from=' + encodeURIComponent(dia0.toISOString()) +\n      '&to='", "    const r = await fetchAuth('/api/agenda?desde=' + encodeURIComponent(dia0.toISOString()) +\n      '&hasta='") },
   { nombre: 'el choque cuenta a todo el equipo', archivo: 'app', romper: cambiar("      if (a.type !== 'meeting' || (a.asesor_id || null) !== suAsesor) return false;\n", '') },
