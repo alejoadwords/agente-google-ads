@@ -52,6 +52,17 @@
       "texto": "Cuando el agente aún no tenía una respuesta —el presupuesto, por ejemplo— a veces la apuntaba como «sin información» y el sistema la contaba como respondida. Eso adelantaba el veredicto: un contacto podía llegarle a tu comercial marcado como calificado sin haber dado los datos, o descartado sin haber dicho nada. Ahora lo que falta se sigue preguntando, y el veredicto espera a tenerlo todo."
     },
     {
+      "id": "2026-09-28-meta-conexion-segura",
+      "fecha": "2026-09-28",
+      "tipo": "mejora",
+      "titulo": "Conectar Meta Ads, más seguro y sin sorpresas",
+      "texto": "La conexión con Meta Ads ahora se verifica con tu sesión de principio a fin, y la hace el dueño o un administrador de la cuenta. Si algo falla al conectar, ahora te decimos qué pasó en vez de volver a la app sin ningún mensaje. Cuando el agente de Meta Ads crea algo en tu cuenta publicitaria, queda siempre en pausa: activarlo, cambiarle el presupuesto o borrarlo lo decides tú en Meta. Y al desconectar, la conexión se borra de verdad, también en este navegador.",
+      "accion": {
+        "texto": "Ir a Configuración",
+        "ir": "crm"
+      }
+    },
+    {
       "id": "2026-09-28-cambiar-cita-pagina",
       "fecha": "2026-09-28",
       "tipo": "nuevo",

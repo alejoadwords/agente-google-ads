@@ -1,5 +1,44 @@
 # App Review de Meta — lo que hay que hacer para que cualquier cliente pueda conectar
 
+## Estado al 28-09-2026 (comprobado por API)
+
+- **Verificación del negocio: HECHA.** `Acuarius AI` (`1532629158230893`) devuelve
+  `verification_status: verified`. Era la puerta: App Review ya acepta la solicitud.
+- **Roles en la app: UNO solo** — administradora Johana Muñoz (`10163537285356658`).
+  Mientras no pase la revisión, solo ella (o quien tenga rol) puede conectar Meta.
+  Para que Alejandro conecte cuentas de clientes ANTES de la revisión, Johana lo
+  agrega en developers.facebook.com → app Acuarius → Roles de la app → Administrador.
+- **La conexión de prueba funciona**: cuenta demo, los 7 permisos concedidos, token
+  sin caducidad (`expires_at: 0`), ve 6 cuentas publicitarias.
+- **Datos para el video**: la campaña «Acuarius — Tráfico al sitio (App Review)»
+  (`act_1678079940003223`) entregó el 27-08 (2.601 impresiones), se detuvo un mes y
+  **volvió a entregar el 28-09**. Dejarla correr 3-5 días antes de grabar: el panel
+  usa los últimos 30 días y hoy casi todo cae fuera.
+- **Código listo para la revisión** (28-09-2026):
+  - el OAuth de Meta va firmado (antes se fiaba del `?userId=` de la URL) y el token
+    ya no viaja en la URL de vuelta;
+  - el proxy del agente exige sesión, usa el token guardado de la cuenta y **garantiza
+    en el servidor** lo que prometemos: todo lo que se crea queda EN PAUSA, nada se
+    activa, nada se borra, no se toca el presupuesto de lo que ya existe;
+  - desconectar borra el token del servidor y del navegador.
+  Pendiente aparte: el navegador todavía guarda una copia del token (igual que con
+  Google Ads). No bloquea la revisión, pero conviene sacarlo.
+
+### Lo que falta, en orden
+
+1. **Johana agrega a Alejandro como administrador** de la app (si quiere conectar
+   Certain & Pezzano ya, sin esperar la revisión).
+2. **Esperar 3-5 días** a que la campaña de Acuarius acumule datos.
+3. **Grabar el video** con el guion de `GUION-VIDEO-META.md`, con una cuenta que SÍ
+   tenga rol (sección 4).
+4. **Poner la contraseña** de `acuarius.review@gmail.com` en las instrucciones de
+   prueba (sección 5) y comprobar que esa cuenta sigue sin conexión de Meta.
+5. **Enviar los siete permisos en UNA solicitud** con los textos de la sección 3.
+6. (Menor) cambiar la categoría de la app de *Utilidades* a *Negocios y páginas*.
+
+---
+
+
 **Por qué.** Los permisos que pide Acuarius están en **acceso estándar**. En ese nivel
 Meta solo deja usarlos a quien tenga un rol en la app (admin, desarrollador, tester).
 A cualquier otra persona le corta el inicio de sesión con "Función no disponible… estamos

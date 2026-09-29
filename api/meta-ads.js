@@ -219,6 +219,53 @@ async function usuarioAutenticado(req) {
   return await cuentaDe(payload.sub);
 }
 
+// ── Candados del proxy del agente ───────────────────────────────────────────
+// Lo que el modelo puede pedirle a la Graph API. Exportado para probarlo.
+
+// Aristas de una cuenta publicitaria donde se puede CREAR algo.
+const CREABLES = new Set(['campaigns', 'adsets', 'ads', 'adcreatives', 'adimages']);
+// Las que llevan `status`: se crean en pausa, siempre.
+const CON_ESTADO = new Set(['campaigns', 'adsets', 'ads']);
+// Lectura: cualquier arista de un objeto de anuncios o de la propia cuenta.
+const RUTA = /^(act_\d+|\d+|me)(\/[a-z_]+)?$/;
+
+export function candadoProxy(endpoint, method, params) {
+  const e = String(endpoint || '').trim().replace(/^\/+/, '');
+  const m = String(method || 'GET').toUpperCase();
+  const p = params && typeof params === 'object' && !Array.isArray(params) ? { ...params } : {};
+  if (!e) return { error: 'endpoint requerido' };
+  if (!RUTA.test(e)) return { error: 'Esa ruta de Meta no está permitida desde el agente.' };
+  if (m === 'GET') return { endpoint: e, method: 'GET', params: p };
+  if (m !== 'POST') return { error: 'Desde el agente solo se lee o se crea. Borrar se hace en el Administrador de anuncios de Meta.' };
+
+  const [raiz, arista] = e.split('/');
+  if (arista) {
+    // Crear dentro de una cuenta.
+    if (!raiz.startsWith('act_') || !CREABLES.has(arista)) {
+      return { error: 'Desde el agente solo se crean campañas, conjuntos, anuncios y sus piezas.' };
+    }
+    if (CON_ESTADO.has(arista)) p.status = 'PAUSED';
+    return { endpoint: e, method: 'POST', params: p };
+  }
+  // Tocar algo que ya existe: solo pausarlo o cambiarle el nombre. Activar,
+  // archivar o mover presupuesto gasta dinero del cliente, y eso lo decide él
+  // en Meta.
+  const claves = Object.keys(p);
+  const soloPausaONombre = claves.length > 0 && claves.every(k => k === 'name' || k === 'status');
+  if (!soloPausaONombre || ('status' in p && p.status !== 'PAUSED')) {
+    return { error: 'Desde el agente solo se puede pausar o renombrar algo que ya existe. Activarlo o cambiar su presupuesto se hace en Meta.' };
+  }
+  return { endpoint: e, method: 'POST', params: p };
+}
+
+// Los parámetros de un GET van en la URL: los objetos (targeting, time_range…)
+// tienen que ir como JSON, no como «[object Object]».
+function aTexto(params) {
+  const out = {};
+  for (const [k, v] of Object.entries(params || {})) out[k] = v && typeof v === 'object' ? JSON.stringify(v) : String(v);
+  return out;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -227,21 +274,38 @@ export default async function handler(req, res) {
 
   const action = req.query.action;
 
-  // ── Legacy proxy (backward compat) ──────────────────────────
+  // ── El proxy del agente de Meta Ads (bloque [META_API]) ──────
+  //
+  // El modelo escribe el endpoint, el método y los parámetros, y esto los
+  // ejecuta. Antes lo hacía SIN sesión, con el token que mandara el navegador y
+  // sin ningún límite: el modelo podía activar una campaña, borrarla o subirle
+  // el presupuesto. A Meta le decimos en la revisión que toda campaña que
+  // creamos queda EN PAUSA; eso tiene que garantizarlo el servidor, no el
+  // prompt. Ahora:
+  //   · hace falta sesión, y el token es el de la CUENTA, el guardado —el que
+  //     mande el navegador se ignora—;
+  //   · solo GET y POST, y solo sobre objetos de anuncios;
+  //   · crear campañas, conjuntos o anuncios los deja en pausa, a la fuerza;
+  //   · sobre algo que ya existe solo se puede pausar o renombrar.
   if (!action) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-    const { accessToken, adAccountId, endpoint, method = 'GET', params = {} } = req.body;
-    if (!accessToken) return res.status(400).json({ error: 'accessToken requerido' });
-    if (!endpoint)    return res.status(400).json({ error: 'endpoint requerido' });
+    const userIdProxy = await usuarioAutenticado(req);
+    if (!userIdProxy) return res.status(401).json({ error: 'No autorizado' });
+    const { endpoint, method = 'GET', params = {} } = req.body || {};
+    const permitido = candadoProxy(endpoint, method, params);
+    if (permitido.error) return res.status(400).json({ error: permitido.error });
+    const conn = await getStoredToken(userIdProxy).catch(() => null);
+    const tokenCuenta = conn?.access_token || '';
+    if (!tokenCuenta) return res.status(401).json({ error: 'No hay token. Conecta tu cuenta de Meta Ads.', needsConnect: true });
     try {
       let url, fetchOpts;
-      if (method === 'GET') {
-        const qs = new URLSearchParams({ ...params, access_token: accessToken });
-        url = `${META_BASE}/${endpoint}?${qs}`;
+      if (permitido.method === 'GET') {
+        const qs = new URLSearchParams({ ...aTexto(permitido.params), access_token: tokenCuenta });
+        url = `${META_BASE}/${permitido.endpoint}?${qs}`;
         fetchOpts = { method: 'GET' };
       } else {
-        url = `${META_BASE}/${endpoint}`;
-        fetchOpts = { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...params, access_token: accessToken }) };
+        url = `${META_BASE}/${permitido.endpoint}`;
+        fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...permitido.params, access_token: tokenCuenta }) };
       }
       const apiRes  = await fetch(url, fetchOpts);
       const apiData = await apiRes.json();
@@ -262,11 +326,10 @@ export default async function handler(req, res) {
   const datePreset  = req.query.datePreset  || 'last_30d';
 
   try {
-    let token = req.query.accessToken || (req.body && req.body.accessToken) || '';
-    if (!token && userId) {
-      const conn = await getStoredToken(userId);
-      token = conn?.access_token || '';
-    }
+    // Manda el token GUARDADO de la cuenta. El que manda el navegador queda de
+    // respaldo solo para conexiones viejas que nunca llegaron a guardarse.
+    const guardado = await getStoredToken(userId).catch(() => null);
+    let token = guardado?.access_token || req.query.accessToken || (req.body && req.body.accessToken) || '';
     if (!token) return res.status(401).json({ error: 'No hay token. Conecta tu cuenta de Meta Ads.', needsConnect: true });
 
     // ── get-ad-accounts ──────────────────────────────────────

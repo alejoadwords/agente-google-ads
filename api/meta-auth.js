@@ -1,13 +1,23 @@
 // api/meta-auth.js
-// Inicia el flujo OAuth 2.0 con Meta (Facebook)
-// Acepta ?userId= para asociar el token al usuario en Supabase
+// Inicia el flujo OAuth 2.0 con Meta (Facebook).
+//
+// SOLO con enlace firmado (?c=), que da api/gcal-enlace.js?para=meta según la
+// sesión. Antes se fiaba de un ?userId= de la URL: bastaba mandarle a alguien
+// un enlace con el userId propio para que, al conectar SU Facebook, su token
+// —que gestiona anuncios— quedara guardado en la cuenta de quien mandó el
+// enlace. El callback vuelve a comprobar la firma.
 
-export default function handler(req, res) {
+import { abrirEnlaceCuenta } from './_enlace-calendario.js';
+
+export default async function handler(req, res) {
   const clientId = process.env.META_APP_ID;
   if (!clientId) return res.status(500).json({ error: 'META_APP_ID no configurado' });
 
-  const userId = req.query.userId || '';
-  const state  = JSON.stringify({ nonce: 'meta_ads_connect', userId });
+  const e = await abrirEnlaceCuenta(req.query.c, 'meta');
+  if (!e || e.caducado) {
+    return res.redirect('https://app.acuarius.app/?meta_error=' + (e?.caducado ? 'enlace_caducado' : 'enlace_invalido'));
+  }
+  const state = JSON.stringify({ nonce: 'meta_ads_connect', c: req.query.c });
 
   // La app usa "Inicio de sesión con Facebook para empresas": ahí los permisos
   // no viajan en 'scope', salen de una configuración creada en el panel. Sin

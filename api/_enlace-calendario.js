@@ -75,7 +75,9 @@ export async function abrirEnlaceCalendario(t) {
 // Media hora: el enlace se usa en el acto, redirigiendo a Google. No tiene por
 // qué sobrevivir en el historial del navegador.
 export const MINUTOS_ENLACE_CUENTA = 30;
-const PREFIJO_CUENTA = { calendario: 'cuenta-cal', youtube: 'cuenta-yt' };
+// `meta` es la conexión de Meta Ads: mismo agujero, mismo arreglo, y peor —ese
+// token GESTIONA ANUNCIOS—.
+const PREFIJO_CUENTA = { calendario: 'cuenta-cal', youtube: 'cuenta-yt', meta: 'cuenta-meta' };
 
 export async function crearEnlaceCuenta(userId, para, minutos = MINUTOS_ENLACE_CUENTA) {
   const prefijo = PREFIJO_CUENTA[para];

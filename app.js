@@ -1678,9 +1678,8 @@ function agencyConnectPlatform(platform) {
   agencyCloseModal();
 
   if (platform === 'meta') {
-    // Redirigir al OAuth de Meta
-    const uid = clerkInstance?.user?.id || '';
-    window.location.href = '/api/meta-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+    // Redirigir al OAuth de Meta, con el enlace firmado por el servidor.
+    irAConectarMeta();
   } else {
     openSettings();
     setTimeout(function() {
@@ -14497,7 +14496,18 @@ let metaActiveAccount = null;
     }
   }
   if (params.get('meta_error')) {
+    // Antes se limpiaba la URL y ya: quien no llegaba a conectar Meta no veía
+    // ni un mensaje, y volvía a intentarlo a ciegas.
+    const motivo = params.get('meta_error');
     window.history.replaceState({}, '', window.location.pathname);
+    const texto = ({
+      access_denied: 'No se conectó Meta: no diste permiso en Facebook.',
+      enlace_caducado: 'El enlace para conectar Meta caducó. Vuelve a pulsar «Conectar con Meta».',
+      enlace_invalido: 'Ese enlace para conectar Meta no es válido. Vuelve a pulsar «Conectar con Meta» desde Configuración.',
+      token_failed: 'Meta no terminó la conexión. Inténtalo otra vez.',
+      save_failed: 'Meta dio permiso, pero no pudimos guardar la conexión. Inténtalo otra vez en unos minutos.',
+    })[motivo] || 'No se pudo conectar Meta. Inténtalo otra vez.';
+    setTimeout(() => showToast(texto, 'error'), 1200);
   }
   // Vuelta de la conexión de WhatsApp por redirección. Se dice el resultado y
   // se limpia la URL, para que recargar no repita el aviso.
@@ -14547,13 +14557,31 @@ function connectMetaAds() {
       return;
     }
   }
-  const uid = clerkInstance?.user?.id || '';
-  window.location.href = '/api/meta-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+  irAConectarMeta();
+}
+
+// El enlace a Meta lo firma el servidor según la SESIÓN (a nombre de la cuenta,
+// solo un administrador). Antes el navegador mandaba su propio userId en la URL
+// y el servidor se lo creía: con un enlace ajeno, tu token de Meta —que
+// gestiona anuncios— acababa en la cuenta de otro.
+async function irAConectarMeta() {
+  try {
+    const r = await fetchAuth('/api/gcal-enlace?para=meta', { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.url) throw new Error(d.error || ('HTTP ' + r.status));
+    window.location.href = d.url;
+  } catch (e) {
+    showToast('No se pudo empezar la conexión con Meta: ' + String(e.message || e), 'error');
+  }
 }
 
 function disconnectMetaAds() {
   ['meta_access_token','meta_user_name','meta_user_email','meta_user_id','meta_active_account','meta_ad_account_id']
     .forEach(k => sessionStorage.removeItem(k));
+  // Y las copias «persistentes»: sin borrarlas, al recargar la app volvía a
+  // pintar Meta como conectado y seguía guardando un token ya revocado.
+  ['meta_access_token_persist','meta_user_name_persist','meta_active_account_persist','meta_ad_account_id_persist']
+    .forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
   metaAccounts = []; metaActiveAccount = null;
   updateMetaUI(false);
   hidePlatformDashboard();
@@ -14720,7 +14748,9 @@ async function callMetaAPI(endpoint, method = 'GET', params = {}) {
   try {
     const res  = await fetchAuth('/api/meta-ads', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ accessToken: token, adAccountId: accountId, endpoint: resolvedEndpoint, method, params }),
+      // Sin el token: el servidor usa el guardado de la cuenta y le pone los
+      // candados (todo se crea en pausa, nada se activa ni se borra).
+      body: JSON.stringify({ adAccountId: accountId, endpoint: resolvedEndpoint, method, params }),
     });
     return await res.json();
   } catch(e) { return { error: e.message }; }

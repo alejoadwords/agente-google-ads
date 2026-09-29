@@ -1,4 +1,5 @@
 import { cifrar } from './_cifrado.js';
+import { abrirEnlaceCuenta } from './_enlace-calendario.js';
 // api/meta-callback.js
 // Recibe el código de Meta, obtiene long-lived token y lo guarda en Supabase
 
@@ -6,7 +7,7 @@ const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 async function saveMetaConnection(userId, token, expiresIn, userInfo) {
-  if (!userId || !SUPABASE_URL) return;
+  if (!userId || !SUPABASE_URL) return false;
   const expiresAt = new Date(Date.now() + (expiresIn || 5184000) * 1000).toISOString();
   const payload = {
     user_id:          userId,
@@ -38,16 +39,24 @@ async function saveMetaConnection(userId, token, expiresIn, userInfo) {
     const errText = await saveRes.text().catch(() => '');
     console.error('saveMetaConnection error:', saveRes.status, errText.slice(0, 300));
   }
+  return saveRes.ok;
 }
 
 export default async function handler(req, res) {
   const { code, state, error } = req.query;
 
+  // De quién es la conexión lo dice la FIRMA, nunca un userId del state: el
+  // state viaja por el navegador y se puede cambiar entre Meta y nosotros.
+  let firmado = '';
+  try { firmado = JSON.parse(state || '{}').c || ''; } catch {}
+  const firma = await abrirEnlaceCuenta(firmado, 'meta');
+  if (!firma || firma.caducado) {
+    return res.redirect('https://app.acuarius.app/?meta_error=' + (firma?.caducado ? 'enlace_caducado' : 'enlace_invalido'));
+  }
+  const userId = firma.userId;
+
   if (error) return res.redirect('https://app.acuarius.app/?meta_error=access_denied');
   if (!code)  return res.status(400).json({ error: 'Código de autorización faltante' });
-
-  let userId = '';
-  try { userId = JSON.parse(state || '{}').userId || ''; } catch {}
 
   const appId     = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
@@ -72,20 +81,19 @@ export default async function handler(req, res) {
     const userRes  = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name,email&access_token=${longData.access_token}`);
     const userInfo = await userRes.json();
 
-    // Intentar guardar en Supabase (no bloquea el redirect si falla)
-    if (userId) {
-      await saveMetaConnection(userId, longData.access_token, longData.expires_in, userInfo);
+    if (longData.error || !longData.access_token) {
+      return res.redirect('https://app.acuarius.app/?meta_error=token_failed');
     }
+    // El token se queda en el servidor. Antes, «por si fallaba Supabase», viajaba
+    // en la URL de vuelta (?meta_token=…) y quedaba en el historial del navegador
+    // y en los registros. Si no se puede guardar, se dice: fallar a la vista.
+    const guardado = await saveMetaConnection(userId, longData.access_token, longData.expires_in, userInfo);
+    if (!guardado) return res.redirect('https://app.acuarius.app/?meta_error=save_failed');
 
-    // Siempre redirigir con el token en la URL para que el frontend lo reciba
-    // aunque Supabase falle — el frontend lo guarda en sessionStorage
     const params = new URLSearchParams({
       meta_connected: 'true',
-      meta_token:     longData.access_token,
       meta_name:      userInfo.name  || '',
-      meta_email:     userInfo.email || '',
-      meta_user_id:   userInfo.id    || '',
-      ...(userId ? { platform: 'meta_ads' } : {}),
+      platform:       'meta_ads',
     });
     return res.redirect(`https://app.acuarius.app/?${params}`);
 
