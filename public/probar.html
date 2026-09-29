@@ -213,6 +213,14 @@ async function enviar() {
   hist.push({ role: 'user', content: t });
   vista.push({ r: 'yo', t });
   ocupado = true; btn.disabled = true; pintar();
+  // El «Escribiendo…» se queda al menos tres segundos, como en la conversación
+  // de verdad. Una prueba que no se parece al resultado no sirve para
+  // aprobarlo.
+  const empezo = Date.now();
+  const esperarSuelo = async () => {
+    const faltan = 3000 - (Date.now() - empezo);
+    if (faltan > 0) await new Promise(r => setTimeout(r, faltan));
+  };
   try {
     const r = await fetch('/api/probar-publico', {
       method: 'POST',
@@ -220,6 +228,7 @@ async function enviar() {
       body: JSON.stringify({ t: TOKEN, mensajes: hist }),
     });
     const d = await r.json();
+    await esperarSuelo();
     ocupado = false; btn.disabled = false;
     if (!r.ok || d.error) {
       // El turno que falló se retira: si se quedara, el siguiente envío mandaría
@@ -234,6 +243,7 @@ async function enviar() {
     radiografia(d);
     txt.focus();
   } catch (e) {
+    await esperarSuelo();
     ocupado = false; btn.disabled = false;
     hist.pop(); vista.pop(); pintar();
     avisar('No se pudo enviar. Revisa tu conexión.');

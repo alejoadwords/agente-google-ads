@@ -72,6 +72,33 @@ async function sendMeta(channel, connection, contactId, text) {
   }
 }
 
+// «Escribiendo…», antes de pensar la respuesta.
+//
+// Sin esto la respuesta aparecía de golpe medio segundo después de escribir, y
+// eso delata al bot más que cualquier error de redacción: una persona tarda en
+// leer y en teclear.
+//
+// La misma llamada marca el mensaje como leído, así que el contacto ve también
+// el doble check azul. Meta lo mantiene 25 segundos o hasta que respondemos, lo
+// que pase antes — así que solo se manda cuando de verdad vamos a contestar.
+//
+// Solo WhatsApp: Messenger e Instagram no tienen este endpoint.
+async function marcarEscribiendo(channel, connection, messageId) {
+  if (channel !== 'whatsapp' || !messageId || !connection?.access_token) return;
+  try {
+    await fetch(`https://graph.facebook.com/v19.0/${connection.external_id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${connection.access_token}` },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+        typing_indicator: { type: 'text' },
+      }),
+    });
+  } catch (e) { /* que no se vea el «escribiendo» no puede costar la respuesta */ }
+}
+
 // El evento de Meta trae el id del contacto pero no su nombre: hay que pedirlo
 // aparte con el token de la página. Sin esto el lead nace como
 // "Contacto messenger" y el comercial recibe una ficha sin nombre.
@@ -124,6 +151,7 @@ function mediaDeMessenger(message) {
 const processMessage = args => processIncoming({
   ...args,
   send: (connection, contactId, text) => sendMeta(args.channel, connection, contactId, text),
+  escribiendo: (connection, messageId) => marcarEscribiendo(args.channel, connection, messageId),
   resolverNombre: nombreDelContacto,
 });
 

@@ -468,6 +468,11 @@ IMPORTANTE: esos cuatro campos son lo que la persona PIDE, no lo que tú le ofre
 // más caro que no cachear.
 const MODELO_WA = process.env.AGENTE_WA_MODELO || 'claude-haiku-4-5-20251001';
 
+// Lo que tarda como mínimo en aparecer una respuesta, contando desde que llega
+// el mensaje. No es una pausa encima del modelo: es un suelo. Si pensar ya
+// costó cuatro segundos, no se añade nada.
+const ESCRIBIENDO_MIN_MS = 3000;
+
 // Devuelve el texto y, aparte, lo que consumió. El uso se registra donde se
 // sabe de quién es la conversación; aquí solo se recoge.
 async function callClaude(systemPrompt, messages, alRegistrar) {
@@ -951,7 +956,7 @@ function textoDeAdjunto(adj, error) {
 // webhook del canal. Meta no manda el nombre en el evento, solo el id, así que
 // sin esto el lead entra como "Contacto messenger" y el comercial recibe una
 // ficha sin nombre.
-export async function processIncoming({ channel, externalId, contactId, contactName, text, providerMessageId, send, resolverNombre, media, referral }) {
+export async function processIncoming({ channel, externalId, contactId, contactName, text, providerMessageId, send, escribiendo, resolverNombre, media, referral }) {
   // Un mensaje puede ser solo un archivo, sin una palabra. Exigir texto era lo
   // que hacía desaparecer las fotos que manda el cliente.
   if ((!text && !media) || !externalId || !contactId) return { ok: false, reason: 'payload incompleto' };
@@ -1138,6 +1143,18 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     : null;
 
   const system = buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas);
+  // «Escribiendo…» antes de pensar.
+  //
+  // El modelo contesta en medio segundo y eso delata al bot más que cualquier
+  // error de redacción: una persona tarda en leer y en teclear. El indicador se
+  // manda ya —Meta lo mantiene hasta que respondemos, o 25 segundos— y el suelo
+  // de tres segundos se cuenta desde aquí: si pensar ya costó cuatro, no se
+  // añade nada.
+  const empezoAPensar = Date.now();
+  if (typeof escribiendo === 'function') {
+    await escribiendo(connection, providerMessageId).catch(() => {});
+  }
+
   let reply = await responderViendo(system, hist, [], { userId: connection.user_id, origen: 'whatsapp' });
 
   // «Te estoy agendando, en un momento te llega la confirmación»… sin el
@@ -1306,6 +1323,11 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   }
 
   if (typeof send === 'function') {
+    // El suelo de tres segundos se aplica UNA vez, antes del primer mensaje.
+    // La confirmación de la cita sale detrás sin más espera: son dos mensajes
+    // seguidos de la misma persona, que es como escribe la gente.
+    const faltan = ESCRIBIENDO_MIN_MS - (Date.now() - empezoAPensar);
+    if (faltan > 0) await new Promise(r => setTimeout(r, faltan));
     if (visible) {
       try { await send(connection, contactId, visible); } catch (e) { console.error('send error', e); }
     }
