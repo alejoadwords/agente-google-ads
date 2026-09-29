@@ -1049,7 +1049,18 @@ function agencySoloElMio() {
   agencyClients = (agencyClients || []).filter(c => String(c.id) === String(mio));
 }
 
+// ¿Ya se sabe si la cuenta tiene cartera de clientes? Hasta saberlo, se trata
+// como agencia: equivocarse al revés filtraría el tablero global de una
+// agencia por un solo proceso y le escondería leads.
+let _agencyCargada = false;
+function crmCuentaSinCartera() {
+  return _agencyCargada && !(agencyClients || []).length;
+}
+
 async function agencyLoadClients() {
+  try { await agencyLoadClientsDentro(); } finally { _agencyCargada = true; }
+}
+async function agencyLoadClientsDentro() {
   // La espera de la sesión y el reintento del 401 los resuelve fetchAuth()
   try {
     const res = await fetchAuth('/api/profile?type=agency_clients');
@@ -17377,10 +17388,12 @@ function pipeRenderSelector() {
   const sel = document.getElementById('pipe-select');
   const txt = document.getElementById('pipe-select-txt');
   if (!cont || !sel || !txt) return;
-  // Con un solo pipeline el selector estorba: solo el engranaje para crear más
-  if (!crmPipelines.length) { cont.style.display = 'none'; return; }
+  // El engranaje se ve SIEMPRE, también sin procesos: es la única puerta para
+  // crear el primero. Y el nombre se ve desde que hay uno. Antes, con cero se
+  // escondía todo y con uno se escondía el nombre: Karvio creó su proceso y no
+  // lo veía por ningún lado, ni encontraba cómo crear otro (29-09-2026).
   cont.style.display = 'flex';
-  sel.style.display = crmPipelines.length > 1 ? 'inline-flex' : 'none';
+  sel.style.display = crmPipelines.length ? 'inline-flex' : 'none';
   const actual = crmPipelines.find(p => p.id === crmPipelineId) || crmPipelines[0] || {};
   txt.textContent = actual.name || '';
   const cliente = pipeAmbitoNombre();
@@ -17459,7 +17472,7 @@ function pipeRenderLista() {
   const amb = document.getElementById('pipe-ambito');
   if (amb) {
     const cliente = pipeAmbitoNombre();
-    amb.textContent = cliente ? 'Procesos de ' + cliente : 'Sin cliente';
+    amb.textContent = cliente ? 'Procesos de ' + cliente : (crmCuentaSinCartera() ? 'Procesos de la cuenta' : 'Sin cliente');
     amb.title = cliente
       ? 'Cada cliente tiene sus propios procesos, con sus propias etapas.'
       : 'Estás viendo todos los clientes a la vez. Elige uno para gestionar sus procesos.';
@@ -17482,21 +17495,29 @@ function pipeRenderLista() {
   // Un proceso de venta pertenece a un cliente: cada uno tiene su forma de
   // vender y sus etapas. Sin cliente activo no se crean nuevos — los que ya
   // existen se siguen viendo y editando, para no esconder datos de nadie.
+  //
+  // Eso vale para una AGENCIA. Una cuenta sin cartera de clientes —una empresa
+  // que vende lo suyo, como Karvio— no tiene cliente que elegir: sus procesos
+  // son de la cuenta, y con esta regla no podía crear ni uno.
   const cliente = pipeAmbitoNombre();
+  const sinCartera = crmCuentaSinCartera();
+  const puede = !!cliente || sinCartera;
   const lleno = crmPipelines.length >= PIPE_MAX;
   const btn = document.getElementById('pipe-btn-nuevo');
   if (btn) {
-    btn.disabled = lleno || !cliente;
-    btn.textContent = !cliente ? 'Elige un cliente' : (lleno ? 'Máximo ' + PIPE_MAX : '+ Crear proceso');
-    btn.title = !cliente ? 'Los procesos de venta pertenecen a un cliente' : '';
+    btn.disabled = lleno || !puede;
+    btn.textContent = !puede ? 'Elige un cliente' : (lleno ? 'Máximo ' + PIPE_MAX : '+ Crear proceso');
+    btn.title = !puede ? 'Los procesos de venta pertenecen a un cliente' : '';
   }
   const cta = document.getElementById('pipe-lat-cta');
   if (cta) {
-    cta.textContent = !cliente
+    cta.textContent = !puede
       ? 'Los procesos pertenecen a un cliente. Elige uno arriba para crear los suyos.'
-      : (lleno
-          ? 'Llegaste al máximo. Elimina uno para crear otro.'
-          : 'Procesos de ' + cliente + '. Otros clientes tienen los suyos; los informes de Análisis suman todos.');
+      : lleno
+        ? 'Llegaste al máximo. Elimina uno para crear otro.'
+        : cliente
+          ? 'Procesos de ' + cliente + '. Otros clientes tienen los suyos; los informes de Análisis suman todos.'
+          : 'Cada proceso tiene sus propias etapas. Cambia de uno a otro desde el selector del tablero.';
   }
 
   pipeRenderPanel();
@@ -17597,7 +17618,7 @@ function pipeMostrarError(msg) {
 }
 
 async function pipeCrear() {
-  if (!pipeAmbitoNombre()) {
+  if (!pipeAmbitoNombre() && !crmCuentaSinCartera()) {
     pipeMostrarError('Los procesos de venta pertenecen a un cliente. Elige el cliente en la barra de arriba y vuelve a abrir esta ventana.');
     return;
   }
@@ -17744,7 +17765,13 @@ async function crmLoadLeads() {
     // Sin cliente activo esto es una vista de TODOS los clientes. Filtrar por el
     // pipeline de ese ambito escondia los leads de cada cliente, que viven en
     // los suyos. Aqui no se filtra: se ve todo.
-    if (crmPipelineId && clientId) params.push('pipeline_id=' + encodeURIComponent(crmPipelineId));
+    //
+    // Salvo en una cuenta sin cartera: ahí «sin cliente» ES la cuenta, y cada
+    // proceso enseña solo sus leads. Al principal se le suman los que no tienen
+    // proceso (los de antes de crear el primero), para no esconder ninguno.
+    const sinCartera = !clientId && crmCuentaSinCartera();
+    if (crmPipelineId && (clientId || sinCartera)) params.push('pipeline_id=' + encodeURIComponent(crmPipelineId));
+    if (crmPipelineId && sinCartera && (crmPipelines.find(p => p.id === crmPipelineId) || {}).is_default) params.push('con_sueltos=1');
     const qs = params.length ? '?' + params.join('&') : '';
     const res = await fetchAuth(`/api/leads${qs}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);

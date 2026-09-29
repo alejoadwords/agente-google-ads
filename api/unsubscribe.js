@@ -63,7 +63,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({ tags: [...(lead.tags || []), 'no-email'].slice(0, 15), updated_at: new Date().toISOString() }),
       });
     }
-    return res.status(200).send(page('Listo, quedaste fuera de la lista', 'No volverás a recibir correos de campañas. Si fue un error, responde cualquier correo anterior y te reactivan.', true));
+    return res.status(200).send(page('Listo, quedaste fuera de la lista', 'No volverás a recibir estos correos. Si fue un error, responde cualquier correo anterior y te reactivan.', true));
   } catch (e) {
     return res.status(500).send(page('Error', 'No se pudo procesar la baja. Intenta de nuevo.', false));
   }

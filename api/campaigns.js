@@ -102,8 +102,6 @@ function sbHeaders(prefer) {
   };
 }
 
-let _lastPlan = 'free';
-let _emailsExtra = 0; // paquetes de 2.000 emails/mes comprados (Hotmart → Clerk emails_extra)
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 async function isAdmin(userId) {
   if (!userId || !process.env.CLERK_SECRET_KEY) return false;
@@ -482,13 +480,17 @@ export default async function handler(req) {
     }
   }
 
-  // El cupo de correos es del DUEÑO. Si quien llama es un miembro, su propio
-  // token trae SU plan —normalmente free— y el cupo habría salido mal.
-  if (quien.esMiembro || _lastPlan === 'free') {
-    const meta = await clerkMeta(userId);
-    if (meta.plan) _lastPlan = meta.plan;
-    if (meta.emails_extra) _emailsExtra = parseInt(meta.emails_extra) || 0;
-  }
+  // El cupo de correos es del DUEÑO, y se lee EN CADA PETICIÓN.
+  //
+  // Antes el plan vivía en dos variables del módulo (`planCuenta`,
+  // `emailsExtra`) que comparten todas las peticiones que caen en la misma
+  // instancia, de clientes distintos. Una vez que pasaba una cuenta de pago,
+  // `planCuenta` dejaba de ser 'free' y ya no se volvía a preguntar: la
+  // siguiente cuenta gratis heredaba el plan —y los paquetes— de la anterior.
+  // clerkMeta ya cachea un minuto POR USUARIO, así que esto no cuesta más.
+  const metaPlan = await clerkMeta(userId);
+  const planCuenta = metaPlan.plan || 'free';
+  const emailsExtra = parseInt(metaPlan.emails_extra) || 0; // paquetes de 2.000 emails/mes (Hotmart → Clerk)
 
   const url = new URL(req.url);
   // Un miembro acotado a un cliente no se sale de el: el servidor manda, no
@@ -552,10 +554,10 @@ export default async function handler(req) {
     const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/campaigns?user_id=eq.${encodeURIComponent(userId)}${scope}&select=*&order=created_at.desc&limit=50`, { headers: sbHeaders() }).then(r => r.json());
     // Cupo del mes para mostrar en la UI (plan + paquetes extra de 2.000)
-    const quota = (EMAIL_QUOTAS[_lastPlan] ?? 0) + _emailsExtra * 2000;
+    const quota = (EMAIL_QUOTAS[planCuenta] ?? 0) + emailsExtra * 2000;
     const used = await monthlySent(userId);
     const unlimited = quota === Infinity;
-    return jsonResp({ campaigns: rows || [], quota: { plan: _lastPlan, limit: unlimited ? null : quota, unlimited, used, extra_packs: _emailsExtra } });
+    return jsonResp({ campaigns: rows || [], quota: { plan: planCuenta, limit: unlimited ? null : quota, unlimited, used, extra_packs: emailsExtra } });
   }
 
   // POST ?action=ai — redactar la campaña con IA. Devuelve JSON con asunto,
@@ -675,7 +677,7 @@ export default async function handler(req) {
     if (c.status !== 'draft') return jsonResp({ error: 'Esta campaña ya fue enviada o está en curso' }, 400);
 
     const adminUser = await isAdmin(userId);
-    const quota = (EMAIL_QUOTAS[_lastPlan] ?? 0) + _emailsExtra * 2000;
+    const quota = (EMAIL_QUOTAS[planCuenta] ?? 0) + emailsExtra * 2000;
     if (!adminUser && quota === 0) return jsonResp({ error: 'Las campañas masivas son parte del plan Pro.', upgrade: true }, 403);
 
     // Cuenta con el envío bloqueado por soporte. No se le dice el motivo aquí:
@@ -725,7 +727,7 @@ export default async function handler(req) {
         }, 403);
       }
 
-      const topeDia = topeDiario(_lastPlan, cuentaMeta.leads_extra);
+      const topeDia = topeDiario(planCuenta, cuentaMeta.leads_extra);
       const hoy = await dailySent(userId);
       if (hoy + leads.length > topeDia) {
         const quedan = Math.max(0, topeDia - hoy);
@@ -743,7 +745,7 @@ export default async function handler(req) {
     if (c.channel === 'email' && !adminUser) {
       const used = await monthlySent(userId);
       if (used + leads.length > quota) {
-        return jsonResp({ error: `Cupo mensual insuficiente: tienes ${quota.toLocaleString()} emails/mes (plan${_emailsExtra ? ' + ' + _emailsExtra + ' paquete(s)' : ''}), llevas ${used.toLocaleString()} y esta campaña necesita ${leads.length.toLocaleString()}. Amplía tu cupo con paquetes de 2.000 emails.`, quota_exceeded: true }, 403);
+        return jsonResp({ error: `Cupo mensual insuficiente: tienes ${quota.toLocaleString()} emails/mes (plan${emailsExtra ? ' + ' + emailsExtra + ' paquete(s)' : ''}), llevas ${used.toLocaleString()} y esta campaña necesita ${leads.length.toLocaleString()}. Amplía tu cupo con paquetes de 2.000 emails.`, quota_exceeded: true }, 403);
       }
     }
 

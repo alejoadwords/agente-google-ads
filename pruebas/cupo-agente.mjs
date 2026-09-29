@@ -157,7 +157,11 @@ console.log('\nEl endpoint que lo sirve');
 {
   const src = fs.readFileSync(new URL('../api/uso-agente.js', import.meta.url), 'utf8');
   ok(/verificarSesion\(req\)/.test(src), 'exige sesión');
-  ok(/if \(!sesion\.id\) return new Response\(cuerpoSinSesion/.test(src), 'y sin ella devuelve 401');
+  // El rechazo lleva el NOMBRE del endpoint, que es la convención del
+  // proyecto: si todos dijeran lo mismo, el registro no serviría para saber
+  // qué pantalla se quedó sin sesión.
+  ok(/cuerpoSinSesion\(sesion, 'uso-agente'\), 401\)/.test(src),
+     'y sin ella devuelve 401 diciendo quién fue');
   // El consumo es de la CUENTA: un vendedor y su dueña ven el mismo número,
   // porque el cupo es uno solo y se gasta entre todos.
   ok(/cuentaDe\(sesion\.id\)/.test(src), 'pregunta por la cuenta del dueño, no por quien mira');

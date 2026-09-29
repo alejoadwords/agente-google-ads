@@ -244,8 +244,6 @@ async function traspasar(cuenta, suyo, destino) {
   return movido;
 }
 
-let _lastPlan = 'free';
-let _seatsExtra = 0;
 
 // ── Plan del usuario ──────────────────────────────────────────────────────────
 // Clerk dejó de incluir public_metadata en el token de sesión (formato v2), así
@@ -404,11 +402,6 @@ export default async function handler(req, contexto) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const sesion = await verificarSesion(req);
   const userId = sesion.id;
-  if (userId && _lastPlan === 'free') {
-    const meta = await clerkMeta(userId);
-    if (meta.plan) _lastPlan = meta.plan;
-    if (meta.seats_extra) _seatsExtra = parseInt(meta.seats_extra) || 0;
-  }
   if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'team'), 401);
   const url = new URL(req.url);
 
@@ -493,11 +486,14 @@ export default async function handler(req, contexto) {
   // administrador invitado pudo invitar, esto dejó de ser un detalle: su propio
   // JWT trae SU plan (normalmente free) y el límite habría salido mal, dejándole
   // invitar a nadie en una cuenta Agency.
-  if (esMiembro) {
-    const metaDueno = await clerkMeta(cuenta);
-    _lastPlan = metaDueno.plan || 'free';
-    _seatsExtra = parseInt(metaDueno.seats_extra || 0) || 0;
-  }
+  //
+  // Y se lee en CADA petición: antes vivía en variables del módulo que
+  // comparten las peticiones de clientes distintos en la misma instancia. Tras
+  // pasar una cuenta Agency, otra cuenta heredaba sus asientos. clerkMeta ya
+  // cachea un minuto por usuario.
+  const metaDueno = await clerkMeta(cuenta);
+  const planCuenta = metaDueno.plan || 'free';
+  const seatsExtra = parseInt(metaDueno.seats_extra || 0) || 0;
 
   // GET — listar el equipo + asientos
   // Qué tiene asignado alguien, para poder preguntar a quién pasa antes de
@@ -555,13 +551,13 @@ export default async function handler(req, contexto) {
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     const myEmail = await clerkEmail(userId);
     const isAdmin = ADMIN_EMAILS.includes(myEmail);
-    const seats = isAdmin ? 99 : (PLAN_SEATS[_lastPlan] ?? 1) + _seatsExtra;
+    const seats = isAdmin ? 99 : (PLAN_SEATS[planCuenta] ?? 1) + seatsExtra;
     // `yo` es lo que el navegador usa para pintar el menú. NO es el permiso: el
     // permiso se comprueba en cada endpoint. Ver api/_perfiles.js.
     return jsonResp({
       members: rows || [],
       pipelines: pipelines || [],
-      seats: { total: seats, used: 1 + (rows || []).length, plan: _lastPlan },
+      seats: { total: seats, used: 1 + (rows || []).length, plan: planCuenta },
       yo: paraElCliente(quien),
       perfiles: Object.entries(PERFILES).map(([id, p]) => ({ id, etiqueta: p.etiqueta, descripcion: p.descripcion })),
     });
@@ -576,16 +572,16 @@ export default async function handler(req, contexto) {
     const myEmail = await clerkEmail(userId);
     if (email === myEmail) return jsonResp({ error: 'Ese es tu propio email' }, 400);
     const isAdmin = ADMIN_EMAILS.includes(myEmail);
-    const seats = isAdmin ? 99 : (PLAN_SEATS[_lastPlan] ?? 1) + _seatsExtra;
+    const seats = isAdmin ? 99 : (PLAN_SEATS[planCuenta] ?? 1) + seatsExtra;
 
     const existing = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(cuenta)}&select=id,member_email`, { headers: sbHeaders() }).then(r => r.json());
     if ((existing || []).some(m => m.member_email === email)) return jsonResp({ error: 'Ese email ya está en tu equipo' }, 400);
     if (1 + (existing || []).length >= seats) {
       return jsonResp({
-        error: _lastPlan === 'agency' || _lastPlan === 'agencia'
+        error: planCuenta === 'agency' || planCuenta === 'agencia'
           ? 'Alcanzaste los ' + seats + ' usuarios de tu plan. Amplía tu equipo con usuarios adicionales.'
           : 'Tu plan incluye 1 usuario. Los equipos son parte del plan Agency.',
-        upgrade: _lastPlan !== 'agency' && _lastPlan !== 'agencia',
+        upgrade: planCuenta !== 'agency' && planCuenta !== 'agencia',
         seats_full: true,
       }, 403);
     }

@@ -13,6 +13,13 @@
       }
     },
     {
+      "id": "2026-09-29-procesos-de-la-cuenta",
+      "fecha": "2026-09-29",
+      "tipo": "arreglo",
+      "titulo": "Procesos de venta: ya puedes crearlos aunque no manejes clientes",
+      "texto": "Si tu cuenta no tiene cartera de clientes, el botón «Crear proceso» aparecía bloqueado pidiendo que eligieras un cliente, y con un solo proceso su nombre no se veía en el CRM. Ahora tus procesos son de la cuenta: los creas desde el engranaje junto al tablero, su nombre se ve siempre arriba, y al cambiar de uno a otro el tablero muestra solo los leads de ese proceso."
+    },
+    {
       "id": "2026-09-29-aviso-responsable",
       "fecha": "2026-09-29",
       "tipo": "nuevo",
