@@ -460,11 +460,21 @@ export function inventos(respuesta, permitido) {
 
 // Todo lo que el agente puede citar sin inventar.
 export function loQuePuedeCitar(agent, inventario, mensajes) {
+  const textos = (mensajes || []).map(m => String(m?.content || ''));
+  // Una cifra que dijo el cliente con palabras cuenta como dicha.
+  //
+  // El cliente escribe «hasta 3 millones» y el agente lo confirma como
+  // «$3.000.000»: en dígitos eso es un 3 contra un 3000000, así que el guardián
+  // lo señalaba como inventado, bloqueaba la respuesta y escalaba. Repetirle su
+  // presupuesto al cliente es lo más normal de una conversación comercial; con
+  // esto saltaba en casi todas.
+  const enCifras = textos.map(t => aPlata(t)).filter(Boolean).map(String);
   return [
     agent?.persona, agent?.business_ctx,
     ...(agent?.faqs || []).map(f => `${f.q} ${f.a}`),
     ...(inventario?.lineas || []),
-    ...(mensajes || []).map(m => String(m?.content || '')),
+    ...textos,
+    ...enCifras,
   ].filter(Boolean).join(' \n ');
 }
 
@@ -1222,6 +1232,58 @@ function textoDeAdjunto(adj, error) {
 // webhook del canal. Meta no manda el nombre en el evento, solo el id, así que
 // sin esto el lead entra como "Contacto messenger" y el comercial recibe una
 // ficha sin nombre.
+// Aviso al responsable cuando su lead escribe y la conversación ya está en
+// manos de una persona.
+//
+// Se reutiliza la campana que ya existe —una nota del lead con `metadata.para`—
+// en vez de inventar una tabla de notificaciones: así el aviso sale en el mismo
+// panel donde el comercial ya mira, y se marca como leído por el mismo camino.
+//
+// Uno por conversación hasta que lo lea: un cliente que escribe cinco mensajes
+// seguidos es UNA cosa que atender, no cinco. Sin este freno la campana se
+// llenaría de avisos del mismo lead y dejaría de leerse, que es como muere un
+// sistema de avisos.
+async function avisarAlResponsable(userId, conv, texto) {
+  if (!conv?.lead_id) return;
+  const lead = await fetch(
+    `${SUPABASE_URL}/rest/v1/leads?id=eq.${conv.lead_id}&select=id,name,assigned_to&limit=1`,
+    { headers: sb() }
+  ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
+  // Sin responsable no hay a quién avisar, y al dueño de la cuenta no se le
+  // avisa de cada mensaje: es el mismo criterio que en el reparto de leads.
+  if (!lead?.assigned_to || lead.assigned_to === userId) return;
+
+  const yaHay = await fetch(
+    `${SUPABASE_URL}/rest/v1/lead_activities?lead_id=eq.${conv.lead_id}&type=eq.nota` +
+    `&metadata->>para=eq.${encodeURIComponent(lead.assigned_to)}` +
+    `&metadata->>motivo=eq.mensaje_entrante&metadata->>leida_at=is.null&select=id&limit=1`,
+    { headers: sb() }
+  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  if (yaHay?.length) return;
+
+  const recorte = String(texto || '').slice(0, 160);
+  await fetch(`${SUPABASE_URL}/rest/v1/lead_activities`, {
+    method: 'POST', headers: sb(),
+    body: JSON.stringify({
+      lead_id: conv.lead_id, user_id: userId, type: 'nota',
+      content: `Te escribió por ${conv.channel || 'el inbox'}: «${recorte}»`,
+      metadata: { sistema: true, para: lead.assigned_to, motivo: 'mensaje_entrante', actor: 'Acuarius' },
+    }),
+  }).catch(() => {});
+
+  try {
+    const { enviarPushA } = await import('./_push.js');
+    await enviarPushA(lead.assigned_to, {
+      titulo: (lead.name || 'Un contacto tuyo') + ' te escribió',
+      texto: recorte,
+      url: '/conversaciones?c=' + conv.id,
+      // Una etiqueta por conversación: si llegan dos, el móvil reemplaza el
+      // aviso en vez de apilar dos que dicen lo mismo.
+      etiqueta: 'inbox-' + conv.id,
+    });
+  } catch (e) { console.error('[push] mensaje al responsable:', e?.message); }
+}
+
 export async function processIncoming({ channel, externalId, contactId, contactName, text, providerMessageId, send, escribiendo, resolverNombre, media, referral }) {
   // Un mensaje puede ser solo un archivo, sin una palabra. Exigir texto era lo
   // que hacía desaparecer las fotos que manda el cliente.
@@ -1349,6 +1411,13 @@ export async function processIncoming({ channel, externalId, contactId, contactN
       ).catch(() => null);
       if (nuevoLead) conv.lead_id = nuevoLead;
     }
+
+    // Y se le avisa al responsable. Sin esto la conversación se quedaba muda:
+    // el agente ya no contesta porque está en manos de una persona, y esa
+    // persona no se entera de que el cliente escribió salvo que entre al inbox
+    // a mirar. Sube el contador de no leídos y se acabó.
+    await avisarAlResponsable(connection.user_id, conv, textoMensaje).catch(() => {});
+
     return { ok: true, escalated: true, manual: aMano, conversationId: conv.id, leadId: conv.lead_id || null };
   }
 

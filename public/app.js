@@ -4902,6 +4902,10 @@ window.onload = async () => {
   // La campana se pinta aunque la carga de notas falle: antes quien la sacaba
   // era initAlertsBadge, y sin esto una petición caída la dejaba invisible.
   setTimeout(function(){ refrescarCampana(); crmAvisosCargar(); }, 3000);
+  // Y si se llegó con /conversaciones?c=<id> —el enlace del aviso al móvil— se
+  // abre ese hilo. Va con retraso porque el inbox pide sus conversaciones al
+  // entrar en la vista, y la función reintenta un rato antes de rendirse.
+  setTimeout(function(){ try { inboxAbrirConvPendiente(); } catch (e) { console.warn('conversación de la url', e); } }, 900);
   // Y se vuelven a pedir cada tanto. Un comercial deja la pestaña abierta toda
   // la mañana: si la campana solo se llenara al cargar la página, una nota que
   // la dirección escribe a media mañana no aparecería hasta el día siguiente.
@@ -17762,6 +17766,35 @@ function crmLeadDeLaUrl() {
 }
 crmLeadDeLaUrl();
 
+// Y lo mismo con una conversación: el aviso de «tu contacto te escribió» enlaza
+// a /conversaciones?c=<id>. Sin esto el comercial aterriza en el inbox y tiene
+// que buscar a mano el hilo del que le acaban de avisar.
+let _convPorUrl = null;
+function inboxConvDeLaUrl() {
+  try {
+    const id = new URLSearchParams(location.search).get('c');
+    if (!id) return;
+    _convPorUrl = id;
+    window.history.replaceState({}, '', location.pathname + location.hash);
+  } catch {}
+}
+inboxConvDeLaUrl();
+
+function inboxAbrirConvPendiente() {
+  if (!_convPorUrl) return;
+  const id = _convPorUrl;
+  _convPorUrl = null;
+  crmSetView('inbox');
+  // Se espera a que la lista esté cargada: inboxOpenConv la busca ahí dentro y
+  // sin ella se sale sin abrir nada. Si aun así no aparece —una conversación
+  // que no entró en la primera tanda— se dice en voz alta, en vez de dejar al
+  // comercial mirando una bandeja que no se abrió sola.
+  inboxEsperarConv(id, function(hay) {
+    if (hay) { inboxOpenConv(id); return; }
+    if (typeof showToast === 'function') showToast('Esa conversación no está en la lista; búscala en el inbox.', 'error');
+  });
+}
+
 function crmAbrirLeadPendiente() {
   if (!_leadPorUrl) return;
   const id = _leadPorUrl;
@@ -21537,13 +21570,26 @@ async function crmLoadLinkedConversations(leadId) {
   } catch(e) { section.style.display = 'none'; }
 }
 
+// Esperar a que la conversación esté en la lista cargada. Se reintenta un rato
+// corto porque el inbox pide sus conversaciones al entrar en la vista.
+function inboxEsperarConv(convId, luego, intentos) {
+  const quedan = intentos === undefined ? 12 : intentos;
+  const hay = typeof inboxConversations !== 'undefined' &&
+    (inboxConversations || []).some(c => c.id === convId);
+  if (hay || quedan <= 0) { luego(hay); return; }
+  setTimeout(function() { inboxEsperarConv(convId, luego, quedan - 1); }, 250);
+}
+
 function crmOpenConvFromDetail(convId, channel) {
   crmCloseDetail();
   crmSetView('inbox');
-  setTimeout(function() {
-    const btn = document.querySelector('[data-conv-id="' + convId + '"]');
-    if (btn) btn.click();
-  }, 300);
+  // Buscaba un `[data-conv-id]` que nadie escribe —la lista se pinta con un
+  // onclick— así que este botón llevaba al inbox y ahí se quedaba, sin abrir la
+  // conversación y sin decir por qué.
+  inboxEsperarConv(convId, function(hay) {
+    if (hay) { inboxOpenConv(convId); return; }
+    if (typeof showToast === 'function') showToast('Esa conversación no está en la lista; búscala en el inbox.', 'error');
+  });
 }
 
 // ── Tareas pendientes del lead ──────────────────────────────────────────────

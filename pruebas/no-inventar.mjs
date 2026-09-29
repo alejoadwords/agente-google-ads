@@ -74,6 +74,27 @@ console.log('\nY se comprueba contra TODO lo que puede citar');
 ok(CITABLE.includes('121513056') && CITABLE.includes('3% más IVA') && CITABLE.includes('2.500.000'),
    'el inventario, su entrenamiento y lo que escribió el contacto');
 ok(loQuePuedeCitar(null, null, null) === '', 'sin nada de eso, no revienta');
+
+// Una cifra que el cliente dijo CON PALABRAS también la dijo él.
+//
+// «hasta 3 millones» son un 3 en dígitos; el agente lo confirma como
+// «$3.000.000» y el guardián lo señalaba como inventado: bloqueaba la
+// respuesta y escalaba a una persona. Repetirle el presupuesto al cliente es
+// de lo más normal en una conversación comercial, así que saltaba casi
+// siempre. Visto ejecutando el camino completo, no leyendo el código.
+console.log('\nEl presupuesto que dijo el cliente con palabras');
+{
+  const conPalabras = loQuePuedeCitar(AGENTE, INVENTARIO,
+    [{ role: 'user', content: 'tengo hasta 3 millones mensuales' }]);
+  ok(inventos('Perfecto, con $3.000.000 tenemos opciones', conPalabras).length === 0,
+     'confirmarle «3 millones» como $3.000.000 no es inventar',
+     JSON.stringify(inventos('Perfecto, con $3.000.000 tenemos opciones', conPalabras)));
+  ok(inventos('Le tengo uno por $9.999.999', conPalabras).length === 1,
+     'y una cifra que nadie dijo se sigue cazando');
+  const conMil = loQuePuedeCitar(AGENTE, INVENTARIO,
+    [{ role: 'user', content: 'mi tope son 800 mil' }]);
+  ok(inventos('Con $800.000 le muestro opciones', conMil).length === 0, '«800 mil» también');
+}
 ok(inventos('$1.200.000', '').length === 1, 'y sin nada citable, todo importe es inventado');
 
 console.log('\nEl mensaje inventado no sale');
