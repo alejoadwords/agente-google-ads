@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Consumo del agente</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  Banco de la tira de consumo de mensajes del agente.
+
+  No es una maqueta: carga el CSS de public/index.html y la función
+  agCupoPintar() de public/app.js tal cual. Lo único que se sustituye es la
+  respuesta del servidor, para poder ver de un vistazo los cinco estados —
+  incluidos los dos que casi nunca se ven en una cuenta real y son los que más
+  importa que estén bien: el cupo agotado y la consulta caída.
+
+  Arrancar con:  node pruebas/servidor-boceto.mjs
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle,#F7F8FC);color:var(--text,#0D0F1C);padding:22px 20px 80px}
+  .zona{max-width:760px;margin:0 auto 26px}
+  .zona h2{margin:0 0 8px;font-size:13px;color:var(--muted,#5A607A);font-weight:600}
+  .zona p{margin:0 0 10px;font-size:12px;color:var(--muted2,#9DA3BE)}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:var(--text,#111);color:#fff;padding:9px 14px;
+    display:flex;gap:10px;align-items:center;justify-content:center;font-size:12px;z-index:9000;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:7px;padding:5px 10px;
+    font-family:inherit;font-size:12px;cursor:pointer}
+  .banco button:hover{background:rgba(255,255,255,.26)}
+</style>
+</head>
+<body>
+
+<div class="zona"><h2>1 · Consumo normal</h2><p>62 de 2.000 · lo que ve una cuenta que acaba de empezar</p><div id="ag-cupo-1"></div></div>
+<div class="zona"><h2>2 · Aviso al 80%</h2><p>Le quedan 400 de 2.000. El borde y la barra cambian a ámbar</p><div id="ag-cupo-2"></div></div>
+<div class="zona"><h2>3 · Cupo agotado</h2><p>El agente deja de responder. Tiene que decir qué pasa ahora, no solo que se acabó</p><div id="ag-cupo-3"></div></div>
+<div class="zona"><h2>4 · Plan free</h2><p>Sin agente. «0 de 0» sería un acertijo</p><div id="ag-cupo-4"></div></div>
+<div class="zona"><h2>5 · No se pudo consultar</h2><p>Lo importante: NO dice «0 de 500». Un contador que miente tranquiliza justo cuando no debe</p><div id="ag-cupo-5"></div></div>
+
+<div class="banco">
+  <button onclick="document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')">Claro / oscuro</button>
+  <button onclick="document.body.style.maxWidth = document.body.style.maxWidth ? '' : '390px'">Ancho de móvil</button>
+  <span>Los cinco estados con el CSS y la función de verdad</span>
+</div>
+
+<script>
+const CASOS = [
+  { plan:'agency', cupo:2000, usados:62,   restante:1938, porcentaje:3,   agotado:false, avisar:false },
+  { plan:'agency', cupo:2000, usados:1600, restante:400,  porcentaje:80,  agotado:false, avisar:true  },
+  { plan:'pro',    cupo:500,  usados:500,  restante:0,    porcentaje:100, agotado:true,  avisar:true  },
+  { plan:'free',   cupo:0,    usados:0,    restante:0,    porcentaje:100, agotado:true,  avisar:false },
+  '503',
+];
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+
+  document.getElementById('estilos-reales').textContent =
+    (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+
+  const trozo = (desde, hasta) => {
+    const i = js.indexOf(desde);
+    if (i < 0) throw new Error('No encontré en app.js: ' + desde);
+    const j = js.indexOf(hasta, i);
+    return js.slice(i, j > i ? j : js.length);
+  };
+
+  // La función de verdad, más el formateador que usa.
+  const codigo = trozo('async function agCupoPintar()', 'async function crmLoadAgents()');
+  // Lo único falso: la respuesta del servidor y el registro de errores.
+  const stubs = `
+    let _caso = null;
+    function errRegistrar(){}
+    async function fetchAuth(){
+      if (_caso === '503') return { ok:false, status:503, json: async () => ({ error:'no se pudo contar' }) };
+      return { ok:true, status:200, json: async () => _caso };
+    }
+  `;
+  new Function(stubs + codigo + `
+    window.pintarCaso = async function (n, caso) {
+      _caso = caso;
+      const real = document.getElementById('ag-cupo');
+      const destino = document.getElementById('ag-cupo-' + n);
+      // agCupoPintar escribe en #ag-cupo; se le presta el id un momento.
+      destino.id = 'ag-cupo';
+      await agCupoPintar();
+      destino.id = 'ag-cupo-' + n;
+      if (real) real.id = 'ag-cupo';
+    };
+  `)();
+
+  for (let i = 0; i < CASOS.length; i++) await window.pintarCaso(i + 1, CASOS[i]);
+})().catch(e => {
+  document.body.insertAdjacentHTML('afterbegin',
+    '<pre style="color:#DC2626;white-space:pre-wrap">' + e.message + '</pre>');
+});
+</script>
+</body>
+</html>

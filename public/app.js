@@ -22190,6 +22190,62 @@ let agEditingId = null;
 let agFaqs = [];
 
 // ── Vista de Agentes ──────────────────────────────────────────────────────────
+// ── Consumo de mensajes del agente ─────────────────────────────────────────
+// El landing vende un cupo por plan; dentro no había forma de saber cuántos se
+// llevan gastados. Cobrar por algo que el cliente no puede mirar es cómo se
+// pierden clientes.
+//
+// Se pinta en la pantalla de Agentes IA, que es donde alguien se pregunta
+// cuánto está consumiendo su agente.
+async function agCupoPintar() {
+  const caja = document.getElementById('ag-cupo');
+  if (!caja) return;
+  let d;
+  try {
+    const r = await fetchAuth('/api/uso-agente');
+    // Un contador que dice «0 de 500» porque la consulta falló miente con
+    // mucha seguridad: quien lo mire creerá que no ha gastado nada. Se dice
+    // que no se pudo mirar, que es la verdad.
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    d = await r.json();
+    if (d.error) throw new Error(d.error);
+  } catch (e) {
+    caja.innerHTML = '<div class="ag-cupo"><span class="ag-cupo-mal">' +
+      'No se pudo consultar tu consumo de mensajes. Vuelve a entrar en un momento.</span></div>';
+    if (typeof errRegistrar === 'function') errRegistrar('cupo del agente: ' + e.message, '/api/uso-agente');
+    return;
+  }
+
+  // El plan free no tiene agente. Decirle «0 de 0» es un acertijo; se le dice
+  // lo que puede hacer al respecto.
+  if (!d.cupo) {
+    caja.innerHTML = '<div class="ag-cupo"><span class="ag-cupo-txt">' +
+      'Los agentes que atienden tus canales están en los planes de pago. ' +
+      '<b>Prueba Pro 14 días</b> y el agente empieza a contestar por ti.</span></div>';
+    return;
+  }
+
+  var clase = d.agotado ? ' lleno' : (d.avisar ? ' ojo' : '');
+  var mensaje = d.agotado
+    ? '<b>Se acabaron los mensajes de este mes.</b> El agente deja de responder y las conversaciones pasan a tu equipo en el inbox.'
+    : (d.avisar
+      ? '<b>Te quedan ' + fmtNum(d.restante) + ' mensajes</b> de los ' + fmtNum(d.cupo) + ' de este mes.'
+      : '<b>' + fmtNum(d.usados) + '</b> de ' + fmtNum(d.cupo) + ' mensajes usados este mes · quedan ' + fmtNum(d.restante));
+
+  caja.innerHTML =
+    '<div class="ag-cupo' + clase + '">' +
+      '<span class="ag-cupo-txt">' + mensaje +
+        '<br><span style="font-size:11.5px;color:var(--muted2)">Cuenta cada respuesta del agente en WhatsApp, Instagram, Messenger, TikTok y el chat web. Las pruebas del agente no cuentan.</span>' +
+      '</span>' +
+      '<span class="ag-cupo-barra"><i style="width:' + d.porcentaje + '%"></i></span>' +
+    '</div>';
+}
+
+// Los miles con punto, como el resto de la aplicación.
+function fmtNum(n) {
+  return Number(n || 0).toLocaleString('es-CO');
+}
+
 async function crmLoadAgents() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
@@ -22200,6 +22256,9 @@ async function crmLoadAgents() {
     crmAgents = data.agents || [];
     crmAgentsLoaded = true;
     crmRenderAgents();
+    // Aparte y sin esperarlo: que el contador tarde o falle no puede dejar la
+    // lista de agentes sin pintar.
+    agCupoPintar().catch(() => {});
     return true;
   } catch(e) { console.error('crmLoadAgents', e); return false; }
 }

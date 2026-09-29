@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-consumo-agente",
+      "fecha": "2026-09-29",
+      "tipo": "nuevo",
+      "titulo": "Ya puedes ver cuántos mensajes lleva tu agente este mes",
+      "texto": "En Conversaciones → Agentes IA aparece arriba tu consumo del mes: cuántas respuestas ha dado tu agente y cuántas te quedan según tu plan. Cuenta cada respuesta en WhatsApp, Instagram, Messenger, TikTok y el chat web; las pruebas que haces desde el probador no gastan. El aviso se pone en ámbar cuando te queda el 20%, para que no te tome por sorpresa. Y si en algún momento no podemos consultarlo, te lo decimos en vez de enseñarte un cero que no es cierto.",
+      "accion": {
+        "texto": "Ver mis agentes",
+        "ir": "conversaciones"
+      }
+    },
+    {
       "id": "2026-09-29-aviso-responsable",
       "fecha": "2026-09-29",
       "tipo": "nuevo",
