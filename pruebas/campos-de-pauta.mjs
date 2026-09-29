@@ -102,7 +102,7 @@ chk('salvo que la entrada pida saltársela', /data\.sinPrimerContacto === true/.
     && /sinPrimerContacto/.test(intake));
 chk('y asignarLead la respeta también cuando SÍ hay comercial',
     /if \(!sinPrimerContacto\) \{[\s\S]{0,160}crearTareaPrimerContacto/.test(leer('api/_assign.js')));
-chk('las reservas son quien la usa', /sinPrimerContacto: true/.test(leer('api/booking-public.js')));
+chk('las reservas son quien la usa', /sinPrimerContacto: true/.test(leer('api/_reservas.js')));
 chk('se recoge lo que devuelve asignarLead', /const com = await asignarLead\(/.test(intake));
 const followup = leer('api/_followup.js');
 chk('la tarea no necesita responsable', /const quien = comercial\?\.nombre \? /.test(followup));

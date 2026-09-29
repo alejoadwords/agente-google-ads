@@ -162,10 +162,10 @@ const DESDE = '2026-10-06T05:00:00.000Z', HASTA = '2026-10-07T05:00:00.000Z';
 
 // ── 3. `ocupadoDe` y `ocupadoGoogle`, sacados del endpoint real ─────────────
 console.log('\nLa página pública suma lo de Google y, si no puede leerlo, tapa\n');
-const fuente = readFileSync(new URL('../api/booking-public.js', import.meta.url), 'utf8');
+const fuente = readFileSync(new URL('../api/_reservas.js', import.meta.url), 'utf8');
 function funcion(firma) {
   const i = fuente.indexOf(firma);
-  if (i < 0) throw new Error('No encontré «' + firma + '» en booking-public.js: revisa esta prueba');
+  if (i < 0) throw new Error('No encontré «' + firma + '» en _reservas.js: revisa esta prueba');
   let prof = 0, j = i + firma.length - 1;
   for (; j < fuente.length; j++) {
     if (fuente[j] === '{') prof++;

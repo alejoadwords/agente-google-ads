@@ -19,10 +19,10 @@ const ok = (c, m, extra) => {
 };
 
 // ── `ocupadoDe`, ejecutada contra una base de mentira ───────────────────────
-const fuente = readFileSync(new URL('../api/booking-public.js', import.meta.url), 'utf8');
+const fuente = readFileSync(new URL('../api/_reservas.js', import.meta.url), 'utf8');
 const firma = 'async function ocupadoDe(neg, ids, desdeISO, hastaISO) {';
 const i = fuente.indexOf(firma);
-if (i < 0) throw new Error('No encontré ocupadoDe en booking-public.js: revisa esta prueba');
+if (i < 0) throw new Error('No encontré ocupadoDe en _reservas.js: revisa esta prueba');
 let prof = 0, j = i + firma.length - 1;
 for (; j < fuente.length; j++) {
   if (fuente[j] === '{') prof++;
@@ -177,7 +177,7 @@ console.log('\nUn bloqueo NO es una tarea de nadie\n');
   const agenda = readFileSync(new URL('../api/agenda.js', import.meta.url), 'utf8');
   ok(!/booking_blocks/.test(cron), 'el resumen diario no los ve');
   ok(!/booking_blocks/.test(agenda), 'ni la agenda del CRM');
-  const pub = readFileSync(new URL('../api/booking-public.js', import.meta.url), 'utf8');
+  const pub = readFileSync(new URL('../api/_reservas.js', import.meta.url), 'utf8');
   ok(/booking_blocks/.test(pub), 'y quien sí los mira es el cálculo de huecos');
 }
 

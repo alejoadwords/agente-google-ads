@@ -6,7 +6,7 @@
 export const SUITE = 'pruebas/reservas-google.mjs';
 export const ARCHIVOS = {
   gcal: 'api/_gcal.js',
-  publica: 'api/booking-public.js',
+  publica: 'api/_reservas.js',
   enlace: 'api/_enlace-calendario.js',
   callback: 'api/oauth/gcal-callback.js',
   app: 'public/app.js',

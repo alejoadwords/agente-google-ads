@@ -14,6 +14,8 @@ import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredict
 import { pautaDeReferral } from './_lead-intake.js';
 import { registrarUso } from './_uso-ia.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
+import { reservasParaAgente, bloqueReservas, extraerReserva, ejecutarReserva, bloquesOcultos, pideConfirmacion } from './_reservas-agente.js';
+import { registrarError } from './_registro-errores.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -42,8 +44,9 @@ export function cleanForUser(text) {
     .replace(/\[CAPTURA:.*?\]/gs, '')
     .replace(/\[ESCALAR\]/g, '')
     .replace(/\[CALIFICACION:.*?\]/gs, '')
+    .replace(/\[RESERVA:.*?\]/gs, '')
     // Si la respuesta se cortó a mitad de un bloque, fuera igual
-    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR)\b[\s\S]*$/, '')
+    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR|RESERVA)\b[\s\S]*$/, '')
     .trim();
 }
 
@@ -389,7 +392,7 @@ ${titular ? `Titular: ${titular}` : ''}${cuerpo ? `\nTexto: ${cuerpo}` : ''}
 `;
 }
 
-export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null, canal = 'whatsapp', referral = null) {
+export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null, canal = 'whatsapp', referral = null, reservas = null) {
   const faqs = (agent.faqs || []).map(f => `P: ${f.q}\nR: ${f.a}`).join('\n\n');
   const captured = Object.entries(capturedData || {})
     .filter(([, v]) => v)
@@ -442,7 +445,7 @@ SI TE MANDAN UNA FOTO:
 - Que se parezca a algo del listado NO significa que sea eso. No afirmes que es una propiedad concreta salvo que te lo diga la persona; si crees reconocerla, preguntale
 - Si la foto no se entiende o no tiene que ver, dilo con amabilidad y pide lo que necesitas
 
-${bloqueDeAnuncio(referral)}DATOS CAPTURADOS HASTA AHORA:
+${bloqueDeAnuncio(referral)}${bloqueReservas(reservas, canal)}DATOS CAPTURADOS HASTA AHORA:
 ${captured}
 
 Cuando detectes un dato nuevo en la conversación, incluye al final de tu respuesta (invisible para el usuario):
@@ -610,7 +613,10 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   const inventario = await propiedadesParaPrompt(userId, agent.client_id || null, pistas)
     .catch(() => ({ lineas: [], total: 0 }));
 
-  const system = buildSystemPrompt(agent, capturado, regla, inventario, canal, null);
+  // Las mismas citas que en la conversación real, pero en el ensayo NUNCA se
+  // guarda nada: se comprueba el hueco y se para ahí.
+  const reservas = await reservasParaAgente(userId, agent.client_id || null).catch(() => null);
+  const system = buildSystemPrompt(agent, capturado, regla, inventario, canal, null, reservas);
 
   let bruto;
   try {
@@ -618,8 +624,23 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   } catch (e) {
     return { ok: false, error: 'No se pudo consultar al agente: ' + (e?.message || 'error desconocido') };
   }
-  const texto = cleanForUser(bruto).trim();
+  let texto = cleanForUser(bruto).trim();
   if (!texto) return { ok: false, error: 'El agente no devolvió texto. Suele ser el presupuesto de tokens: reintenta.' };
+
+  // Si el agente agendó, se enseña lo que habría pasado: la confirmación que
+  // saldría, o el mensaje que sustituiría al suyo si la hora no está libre.
+  let reserva = null;
+  const pedidoCita = reservas && !pideConfirmacion(texto) ? extraerReserva(bruto) : null;
+  if (pedidoCita) {
+    const cap = { ...capturado, ...extractCapturedData(bruto) };
+    reserva = await ejecutarReserva({
+      info: reservas, pedido: pedidoCita, simular: true,
+      // En el ensayo no hay chat de WhatsApp del que sacar el teléfono: se da
+      // por puesto, que es lo que pasaría en el canal real.
+      contacto: { nombre: cap.nombre || '', telefono: cap.celular || (canal === 'whatsapp' ? 'ensayo' : ''), correo: cap.email || '' },
+    }).catch(e => ({ ok: false, texto: 'No se pudo comprobar la cita: ' + (e?.message || e) }));
+    texto = reserva.ok ? texto + '\n\n' + reserva.texto : reserva.texto;
+  }
 
   const respuestas = { ...previas, ...extraerCalificacion(bruto) };
   const veredicto = evaluar(regla, respuestas);
@@ -637,7 +658,8 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
     // En bruto para que el navegador lo devuelva tal cual en el siguiente turno.
     bruto,
     capturado: { ...capturado, ...nuevo },
-    escalar: bruto.includes('[ESCALAR]'),
+    escalar: bruto.includes('[ESCALAR]') || !!(reserva && reserva.escalar),
+    reserva: reserva ? { ok: !!reserva.ok, texto: reserva.texto, motivo: reserva.motivo || null } : null,
     calificacion: {
       activa: !!regla?.activo,
       estado: veredicto.estado,
@@ -1094,10 +1116,63 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   const inventario = await propiedadesParaPrompt(connection.user_id, clienteDelCanal,
     pistasDeBusqueda(capturedData, previas, delContacto)).catch(() => ({ lineas: [], total: 0 }));
 
+  // Lo que el agente puede agendar, con sus próximos huecos. Si esto falla, el
+  // agente contesta igual pero sin ofrecer citas —dirá que lo confirma un
+  // asesor—: es preferible a no contestar. Y queda en el registro.
+  const reservas = await reservasParaAgente(connection.user_id, clienteDelCanal).catch(async (e) => {
+    await registrarError({ origen: 'inbox', donde: 'huecos para el agente', error: e, usuario: connection.user_id });
+    return null;
+  });
+
   const reply = await responderViendo(
-    buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null),
+    buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas),
     hist, [], { userId: connection.user_id, origen: 'whatsapp' }
   );
+
+  // ── La cita, si el agente la pidió ──────────────────────────────────────
+  // Se ejecuta ANTES de guardar y enviar su mensaje, porque de lo que pase
+  // depende qué se envía: si la hora ya no está libre, el «te agendo» del
+  // agente no puede salir.
+  let guardado = reply;            // lo que queda en el historial
+  let visible = cleanForUser(reply);
+  let confirmacionCita = null;
+  let escalarPorReserva = false;
+  // Si el mismo mensaje pregunta «¿te parece bien?», la persona aún no ha
+  // dicho que sí: no se agenda. En su «sí» el agente volverá a pedirla.
+  const pedidoCita = reservas && !pideConfirmacion(cleanForUser(reply)) ? extraerReserva(reply) : null;
+  if (pedidoCita) {
+    const captura = { ...capturedData, ...extractCapturedData(reply) };
+    const contacto = {
+      nombre: pedidoCita.nombre || captura.nombre || conv.contact_name || '',
+      telefono: telefonoDelCanal(conv.channel || channel, contactId) || captura.celular || '',
+      correo: captura.email || '',
+    };
+    // La cita se cuelga del contacto de ESTA conversación. Si todavía no
+    // existe, nace ahora aunque el canal esperase: quien agenda ya dio todo.
+    if (!conv.lead_id) {
+      const nuevo = await upsertLeadFromConversation(
+        connection.user_id, clienteDelCanal, conv,
+        { nombre: contacto.nombre, celular: contacto.telefono, email: contacto.correo },
+        { ...policy, mode: 'always' }, false, connection.pipeline_id || null
+      ).catch(() => null);
+      if (nuevo) conv.lead_id = nuevo;
+    }
+    const r = await ejecutarReserva({ info: reservas, pedido: pedidoCita, contacto, leadId: conv.lead_id || null })
+      .catch(async (e) => {
+        await registrarError({ origen: 'inbox', donde: 'reserva del agente', error: e, usuario: connection.user_id });
+        return { ok: false, texto: 'No pude agendarla por un problema de nuestro lado. Ya le aviso a un asesor para que te la confirme.', escalar: true };
+      });
+    if (r.ok) {
+      confirmacionCita = r.texto;
+      if (r.cerrar) await r.cerrar;
+    } else {
+      // El texto del agente se cambia; sus bloques ocultos se conservan, que
+      // son lo que el motor relee en el siguiente mensaje.
+      visible = r.texto;
+      guardado = r.texto + '\n' + bloquesOcultos(reply);
+      escalarPorReserva = !!r.escalar;
+    }
+  }
 
   await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
     method: 'POST', headers: sb(),
@@ -1106,8 +1181,16 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     // capturado y lo calificado entre mensajes. Limpiar aquí haría que la
     // conversación se quedara 'pendiente' para siempre. Se limpia al MOSTRAR,
     // en el inbox.
-    body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: reply }),
+    body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: guardado }),
   });
+  // La confirmación va como mensaje aparte, también en el historial: así el
+  // inbox la enseña y el agente sabe en el siguiente turno que ya quedó.
+  if (confirmacionCita) {
+    await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
+      method: 'POST', headers: sb(),
+      body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: confirmacionCita }),
+    });
+  }
 
   // Las respuestas se acumulan: cada mensaje del agente aporta las nuevas y las
   // anteriores siguen valiendo.
@@ -1119,14 +1202,14 @@ export async function processIncoming({ channel, externalId, contactId, contactN
 
   // Pedir un humano siempre manda: si alguien lo pide, lo pide. Y un lead que
   // califica pasa al comercial, que es justo el objetivo de calificar.
-  const needsEscalation = reply.includes('[ESCALAR]')
+  const needsEscalation = reply.includes('[ESCALAR]') || escalarPorReserva
     || (veredicto.estado === 'calificado' && reglaCal.al_calificar.escalar);
   await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
     method: 'PATCH', headers: sb(),
     body: JSON.stringify({
       // last_inbound_at NO se toca aquí: esto es nuestra respuesta. Se fijó al
     // guardar el mensaje del cliente, unas líneas más arriba.
-    last_message: cleanForUser(reply).slice(0, 200),
+    last_message: (confirmacionCita || visible).slice(0, 200),
       last_message_at: new Date().toISOString(),
       unread_count: 0,
       ...(needsEscalation ? { status: 'human' } : {}),
@@ -1160,8 +1243,13 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   }
 
   if (typeof send === 'function') {
-    try { await send(connection, contactId, cleanForUser(reply)); } catch (e) { console.error('send error', e); }
+    if (visible) {
+      try { await send(connection, contactId, visible); } catch (e) { console.error('send error', e); }
+    }
+    if (confirmacionCita) {
+      try { await send(connection, contactId, confirmacionCita); } catch (e) { console.error('send error', e); }
+    }
   }
 
-  return { ok: true, conversationId: conv.id, leadId, reply: cleanForUser(reply), escalated: needsEscalation, calificacion: veredicto };
+  return { ok: true, conversationId: conv.id, leadId, reply: visible, cita: confirmacionCita, escalated: needsEscalation, calificacion: veredicto };
 }

@@ -450,6 +450,10 @@ export default async function handler(req) {
         if ('icono' in body) campos.icono = iconoValido(body.icono) ? String(body.icono) : ICONO_POR_DEFECTO;
         if ('activo' in body) campos.activo = !!body.activo;
         if ('orden' in body) campos.orden = entero(body.orden, 0, 999, 0);
+        // El agente del chat solo agenda lo que esté marcado. Nace apagado: un
+        // negocio empieza por una visita o una asesoría, y lo que no deba
+        // cerrarse solo no se cierra solo por olvidar desmarcarlo.
+        if ('agente_reserva' in body) campos.agente_reserva = body.agente_reserva === true;
 
         if (req.method === 'POST') {
           const ya = await traerServicios(userId, cliente);

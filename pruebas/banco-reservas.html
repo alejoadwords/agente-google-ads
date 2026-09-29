@@ -68,7 +68,7 @@ function escenario(cual) {
   PUEDE = cual !== 'miembro';
   const servicios = [
     { id: 's1', nombre: 'Sesión de fotos', descripcion: 'Estudio, 20 fotos editadas', minutos: 60, precio: 300000, color: '#1E2BCC', icono: 'camara', activo: true, recursos: ['r1', 'r3'] },
-    { id: 's2', nombre: 'Consulta veterinaria', descripcion: 'Revisión general', minutos: 30, precio: 65000, color: '#0F766E', icono: 'mascota', activo: true, recursos: ['r1'] },
+    { id: 's2', nombre: 'Consulta veterinaria', descripcion: 'Revisión general', minutos: 30, precio: 65000, color: '#0F766E', icono: 'mascota', activo: true, agente_reserva: true, recursos: ['r1'] },
     { id: 's3', nombre: 'Alquiler de sala', descripcion: 'Por hora, con equipo', minutos: 60, precio: 120000, color: '#BE185D', icono: 'espacio', activo: false, recursos: ['r2'] },
   ];
   BD = {

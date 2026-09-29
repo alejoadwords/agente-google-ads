@@ -24142,9 +24142,10 @@ function inboxLimpiar(txt) {
   return String(txt || '')
     .replace(/\[CAPTURA:.*?\]/gs, '')
     .replace(/\[CALIFICACION:.*?\]/gs, '')
+    .replace(/\[RESERVA:.*?\]/gs, '')
     .replace(/\[ESCALAR\]/g, '')
     // Si la respuesta se cortó a mitad de un bloque, fuera igual
-    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR)\b[\s\S]*$/, '')
+    .replace(/\[(CAPTURA|CALIFICACION|ESCALAR|RESERVA)\b[\s\S]*$/, '')
     .trim();
 }
 
@@ -38664,6 +38665,7 @@ function rsvPintarServicios(puede) {
               (s.precio != null && s.precio !== '' ? ' · $' + esc(rsvPrecioTexto(s.precio)) : '') + '</div>' +
           '</div>' +
           (s.activo === false ? '<span class="rsv-chip off">Oculto</span>' : '') +
+          (s.agente_reserva === true ? '<span class="rsv-chip ok rsv-cal" title="El agente del chat lo agenda solo">' + icn('bot', 11) + ' Agente</span>' : '') +
         '</div>' +
         (s.descripcion ? '<div class="rsv-card-desc">' + esc(String(s.descripcion)) + '</div>' : '') +
         '<div class="rsv-card-quien">' +
@@ -39344,7 +39346,7 @@ function rsvEditarServicio(id) {
   const s = id ? (rsvDatos.servicios || []).find(x => x.id === id) : null;
   rsvBorrador = s
     ? JSON.parse(JSON.stringify(s))
-    : { nombre: '', descripcion: '', minutos: 30, precio: '', color: '#1E2BCC', icono: 'cita', activo: true, recursos: [] };
+    : { nombre: '', descripcion: '', minutos: 30, precio: '', color: '#1E2BCC', icono: 'cita', activo: true, agente_reserva: false, recursos: [] };
   const recursos = rsvDatos.recursos || [];
 
   rsvCerrarModal();
@@ -39400,6 +39402,10 @@ function rsvEditarServicio(id) {
         '</div></div>' +
       '<label class="rsv-check rsv-solo"><input type="checkbox" id="rsv-s-activo"' + (rsvBorrador.activo !== false ? ' checked' : '') + '>' +
         'Se puede reservar desde la página</label>' +
+      '<label class="rsv-check rsv-solo"><input type="checkbox" id="rsv-s-agente"' + (rsvBorrador.agente_reserva === true ? ' checked' : '') + '>' +
+        'El agente del chat puede agendarlo solo</label>' +
+      '<div class="rsv-nota">Tu agente de WhatsApp ofrece horas libres de este servicio y deja la cita confirmada, sin pasar por nadie. ' +
+        'Márcalo en lo que sea sencillo de cerrar —una visita, una asesoría— y deja sin marcar lo que prefieras cerrar tú.</div>' +
     '</div>' +
     '<div class="rsv-modal-pie">' +
       '<button class="btn-ghost sm" onclick="rsvCerrarModal()">Cancelar</button>' +
@@ -39422,6 +39428,7 @@ async function rsvGuardarServicio(id) {
     color: rsvBorrador.color || '#1E2BCC',
     icono: rsvBorrador.icono || 'cita',
     activo: !!(document.getElementById('rsv-s-activo') || {}).checked,
+    agente_reserva: !!(document.getElementById('rsv-s-agente') || {}).checked,
     recursos: [...document.querySelectorAll('.rsv-checks input:checked')].map(i => i.value),
   };
   if (id) cuerpo.id = id;

@@ -45,6 +45,17 @@
       "texto": "Cuando el agente aún no tenía una respuesta —el presupuesto, por ejemplo— a veces la apuntaba como «sin información» y el sistema la contaba como respondida. Eso adelantaba el veredicto: un contacto podía llegarle a tu comercial marcado como calificado sin haber dado los datos, o descartado sin haber dicho nada. Ahora lo que falta se sigue preguntando, y el veredicto espera a tenerlo todo."
     },
     {
+      "id": "2026-09-28-agente-agenda-citas",
+      "fecha": "2026-09-28",
+      "tipo": "nuevo",
+      "titulo": "Tu agente de WhatsApp ya agenda citas, de principio a fin",
+      "texto": "Cuando alguien escribe por WhatsApp pidiendo una cita, tu agente le ofrece horas libres de verdad, le confirma el día y la hora, y la deja agendada: entra a tu agenda, al calendario de quien atiende y a la ficha del contacto, igual que si hubiera reservado en tu página. La persona recibe en el chat la confirmación con un enlace para cancelar. Solo agenda los servicios que tú marques: en Reservas → Servicios, cada uno tiene la casilla «El agente del chat puede agendarlo solo». Empieza por lo sencillo —una visita, una asesoría— y deja sin marcar lo que prefieras cerrar tú; si alguien pide uno de esos, el agente pasa la conversación a tu equipo. Y la hora siempre la comprueba el sistema antes de guardarla: si otra persona la tomó mientras tanto, el agente no confirma nada y le ofrece otras.",
+      "accion": {
+        "texto": "Elegir qué agenda el agente",
+        "ir": "reservas"
+      }
+    },
+    {
       "id": "2026-09-28-reservas-google-por-persona",
       "fecha": "2026-09-28",
       "tipo": "nuevo",

@@ -7,7 +7,10 @@
 
 import { readFileSync } from 'node:fs';
 
-const api = readFileSync(new URL('../api/booking-public.js', import.meta.url), 'utf8');
+// El camino de reservar se reparte entre el endpoint y api/_reservas.js, que
+// comparte con el agente del chat. Las reglas de aquí valen para los dos.
+const api = readFileSync(new URL('../api/booking-public.js', import.meta.url), 'utf8') + '\n' +
+  readFileSync(new URL('../api/_reservas.js', import.meta.url), 'utf8');
 const pag = readFileSync(new URL('../public/reservar.html', import.meta.url), 'utf8');
 const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
 
