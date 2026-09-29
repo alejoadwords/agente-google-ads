@@ -2,6 +2,20 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-agente-corrige",
+      "fecha": "2026-09-29",
+      "tipo": "arreglo",
+      "titulo": "El agente ahora te sigue cuando cambias de idea",
+      "texto": "Si alguien pedía «una casa de 4 habitaciones» y después «¿y de 3 habitaciones?», el agente seguía buscando de 4 y contestaba que no tenía nada. Leía toda la conversación de golpe y se quedaba con la primera cosa que le dijeron. Ahora manda lo último: si cambias de habitaciones, de tipo de inmueble o dices «en cualquier rango de precio», la búsqueda se ajusta. Y también filtra por tipo: quien pide una casa ya no ve locales."
+    },
+    {
+      "id": "2026-09-29-agente-fotos",
+      "fecha": "2026-09-29",
+      "tipo": "nuevo",
+      "titulo": "El agente ya puede enviar fotos de tus inmuebles",
+      "texto": "Antes, si alguien pedía fotos, el agente tenía que pasar la conversación a un asesor para algo que ya estaba publicado en tu web. Ahora las tiene: se guardan de cada ficha al sincronizar tu catálogo, sin trabajo extra para ti. Las ofrece antes de mandarlas —«¿le mando unas fotos?»— y envía hasta cuatro, para no llenar el chat ni gastar los datos de quien escribe. De un inmueble sin fotos publicadas no las promete: lo pasa a un asesor."
+    },
+    {
       "id": "2026-09-29-agente-escribiendo",
       "fecha": "2026-09-29",
       "tipo": "mejora",
