@@ -69,6 +69,13 @@ ok(/asignarLead\(userId, \{ \.\.\.lead, \.\.\.update \}, canal,\s*ruta\.asignar_
 ok(/hayLista \? quienes : null, hayLista\)/.test(trozo),
    'y si el tablero no tiene a nadie, cae en la regla de la fuente');
 
+// El lead que se devuelve tiene que llevar ya su dueño: quien llama tiene una
+// red de seguridad que reparte si lo ve vacío. En la prueba real el lead se
+// asignó DOS veces y salieron DOS correos, uno a quien tocaba por tablero y
+// otro a quien tocaba por fuente.
+ok(/if \(com\) \{ update\.assigned_to = com\.id; update\.assigned_name = com\.nombre \|\| null; \}/.test(trozo),
+   'y el lead devuelto lleva su dueño, para que nadie lo reparta otra vez');
+
 // Un lead descartado no se le echa encima a un comercial: hasta ahora se
 // quedaba sin dueño a propósito.
 ok(/if \(ruta && califica && !lead\.assigned_to\)/.test(qual),
@@ -83,8 +90,13 @@ ok(/reglaCal\.activo && \(reglaCal\.enrutado\?\.activo \|\| veredicto\.estado !=
 // Los DOS caminos —asesor fijo y reparto— van por ahí. El fijo escribía
 // `assigned_to` a mano: nadie lo usa todavía, pero el día que alguien elija un
 // asesor en el paso 5, ese lead se habría asignado en silencio.
-ok(!/assigned_to =/.test(qual),
-   'nunca escribiendo el dueño a mano: eso se salta el aviso y la tarea');
+// Lo que importa es que el dueño no se escriba en el PATCH del lead: eso es
+// asignar sin avisar. Después del PATCH sí se anota en el objeto que se
+// devuelve, que es otra cosa.
+const antesDelGuardado = qual.slice(qual.indexOf('const update = {'), qual.indexOf('rest/v1/leads?id=eq.${leadId}`, {\n      method: \'PATCH\''));
+ok(!/assigned_to =/.test(antesDelGuardado),
+   'nunca escribiendo el dueño en el guardado: eso se salta el aviso y la tarea',
+   (antesDelGuardado.match(/.*assigned_to =.*/) || [''])[0].trim());
 ok(/ruta\.asignar_a \? null : await asesoresDelTablero/.test(trozo),
    'el asesor fijo de la ruta manda sobre el reparto');
 

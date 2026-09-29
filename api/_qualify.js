@@ -220,6 +220,16 @@ const NO_RESPUESTA = new RegExp(
   'sin (informacion|datos?|especificar|definir|responder|aclarar)' +
   '|no (lo )?(se|sabe|dijo|indico|indica|respondio|responde|especifico|especifica|' +
       'proporciono|proporciona|menciono|menciona|confirmo|confirma|aclaro|aclara|contesto)' +
+  // Los participios: «No especificado» disparó un veredicto sin presupuesto en
+  // el primer mensaje de una conversación real, y no casaba porque «no
+  // especifico» y «no especificado» no son la misma palabra.
+  //
+  // Van enumerados y no como «no + cualquier participio»: con la regla general,
+  // «no amoblado» —que es una respuesta perfectamente buena a «¿lo quiere
+  // amoblado?»— se caía como si no hubieran contestado.
+  '|no (especificad|indicad|mencionad|proporcionad|definid|confirmad|suministrad|' +
+      'aclarad|informad|contestad|respondid|entregad|brindad|compartid)[oa]' +
+  '|no dicho' +
   '|no disponible|no aplica|desconocid[oa]|pendiente|ningun[oa]?|n/?a|null|none|vacio' +
   ')( (aun|todavia|por ahora|de momento|por el momento|hasta ahora))?$'
 );
@@ -375,8 +385,16 @@ export async function aplicarVeredicto({ userId, leadId, regla, veredicto, respu
         //
         // Con lista, `forzarTurnos` evita que un «fijo a una persona» de la
         // fuente se salte a quienes de verdad atienden el tablero.
-        await asignarLead(userId, { ...lead, ...update }, canal,
+        const com = await asignarLead(userId, { ...lead, ...update }, canal,
           ruta.asignar_a || null, hayLista ? quienes : null, hayLista);
+        // El lead que se devuelve tiene que llevar ya su dueño.
+        //
+        // Sin esto, quien llama ve `assigned_to` vacío —porque el PATCH de
+        // arriba no lo escribe, lo escribe asignarLead— y su red de seguridad
+        // vuelve a repartir. En la prueba real el lead se asignó DOS veces y
+        // salieron DOS correos: uno a quien tocaba por tablero y otro a quien
+        // tocaba por fuente.
+        if (com) { update.assigned_to = com.id; update.assigned_name = com.nombre || null; }
       } catch (e) { /* que falle el reparto no puede tumbar la calificación */ }
     }
 
