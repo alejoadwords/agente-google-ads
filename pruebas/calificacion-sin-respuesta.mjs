@@ -25,6 +25,11 @@ const ok = (c, m, extra) => {
 
 console.log('\nLo que significa «todavía no me lo han dicho»');
 const relleno = ['', '   ', 'sin información', 'sin informacion', 'sin datos', 'sin especificar',
+  // Los participios. «No especificado» disparó un veredicto sin presupuesto en
+  // el PRIMER mensaje de una conversación real: el lead salió calificado y se
+  // repartió a un comercial sin que nadie hubiera dicho cuánto podía pagar.
+  'No especificado', 'no especificada', 'no indicado', 'no mencionado',
+  'no proporcionado', 'no definido', 'no confirmado', 'no suministrado', 'no dicho',
   'no sé', 'no se', 'No lo dijo', 'no especificó', 'no indicó', 'no proporcionó',
   'pendiente', 'N/A', 'n/a', 'null', '—', '?', '...', 'ninguna', 'ninguno',
   'No disponible', 'no aplica', 'desconocido',
@@ -34,6 +39,9 @@ for (const v of relleno) ok(esNoRespuesta(v), JSON.stringify(v) + ' no es una re
 
 console.log('\nY lo que sí lo es, aunque lo parezca');
 const buenas = ['3 millones', 'Buenavista', 'Apartamento', 'Barranquilla',
+  // Y lo que la regla general de participios se tragaba: «no amoblado» es una
+  // respuesta perfectamente buena a «¿lo quiere amoblado?».
+  'no amoblado', 'no remodelado', 'no negociable', 'sin amoblar',
   // «No» es una respuesta perfectamente válida a un criterio de sí o no.
   'no',
   'no tiene parqueadero', 'Sin ascensor', 'ninguno de los dos le sirve',
