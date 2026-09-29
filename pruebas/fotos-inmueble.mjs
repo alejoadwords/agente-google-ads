@@ -84,6 +84,26 @@ console.log('\nEl bloque no lo ve el contacto');
 ok(/CAMBIAR_CITA\|FOTOS\):/.test(eng), 'se limpia del texto visible');
 ok(/CAMBIAR_CITA\|FOTOS\)\\b/.test(eng), 'y también si la respuesta se cortó a mitad');
 
+console.log('\nY la pantalla de prueba las ENSEÑA');
+// Sin esto, el agente decía «le mando unas fotos», el bloque se limpiaba y no
+// aparecía ninguna. Es la pantalla con la que se le enseña el agente al
+// cliente: una prueba que no se parece al resultado no sirve para aprobarlo.
+const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+const pag = readFileSync(new URL('../public/probar.html', import.meta.url), 'utf8');
+const pub = readFileSync(new URL('../api/probar-publico.js', import.meta.url), 'utf8');
+ok(/const fotos = await fotosPedidas\(bruto, userId, agent\.client_id \|\| null\)/.test(eng),
+   'el ensayo resuelve las fotos que se habrían enviado');
+ok(/ok: true,\s*texto,\s*fotos,/.test(eng), 'y las devuelve');
+ok(/fotos: r\.fotos/.test(pub), 'el enlace público también');
+for (const [nombre, src] of [['el probador', app], ['el enlace público', pag]]) {
+  ok(/m\.fotos \|\| \[\]/.test(src), `${nombre} las pinta como imágenes`);
+  ok(/fotos: d\.fotos \|\| \[\]/.test(src), `y ${nombre} las guarda con el mensaje`);
+}
+
+// El hueco que dejaba el bloque al quitarlo del texto.
+ok(/\.replace\(\/\\n\{3,\}\/g, '\\n\\n'\)/.test(eng),
+   'y al quitar el bloque no queda una línea en blanco en medio del mensaje');
+
 console.log('\nY se envían como imágenes de verdad');
 ok(/await send\(connection, contactId, '', \{ tipo: 'image', url \}\)/.test(eng),
    'una por una, detrás del mensaje');

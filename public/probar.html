@@ -48,6 +48,9 @@ main{flex:1;overflow-y:auto;padding:16px}
   white-space:pre-wrap;word-break:break-word}
 .b.yo{background:var(--blue);color:#fff;border-radius:14px 14px 3px 14px}
 .b.el{background:var(--card);border:1px solid var(--border);border-radius:14px 14px 14px 3px}
+/* Las fotos que el agente habría mandado por WhatsApp. */
+.fotos{display:flex;gap:5px;flex-wrap:wrap;max-width:80%;margin-top:4px}
+.fotos img{width:88px;height:88px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
 .vacio{color:var(--muted2);font-size:13px;text-align:center;padding:40px 16px;line-height:1.6}
 footer{border-top:1px solid var(--border);background:var(--card);padding:11px 16px;flex-shrink:0}
 .barra{max-width:620px;margin:0 auto;display:flex;gap:9px}
@@ -125,7 +128,12 @@ function pintar() {
     return;
   }
   chat.innerHTML = vista.map(m =>
-    '<div class="fila ' + m.r + '"><div class="b ' + m.r + '">' + negritaWa(m.t) + '</div></div>'
+    '<div class="fila ' + m.r + '" style="flex-direction:column;align-items:' + (m.r === 'yo' ? 'flex-end' : 'flex-start') + '">' +
+      '<div class="b ' + m.r + '">' + negritaWa(m.t) + '</div>' +
+      ((m.fotos || []).length
+        ? '<div class="fotos">' + m.fotos.map(u => '<img src="' + esc(u) + '" alt="Foto del inmueble" loading="lazy">').join('') + '</div>'
+        : '') +
+    '</div>'
   ).join('') + (ocupado ? '<div class="fila el"><div class="b el" style="opacity:.55">Escribiendo…</div></div>' : '');
   chat.parentElement.scrollTop = chat.parentElement.scrollHeight;
 }
@@ -238,7 +246,7 @@ async function enviar() {
       return;
     }
     hist.push({ role: 'assistant', content: d.bruto });
-    vista.push({ r: 'el', t: d.texto });
+    vista.push({ r: 'el', t: d.texto, fotos: d.fotos || [] });
     pintar();
     radiografia(d);
     txt.focus();

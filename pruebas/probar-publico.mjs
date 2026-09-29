@@ -134,7 +134,7 @@ console.log('\nLa página que abre el cliente');
 ok(/noindex/.test(pag), 'no la indexa Google: es el agente de un cliente, no una landing');
 ok(/content: d\.bruto/.test(pag),
    'el historial se guarda en bruto: con el texto limpio el agente se quedaría amnésico');
-ok(/vista\.push\(\{ r: 'el', t: d\.texto \}\)/.test(pag), 'y se pinta el limpio');
+ok(/vista\.push\(\{ r: 'el', t: d\.texto/.test(pag), 'y se pinta el limpio');
 ok(/hist\.pop\(\); vista\.pop\(\)/.test(pag), 'un envío fallido no se queda en el historial');
 ok(/prefers-color-scheme: dark/.test(pag), 'y se ve en modo oscuro');
 ok(/Esto es una prueba/.test(pag), 'dice que es una prueba, para que nadie crea que ha contactado de verdad');

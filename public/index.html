@@ -3299,6 +3299,10 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .ag-prb-fila{display:flex;flex-direction:column}
 .ag-prb-envio{display:flex;gap:8px;margin-top:10px}
 .ag-prb-envio input{flex:1}
+/* Las fotos que el agente habría mandado. En WhatsApp llegan una debajo de
+   otra; aquí van en fila para no estirar el chat. */
+.ag-prb-fotos{display:flex;gap:5px;flex-wrap:wrap;max-width:75%;margin-top:4px}
+.ag-prb-fotos img{width:82px;height:82px;object-fit:cover;border-radius:9px;border:1px solid var(--border);background:var(--bg-muted)}
 .ag-prb-rx{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);padding:11px 12px}
 .ag-prb-rx h5{margin:0 0 3px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .ag-prb-rx-grupo{margin-bottom:11px}

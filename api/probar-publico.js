@@ -113,6 +113,7 @@ export default async function handler(req) {
   return jsonResp({
     texto: r.texto,
     bruto: r.bruto,
+    fotos: r.fotos,
     capturado: r.capturado,
     escalar: r.escalar,
     calificacion: r.calificacion,

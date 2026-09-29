@@ -116,7 +116,7 @@ ok(/bruto,/.test(cuerpo),
    'y la respuesta se devuelve también EN BRUTO, con los bloques dentro');
 ok(/agPrbHist\.push\(\{ role: 'assistant', content: d\.bruto \}\)/.test(app),
    'el navegador guarda el bruto en el historial, no el texto limpio');
-ok(/agPrbVista\.push\(\{ role: 'assistant', content: d\.texto \}\)/.test(app),
+ok(/agPrbVista\.push\(\{ role: 'assistant', content: d\.texto/.test(app),
    'y pinta el limpio: si guardara el limpio, el ensayo se quedaría amnésico');
 
 // Un turno que falla no puede quedarse en el historial: el siguiente envío

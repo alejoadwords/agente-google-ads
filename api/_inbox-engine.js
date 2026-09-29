@@ -48,6 +48,10 @@ export function cleanForUser(text) {
     .replace(/\[(RESERVA|CANCELAR_CITA|CAMBIAR_CITA|FOTOS):.*?\]/gs, '')
     // Si la respuesta se cortó a mitad de un bloque, fuera igual
     .replace(/\[(CAPTURA|CALIFICACION|ESCALAR|RESERVA|CANCELAR_CITA|CAMBIAR_CITA|FOTOS)\b[\s\S]*$/, '')
+    // Al quitar un bloque de en medio quedaba su línea en blanco, y en el chat
+    // se veía un hueco sin explicación entre dos frases.
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+\n/g, '\n')
     .trim();
 }
 
@@ -904,9 +908,17 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
     ? (await asesoresDelTablero(userId, destino.pipeline_id).catch(() => [])).length
     : 0;
 
+  // Las fotos que se habrían enviado por WhatsApp. El ensayo no manda nada,
+  // pero tiene que ENSEÑARLAS: sin esto el agente decía «le mando unas fotos»
+  // y en la pantalla no aparecía ninguna. Una prueba que no se parece al
+  // resultado no sirve para aprobarlo, y esta es la pantalla con la que se le
+  // enseña el agente al cliente.
+  const fotos = await fotosPedidas(bruto, userId, agent.client_id || null).catch(() => []);
+
   return {
     ok: true,
     texto,
+    fotos,
     // En bruto para que el navegador lo devuelva tal cual en el siguiente turno.
     bruto,
     capturado: { ...capturado, ...nuevo },

@@ -22447,6 +22447,12 @@ function agPrbPintar() {
   c.innerHTML = agPrbVista.map(m =>
     '<div class="ag-prb-fila crm-inbox-bubble-wrap ' + m.role + '">' +
       '<div class="crm-inbox-bubble ' + m.role + '">' + negritaWa(m.content) + '</div>' +
+      // Las fotos que el agente habría mandado por WhatsApp. Sin pintarlas, el
+      // ensayo decía «le mando unas fotos» y no aparecía ninguna.
+      ((m.fotos || []).length
+        ? '<div class="ag-prb-fotos">' + m.fotos.map(u =>
+            '<img src="' + esc(u) + '" alt="Foto del inmueble" loading="lazy">').join('') + '</div>'
+        : '') +
     '</div>'
   ).join('') + (agPrbOcupado
     ? '<div class="ag-prb-fila crm-inbox-bubble-wrap assistant"><div class="crm-inbox-bubble assistant" style="opacity:.6">Escribiendo…</div></div>'
@@ -22596,7 +22602,7 @@ async function agPrbEnviar() {
       return;
     }
     agPrbHist.push({ role: 'assistant', content: d.bruto });
-    agPrbVista.push({ role: 'assistant', content: d.texto });
+    agPrbVista.push({ role: 'assistant', content: d.texto, fotos: d.fotos || [] });
     agPrbPintar();
     agPrbRadiografia(d);
     const rest = document.getElementById('ag-prb-restantes');
