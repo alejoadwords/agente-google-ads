@@ -144,7 +144,11 @@ export async function sincronizarLote(fuente) {
   const base = fuente.base_url;
   if (!base) return { error: 'Esta fuente no tiene web: el inventario se cargó de un archivo.', estado: 400 };
 
-  const pagina = Math.max(1, fuente.cursor_pagina || 1);
+  // Si el tamaño de lote cambió desde que empezó la pasada, la paginación ya no
+  // apunta a lo mismo y hay que empezar de nuevo. Ver sql/2026-09-catalogo-lote-pasada.sql:
+  // continuar dejó 82 inmuebles sin visitar, y 39 de ellos seguían publicados.
+  const loteCambio = fuente.pase_lote != null && fuente.pase_lote !== LOTE;
+  const pagina = loteCambio ? 1 : Math.max(1, fuente.cursor_pagina || 1);
   const tipo = fuente.post_type || 'propiedades';
   const mapeo = fuente.mapeo || {};
   const alcance = `user_id=eq.${encodeURIComponent(userId)}&` +
@@ -153,9 +157,15 @@ export async function sincronizarLote(fuente) {
   // Cuándo empezó la pasada en curso. Al terminarla se borra lo que no se haya
   // visto en ella, así que el corte se fija ANTES de leer nada: con la hora del
   // final, lo guardado en la primera página quedaría por detrás y se borraría.
-  const paseDesde = (pagina === 1 || !fuente.pase_desde)
+  //
+  // Y se normaliza a ISO con Z. Postgres lo devuelve como
+  // «2026-09-28T22:25:27.202+00:00», y en una URL el «+» significa espacio: la
+  // consulta de la barrida salía mal formada, fallaba, y la pasada terminaba
+  // diciendo «no se pudo comprobar qué inmuebles siguen publicados». Nunca
+  // borró nada y el aviso era tan educado que parecía un caso previsto.
+  const paseDesde = (pagina === 1 || !fuente.pase_desde || loteCambio)
     ? new Date().toISOString()
-    : fuente.pase_desde;
+    : new Date(fuente.pase_desde).toISOString();
 
   const anotar = (campos) => fetch(
     `${SUPABASE_URL}/rest/v1/client_knowledge_sources?id=eq.${fuente.id}`,
@@ -225,10 +235,12 @@ export async function sincronizarLote(fuente) {
   };
 
   let releidas = 0;
+  let reusadas = 0;
   const precios = await enTandas(props, async (p) => {
     const codigo = String(p.title?.rendered || '').replace(/<[^>]*>/g, '').trim();
     const igual = sigueIgual(codigo, p.modified);
     if (igual) {
+      reusadas++;
       return {
         precio_arriendo: igual.precio_arriendo,
         precio_venta: igual.precio_venta,
@@ -336,13 +348,14 @@ export async function sincronizarLote(fuente) {
     cursor_pagina: siguiente,
     // Al cerrar la pasada se limpia el corte: la siguiente fija el suyo.
     pase_desde: terminado ? null : paseDesde,
+    pase_lote: terminado ? null : LOTE,
     ultimo_sync: new Date().toISOString(),
     ultimo_estado: terminado ? 'ok' : 'en_curso',
     ultimo_error: aviso,
   });
 
   return {
-    guardadas: unicas.length, releidas, reusadas: unicas.length - releidas,
+    guardadas: unicas.length, releidas, reusadas, reiniciada: loteCambio,
     pagina, de: totalPaginas, terminado,
     sin_precio: unicas.filter(f => !f.precio).length,
     codigos_repetidos: repetidos,

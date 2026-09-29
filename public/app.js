@@ -22534,6 +22534,16 @@ async function agPrbEnviar() {
   agPrbOcupado = true;
   agPrbPintar();
 
+  // El «Escribiendo…» se queda al menos tres segundos, como en la conversación
+  // de verdad: el agente responde en medio segundo y eso delata al bot más que
+  // cualquier error de redacción. Una prueba que no se parece al resultado no
+  // sirve para aprobarlo.
+  const empezo = Date.now();
+  const esperarSuelo = async () => {
+    const faltan = 3000 - (Date.now() - empezo);
+    if (faltan > 0) await new Promise(r => setTimeout(r, faltan));
+  };
+
   try {
     const r = await fetchAuth('/api/agent-probar', {
       method: 'POST',
@@ -22541,6 +22551,7 @@ async function agPrbEnviar() {
       body: JSON.stringify({ agent_id: agEditingId, mensajes: agPrbHist }),
     });
     const d = await r.json();
+    await esperarSuelo();
     agPrbOcupado = false;
     if (!r.ok || d.error) {
       // El turno que falló se retira: dejarlo haría que el siguiente envío
@@ -22560,6 +22571,7 @@ async function agPrbEnviar() {
       rest.textContent = d.restantes <= 40 ? 'Te quedan ' + d.restantes + ' mensajes de prueba hoy' : '';
     }
   } catch (e) {
+    await esperarSuelo();
     agPrbOcupado = false;
     agPrbHist.pop();
     agPrbVista.pop();
