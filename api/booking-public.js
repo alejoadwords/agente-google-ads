@@ -22,7 +22,7 @@ export const config = { runtime: 'edge' };
 import { franjasLibres, diasConCupo, diaLocal } from './_disponibilidad.js';
 // Lo que decide si hay hueco y cómo se guarda una cita vive en _reservas.js:
 // el agente del chat reserva por el mismo camino.
-import { cargarCatalogo, ocupadoDe, reglasDe, elegibles, guardarCita, cancelarCita } from './_reservas.js';
+import { cargarCatalogo, ocupadoDe, reglasDe, elegibles, guardarCita, cancelarCita, moverCita } from './_reservas.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -77,7 +77,7 @@ export default async function handler(req, contexto) {
 
   const url = new URL(req.url);
   const citaTok = url.searchParams.get('cita');
-  if (citaTok) return manejarCita(req, url, citaTok);
+  if (citaTok) return manejarCita(req, url, citaTok, contexto);
 
   const token = url.searchParams.get('token');
   if (!esDireccion(token)) return jsonResp({ error: 'Página de reservas no encontrada' }, 404);
@@ -132,56 +132,79 @@ async function manejarGet(url, neg) {
   const puede = elegibles(servicio, recursos, recId);
   if (!puede.length) return jsonResp({ error: 'Nadie presta ese servicio ahora mismo' }, 404);
 
-  // El techo de la ventana: ni un día más de lo que el negocio permite.
-  //
-  // Se guarda como DÍA LOCAL del negocio, no como instante. Antes se comparaba
-  // `new Date(d.dia) <= tope`, y `d.dia` es un día suelto («2026-11-23»): eso
-  // lo interpreta como medianoche UTC, cinco horas antes de que empiece de
-  // verdad en Colombia. El resultado era que, según la hora a la que alguien
-  // abriera la página, se ofrecía un día MÁS del máximo configurado. Comparar
-  // dos cadenas de día no depende de la hora ni de la zona de quien mira.
-  const tope = new Date(ahora.getTime() + ((neg.antelacion_max_dias | 0) || 60) * 86400000);
-  const topeDia = diaLocal(zona, tope);
-
   if (quiereDias) {
-    const desde = url.searchParams.get('desde') || diaLocal(zona, ahora);
-    const hasta = new Date(ahora.getTime() + (DIAS_TIRA + 2) * 86400000).toISOString();
-    const ocupado = await ocupadoDe(neg, puede.map(r => r.id), ahora.toISOString(), hasta);
-
-    // Un día tiene cupo si le queda hueco a CUALQUIERA de los que pueden
-    // atenderlo, no a todos.
-    const porRecurso = puede.map(r =>
-      diasConCupo({ ...reglasDe(neg, r, servicio, ocupado[r.id], ahora), desde, dias: DIAS_TIRA }));
-    const dias = (porRecurso[0] || []).map((d, i) => ({
-      dia: d.dia,
-      cerrado: porRecurso.every(p => p[i] && p[i].cerrado),
-      cupo: porRecurso.some(p => p[i] && p[i].cupo) && d.dia <= topeDia,
-    }));
+    const dias = await diasDisponibles(neg, servicio, puede, url.searchParams.get('desde'), null);
     return jsonResp({ negocio, dias });
   }
 
   if (dia) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return jsonResp({ error: 'Fecha inválida' }, 400);
-    const desdeISO = new Date(new Date(dia + 'T00:00:00Z').getTime() - 86400000).toISOString();
-    const hastaISO = new Date(new Date(dia + 'T00:00:00Z').getTime() + 2 * 86400000).toISOString();
-    const ocupado = await ocupadoDe(neg, puede.map(r => r.id), desdeISO, hastaISO);
-
-    // Se junta lo de todos los que pueden atender y se queda UNA entrada por
-    // hora: al cliente le da igual con quién, y ver la misma hora tres veces
-    // porque hay tres barberos libres es ruido.
-    const porHora = new Map();
-    for (const r of puede) {
-      for (const f of franjasLibres({ ...reglasDe(neg, r, servicio, ocupado[r.id], new Date()), dia })) {
-        if (new Date(f.inicio) > tope) continue;
-        if (!porHora.has(f.inicio)) porHora.set(f.inicio, { ...f, recursos: [] });
-        porHora.get(f.inicio).recursos.push(r.id);
-      }
-    }
-    const horas = [...porHora.values()].sort((a, b) => a.inicio.localeCompare(b.inicio));
+    const horas = await horasDelDia(neg, servicio, puede, dia, null);
     return jsonResp({ negocio, horas });
   }
 
   return jsonResp({ negocio, servicios, recursos });
+}
+
+// ── Días y horas libres ─────────────────────────────────────────────────────
+// Los usan reservar y cambiar de hora una cita. `ignorar` es la cita que se
+// está cambiando: no puede taparse a sí misma, o su propia hora y las que la
+// solapan saldrían ocupadas.
+
+/**
+ * El techo de la ventana: ni un día más de lo que el negocio permite.
+ *
+ * Se guarda como DÍA LOCAL del negocio, no como instante. Antes se convertía
+ * el día suelto («2026-11-23») en fecha para compararlo con el tope, y eso lo
+ * interpreta como medianoche UTC, cinco horas antes de que empiece de verdad
+ * en Colombia. El resultado era que, según la hora a la que alguien abriera la
+ * página, se ofrecía un día MÁS del máximo configurado. Comparar dos cadenas de
+ * día no depende de la hora ni de la zona de quien mira.
+ */
+function topeDe(neg, ahora) {
+  const zona = neg.zona_horaria || 'America/Bogota';
+  const tope = new Date(ahora.getTime() + ((neg.antelacion_max_dias | 0) || 60) * 86400000);
+  const topeDia = diaLocal(zona, tope);
+  return { tope, topeDia };
+}
+
+async function diasDisponibles(neg, servicio, puede, desdePedido, ignorar) {
+  const zona = neg.zona_horaria || 'America/Bogota';
+  const ahora = new Date();
+  const { topeDia } = topeDe(neg, ahora);
+  const desde = desdePedido || diaLocal(zona, ahora);
+  const hasta = new Date(ahora.getTime() + (DIAS_TIRA + 2) * 86400000).toISOString();
+  const ocupado = await ocupadoDe(neg, puede.map(r => r.id), ahora.toISOString(), hasta, ignorar);
+
+  // Un día tiene cupo si le queda hueco a CUALQUIERA de los que pueden
+  // atenderlo, no a todos.
+  const porRecurso = puede.map(r =>
+    diasConCupo({ ...reglasDe(neg, r, servicio, ocupado[r.id], ahora), desde, dias: DIAS_TIRA }));
+  return (porRecurso[0] || []).map((d, i) => ({
+    dia: d.dia,
+    cerrado: porRecurso.every(p => p[i] && p[i].cerrado),
+    cupo: porRecurso.some(p => p[i] && p[i].cupo) && d.dia <= topeDia,
+  }));
+}
+
+async function horasDelDia(neg, servicio, puede, dia, ignorar) {
+  const { tope } = topeDe(neg, new Date());
+  const desdeISO = new Date(new Date(dia + 'T00:00:00Z').getTime() - 86400000).toISOString();
+  const hastaISO = new Date(new Date(dia + 'T00:00:00Z').getTime() + 2 * 86400000).toISOString();
+  const ocupado = await ocupadoDe(neg, puede.map(r => r.id), desdeISO, hastaISO, ignorar);
+
+  // Se junta lo de todos los que pueden atender y se queda UNA entrada por
+  // hora: al cliente le da igual con quién, y ver la misma hora tres veces
+  // porque hay tres barberos libres es ruido.
+  const porHora = new Map();
+  for (const r of puede) {
+    for (const f of franjasLibres({ ...reglasDe(neg, r, servicio, ocupado[r.id], new Date()), dia })) {
+      if (new Date(f.inicio) > tope) continue;
+      if (!porHora.has(f.inicio)) porHora.set(f.inicio, { ...f, recursos: [] });
+      porHora.get(f.inicio).recursos.push(r.id);
+    }
+  }
+  return [...porHora.values()].sort((a, b) => a.inicio.localeCompare(b.inicio));
 }
 
 // ── Reservar ────────────────────────────────────────────────────────────────
@@ -235,7 +258,7 @@ async function reservar(req, url, neg, contexto) {
 
 // ── Ver, cancelar y reprogramar ─────────────────────────────────────────────
 
-async function manejarCita(req, url, citaTok) {
+async function manejarCita(req, url, citaTok, contexto) {
   if (!esToken(citaTok)) return jsonResp({ error: 'Cita no encontrada' }, 404);
   const filas = await sb(
     `/activities?booking_token=eq.${encodeURIComponent(citaTok)}` +
@@ -244,35 +267,92 @@ async function manejarCita(req, url, citaTok) {
   const cita = filas?.[0];
   if (!cita) return jsonResp({ error: 'Cita no encontrada' }, 404);
 
-  const negs = await sb(`/booking_settings?user_id=eq.${encodeURIComponent(cita.user_id)}&select=*&limit=1`).catch(() => []);
+  // El negocio de ESA cita: de su cuenta Y de su cliente. Antes se buscaba solo
+  // por cuenta, y una agencia con reservas para dos clientes podía enseñar el
+  // nombre, la dirección y el horario del otro.
+  const negs = await sb(`/booking_settings?user_id=eq.${encodeURIComponent(cita.user_id)}` +
+    `&client_id=eq.${encodeURIComponent(cita.client_id || '')}&select=*&limit=1`).catch(() => []);
   const neg = negs?.[0] || {};
   const zona = neg.zona_horaria || 'America/Bogota';
 
-  const vista = {
-    inicio: cita.due_at, fin: cita.end_at,
-    titulo: cita.title,
-    estado: cita.cancelled_at ? 'cancelada' : (cita.booking_status || 'confirmada'),
+  // Lo que hace falta para cambiarla de hora: el mismo servicio, con quien lo
+  // preste hoy. Si el servicio ya no se ofrece o la página está apagada, se
+  // dice por qué en vez de enseñar un botón que termina en error.
+  const { servicios, recursos } = neg.user_id ? await cargarCatalogo(neg).catch(() => ({ servicios: [], recursos: [] })) : { servicios: [], recursos: [] };
+  const servicio = servicios.find(x => x.id === cita.service_id) || null;
+  const puede = servicio ? elegibles(servicio, recursos, null) : [];
+  const pasada = new Date(cita.due_at) < new Date();
+  const cancelada = !!cita.cancelled_at;
+  const noSePuedeCambiar = cancelada || pasada ? null
+    : !neg.activo ? 'El negocio no está tomando reservas en línea ahora mismo. Escríbele para cambiarla.'
+    : !servicio || !puede.length ? 'Este servicio ya no se puede reservar en línea. Escríbele al negocio para cambiarla.'
+    : null;
+
+  const vista = (c) => ({
+    inicio: c.due_at, fin: c.end_at,
+    titulo: c.title,
+    estado: c.cancelled_at ? 'cancelada' : (c.booking_status || 'confirmada'),
     negocio: neg.nombre_negocio || null,
     direccion: neg.direccion || null,
     detalle_direccion: neg.detalle_direccion || null,
     acento: neg.acento || '#1E2BCC',
     zona,
+    servicio: servicio ? { nombre: servicio.nombre, minutos: servicio.minutos, icono: servicio.icono } : null,
+    con: (recursos.find(r => r.id === c.resource_id) || {}).nombre || null,
     // Se dice si todavía se puede cancelar y por qué no, en vez de enseñar un
     // botón que devuelve un error.
-    pasada: new Date(cita.due_at) < new Date(),
-  };
+    pasada: new Date(c.due_at) < new Date(),
+    se_puede_cambiar: !c.cancelled_at && !(new Date(c.due_at) < new Date()) && !noSePuedeCambiar,
+    motivo_no_cambiar: noSePuedeCambiar,
+  });
 
-  if (req.method === 'GET') return jsonResp({ cita: vista });
+  if (req.method === 'GET') {
+    const quiereDias = url.searchParams.get('dias') !== null;
+    const dia = url.searchParams.get('dia');
+    if (!quiereDias && !dia) return jsonResp({ cita: vista(cita) });
+    // Días y horas para cambiarla: los del mismo servicio, sin contar la propia
+    // cita, que si no taparía su hora y las que la solapan.
+    if (cancelada || pasada || noSePuedeCambiar) return jsonResp({ error: noSePuedeCambiar || 'Esta cita ya no se puede cambiar.' }, 409);
+    if (quiereDias) return jsonResp({ dias: await diasDisponibles(neg, servicio, puede, url.searchParams.get('desde'), cita.id) });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return jsonResp({ error: 'Fecha inválida' }, 400);
+    return jsonResp({ horas: await horasDelDia(neg, servicio, puede, dia, cita.id) });
+  }
   if (req.method !== 'POST') return jsonResp({ error: 'Método no permitido' }, 405);
 
   let body = {};
   try { body = await req.json(); } catch {}
-  if (String(body.accion) !== 'cancelar') return jsonResp({ error: 'Acción no reconocida' }, 400);
-  if (cita.cancelled_at) return jsonResp({ ok: true, cita: { ...vista, estado: 'cancelada' } });
-  if (vista.pasada) return jsonResp({ error: 'Esa cita ya pasó.' }, 400);
+  const accion = String(body.accion || '');
 
-  // El mismo cancelar que usa el agente del chat.
-  const r = await cancelarCita(cita);
-  if (r.error) return jsonResp({ error: r.error }, 500);
-  return jsonResp({ ok: true, cita: { ...vista, estado: 'cancelada' } });
+  if (accion === 'cancelar') {
+    if (cancelada) return jsonResp({ ok: true, cita: vista({ ...cita, cancelled_at: cita.cancelled_at }) });
+    if (pasada) return jsonResp({ error: 'Esa cita ya pasó.' }, 400);
+    // El mismo cancelar que usa el agente del chat.
+    const r = await cancelarCita(cita);
+    if (r.error) return jsonResp({ error: r.error }, 500);
+    return jsonResp({ ok: true, cita: vista({ ...cita, cancelled_at: new Date().toISOString() }) });
+  }
+
+  if (accion === 'cambiar') {
+    if (cancelada) return jsonResp({ error: 'Esta cita está cancelada. Reserva una nueva desde la página del negocio.' }, 409);
+    if (pasada) return jsonResp({ error: 'Esa cita ya pasó.' }, 400);
+    if (noSePuedeCambiar) return jsonResp({ error: noSePuedeCambiar }, 409);
+    const inicio = new Date(String(body.inicio || ''));
+    if (isNaN(inicio.getTime())) return jsonResp({ error: 'Esa hora no es válida' }, 400);
+
+    // Primero con la MISMA persona: quien pidió cita con su barbero quiere
+    // seguir con él. Si a esa hora no está libre, con quien lo esté —la hora que
+    // eligió la vio en la lista porque alguien podía atenderla—.
+    const conMisma = puede.some(r => r.id === cita.resource_id);
+    let r = conMisma
+      ? await moverCita(neg, cita, { servicio, recursos, inicio, pedido: cita.resource_id })
+      : null;
+    if (!r || r.ocupada) r = await moverCita(neg, cita, { servicio, recursos, inicio, pedido: null });
+    if (r.error) return jsonResp({ error: r.error, ...(r.ocupada ? { ocupada: true } : {}) }, r.status || 500);
+
+    if (contexto && typeof contexto.waitUntil === 'function') contexto.waitUntil(r.cerrar);
+    else await r.cerrar;
+    return jsonResp({ ok: true, cita: vista(r.cita), cambio_persona: r.cita.resource_id !== cita.resource_id });
+  }
+
+  return jsonResp({ error: 'Acción no reconocida' }, 400);
 }

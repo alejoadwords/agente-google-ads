@@ -476,8 +476,8 @@ export async function avisarPorCorreo(neg, cita, servicio, recurso, quien, citaT
           (neg.detalle_direccion ? '<br><span style="color:#5B6072">' + esc(neg.detalle_direccion) + '</span>' : '') : '')
       ) +
       (neg.mensaje_confirmacion ? '<p style="font-size:14px;line-height:1.6">' + esc(neg.mensaje_confirmacion) + '</p>' : '') +
-      '<p style="font-size:14px;line-height:1.6;color:#5B6072">Si no puedes venir, cancela desde el botón de abajo para dejarle el turno a alguien más.</p>',
-    cta: { texto: 'Ver o cancelar mi cita', url: enlace },
+      '<p style="font-size:14px;line-height:1.6;color:#5B6072">Si no puedes venir, cámbiala o cancélala desde el botón de abajo para dejarle el turno a alguien más.</p>',
+    cta: { texto: 'Ver, cambiar o cancelar mi cita', url: enlace },
     pie: negocio,
   });
 

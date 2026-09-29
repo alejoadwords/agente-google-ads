@@ -45,6 +45,17 @@
       "texto": "Cuando el agente aún no tenía una respuesta —el presupuesto, por ejemplo— a veces la apuntaba como «sin información» y el sistema la contaba como respondida. Eso adelantaba el veredicto: un contacto podía llegarle a tu comercial marcado como calificado sin haber dado los datos, o descartado sin haber dicho nada. Ahora lo que falta se sigue preguntando, y el veredicto espera a tenerlo todo."
     },
     {
+      "id": "2026-09-28-cambiar-cita-pagina",
+      "fecha": "2026-09-28",
+      "tipo": "nuevo",
+      "titulo": "Tus clientes ya pueden cambiar su cita solos",
+      "texto": "El enlace que recibe cada cliente al reservar ahora sirve también para cambiar el día o la hora, no solo para cancelar. Elige otro momento entre las horas libres de ese mismo servicio, confirma, y listo: su cita se mueve, le sigue atendiendo la misma persona si está libre, y el calendario se actualiza solo. Si su persona no está a esa hora, le avisamos de quién le atenderá. Mientras no confirme, su cita de antes sigue en pie. El correo de confirmación y el recordatorio ya lo dicen: «Ver, cambiar o cancelar mi cita».",
+      "accion": {
+        "texto": "Ver mis reservas",
+        "ir": "reservas"
+      }
+    },
+    {
       "id": "2026-09-28-agente-cambia-cancela",
       "fecha": "2026-09-28",
       "tipo": "nuevo",

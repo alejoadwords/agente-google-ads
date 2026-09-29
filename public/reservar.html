@@ -102,6 +102,8 @@ p.ayuda{font-size:13px;color:var(--text-2);margin:0 0 14px}
   padding:11px 0;font-size:14px;font-weight:600;transition:all .15s var(--ease)}
 .horas button:hover{border-color:var(--acento);color:var(--acento)}
 .horas button.sel{background:var(--acento);border-color:var(--acento);color:#fff}
+.horas button.actual{border-style:dashed;border-color:var(--acento);color:var(--acento);line-height:1.15}
+.horas button small{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 
 .vacio{text-align:center;padding:34px 20px;background:var(--bg);border:1px dashed var(--border);
   border-radius:var(--rlg);margin-top:14px}
@@ -390,6 +392,8 @@ function elegirServ(i) {
 
 // ── Paso 3 ─────────────────────────────────────────────────────────────────
 function qs() {
+  // Al cambiar una cita, el servicio lo pone la propia cita: basta su token.
+  if (MODO === 'cita') return 'cita=' + TOKEN;
   return 'token=' + TOKEN + '&service_id=' + encodeURIComponent(sel.serv.id) +
     (sel.pro ? '&resource_id=' + encodeURIComponent(sel.pro.id) : '');
 }
@@ -404,7 +408,13 @@ function cargarDias() {
     // Se abre en el primer día con hueco: nadie quiere llegar y tener que
     // buscar a mano cuál de los catorce tiene algo.
     var k = -1;
-    for (var i = 0; i < DIAS.length; i++) if (DIAS[i].cupo) { k = i; break; }
+    // Al cambiar una cita se abre en SU día: lo normal es moverla unas horas,
+    // y así se ve la hora que tiene ahora junto a las demás.
+    if (MODO === 'cita' && CITA) {
+      var suDia = fechaDia(CITA.inicio);
+      for (var q = 0; q < DIAS.length; q++) if (DIAS[q].dia === suDia && DIAS[q].cupo) { k = q; break; }
+    }
+    if (k < 0) for (var i = 0; i < DIAS.length; i++) if (DIAS[i].cupo) { k = i; break; }
     if (k >= 0) elegirDia(k);
     else avisoVacio('No queda ninguna hora libre en los próximos días. Escríbele al negocio.');
   }).catch(function () { $('dias').innerHTML = ''; avisoVacio('Revisa tu conexión y vuelve a intentarlo.'); });
@@ -466,7 +476,10 @@ function pintarHoras() {
   var bloque = function (rot, arr) {
     if (!arr.length) return '';
     return '<div class="franja-tit">' + rot + '</div><div class="horas">' + arr.map(function (h) {
-      return '<button data-i="' + HORAS.indexOf(h) + '">' + esc(horaLocal(h.inicio)) + '</button>';
+      // Su hora actual, marcada: sin eso no se sabe qué se está cambiando.
+      var actual = MODO === 'cita' && CITA && new Date(h.inicio).getTime() === new Date(CITA.inicio).getTime();
+      return '<button data-i="' + HORAS.indexOf(h) + '"' + (actual ? ' class="actual" title="Tu hora actual"' : '') + '>' +
+        esc(horaLocal(h.inicio)) + (actual ? '<small>la tuya</small>' : '') + '</button>';
     }).join('') + '</div>';
   };
   $('horarios').innerHTML = bloque('Mañana', man) + bloque('Tarde', tar);
@@ -476,6 +489,17 @@ function pintarHoras() {
     sel.hora = HORAS[+b.dataset.i];
     Array.prototype.forEach.call($('horarios').querySelectorAll('.horas button'), function (x) { x.classList.remove('sel'); });
     b.classList.add('sel');
+    if (MODO === 'cita') {
+      // Elegir la misma hora no es un cambio: se dice, sin pedir confirmación.
+      if (new Date(sel.hora.inicio).getTime() === new Date(CITA.inicio).getTime()) {
+        b.classList.remove('sel');
+        avisoVacio('Esa ya es tu hora. Elige otra, o vuelve a tu cita si prefieres dejarla como está.');
+        setTimeout(function () { elegirDia(indiceDe(sel.dia)); }, 2200);
+        return;
+      }
+      setTimeout(confirmarCambio, 180);
+      return;
+    }
     setTimeout(function () { pintarResumen(); ir(4); }, 180);
   };
 }
@@ -557,7 +581,7 @@ function enlaceCalendario(c) {
     action: 'TEMPLATE',
     text: c.servicio + (N.nombre ? ' · ' + N.nombre : ''),
     dates: z(c.inicio) + '/' + z(c.fin),
-    details: 'Reservado en ' + (N.nombre || 'línea') + '. Cancelar: ' + location.origin + '/cita/' + c.token,
+    details: 'Reservado en ' + (N.nombre || 'línea') + '. Cambiar o cancelar: ' + location.origin + '/cita/' + c.token,
     location: N.direccion || '',
   });
   return 'https://calendar.google.com/calendar/render?' + p.toString();
@@ -581,7 +605,7 @@ function listo(c) {
       ? '<div class="avisos">' + ico(I.info, 15) + '<div>' + esc(N.mensaje_confirmacion) + '</div></div>' : '') +
     '<div class="avisos">' + ico(I.info, 15) +
       '<div>' + (N.recordatorio ? 'Te lo recordamos antes de la cita. ' : '') +
-      'Guarda este enlace: desde ahí puedes cancelar si te surge algo.</div></div>' +
+      'Guarda este enlace: desde ahí puedes cambiarla o cancelarla si te surge algo.</div></div>' +
     '<div class="acciones">' +
       '<a class="cal" href="' + esc(enlaceCalendario(c)) + '" target="_blank" rel="noopener">Agregar a mi calendario</a>' +
       '<a href="/cita/' + esc(c.token) + '">Ver mi cita</a>' +
@@ -609,7 +633,10 @@ function verCita() {
   }).catch(function () { pantallaSola('No se pudo cargar', 'Revisa tu conexión.', true); });
 }
 
-function pintarCita(c) {
+var CITA = null;          // la cita que se está viendo o cambiando
+
+function pintarCita(c, aviso) {
+  CITA = c;
   N = { zona: c.zona, nombre: c.negocio, direccion: c.direccion, detalle_direccion: c.detalle_direccion };
   aplicarAcento(c.acento);
   document.title = c.negocio || 'Tu cita';
@@ -626,16 +653,27 @@ function pintarCita(c) {
   $('todo').innerHTML =
     '<div class="ok"><div class="tick' + (cancelada || c.pasada ? ' gris' : '') + '">' +
       ico(cancelada ? I.info : I.tick, 30) + '</div>' +
-      '<h2>' + (cancelada ? 'Cita cancelada' : (c.pasada ? 'Esta cita ya pasó' : 'Tu cita está confirmada')) + '</h2>' +
+      '<h2>' + (cancelada ? 'Cita cancelada' : (c.pasada ? 'Esta cita ya pasó' : (aviso ? 'Listo, cambiamos tu cita' : 'Tu cita está confirmada'))) + '</h2>' +
       '<div class="cuando"><b>' + esc(cuando) + '</b>' +
+        (c.servicio ? '<br>' + esc(c.servicio.nombre) + ' · ' + duracion(c.servicio.minutos) : '') +
+        (c.con ? '<br>Con ' + esc(c.con) : '') +
         (c.negocio ? '<br>' + esc(c.negocio) : '') + '</div></div>' +
+    (aviso ? '<div class="avisos">' + ico(I.info, 15) + '<div>' + esc(aviso) + '</div></div>' : '') +
     (c.direccion ? '<div class="tarjeta"><div class="fila">' + ico(I.pin, 16) + '<div>' + esc(c.direccion) +
       (c.detalle_direccion ? '<br><span style="color:var(--text-3);font-size:12.5px">' + esc(c.detalle_direccion) + '</span>' : '') +
       '</div></div></div>' : '') +
     (cancelada || c.pasada ? '' :
-      '<div class="acciones"><button class="peligro" id="btn-cancelar">Cancelar mi cita</button></div>') +
+      '<div class="acciones">' +
+        (c.se_puede_cambiar ? '<button id="btn-cambiar">Cambiar día u hora</button>' : '') +
+        '<button class="peligro" id="btn-cancelar">Cancelar mi cita</button></div>' +
+      // Si no se puede cambiar, se dice por qué: un botón que no está sin
+      // explicación hace pensar que la página falla.
+      (c.motivo_no_cambiar ? '<div class="avisos">' + ico(I.info, 15) + '<div>' + esc(c.motivo_no_cambiar) + '</div></div>' : '')) +
     '<div class="err" id="err" style="display:none"></div>' +
     '<div class="firma">Con la tecnología de <a href="https://acuarius.app" target="_blank" rel="noopener">Acuarius</a></div>';
+
+  var bc = $('btn-cambiar');
+  if (bc) bc.onclick = elegirOtraHora;
 
   var b = $('btn-cancelar');
   if (b) b.onclick = function () {
@@ -658,6 +696,81 @@ function pintarCita(c) {
       $('err').style.display = 'block';
     });
   };
+}
+
+// ── Cambiar de día u hora ──────────────────────────────────────────────────
+// La misma tira de días y horas que al reservar, sobre el mismo servicio. La
+// cita no se toca hasta confirmar: si se arrepiente, «Volver» la deja como estaba.
+function elegirOtraHora() {
+  $('todo').innerHTML =
+    '<div class="neg"><div><h1>Cambiar tu cita</h1>' +
+      '<div class="sub">' + esc(CITA.servicio ? CITA.servicio.nombre + ' · ' + duracion(CITA.servicio.minutos) : '') + '</div></div></div>' +
+    '<section class="paso on" id="p3"><h2 class="tit">¿Cuándo te viene mejor?</h2>' +
+      '<p class="ayuda" id="ayuda-hora"></p>' +
+      '<div class="dias" id="dias"></div><div id="horarios"></div></section>' +
+    '<section class="paso" id="p4"></section>' +
+    '<div class="acciones"><button id="btn-volver">Volver a mi cita</button></div>' +
+    '<div class="firma">Con la tecnología de <a href="https://acuarius.app" target="_blank" rel="noopener">Acuarius</a></div>';
+  $('ayuda-hora').textContent = 'Tu cita actual sigue en pie hasta que confirmes la nueva.' +
+    (zonaTexto() ? ' Las horas están en ' + zonaTexto() + '.' : '');
+  $('btn-volver').onclick = function () { pintarCita(CITA); };
+  window.scrollTo(0, 0);
+  cargarDias();
+}
+
+function confirmarCambio() {
+  var p3 = $('p3'), p4 = $('p4');
+  p3.classList.remove('on'); p4.classList.add('on');
+  p4.innerHTML = '<h2 class="tit">¿La pasamos a esta hora?</h2>' +
+    '<div class="resumen">' +
+      '<div class="fila">' + ico(I.cal) + '<b>' + esc(cuandoTexto()) + '</b></div>' +
+      '<div class="fila">' + ico(I.reloj) + '<span>Antes: ' + esc(fechaCita(CITA.inicio)) + '</span></div>' +
+    '</div>' +
+    '<button class="btn-pri" id="btn-cambio">Confirmar el cambio</button>' +
+    '<div class="err" id="err" style="display:none"></div>' +
+    '<div class="acciones"><button id="btn-otra">Elegir otra hora</button></div>';
+  $('btn-otra').onclick = function () { p4.classList.remove('on'); p3.classList.add('on'); };
+  var btn = $('btn-cambio');
+  btn.onclick = function () {
+    btn.disabled = true; btn.textContent = 'Cambiando…';
+    api('cita=' + TOKEN, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'cambiar', inicio: sel.hora.inicio }),
+    }).then(function (r) {
+      if (!r.ok) {
+        btn.disabled = false; btn.textContent = 'Confirmar el cambio';
+        $('err').textContent = (r.d && r.d.error) || 'No se pudo cambiar. Tu cita sigue como estaba.';
+        $('err').style.display = 'block';
+        // Se la quitaron mientras decidía: de vuelta a las horas, ya al día.
+        if (r.d && r.d.ocupada) setTimeout(function () { p4.classList.remove('on'); p3.classList.add('on'); elegirDia(indiceDe(sel.dia)); }, 1400);
+        return;
+      }
+      pintarCita(r.d.cita, r.d.cambio_persona
+        ? 'A esa hora te atiende otra persona del equipo: ' + (r.d.cita.con || 'quien esté libre') + '.'
+        : 'Guarda este mismo enlace: sigue sirviendo para cambiarla o cancelarla.');
+    }).catch(function () {
+      btn.disabled = false; btn.textContent = 'Confirmar el cambio';
+      $('err').textContent = 'Revisa tu conexión. Tu cita sigue como estaba.';
+      $('err').style.display = 'block';
+    });
+  };
+  window.scrollTo(0, 0);
+}
+
+/** El día local del negocio ('2026-10-01') de un instante. */
+function fechaDia(iso) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: N.zona, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+  } catch (e) { return String(iso).slice(0, 10); }
+}
+
+function fechaCita(iso) {
+  try {
+    return new Intl.DateTimeFormat('es-CO', {
+      timeZone: N.zona, weekday: 'long', day: 'numeric', month: 'long',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+    }).format(new Date(iso));
+  } catch (e) { return iso; }
 }
 
 })();
