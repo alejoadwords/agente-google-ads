@@ -27987,9 +27987,18 @@ async function connectMercadoPago() {
   }
 })();
 
-function connectGoogleCalendar() {
-  const uid = clerkInstance?.user?.id || '';
-  window.location.href = '/api/gcal-auth' + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+// El enlace a Google lo firma el servidor según la SESIÓN. Antes el navegador
+// mandaba su propio userId en la URL y el servidor se lo creía: bastaba cambiarlo
+// para colgarle tu Google a una cuenta ajena y recibir sus reuniones y reservas.
+async function connectGoogleCalendar() {
+  try {
+    const r = await fetchAuth('/api/gcal-enlace', { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.url) throw new Error(d.error || ('HTTP ' + r.status));
+    window.location.href = d.url;
+  } catch (e) {
+    showToast('No se pudo empezar la conexión con Google Calendar: ' + String(e.message || e), 'error');
+  }
 }
 
 // Callback del OAuth de Google Calendar
@@ -28007,8 +28016,16 @@ function connectGoogleCalendar() {
     }, 1500);
   }
   if (params.get('gcal_error')) {
+    const motivo = params.get('gcal_error');
     window.history.replaceState({}, '', window.location.pathname);
-    setTimeout(() => showToast('❌ No se pudo conectar Google Calendar', 'error'), 1500);
+    // Un enlace caducado se arregla volviendo a pulsar; decir solo «no se pudo»
+    // haría pensar que el fallo es de la cuenta de Google.
+    const texto = motivo === 'enlace_caducado'
+      ? 'El enlace para conectar Google Calendar caducó. Vuelve a pulsar «Conectar Google Calendar».'
+      : motivo === 'enlace_invalido'
+        ? 'Ese enlace para conectar Google Calendar no es válido. Vuelve a pulsar «Conectar Google Calendar» desde la Agenda.'
+        : '❌ No se pudo conectar Google Calendar';
+    setTimeout(() => showToast(texto, 'error'), 1500);
   }
 })();
 

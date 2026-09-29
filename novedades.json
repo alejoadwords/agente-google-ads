@@ -45,6 +45,17 @@
       "texto": "Cuando el agente aún no tenía una respuesta —el presupuesto, por ejemplo— a veces la apuntaba como «sin información» y el sistema la contaba como respondida. Eso adelantaba el veredicto: un contacto podía llegarle a tu comercial marcado como calificado sin haber dado los datos, o descartado sin haber dicho nada. Ahora lo que falta se sigue preguntando, y el veredicto espera a tenerlo todo."
     },
     {
+      "id": "2026-09-28-gcal-cuenta-segura",
+      "fecha": "2026-09-28",
+      "tipo": "arreglo",
+      "titulo": "Conectar el Google Calendar de la Agenda es cosa del administrador",
+      "texto": "El calendario de la Agenda es el de toda la cuenta: ahí se escriben las reuniones y las reservas de todo el equipo, con los datos de tus clientes. Por eso ahora solo el dueño o un administrador pueden conectarlo, y cada conexión queda verificada con tu sesión de principio a fin. Si alguien de ventas pulsa «Conectar Google Calendar», verá un aviso que le explica que lo haga un administrador. Los calendarios ya conectados siguen funcionando igual.",
+      "accion": {
+        "texto": "Ir a la Agenda",
+        "ir": "crm"
+      }
+    },
+    {
       "id": "2026-09-28-agente-agenda-citas",
       "fecha": "2026-09-28",
       "tipo": "nuevo",

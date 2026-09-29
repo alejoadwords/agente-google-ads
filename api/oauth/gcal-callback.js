@@ -3,7 +3,7 @@
 // (con on_conflict — lección aprendida del callback de Ads) y redirige a la app.
 
 import { cifrar } from '../_cifrado.js';
-import { abrirEnlaceCalendario } from '../_enlace-calendario.js';
+import { abrirEnlaceCalendario, abrirEnlaceCuenta } from '../_enlace-calendario.js';
 import { paginaCalendario } from '../_pagina-calendario.js';
 import { eventosGoogle } from '../_gcal.js';
 const SUPABASE_URL         = process.env.SUPABASE_URL;
@@ -40,18 +40,28 @@ async function saveGcalConnection(userId, tokens, email, platform = 'google_cale
 
 export default async function handler(req, res) {
   const { code, state, error } = req.query;
-  let userId = '', nonce = '', enlace = '';
-  try { const s = JSON.parse(state || '{}'); userId = s.userId || ''; nonce = s.nonce || ''; enlace = s.r || ''; } catch {}
+  let nonce = '', enlace = '', firmado = '';
+  try { const s = JSON.parse(state || '{}'); nonce = s.nonce || ''; enlace = s.r || ''; firmado = s.c || ''; } catch {}
 
   // El calendario de una persona de las reservas: otra historia, con su propia
   // respuesta (quien lo conecta puede no tener cuenta en Acuarius).
   if (nonce === 'gcal_recurso') return conectarRecurso(req, res, enlace);
 
-  if (error) return res.redirect('https://app.acuarius.app/?gcal_error=access_denied');
-  if (!code)  return res.status(400).json({ error: 'Código de autorización faltante' });
   // El mismo callback sirve a Calendar y a YouTube: el state dice cuál es.
   const esYoutube = nonce === 'yt_connect';
   const plataforma = esYoutube ? 'youtube' : 'google_calendar';
+
+  // DE QUIÉN es la conexión lo dice la FIRMA, nunca un userId del state: el
+  // state viaja por el navegador y se puede cambiar entre Google y nosotros.
+  // Sin firma válida no se guarda nada, aunque Google haya dado permiso.
+  const firma = await abrirEnlaceCuenta(firmado, esYoutube ? 'youtube' : 'calendario');
+  if (!firma || firma.caducado) {
+    return res.redirect('https://app.acuarius.app/?gcal_error=' + (firma?.caducado ? 'enlace_caducado' : 'enlace_invalido'));
+  }
+  const userId = firma.userId;
+
+  if (error) return res.redirect('https://app.acuarius.app/?gcal_error=access_denied');
+  if (!code)  return res.status(400).json({ error: 'Código de autorización faltante' });
 
   try {
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {

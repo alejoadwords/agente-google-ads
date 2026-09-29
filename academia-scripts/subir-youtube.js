@@ -8,7 +8,8 @@
 //
 // Requiere en el entorno: SUPABASE_URL, SUPABASE_SERVICE_KEY, GOOGLE_CLIENT_ID,
 // GOOGLE_CLIENT_SECRET y TOKENS_KEY (esta última para descifrar el token). El token sale de platform_connections (platform
-// 'youtube'), que se llena autorizando una vez en /api/yt-auth.
+// 'youtube'), que se llena autorizando una vez con el enlace firmado que da
+// `node tools/enlace-youtube.mjs <userId>`.
 //
 // Cuota de YouTube: 10.000 unidades/día. Cada video cuesta 1.600 (subida) +
 // 400 (subtítulos) + 50 (playlist) = 2.050, así que entran 4 por día. Sin
@@ -77,8 +78,9 @@ async function tokenFresco() {
     { headers: sb() }
   ).then(r => r.json());
   const c = filas?.[0];
-  if (!c) throw new Error('No hay conexión de YouTube. Autoriza una vez en https://app.acuarius.app/api/yt-auth?userId=' + USER_ID);
-  if (!c.refresh_token) throw new Error('La conexión no tiene refresh_token: vuelve a autorizar en /api/yt-auth');
+  // El enlace de autorizar va firmado: un ?userId= suelto ya no vale.
+  if (!c) throw new Error('No hay conexión de YouTube. Saca el enlace con `node tools/enlace-youtube.mjs ' + USER_ID + '` y ábrelo.');
+  if (!c.refresh_token) throw new Error('La conexión no tiene refresh_token: vuelve a autorizar con el enlace de `node tools/enlace-youtube.mjs ' + USER_ID + '`.');
 
   // Los tokens de terceros se guardan CIFRADOS (`enc:v1:…`, ver api/_cifrado.js).
   // Mandarle a Google el texto cifrado devuelve `invalid_grant`, que es EL MISMO

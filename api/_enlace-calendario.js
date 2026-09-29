@@ -34,8 +34,8 @@ export async function crearEnlaceCalendario(userId, resourceId, dias = DIAS_ENLA
   return encodeURIComponent(datos) + '.' + (await firmar(datos));
 }
 
-/** { userId, resourceId } si vale; { caducado: true } si ya no; null si es falso. */
-export async function abrirEnlaceCalendario(t) {
+/** Los campos firmados, o null si la firma no cuadra. */
+async function abrir(t) {
   if (!LINK_SECRET) return null;
   const i = String(t || '').lastIndexOf('.');
   if (i < 0) return null;
@@ -48,11 +48,52 @@ export async function abrirEnlaceCalendario(t) {
   let dif = 0;
   for (let k = 0; k < firma.length; k++) dif |= firma.charCodeAt(k) ^ esperada.charCodeAt(k);
   if (dif !== 0) return null;
+  return datos.split('|');
+}
 
-  const [prefijo, userId, resourceId, caduca] = datos.split('|');
+/** { userId, resourceId } si vale; { caducado: true } si ya no; null si es falso. */
+export async function abrirEnlaceCalendario(t) {
+  const partes = await abrir(t);
+  if (!partes) return null;
+  const [prefijo, userId, resourceId, caduca] = partes;
   if (prefijo !== PREFIJO || !userId || !resourceId) return null;
   // La caducidad, DESPUÉS de la firma: al revés, un enlace con la fecha
   // manipulada se rechazaría por viejo y no por falso.
   if (!(Number(caduca) > Date.now())) return { caducado: true };
   return { userId, resourceId };
+}
+
+// ── La conexión de la CUENTA (Agenda) y la de YouTube ───────────────────────
+//
+// Antes el OAuth de la cuenta se fiaba del `userId` que venía en la URL: quien
+// conociera el id de otra cuenta podía colgarle SU Google, y desde ese momento
+// las reuniones de la Agenda y las reservas —con nombre, teléfono y correo del
+// cliente— se escribían en el calendario del atacante. Ahora el usuario sale
+// de la firma, y la firma solo la da un endpoint con sesión (api/gcal-enlace.js)
+// o, para YouTube, quien tiene la clave del servidor (tools/enlace-youtube.mjs).
+//
+// Media hora: el enlace se usa en el acto, redirigiendo a Google. No tiene por
+// qué sobrevivir en el historial del navegador.
+export const MINUTOS_ENLACE_CUENTA = 30;
+const PREFIJO_CUENTA = { calendario: 'cuenta-cal', youtube: 'cuenta-yt' };
+
+export async function crearEnlaceCuenta(userId, para, minutos = MINUTOS_ENLACE_CUENTA) {
+  const prefijo = PREFIJO_CUENTA[para];
+  if (!LINK_SECRET || !userId || !prefijo) return null;
+  const datos = [prefijo, userId, Date.now() + minutos * 60000].join('|');
+  return encodeURIComponent(datos) + '.' + (await firmar(datos));
+}
+
+/**
+ * { userId } si vale PARA ESO; { caducado: true } si ya no; null si es falso.
+ * Un enlace de YouTube no conecta un calendario ni al revés: cada uno guarda
+ * sus tokens en una plataforma distinta.
+ */
+export async function abrirEnlaceCuenta(t, para) {
+  const partes = await abrir(t);
+  if (!partes) return null;
+  const [prefijo, userId, caduca] = partes;
+  if (!PREFIJO_CUENTA[para] || prefijo !== PREFIJO_CUENTA[para] || !userId || partes.length !== 3) return null;
+  if (!(Number(caduca) > Date.now())) return { caducado: true };
+  return { userId };
 }

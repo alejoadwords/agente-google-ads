@@ -3,12 +3,15 @@
 // La conexión se guarda en platform_connections como 'google_calendar' con
 // refresh_token — misma arquitectura estable que Google Ads.
 //
+// Con ?c=<enlace firmado> conecta el de la CUENTA; el navegador lo pide antes a
+// api/gcal-enlace.js, que mira la sesión.
+//
 // Con ?r=<enlace firmado> conecta el calendario de UNA persona de las reservas
 // (ver api/_enlace-calendario.js). Ese camino no se fía de nada de la URL salvo
 // de la firma, y se comprueba aquí ANTES de mandar a Google: quien abre un
 // enlace caducado tiene que enterarse ahora, no después de dar permisos.
 
-import { abrirEnlaceCalendario } from './_enlace-calendario.js';
+import { abrirEnlaceCalendario, abrirEnlaceCuenta } from './_enlace-calendario.js';
 import { paginaCalendario } from './_pagina-calendario.js';
 
 const SCOPES = [
@@ -34,8 +37,12 @@ export default async function handler(req, res) {
     }
     state = JSON.stringify({ nonce: 'gcal_recurso', r: enlace });
   } else {
-    const userId = req.query.userId || '';
-    state = JSON.stringify({ nonce: 'gcal_connect', userId });
+    // La cuenta: SOLO con enlace firmado (lo da api/gcal-enlace.js con sesión).
+    // Un ?userId= suelto ya no vale: era la puerta para colgarle tu Google a
+    // una cuenta ajena. Se comprueba aquí y otra vez en el callback.
+    const e = await abrirEnlaceCuenta(req.query.c, 'calendario');
+    if (!e || e.caducado) return res.redirect('https://app.acuarius.app/?gcal_error=' + (e?.caducado ? 'enlace_caducado' : 'enlace_invalido'));
+    state = JSON.stringify({ nonce: 'gcal_connect', c: req.query.c });
   }
 
   const params = new URLSearchParams({
