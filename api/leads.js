@@ -483,7 +483,13 @@ export default async function handler(req) {
     // El paginador añade `id.asc` de desempate, así que el orden es estable
     // entre páginas — ver conOrdenEstable en api/_paginado.js.
     let query = `${SUPABASE_URL}/rest/v1/leads?${scopeFilter}${filtroMios}&select=*&order=created_at.desc`;
-    if (pipelineId) query += `&pipeline_id=eq.${encodeURIComponent(pipelineId)}`;
+    // `con_sueltos=1`: además, los leads que no tienen proceso (los de antes de
+    // que la cuenta creara el primero). Lo pide la pantalla para el proceso
+    // principal de una cuenta sin cartera de clientes: filtrar solo por el id
+    // los escondería.
+    if (pipelineId && url.searchParams.get('con_sueltos') === '1') {
+      query += `&or=(pipeline_id.eq.${encodeURIComponent(pipelineId)},pipeline_id.is.null)`;
+    } else if (pipelineId) query += `&pipeline_id=eq.${encodeURIComponent(pipelineId)}`;
     if (stage) query += `&stage=eq.${encodeURIComponent(stage)}`;
     // Esta consulta no tenía límite y PostgREST devolvía mil filas calladamente:
     // una cuenta con 3.000 contactos veía 1.000 y creía que esos eran todos.
