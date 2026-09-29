@@ -107,6 +107,25 @@ ok(/No se borró nada/.test(sync), 'y lo dice, en vez de callarse');
 ok(/sobran == null \|\| vivos == null/.test(sync),
    'si no se puede ni contar, tampoco borra: borrar es lo único que no se deshace');
 
+// El corte se normaliza a ISO con Z. Postgres lo devuelve como «…+00:00», y en
+// una URL el «+» significa espacio: la consulta salía mal formada, daba 400 y
+// la pasada terminaba diciendo «no se pudo comprobar qué inmuebles siguen
+// publicados». Nunca borró nada, y el aviso era tan educado que parecía un caso
+// previsto.
+ok(/new Date\(fuente\.pase_desde\)\.toISOString\(\)/.test(cat),
+   'el corte va en ISO con Z, no como lo devuelve Postgres');
+
+// Y el tamaño del lote: si cambia a mitad de pasada, la paginación deja de
+// apuntar a lo mismo y hay inmuebles que no se visitan en toda la vuelta. Antes
+// eso era un precio viejo; con la barrida es BORRAR lo que sigue publicado.
+// Medido en Certain al subir el lote de 30 a 40: 82 sin visitar, 39 de ellos
+// vivos. El freno del tercio no lo habría parado, porque era el 17%.
+ok(/const loteCambio = fuente\.pase_lote != null && fuente\.pase_lote !== LOTE/.test(cat),
+   'se guarda con qué lote empezó la pasada');
+ok(/const pagina = loteCambio \? 1 :/.test(cat),
+   'y si cambia, la pasada se reinicia desde la página 1 en vez de corromperse');
+ok(/pase_lote: terminado \? null : LOTE/.test(cat), 'el lote en curso se guarda con el corte');
+
 // ── 3. Las pistas llegan al filtro ──────────────────────────────────────────
 console.log('\nLo que la persona dijo llega a la búsqueda');
 
@@ -237,7 +256,7 @@ ok(/new Date\(g\.modificado\)\.getTime\(\) !== new Date\(modified\)\.getTime\(\)
 ok(/if \(g\.precio_arriendo == null && g\.precio_venta == null\) return null;/.test(cat),
    'y una fila sin precios separados se relee aunque no haya cambiado: es de antes de que existieran');
 ok(/reusado: true/.test(cat), 'lo reutilizado se marca');
-ok(/releidas, reusadas: unicas\.length - releidas/.test(cat),
+ok(/guardadas: unicas\.length, releidas, reusadas,/.test(cat),
    'y se informa de cuántas se releyeron, para poder ver si el ahorro es real');
 // Un instrumento que no llega a donde se lee no mide nada: el cron armaba su
 // propio resumen y se dejaba estos dos campos por el camino.
