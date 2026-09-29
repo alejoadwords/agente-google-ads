@@ -20,7 +20,7 @@
 
 import { readFileSync } from 'node:fs';
 import { preciosDeTexto, precioPrincipal } from '../api/_catalogo.js';
-import { aPlata, pistasDeBusqueda } from '../api/_inbox-engine.js';
+import { aPlata, pistasDeBusqueda, habitacionesDelTexto, presupuestoDelTexto } from '../api/_inbox-engine.js';
 
 const cat = readFileSync(new URL('../api/_catalogo.js', import.meta.url), 'utf8');
 const eng = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
@@ -131,6 +131,70 @@ ok(soloCalif.operacion === 'arriendo', 'y la operación sigue saliendo del enrut
 const vacio = pistasDeBusqueda({}, { presupuesto: { valor: '', cumple: false } });
 ok(vacio.presupuesto === null,
    'un criterio sin respuesta no es un presupuesto de cero');
+
+// Quien pide tres habitaciones no quiere ver de dos. No se filtraba, y el
+// efecto era peor que no ofrecer nada: el agente respondía «no tengo de tres,
+// pero mira estas» y las de la lista eran de dos.
+console.log('\nY las habitaciones, que es lo primero que se pide');
+ok(pistasDeBusqueda({ habitaciones: '3' }, {}).habitaciones === 3, 'del bloque de captura');
+ok(pistasDeBusqueda({}, { habitaciones_necesarias: { valor: '3 habitaciones', cumple: true } }).habitaciones === 3,
+   'y de la calificación');
+ok(pistasDeBusqueda({ habitaciones: 'no sé' }, {}).habitaciones === null, 'lo que no es un número, no cuenta');
+ok(pistasDeBusqueda({ habitaciones: '0' }, {}).habitaciones === null, 'ni un cero');
+ok(pistasDeBusqueda({ habitaciones: '900' }, {}).habitaciones === null, 'ni un disparate');
+ok(/habitaciones=gte\.\$\{pistas\.habitaciones\}/.test(eng),
+   'y se filtra con «al menos»: nunca se ofrece menos de lo que pidió');
+
+// ── Las pistas salen de lo que escribió la persona ──────────────────────────
+// Se le pedía al modelo que reportara ciudad, zona, presupuesto y
+// habitaciones. No lo hacía. En una conversación real, con «Buenavista en
+// Barranquilla» y «máximo 3 millones» escritos, reportó solo «habitaciones».
+// El filtro se quedaba sin pistas y el agente ofrecía lo primero del
+// inventario diciendo «tengo varias opciones en esa zona» — de otro barrio.
+console.log('\nLo que pidió la persona se lee de sus palabras, no del modelo');
+
+for (const [t, e] of [['estoy buscando un apartamento de 3 habitaciones', 3], ['de 3 alcobas', 3],
+                      ['un apto 2 hab', 2], ['sin numeros', null], ['quiero 25 habitaciones', null]]) {
+  ok(habitacionesDelTexto(t) === e, JSON.stringify(t) + ' → ' + e, habitacionesDelTexto(t));
+}
+
+for (const [t, e] of [['yo creo que maximo 3 millones', 3000000],
+                      ['mi presupuesto es de $4.000.000', 4000000],
+                      ['hasta 2,5 millones mensuales', 2500000],
+                      ['pago hasta 800 mil', 800000],
+                      ['quiero 3 habitaciones. mi tope es 2 millones', 2000000],
+                      // Un número que no habla de dinero no es un presupuesto.
+                      ['busco 3 habitaciones', null],
+                      ['el codigo 121513056', null],
+                      ['3 habitaciones y 2 baños', null]]) {
+  ok(presupuestoDelTexto(t) === e, JSON.stringify(t) + ' → ' + e, presupuestoDelTexto(t));
+}
+
+// Un punto dentro de «$4.000.000» partía la frase en tres y el presupuesto
+// desaparecía: las frases se cortan por punto SEGUIDO DE ESPACIO.
+ok(/\.split\(\/\[;\\n\]\|\\\.\\s\+\//.test(eng),
+   'las frases se cortan por punto y espacio, no por cualquier punto');
+
+console.log('\nY lo que dijo la persona manda sobre lo que reportó el modelo');
+const conAmbos = pistasDeBusqueda(
+  { zona: 'El Prado', presupuesto: '9000000' },          // lo que reportó el modelo
+  {},
+  { barrio: 'Buenavista', presupuesto: 3000000 });        // lo que dijo la persona
+ok(conAmbos.barrio === 'Buenavista',
+   'la zona es la que pidió, no la del inmueble que el agente ofreció', conAmbos.barrio);
+ok(conAmbos.presupuesto === 3000000, 'y el presupuesto también', conAmbos.presupuesto);
+// Sin lectura directa se sigue usando lo del modelo: es mejor que nada.
+ok(pistasDeBusqueda({ zona: 'El Prado' }, {}, {}).barrio === 'El Prado',
+   'pero si no se pudo leer nada, lo del modelo sigue valiendo');
+
+console.log('\nY si en ese barrio no hay nada, se amplía a la ciudad');
+const amp = eng.slice(eng.indexOf('let ampliado = false;'), eng.indexOf('const lineas = (filas || []).map'));
+ok(/if \(!filas\.length && pistas\.barrio\)/.test(amp),
+   'solo cuando el barrio no dio nada, no siempre');
+ok(/q\.replace\(`&barrio=ilike/.test(amp),
+   'se quita el barrio y se dejan los demás filtros: presupuesto y habitaciones siguen');
+ok(/no hay NADA que encaje/.test(eng) && /no las presentes como si fueran de ahí/.test(eng),
+   'y se le dice al agente que lo diga, no que lo disimule');
 
 console.log('\n«Tres millones» son tres millones, no tres pesos');
 const plata = [

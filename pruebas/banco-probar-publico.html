@@ -37,6 +37,7 @@
   <button onclick="montar('vacio')">recién abierto</button>
   <button onclick="montar('invalido')">enlace inválido</button>
   <button onclick="montar('caducado')">enlace caducado</button>
+  <button onclick="montar('sinasesor')">sin asesor · sin filtrar</button>
   <button onclick="montar('tope')">tope agotado</button>
   <button onclick="montar('caido')">servidor caído</button>
   <span>·</span>
@@ -49,10 +50,23 @@
 let MODO = 'ok';
 
 const RESPUESTAS = {
-  ok:        { get: { nombre: 'Aura' }, post: { texto: 'Con gusto le ayudo. Tengo dos opciones en Buenavista:\n\nCP-1042 — 3 habitaciones, $2.700.000 · admón. $484.000 (por confirmar)\nCP-0988 — 2 habitaciones, $2.100.000\n\n¿Cuál le interesa ver?', bruto: 'x [CAPTURA: {"zona":"Buenavista"}]' } },
+  ok: { get: { nombre: 'Aura' }, post: {
+    texto: 'En Buenavista no tengo nada ahora mismo, pero sí en otras zonas de Barranquilla:\n\nRiomar · 3 hab · 2 baños · $1.800.000 (121513056)\nAlto Prado · 3 hab · 2 baños · $1.880.000 (121513470)\n\n*¿Cuál le interesa ver?*',
+    bruto: 'x',
+    capturado: { nombre: 'Alejandro González', celular: '3219972333', habitaciones: '3' },
+    escalar: false,
+    calificacion: { activa: true, estado: 'pendiente', cumplidas: 1, total: 2,
+      resumen: '¿Qué tipo de inmueble necesita? → Apartamento de 3 habitaciones ✅' },
+    ruta: { clave: 'arriendo', etiqueta: 'Arriendo', reconocida: true, asignada: true, asignar_nombre: null, por_turnos: 3 },
+    catalogo: { pistas: { operacion: 'arriendo', ciudad: 'Barranquilla', presupuesto: 3000000, habitaciones: 3 }, ofrecidas: 7 },
+  } },
   vacio:     { get: { nombre: 'Aura' } },
   invalido:  { get: { error: 'Este enlace no es válido.' }, codigo: 403 },
   caducado:  { get: { error: 'Este enlace caducó. Pídele uno nuevo a quien te lo compartió.' }, codigo: 410 },
+  sinasesor: { get: { nombre: 'Aura' }, post: { texto: 'Con gusto le ayudo.', bruto: 'x',
+    capturado: { nombre: 'Alejandro González' }, calificacion: { activa: true, estado: 'calificado', cumplidas: 2, total: 2, resumen: '' },
+    ruta: { clave: 'arriendo', etiqueta: 'Arriendo', reconocida: true, asignada: false, por_turnos: 0 },
+    catalogo: { pistas: {}, ofrecidas: 25 } } },
   tope:      { get: { nombre: 'Aura' }, post: { error: 'Se agotaron las pruebas de hoy para este enlace. Vuelve mañana.' }, codigoPost: 429 },
   caido:     { romper: true },
 };

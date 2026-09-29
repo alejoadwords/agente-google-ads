@@ -2,6 +2,20 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-agente-escucha",
+      "fecha": "2026-09-29",
+      "tipo": "arreglo",
+      "titulo": "El agente ya no ofrece lo que no le pediste",
+      "texto": "Si decías «busco un apartamento de 3 habitaciones», el agente te respondía con opciones de 2: la búsqueda en tu inventario nunca miraba las habitaciones. Tampoco usaba la ciudad, la zona ni el presupuesto de forma fiable, porque dependía de que el modelo los apuntara y a veces no lo hacía. Ahora esos cuatro datos se leen directamente de lo que escribe la persona, y los barrios y ciudades salen de tu propio catálogo. Además, si en el barrio que te piden no tienes nada, el agente amplía a la ciudad y lo dice en vez de presentarlas como si fueran de esa zona."
+    },
+    {
+      "id": "2026-09-29-probar-radiografia",
+      "fecha": "2026-09-29",
+      "tipo": "mejora",
+      "titulo": "El enlace de prueba ahora muestra lo que el agente entendió",
+      "texto": "Quien abra el enlace que compartes verá, junto al chat, los datos que el agente recogió, a qué proceso de venta manda la conversación, si la califica y cuántas opciones de tu inventario le ofreció. Es lo que hace falta para aprobarlo, no solo leer si la conversación suena bien. Y el resaltado de WhatsApp —lo que va entre asteriscos— ya se ve en negrita en las dos pantallas de prueba, igual que lo verá tu cliente en su teléfono."
+    },
+    {
       "id": "2026-09-29-tableros-por-asesor",
       "fecha": "2026-09-29",
       "tipo": "nuevo",

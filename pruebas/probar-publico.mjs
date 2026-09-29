@@ -84,14 +84,22 @@ console.log('\nSin secreto configurado no se firma nada');
 }
 
 // ── 2. Nada del CRM se escapa ───────────────────────────────────────────────
-console.log('\nQuien prueba ve la conversación y nada más');
+console.log('\nQué sale por el enlace y qué no');
 
-const devuelve = pub.slice(pub.lastIndexOf('return jsonResp({ texto'));
-ok(/return jsonResp\(\{ texto: r\.texto, bruto: r\.bruto \}\)/.test(devuelve),
-   'la respuesta pública lleva solo el texto y el historial en bruto');
-for (const dentro of ['calificacion', 'catalogo', 'capturado', 'ruta:']) {
-  ok(!devuelve.includes(dentro), `no se devuelve «${dentro}»: son nuestras tripas y su proceso comercial`);
+const devuelve = pub.slice(pub.lastIndexOf('return jsonResp({'));
+// La radiografía SÍ sale por el enlace. Al principio se dejó fuera por
+// prudencia —quien abre no tiene cuenta— y resultó ser justo lo que hacía
+// falta: quien prueba es el dueño del negocio, no un comprador, y lo que
+// quiere ver es si el agente entendió.
+for (const dentro of ['capturado', 'calificacion', 'ruta', 'catalogo']) {
+  ok(devuelve.includes(dentro + ':'), `se devuelve «${dentro}», que es lo que se juzga`);
 }
+// Lo que no sale: las líneas del catálogo. Son muchas, no aportan al juicio y
+// el número con sus filtros ya explica por qué ofreció lo que ofreció.
+ok(/pistas: r\.catalogo\?\.pistas \|\| \{\}, ofrecidas: r\.catalogo\?\.ofrecidas \|\| 0/.test(devuelve),
+   'del catálogo solo el número y los filtros, no la lista entera');
+ok(!/lineas/.test(devuelve), 'las líneas del inventario no viajan');
+
 ok(/select=name,is_active/.test(pub),
    'del agente solo se lee el nombre, no su prompt ni su contexto');
 ok(!/business_ctx|persona|faqs/.test(pub), 'la configuración no sale de aquí');
@@ -130,6 +138,12 @@ ok(/vista\.push\(\{ r: 'el', t: d\.texto \}\)/.test(pag), 'y se pinta el limpio'
 ok(/hist\.pop\(\); vista\.pop\(\)/.test(pag), 'un envío fallido no se queda en el historial');
 ok(/prefers-color-scheme: dark/.test(pag), 'y se ve en modo oscuro');
 ok(/Esto es una prueba/.test(pag), 'dice que es una prueba, para que nadie crea que ha contactado de verdad');
+ok(/function radiografia\(/.test(pag) && /id="rx"/.test(pag), 'y pinta la radiografía');
+ok(/Sin asesor asignado/.test(pag), 'incluido el aviso de que el lead se quedaría sin dueño');
+ok(/grid-template-columns:1fr\}/.test(pag),
+   'que en el teléfono va debajo del chat y no al lado');
+// El asterisco de WhatsApp se veía en crudo y parecía un fallo del agente.
+ok(/negritaWa/.test(pag), 'la negrita de WhatsApp se pinta como negrita');
 // Un alert() del sistema en un móvil tapa la pantalla entera y hay que darle a
 // Aceptar para poder seguir leyendo.
 ok(!/(?<!\/\/ [^\n]{0,80})\balert\(/.test(pag.replace(/\/\*[\s\S]*?\*\//g, '')),

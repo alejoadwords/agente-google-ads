@@ -102,6 +102,21 @@ export default async function handler(req) {
   });
   if (!r.ok) return jsonResp({ error: r.error }, 400);
 
-  // Solo la conversación. La radiografía se queda dentro.
-  return jsonResp({ texto: r.texto, bruto: r.bruto });
+  // La radiografía va también en el enlace: quien prueba es el dueño del
+  // negocio, no un comprador, y lo que quiere ver es justo si el agente
+  // entendió —qué datos recogió, a qué proceso manda, si califica—. Al
+  // principio se dejó fuera por prudencia y resultó ser lo que hacía falta.
+  //
+  // Lo único que no sale son las líneas del catálogo: son muchas y no aportan
+  // nada al juicio. El número y los filtros sí, que es lo que explica por qué
+  // ofreció lo que ofreció.
+  return jsonResp({
+    texto: r.texto,
+    bruto: r.bruto,
+    capturado: r.capturado,
+    escalar: r.escalar,
+    calificacion: r.calificacion,
+    ruta: r.ruta,
+    catalogo: { pistas: r.catalogo?.pistas || {}, ofrecidas: r.catalogo?.ofrecidas || 0 },
+  });
 }

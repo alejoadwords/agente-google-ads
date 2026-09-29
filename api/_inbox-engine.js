@@ -10,7 +10,7 @@
 import { ensureCatalog, enqueueAutomations, pipelinePrincipal } from './_lead-intake.js';
 import { getPolicy } from './_channel-policy.js';
 import { asignarLead } from './_assign.js';
-import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredicto, resumenLegible } from './_qualify.js';
+import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredicto, resumenLegible, asesoresDelTablero } from './_qualify.js';
 import { pautaDeReferral } from './_lead-intake.js';
 import { registrarUso } from './_uso-ia.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
@@ -110,6 +110,16 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
 
   if (pistas.ciudad) q += `&ciudad=ilike.*${encodeURIComponent(pistas.ciudad)}*`;
   if (pistas.barrio) q += `&barrio=ilike.*${encodeURIComponent(pistas.barrio)}*`;
+  // Quien pide tres habitaciones no quiere ver de dos.
+  //
+  // Esto no se filtraba, y el efecto era peor que no ofrecer nada: alguien
+  // pedía tres habitaciones, el motor le pasaba veinticinco opciones sin mirar
+  // cuántas tenían, y el agente le respondía «no tengo de tres, pero mira
+  // estas» — y las de la lista eran de dos. Quedaba como que no escucha.
+  //
+  // `gte` y no `eq`: nunca se ofrece menos de lo que pidió, y si algo más
+  // grande le cabe en el presupuesto, que lo vea.
+  if (pistas.habitaciones) q += `&habitaciones=gte.${pistas.habitaciones}`;
   if (pistas.presupuesto) {
     const tope = Math.round(pistas.presupuesto * 1.15);   // 15% de margen
     const col = esArriendo ? 'precio_arriendo' : esVenta ? 'precio_venta' : null;
@@ -123,7 +133,23 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
   q += '&order=precio.asc';
 
   try {
-    const filas = await fetch(q, { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    let filas = await fetch(q, { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+
+    // Si en ESE barrio no hay nada, se amplía a la ciudad en vez de devolver
+    // una lista vacía.
+    //
+    // Certain no tiene ni un arriendo en Buenavista, pero sí siete de tres
+    // habitaciones en Barranquilla dentro del presupuesto. Sin esto el agente
+    // se quedaba sin nada que enseñar justo cuando tenía la respuesta buena, y
+    // acababa ofreciendo lo primero que pillaba. Se avisa de que son otras
+    // zonas para que lo diga, no para que lo disimule.
+    let ampliado = false;
+    if (!filas.length && pistas.barrio) {
+      ampliado = true;
+      filas = await fetch(q.replace(`&barrio=ilike.*${encodeURIComponent(pistas.barrio)}*`, ''),
+        { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    }
+
     const lineas = (filas || []).map(f => {
       const propio = esArriendo ? f.precio_arriendo : esVenta ? f.precio_venta : null;
       const importe = propio ?? f.precio;
@@ -141,7 +167,7 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
         esArriendo && f.administracion ? 'admón. ' + plata(f.administracion) + ' (por confirmar)' : null,
       ].filter(Boolean).join(' · ');
     });
-    return { lineas, total: lineas.length };
+    return { lineas, total: lineas.length, ampliado, barrioPedido: pistas.barrio || null };
   } catch { return { lineas: [], total: 0 }; }
 }
 
@@ -166,6 +192,93 @@ export function tratamiento(tono) {
   return '- Háblale de tú, sin exagerar la informalidad: «¿en qué te ayudo?», «cuéntame qué buscas»';
 }
 
+// ── Lo que pidió la persona, leído de sus propias palabras ──────────────────
+// El modelo tenía que reportar ciudad, zona, presupuesto y habitaciones en su
+// bloque de captura. No lo hacía: se le pidió con ejemplos y en mayúsculas, y
+// en una conversación real donde el contacto dijo «Buenavista en Barranquilla»
+// y «máximo 3 millones» reportó solo «habitaciones: 3». El filtro se quedaba
+// sin pistas y el agente ofrecía lo primero del inventario diciendo «tengo
+// varias opciones en esa zona» — y eran de otro barrio.
+//
+// Así que esto no se le pide al modelo: se lee de lo que escribió la persona.
+// Los barrios y ciudades salen del catálogo del propio cliente, así que no hay
+// lista que mantener ni que adivinar.
+const sinTildes = (t) => String(t || '').toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+export async function zonasDelCliente(userId, clientId) {
+  try {
+    const filas = await fetch(
+      `${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
+      (clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null') +
+      '&select=ciudad,barrio',
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    const ciudades = new Map();
+    const barrios = new Map();
+    for (const f of filas || []) {
+      if (f.ciudad) ciudades.set(sinTildes(f.ciudad), f.ciudad);
+      if (f.barrio) barrios.set(sinTildes(f.barrio), f.barrio);
+    }
+    return { ciudades, barrios };
+  } catch { return { ciudades: new Map(), barrios: new Map() }; }
+}
+
+// El nombre más largo que aparezca en el texto. El más largo y no el primero
+// porque «Alto Prado» contiene «Prado»: con el primero, quien pide Alto Prado
+// acabaría viendo El Prado.
+function nombreEnTexto(texto, mapa) {
+  const t = sinTildes(texto);
+  let mejor = null;
+  for (const [clave, original] of mapa) {
+    if (clave.length < 4) continue;
+    if (!new RegExp('(^|[^a-z0-9])' + clave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])').test(t)) continue;
+    if (!mejor || clave.length > mejor.clave.length) mejor = { clave, original };
+  }
+  return mejor?.original || null;
+}
+
+// Cuántas habitaciones pidió: «3 habitaciones», «de 3 alcobas», «3 hab».
+export function habitacionesDelTexto(texto) {
+  const t = sinTildes(texto);
+  const m = t.match(/(\d{1,2})\s*(habitacion|habitaciones|alcoba|alcobas|cuarto|cuartos|dormitorio|dormitorios|hab\b|alc\b)/);
+  const n = m ? parseInt(m[1], 10) : null;
+  return n > 0 && n <= 20 ? n : null;
+}
+
+// Cuánto dijo que podía pagar. Solo si la frase habla de dinero: un «3
+// habitaciones» suelto no es un presupuesto, y un código de inmueble tampoco.
+export function presupuestoDelTexto(texto) {
+  const t = sinTildes(texto);
+  // Las frases se cortan por punto y coma, salto de línea o punto SEGUIDO DE
+  // ESPACIO. Cortando por cualquier punto, «$4.000.000» se partía en tres y el
+  // presupuesto desaparecía.
+  const frases = t.split(/[;\n]|\.\s+/)
+    .filter(f => /\$|millon|millones|mil\b|presupuesto|pagar|canon|mensual|maximo|hasta/.test(f));
+  for (const f of frases) {
+    // Una frase que habla de habitaciones no habla de plata.
+    if (/habitacion|alcoba|cuarto|dormitorio|bano/.test(f)) continue;
+    const v = aPlata(f);
+    if (v) return v;
+  }
+  return null;
+}
+
+export async function pistasDelContacto(userId, clientId, mensajes = []) {
+  const texto = (mensajes || [])
+    .filter(m => m && m.role === 'user')
+    .map(m => String(m.content || ''))
+    .join(' \n ');
+  if (!texto.trim()) return {};
+  const { ciudades, barrios } = await zonasDelCliente(userId, clientId);
+  return {
+    ciudad: nombreEnTexto(texto, ciudades),
+    barrio: nombreEnTexto(texto, barrios),
+    presupuesto: presupuestoDelTexto(texto),
+    habitaciones: habitacionesDelTexto(texto),
+  };
+}
+
 // Las pistas con las que se filtra el inventario, sacadas de los dos sitios
 // donde el agente deja lo que ha entendido.
 //
@@ -180,7 +293,7 @@ export function tratamiento(tono) {
 // Ahora se pide en la captura Y se recoge de la calificación, emparejando por
 // el nombre del criterio: quien configura la regla los llama «presupuesto» o
 // «zona» porque es lo que son.
-export function pistasDeBusqueda(capturado = {}, respuestas = {}) {
+export function pistasDeBusqueda(capturado = {}, respuestas = {}, delContacto = {}) {
   const deCriterio = (...nombres) => {
     for (const [clave, r] of Object.entries(respuestas || {})) {
       if (clave === '_ruta' || !r?.valor) continue;
@@ -188,11 +301,19 @@ export function pistasDeBusqueda(capturado = {}, respuestas = {}) {
     }
     return null;
   };
+  const cuantas = (v) => {
+    const n = parseInt(String(v ?? '').replace(/[^\d]/g, ''), 10);
+    return n > 0 && n <= 20 ? n : null;
+  };
+  // Lo que dijo la persona manda sobre lo que el modelo reportó: es la fuente,
+  // no una interpretación. Y el modelo llegó a poner como zona la del inmueble
+  // que él mismo estaba ofreciendo.
   return {
     operacion: respuestas?._ruta || null,
-    ciudad: capturado.ciudad || deCriterio('ciudad') || null,
-    barrio: capturado.zona || capturado.barrio || deCriterio('zona', 'barrio', 'sector') || null,
-    presupuesto: aPlata(capturado.presupuesto) || aPlata(deCriterio('presupuesto', 'canon', 'precio')),
+    ciudad: delContacto.ciudad || capturado.ciudad || deCriterio('ciudad') || null,
+    barrio: delContacto.barrio || capturado.zona || capturado.barrio || deCriterio('zona', 'barrio', 'sector') || null,
+    presupuesto: delContacto.presupuesto || aPlata(capturado.presupuesto) || aPlata(deCriterio('presupuesto', 'canon', 'precio')),
+    habitaciones: delContacto.habitaciones || cuantas(capturado.habitaciones) || cuantas(deCriterio('habitacion', 'alcoba', 'cuarto', 'dormitorio')),
   };
 }
 
@@ -304,7 +425,8 @@ LO QUE NO PUEDES INVENTAR — ESTO ES INNEGOCIABLE:
 ${propiedades && propiedades.lineas.length ? `LO QUE HAY DISPONIBLE AHORA MISMO (${propiedades.total} opciones que encajan con lo que te dijeron):
 ${propiedades.lineas.join('\n')}
 
-Sobre esta lista:
+Sobre esta lista:${propiedades.ampliado ? `
+- OJO: en ${propiedades.barrioPedido} no hay NADA que encaje. Estas son de OTRAS zonas de la misma ciudad. Dilo antes de enseñarlas —"en ${propiedades.barrioPedido} no tengo nada ahora mismo, pero sí en otras zonas"— y no las presentes como si fueran de ahí` : ''}
 - Es lo unico que puedes ofrecer. Si te preguntan por algo que no esta aqui, no lo inventes: dilo y ofrece pasar la conversacion a un asesor
 - Menciona como mucho tres opciones por mensaje y pregunta cual le interesa
 - Cada opcion va en SU PROPIA LINEA, no seguidas dentro de un parrafo. Una linea de presentacion, las opciones debajo separadas por salto de linea, y la pregunta al final. Asi se lee de un vistazo en el movil
@@ -324,9 +446,10 @@ ${bloqueDeAnuncio(referral)}DATOS CAPTURADOS HASTA AHORA:
 ${captured}
 
 Cuando detectes un dato nuevo en la conversación, incluye al final de tu respuesta (invisible para el usuario):
-[CAPTURA: {"nombre": "...", "celular": "...", "email": "...", "interes": "...", "ciudad": "...", "zona": "...", "presupuesto": "..."}]
+[CAPTURA: {"nombre": "...", "celular": "...", "email": "...", "interes": "...", "ciudad": "...", "zona": "...", "presupuesto": "...", "habitaciones": "..."}]
 Solo incluye los campos que tengas. Omite este bloque si no hay datos nuevos.
-Ciudad, zona y presupuesto son los que deciden qué te enseño del inventario: en cuanto los oigas, aunque sea de pasada, ponlos. «Un apartamento en Buenavista» ya es una zona. «Hasta tres millones» ya es un presupuesto, y va en números, sin puntos ni símbolos: 3000000.${bloqueDePrompt(reglaCalificacion)}`;
+Ciudad, zona, presupuesto y habitaciones son los que deciden qué te enseño del inventario: en cuanto los oigas, aunque sea de pasada, ponlos. «Un apartamento de 3 habitaciones en Buenavista» son las dos cosas. «Hasta tres millones» ya es un presupuesto, y va en números, sin puntos ni símbolos: 3000000.
+IMPORTANTE: esos cuatro campos son lo que la persona PIDE, no lo que tú le ofreces. Si le enseñas un inmueble en otro barrio, la zona sigue siendo la que ella dijo. No la cambies nunca por la de una opción que mencionaste tú.${bloqueDePrompt(reglaCalificacion)}`;
 }
 
 // El agente de WhatsApp contesta con un guion cerrado y un inventario delante:
@@ -411,8 +534,9 @@ export async function sugerirRespuesta(userId, conversationId) {
   const capturedData = extractCapturedData(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
   const previas = extraerCalificacion(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
   const clienteDelCanal = connection?.client_id || agent.client_id || null;
+  const delContacto = await pistasDelContacto(userId, clienteDelCanal, hist).catch(() => ({}));
   const inventario = await propiedadesParaPrompt(userId, clienteDelCanal,
-    pistasDeBusqueda(capturedData, previas)).catch(() => ({ lineas: [], total: 0 }));
+    pistasDeBusqueda(capturedData, previas, delContacto)).catch(() => ({ lineas: [], total: 0 }));
 
   // Sin la regla de calificación: los bloques ocultos solo tienen sentido cuando
   // el mensaje se guarda, y este no se guarda.
@@ -478,7 +602,11 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   // Las pistas, calculadas aparte y devueltas: son la explicación de por qué el
   // agente ofreció lo que ofreció. Un catálogo que no filtra no se nota en la
   // respuesta, se nota aquí.
-  const pistas = pistasDeBusqueda(capturado, previas);
+  // El ensayo lee las pistas igual que la conversación real: de lo que escribió
+  // la persona. Si aquí se leyeran de otro sitio, el probador daría luz verde a
+  // un agente que luego se comporta distinto.
+  const delContacto = await pistasDelContacto(userId, agent.client_id || null, limpios).catch(() => ({}));
+  const pistas = pistasDeBusqueda(capturado, previas, delContacto);
   const inventario = await propiedadesParaPrompt(userId, agent.client_id || null, pistas)
     .catch(() => ({ lineas: [], total: 0 }));
 
@@ -498,6 +626,10 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   const nuevo = extractCapturedData(bruto);
   const ruta = respuestas._ruta || null;
   const destino = ruta ? (regla?.enrutado?.rutas || []).find(r => r.clave === ruta) || null : null;
+  // Cuántos atienden ese tablero: es lo que decide si el lead tendría dueño.
+  const porTurnos = destino?.pipeline_id
+    ? (await asesoresDelTablero(userId, destino.pipeline_id).catch(() => [])).length
+    : 0;
 
   return {
     ok: true,
@@ -519,8 +651,14 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
       // Que el modelo devuelva una clave que el enrutado no conoce es un fallo
       // silencioso en producción: el lead se queda donde estaba. Aquí se ve.
       reconocida: !!destino,
-      asignada: !!destino?.asignar_a,
+      // Hay dos formas de tener dueño: un asesor fijo en la ruta, o el reparto
+      // por turnos entre quienes atienden ese tablero. Mirando solo la primera,
+      // la radiografía decía «Sin asesor asignado» con el equipo perfectamente
+      // repartido — y eso es peor que no decir nada, porque manda a arreglar
+      // algo que ya está bien.
+      asignada: !!destino?.asignar_a || porTurnos > 0,
       asignar_nombre: destino?.asignar_nombre || null,
+      por_turnos: destino?.asignar_a ? 0 : porTurnos,
     } : null,
     catalogo: { pistas, ofrecidas: inventario.total, lineas: inventario.lineas },
   };
@@ -952,8 +1090,9 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // Pistas: lo que el agente ya dedujo. La operacion sale del enrutado; el resto,
   // de lo que haya capturado. Sin pistas se le pasan las primeras del inventario.
   const previas = extraerCalificacion(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
+  const delContacto = await pistasDelContacto(connection.user_id, clienteDelCanal, hist).catch(() => ({}));
   const inventario = await propiedadesParaPrompt(connection.user_id, clienteDelCanal,
-    pistasDeBusqueda(capturedData, previas)).catch(() => ({ lineas: [], total: 0 }));
+    pistasDeBusqueda(capturedData, previas, delContacto)).catch(() => ({ lineas: [], total: 0 }));
 
   const reply = await responderViendo(
     buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null),

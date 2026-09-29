@@ -22392,6 +22392,17 @@ function agPrbReiniciar() {
   agPrbRadiografia(null);
 }
 
+// La negrita de WhatsApp, *así*, pintada como negrita.
+//
+// Al agente se le pide que resalte con un asterisco porque es lo que entiende
+// WhatsApp. En la prueba se veía el asterisco en crudo y parecía un fallo del
+// agente: lo que el cliente va a ver en su teléfono es la palabra en negrita.
+// Una prueba que no se parece al resultado no sirve para aprobarlo.
+function negritaWa(texto) {
+  return esc(texto).replace(/(^|[\s(¡¿"'])\*([^*\n]{1,120}?)\*(?=$|[\s.,;:!?)"'])/g,
+    (m, antes, dentro) => antes + '<strong>' + dentro + '</strong>');
+}
+
 function agPrbPintar() {
   const c = document.getElementById('ag-prb-chat');
   if (!c) return;
@@ -22402,7 +22413,7 @@ function agPrbPintar() {
   }
   c.innerHTML = agPrbVista.map(m =>
     '<div class="ag-prb-fila crm-inbox-bubble-wrap ' + m.role + '">' +
-      '<div class="crm-inbox-bubble ' + m.role + '">' + esc(m.content) + '</div>' +
+      '<div class="crm-inbox-bubble ' + m.role + '">' + negritaWa(m.content) + '</div>' +
     '</div>'
   ).join('') + (agPrbOcupado
     ? '<div class="ag-prb-fila crm-inbox-bubble-wrap assistant"><div class="crm-inbox-bubble assistant" style="opacity:.6">Escribiendo…</div></div>'
@@ -22434,10 +22445,15 @@ function agPrbRadiografia(r) {
     : nada('Todavía ninguno')));
 
   if (r.ruta) {
+    const quien = r.ruta.asignar_nombre
+      ? 'Asignado a ' + esc(r.ruta.asignar_nombre)
+      : r.ruta.por_turnos
+        ? 'Por turnos entre ' + r.ruta.por_turnos + (r.ruta.por_turnos === 1 ? ' asesor' : ' asesores')
+        : 'Asignado a un asesor';
     partes.push(bloque('Proceso', r.ruta.reconocida
       ? '<p><strong>' + esc(r.ruta.etiqueta || r.ruta.clave) + '</strong><br>' +
         (r.ruta.asignada
-          ? '<span class="ag-prb-bien">Asignado a ' + esc(r.ruta.asignar_nombre || 'un asesor') + '</span>'
+          ? '<span class="ag-prb-bien">' + quien + '</span>'
           : '<span class="ag-prb-mal">Sin asesor asignado</span>') + '</p>'
       : '<p class="ag-prb-mal">Dijo «' + esc(r.ruta.clave) + '», que no está entre tus opciones. ' +
         'En producción el lead se quedaría donde estaba.</p>'));
