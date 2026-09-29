@@ -360,6 +360,36 @@ export async function fotosPedidas(texto, userId, clientId) {
   } catch { return []; }
 }
 
+// Un agente en «usted» que tutea.
+//
+// Es raro —17 turnos seguidos en producción sin uno— pero pasa, y cuando pasa
+// en el primer mensaje la conversación entera se va detrás: el modelo mantiene
+// el registro que empezó. Un cliente que pidió trato formal vería toda la
+// conversación tuteada.
+//
+// Reescribir el texto del agente para quitarle las formas en segunda persona no
+// cambia nada: medido, 0 de 12 con y sin ellas. Así que no se le pide mejor: se
+// comprueba.
+//
+// La lista es corta y sin ambigüedad a propósito. «Tiene» es usted y «tienes»
+// es tú; un falso positivo aquí cuesta una llamada de más al modelo, así que
+// solo entran las formas que no pueden ser otra cosa.
+const TUTEA = new RegExp('(^|[^a-záéíóúñ])(' + [
+  'tú', 'tu', 'tus', 'te', 'ti', 'contigo', 'tuyo', 'tuya',
+  'puedes', 'quieres', 'tienes', 'necesitas', 'buscas', 'estás', 'eres', 'sabes',
+  'prefieres', 'deseas', 'quedas', 'vienes', 'vives', 'dispones',
+  'dime', 'cuéntame', 'cuentame', 'escríbeme', 'escribeme', 'llámame', 'llamame',
+  'avísame', 'avisame', 'mándame', 'mandame', 'confirmame', 'confírmame',
+  // Subjuntivos e imperativos de tú. «Mira» y «elige» entran porque en usted
+  // serían «mire» y «elija»: no hay forma de confundirlos.
+  'hayas', 'hagas', 'digas', 'puedas', 'quieras', 'tengas', 'necesites', 'estés',
+  'seas', 'sepas', 'vengas', 'vayas', 'mira', 'elige', 'dame',
+].join('|') + ')([^a-záéíóúñ]|$)', 'i');
+
+export function tutea(texto) {
+  return TUTEA.test(String(texto || '').toLowerCase());
+}
+
 // ── El guardián: lo que el agente dice tiene que estar en lo que le dimos ────
 //
 // La regla de "no inventes" lleva en el prompt desde siempre, en mayúsculas y
@@ -1379,6 +1409,25 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // Esto es lo único que hace la regla irrompible: no depende de que el modelo
   // obedezca. Un precio inventado no se desmiente después, porque el contacto
   // ya lo leyó.
+  // Y el trato: un agente en «usted» que tutea en el primer mensaje arrastra el
+  // registro toda la conversación. Se comprueba aquí, por lo mismo que los
+  // inventos: pedírselo mejor al modelo ya se intentó y no basta siempre.
+  if (agent.tone === 'formal' && tutea(cleanForUser(reply))) {
+    const deUsted = await responderViendo(system, hist, [
+      { role: 'assistant', content: reply },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió: tuteaste, y este cliente pidió trato de usted. ' +
+        'Escríbelo otra vez tratándole de USTED: «le ayudo», «cuénteme», «su presupuesto». Nada de «tú», «te», «tu» ni «ti». ' +
+        'El contacto no vio nada y no te ha corregido: no te disculpes ni lo menciones, escribe el mensaje como si fuera el primero.' },
+    ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
+    if (deUsted && !tutea(cleanForUser(deUsted))) reply = deUsted;
+    await registrarError({
+      origen: 'inbox', donde: 'el agente tuteó estando en usted',
+      error: new Error('Tuteo en un agente formal'),
+      usuario: connection.user_id,
+      detalle: (deUsted && !tutea(cleanForUser(deUsted))) ? 'corregido al segundo intento' : 'NO se pudo corregir, salió tuteando',
+    }).catch(() => {});
+  }
+
   const citable = loQuePuedeCitar(agent, inventario, hist);
   let invento = inventos(cleanForUser(reply), citable);
   // Lo que se inventó la PRIMERA vez, para el registro. `invento` se vacía al

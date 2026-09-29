@@ -18,7 +18,7 @@
 // la primera, vaya sola, traiga ejemplo y no admita excepciones.
 
 import { readFileSync } from 'node:fs';
-import { tratamiento, buildSystemPrompt } from '../api/_inbox-engine.js';
+import { tratamiento, buildSystemPrompt, tutea } from '../api/_inbox-engine.js';
 
 let mal = 0;
 const ok = (c, m, extra) => {
@@ -67,6 +67,39 @@ ok(lineas[0] === f.trim(), 'es la PRIMERA instrucción de comportamiento, no una
 // Y sola: el fallo original fue ir pegada a otra con un punto en medio.
 ok(!/cálida y natural.*usted/i.test(pFormal),
    'y no cuelga de «habla como una persona real», que es como se perdía');
+
+// ── Y si aun así tutea, no sale ─────────────────────────────────────────────
+// La instrucción funciona casi siempre: 17 turnos seguidos en producción sin
+// un tuteo. Pero lo vi una vez, y cuando pasa en el primer mensaje la
+// conversación entera se va detrás. Reescribir el texto del agente para
+// quitarle las formas en segunda persona no cambia nada —medido, 0 de 12 con y
+// sin ellas—, así que no se le pide mejor: se comprueba antes de enviar.
+console.log('\nY si aun así tutea, el mensaje no sale');
+
+for (const t of ['¿Cuál es su presupuesto máximo?', 'Voy a ayudarle a encontrar lo que busca',
+                 'El inmueble tiene 3 habitaciones', 'Si lo desea, le comparto más opciones',
+                 'Mire estas opciones', 'Elija la que prefiera', 'Cuando usted quiera, coordinamos',
+                 'El asesor le escribe hoy mismo']) {
+  ok(!tutea(t), 'no marca como tuteo: ' + JSON.stringify(t.slice(0, 40)));
+}
+for (const t of ['Me alegra que nos hayas contactado', '¿Alguna de estas te interesa?',
+                 'con gusto te ayudo', '¿Cuál es tu presupuesto?', 'Mira estas opciones',
+                 'dime qué necesitas', 'cuando puedas me avisas', 'elige la que quieras',
+                 '¿Qué tipo de inmueble tienes en mente?', '¿Ya sabes en qué zona?', '¿Estás disponible mañana?']) {
+  ok(tutea(t), 'lo detecta: ' + JSON.stringify(t.slice(0, 40)));
+}
+
+const eng = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
+const g = eng.slice(eng.indexOf("if (agent.tone === 'formal' && tutea("), eng.indexOf('const citable = loQuePuedeCitar'));
+ok(g.length > 200, 'el guardián del trato existe en la conversación real');
+ok(/agent\.tone === 'formal'/.test(g), 'solo cuando el cliente pidió usted');
+ok(/if \(deUsted && !tutea\(cleanForUser\(deUsted\)\)\) reply = deUsted;/.test(g),
+   'y solo se usa la corrección si de verdad dejó de tutear');
+ok(/no te disculpes ni lo menciones/.test(g),
+   'sin pedirle perdón al contacto, que no vio nada');
+ok(/donde: 'el agente tuteó estando en usted'/.test(g), 'y queda registrado');
+ok(eng.indexOf("donde: 'el agente tuteó estando en usted'") < eng.indexOf('await send(connection, contactId, visible)'),
+   'la comprobación va antes del envío');
 
 console.log('');
 process.exit(mal ? 1 : 0);

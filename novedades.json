@@ -13,6 +13,13 @@
       }
     },
     {
+      "id": "2026-09-29-trato-garantizado",
+      "fecha": "2026-09-29",
+      "tipo": "arreglo",
+      "titulo": "Si configuraste el agente en «usted», ya no se le escapa un tuteo",
+      "texto": "La instrucción funcionaba casi siempre, pero de vez en cuando se le colaba un «cuéntame» en el primer mensaje — y a partir de ahí la conversación entera seguía tuteando. Ahora, antes de enviar, se comprueba que el mensaje trate de usted: si no, no sale, se le pide que lo reescriba y solo entonces se envía. No tienes que cambiar nada en el texto de tu agente."
+    },
+    {
       "id": "2026-09-29-no-inventar",
       "fecha": "2026-09-29",
       "tipo": "arreglo",
