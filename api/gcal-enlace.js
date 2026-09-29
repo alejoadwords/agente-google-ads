@@ -35,6 +35,10 @@ export default async function handler(req) {
     const para = new URL(req.url).searchParams.get('para');
     return json({ error: para === 'meta'
       ? 'Solo el administrador de la cuenta conecta Meta Ads.'
+      : para === 'google'
+        ? 'Solo el administrador de la cuenta conecta Google Ads.'
+      : para === 'linkedin'
+        ? 'Solo el administrador de la cuenta conecta LinkedIn Ads.'
       : para === 'whatsapp'
         ? 'Solo el administrador de la cuenta conecta números de WhatsApp.'
         : 'Solo el administrador de la cuenta conecta el Google Calendar de la Agenda.' }, 403);
@@ -62,8 +66,11 @@ export default async function handler(req) {
 
   // ?para=meta: el mismo enlace firmado para conectar Meta Ads. Mismo criterio
   // —lo decide la sesión, a nombre de la cuenta, solo un administrador—.
-  const para = new URL(req.url).searchParams.get('para') === 'meta' ? 'meta' : 'calendario';
+  // ?para=google / ?para=linkedin: Google Ads y LinkedIn, igual.
+  const DESTINO = { meta: '/api/meta-auth?c=', google: '/api/google-ads-auth?c=', linkedin: '/api/linkedin-auth?c=', calendario: '/api/gcal-auth?c=' };
+  const pedidoPara = new URL(req.url).searchParams.get('para');
+  const para = DESTINO[pedidoPara] ? pedidoPara : 'calendario';
   const t = await crearEnlaceCuenta(quien.userId, para);
   if (!t) return json({ error: 'Falta la clave para firmar enlaces en el servidor.' }, 500);
-  return json({ url: (para === 'meta' ? '/api/meta-auth?c=' : '/api/gcal-auth?c=') + t });
+  return json({ url: DESTINO[para] + t });
 }

@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-google-linkedin-seguros",
+      "fecha": "2026-09-29",
+      "tipo": "mejora",
+      "titulo": "Google Ads y LinkedIn: tus permisos ya no pasan por el navegador",
+      "texto": "El permiso que le das a Acuarius para trabajar con tu cuenta de Google Ads o de LinkedIn se queda guardado y cifrado en nuestros servidores, y desde ahí se usa. Tu navegador solo sabe que la cuenta está conectada, así que ninguna extensión ni página abierta puede llevárselo. Además, el enlace para conectar va firmado a nombre de tu cuenta: nadie puede enviarte un enlace para que tu cuenta publicitaria acabe conectada a la de otra persona. Si ya tenías Google Ads conectado, sigue funcionando igual; no tienes que volver a conectarlo."
+    },
+    {
       "id": "2026-09-29-criterios-condicion",
       "fecha": "2026-09-29",
       "tipo": "mejora",

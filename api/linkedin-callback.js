@@ -1,16 +1,20 @@
 // api/linkedin-callback.js
 // Recibe el código de LinkedIn, obtiene access token y lo guarda en Supabase
 
+import { cifrar } from './_cifrado.js';
+import { abrirEnlaceCuenta } from './_enlace-calendario.js';
+
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 async function saveLinkedInConnection(userId, token, expiresIn, userInfo) {
-  if (!userId || !SUPABASE_URL) return;
+  if (!userId || !SUPABASE_URL) return false;
   const expiresAt = new Date(Date.now() + (expiresIn || 5184000) * 1000).toISOString();
   const payload = {
     user_id:          userId,
     platform:         'linkedin_ads',
-    access_token:     token,
+    // Cifrado como los de Google y Meta: era el único que se guardaba en claro.
+    access_token:     await cifrar(token),
     refresh_token:    null,
     token_expires_at: expiresAt,
     account_name:     userInfo.name || userInfo.email || '',
@@ -36,16 +40,23 @@ async function saveLinkedInConnection(userId, token, expiresIn, userInfo) {
     const errText = await saveRes.text().catch(() => '');
     console.error('saveLinkedInConnection error:', saveRes.status, errText.slice(0, 300));
   }
+  return saveRes.ok;
 }
 
 export default async function handler(req, res) {
   const { code, state, error } = req.query;
 
+  // De quién es la conexión lo dice la FIRMA, nunca un userId del state.
+  let firmado = '';
+  try { firmado = JSON.parse(state || '{}').c || ''; } catch {}
+  const firma = await abrirEnlaceCuenta(firmado, 'linkedin');
+  if (!firma || firma.caducado) {
+    return res.redirect('https://app.acuarius.app/?linkedin_error=' + (firma?.caducado ? 'enlace_caducado' : 'enlace_invalido'));
+  }
+  const userId = firma.userId;
+
   if (error) return res.redirect('https://app.acuarius.app/?linkedin_error=access_denied');
   if (!code)  return res.status(400).json({ error: 'Código de autorización faltante' });
-
-  let userId = '';
-  try { userId = JSON.parse(state || '{}').userId || ''; } catch {}
 
   const clientId     = process.env.LINKEDIN_CLIENT_ID;
   const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
@@ -81,18 +92,16 @@ export default async function handler(req, res) {
     const email = userInfo.email || '';
     const id    = userInfo.sub   || '';
 
-    // 3. Guardar en Supabase (no bloquea el redirect si falla)
-    if (userId) {
-      await saveLinkedInConnection(userId, accessToken, tokenData.expires_in, { name, email, id });
-    }
+    // 3. Guardar. El token se queda en el servidor: antes volvía en la URL y
+    // acababa en el historial y en sessionStorage. Si no se guarda, se dice.
+    const guardado = await saveLinkedInConnection(userId, accessToken, tokenData.expires_in, { name, email, id });
+    if (!guardado) return res.redirect('https://app.acuarius.app/?linkedin_error=save_failed');
 
-    // Siempre redirigir con el token en la URL para que el frontend lo guarde en sessionStorage
     const params = new URLSearchParams({
       linkedin_connected: 'true',
-      linkedin_token:     accessToken,
       linkedin_name:      name,
       linkedin_email:     email,
-      ...(userId ? { platform: 'linkedin_ads' } : {}),
+      platform:           'linkedin_ads',
     });
     return res.redirect(`https://app.acuarius.app/?${params}`);
 

@@ -2,6 +2,7 @@
 // Recibe el código de Google, obtiene tokens y los guarda en Supabase
 
 import { cifrar } from '../_cifrado.js';
+import { abrirEnlaceCuenta } from '../_enlace-calendario.js';
 const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -47,11 +48,18 @@ async function saveGoogleConnection(userId, tokens, userInfo) {
 export default async function handler(req, res) {
   const { code, state, error } = req.query;
 
+  // De quién es la conexión lo dice la FIRMA, nunca un userId del state: el
+  // state viaja por el navegador y se puede cambiar entre Google y nosotros.
+  let firmado = '';
+  try { firmado = JSON.parse(state || '{}').c || ''; } catch {}
+  const firma = await abrirEnlaceCuenta(firmado, 'google');
+  if (!firma || firma.caducado) {
+    return res.redirect('https://app.acuarius.app/?ads_error=' + (firma?.caducado ? 'enlace_caducado' : 'enlace_invalido'));
+  }
+  const userId = firma.userId;
+
   if (error) return res.redirect('https://app.acuarius.app/?ads_error=access_denied');
   if (!code)  return res.status(400).json({ error: 'Código de autorización faltante' });
-
-  let userId = '';
-  try { userId = JSON.parse(state || '{}').userId || ''; } catch {}
 
   const clientId     = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -74,32 +82,20 @@ export default async function handler(req, res) {
     const userRes  = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
-    const userInfo = await userRes.json();
+    const userInfo = await userRes.json().catch(() => ({}));
 
-    if (userId) {
-      // Intentar guardar en Supabase
-      await saveGoogleConnection(userId, tokens, userInfo);
-      // Pasar el token en la URL también — el frontend lo guarda en sessionStorage
-      // inmediatamente sin depender de la lectura de Supabase.
-      // El token es de corta duración (1h) y la URL se limpia con replaceState.
-      return res.redirect(
-        `https://app.acuarius.app/?ads_connected=true&platform=google_ads` +
-        `&ads_email=${encodeURIComponent(userInfo.email || '')}` +
-        `&ads_token=${encodeURIComponent(tokens.access_token)}` +
-        `&ads_refresh=${encodeURIComponent(tokens.refresh_token || '')}` +
-        `&uid=${encodeURIComponent(userId)}`
-      );
-    }
+    // El token se queda en el servidor. Antes volvía en la URL —incluido el
+    // refresh_token, que no caduca— y acababa en el historial del navegador,
+    // en los registros de Vercel y en sessionStorage. Si no se guarda, se dice:
+    // antes el navegador tiraba del token de la URL y la conexión «funcionaba»
+    // hasta la siguiente sesión.
+    const guardado = await saveGoogleConnection(userId, tokens, userInfo);
+    if (!guardado) return res.redirect('https://app.acuarius.app/?ads_error=save_failed');
 
-    // Fallback sin userId
-    const params = new URLSearchParams({
-      ads_connected: 'true',
-      ads_email:     userInfo.email || '',
-      ads_token:     tokens.access_token,
-      ads_refresh:   tokens.refresh_token || '',
-    });
-    return res.redirect(`https://app.acuarius.app/?${params}`);
-
+    return res.redirect(
+      `https://app.acuarius.app/?ads_connected=true&platform=google_ads` +
+      `&ads_email=${encodeURIComponent(userInfo.email || '')}`
+    );
   } catch (err) {
     console.error('OAuth callback error:', err);
     return res.redirect('https://app.acuarius.app/?ads_error=server_error');

@@ -230,7 +230,10 @@ console.log('\nEl navegador\n');
   };
   const llamadas = [], toasts = [];
   const win = { location: { href: '' } };
-  const ir = new Function('fetchAuth', 'showToast', 'window', cuerpo('async function irAConectarMeta() {') + '; return irAConectarMeta;')(
+  // Desde el 29-09-2026 el botón de Meta es un atajo del genérico irAConectar,
+  // que comparten Google Ads y LinkedIn.
+  const ir = new Function('fetchAuth', 'showToast', 'window',
+    cuerpo('async function irAConectar(para, nombre) {') + '\n' + cuerpo('function irAConectarMeta() {') + '; return irAConectarMeta;')(
     async (u, o) => { llamadas.push([u, o && o.method]); return resp({ url: '/api/meta-auth?c=FIRMA' }); },
     (t, k) => toasts.push([t, k]), win);
   await ir();
@@ -336,7 +339,9 @@ console.log('\nEl token de Meta vive en el servidor\n');
 {
   // admin get-connection: para Meta, sin el token (salvo el backoffice).
   const src = readFileSync(new URL('../api/admin.js', import.meta.url), 'utf8');
-  ok(/const sinToken = platform === 'meta_ads' && !authCheck\(req\);/.test(src) && /\.\.\.\(sinToken \? \{\} : \{ access_token: c\.access_token \}\)/.test(src),
+  // Desde el 29-09-2026 la lista incluye Google Ads y LinkedIn; se ejecuta de
+  // verdad en pruebas/google-linkedin-sin-token.mjs.
+  ok(/SIN_TOKEN_AL_NAVEGADOR = new Set\(\[[^\]]*'meta_ads'/.test(src) && /const sinToken = SIN_TOKEN_AL_NAVEGADOR\.has\(platform\) && !authCheck\(req\);/.test(src) && /\.\.\.\(sinToken \? \{\} : \{ access_token: c\.access_token \}\)/.test(src),
      'get-connection de Meta ya no da el token al navegador');
 }
 

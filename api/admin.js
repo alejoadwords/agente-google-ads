@@ -713,6 +713,8 @@ CREATE INDEX idx_connections_user ON platform_connections(user_id);
 
 */
 
+const SIN_TOKEN_AL_NAVEGADOR = new Set(['meta_ads', 'google_ads', 'linkedin_ads']);
+
 async function handleGetConnection(req, res) {
   // El router ya impuso el userId de la sesión sobre el de la petición.
   const { userId, platform } = req.query;
@@ -731,10 +733,10 @@ async function handleGetConnection(req, res) {
   // token utilizable. Que este endpoint lo devuelva en claro es una exposición
   // aparte, anterior a esto, anotada como tal.
   const c = await abrirConexion(rows[0]);
-  // Meta Ads ya NO le da el token al navegador: vive en el servidor, que lo usa
-  // por su cuenta (api/meta-ads.js). Solo el backoffice —con el secreto de
-  // admin— lo sigue recibiendo. Google y LinkedIn aún no se han pasado.
-  const sinToken = platform === 'meta_ads' && !authCheck(req);
+  // Meta, Google Ads y LinkedIn ya NO le dan el token al navegador: vive en el
+  // servidor, que lo usa por su cuenta (meta-ads, google-ads, linkedin-ads).
+  // Solo el backoffice —con el secreto de admin— lo sigue recibiendo.
+  const sinToken = SIN_TOKEN_AL_NAVEGADOR.has(platform) && !authCheck(req);
   return res.json({
     connected:       true,
     ...(sinToken ? {} : { access_token: c.access_token }),
@@ -845,6 +847,13 @@ async function handleLogApiAction(req, res) {
 // Devuelve el error de Supabase si falla — nada de fallos silenciosos.
 async function handleSaveConnection(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  // Guardar un token que trae el navegador ya solo lo hace el backoffice. Las
+  // conexiones se guardan en su callback de OAuth, en el servidor; aceptarlo
+  // desde la app era dejar que cualquiera metiera en su cuenta un token que no
+  // salió de nuestro OAuth, y además se guardaba sin cifrar.
+  if (!authCheck(req)) {
+    return res.status(403).json({ error: 'Las conexiones se guardan al terminar de conectarlas; vuelve a conectar desde Configuración → Conexiones.' });
+  }
   const { userId, platform, access_token, refresh_token, account_name, expires_in } = req.body || {};
   if (!userId || !platform || !access_token) return res.status(400).json({ error: 'userId, platform y access_token requeridos' });
   if (!['google_ads', 'meta_ads', 'linkedin_ads'].includes(platform)) return res.status(400).json({ error: 'platform inválida' });
@@ -852,8 +861,8 @@ async function handleSaveConnection(req, res) {
   const payload = {
     user_id:          userId,
     platform,
-    access_token,
-    ...(refresh_token ? { refresh_token } : {}),
+    access_token:     await cifrar(access_token),
+    ...(refresh_token ? { refresh_token: await cifrar(refresh_token) } : {}),
     token_expires_at: expiresAt,
     ...(account_name ? { account_name } : {}),
     updated_at:       new Date().toISOString(),

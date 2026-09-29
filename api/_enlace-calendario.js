@@ -77,7 +77,9 @@ export async function abrirEnlaceCalendario(t) {
 export const MINUTOS_ENLACE_CUENTA = 30;
 // `meta` es la conexión de Meta Ads: mismo agujero, mismo arreglo, y peor —ese
 // token GESTIONA ANUNCIOS—.
-const PREFIJO_CUENTA = { calendario: 'cuenta-cal', youtube: 'cuenta-yt', meta: 'cuenta-meta' };
+// `google` (Google Ads) y `linkedin`: mismo agujero —el userId en la URL— y el de
+// Google peor, porque su callback devolvía también el refresh_token en la URL.
+const PREFIJO_CUENTA = { calendario: 'cuenta-cal', youtube: 'cuenta-yt', meta: 'cuenta-meta', google: 'cuenta-gads', linkedin: 'cuenta-li' };
 
 export async function crearEnlaceCuenta(userId, para, minutos = MINUTOS_ENLACE_CUENTA) {
   const prefijo = PREFIJO_CUENTA[para];
