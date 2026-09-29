@@ -27897,6 +27897,37 @@ let agnCursor = new Date();      // mes visible
 let agnActivities = [];          // actividades del mes cargado
 let agnSelDay = null;            // 'YYYY-MM-DD' seleccionado
 let agnGcal = { connected: false, email: null, checked: false };
+// De quién se ve el calendario: '' = todo el equipo, un id de asesor, o
+// '__nadie__' para lo que no tiene asesor. Se recuerda entre visitas: quien
+// dirige suele revisar a la misma persona varias veces seguidas.
+let agnAsesor = (function () { try { return localStorage.getItem('agn_asesor') || ''; } catch (e) { return ''; } })();
+
+function agnElegirAsesor(id, nombre) {
+  agnAsesor = id || '';
+  try {
+    if (agnAsesor) { localStorage.setItem('agn_asesor', agnAsesor); localStorage.setItem('agn_asesor_nombre', nombre || ''); }
+    else { localStorage.removeItem('agn_asesor'); localStorage.removeItem('agn_asesor_nombre'); }
+  } catch (e) {}
+  agnRender();
+}
+
+// Quién tiene qué en el mes visible. Agrupa por id —el mismo criterio que el
+// filtro de Tareas—: hay asesores que se llaman parecido y un nombre guardado
+// con un tabulador dentro.
+function agnPorAsesor(acts, y, m) {
+  const mapa = new Map();
+  for (const a of acts || []) {
+    const d = new Date(a.due_at);
+    if (d.getFullYear() !== y || d.getMonth() !== m) continue;
+    const id = a.asesor_id || '__nadie__';
+    if (!mapa.has(id)) mapa.set(id, { id, nombre: a.asesor_id ? (a.asesor_nombre || 'Sin nombre') : 'Sin asignar', total: 0 });
+    mapa.get(id).total++;
+  }
+  // Por orden alfabético: con veinte asesores, buscar un nombre en una lista
+  // ordenada por volumen obliga a leerla entera.
+  return [...mapa.values()].sort((a, b) =>
+    (a.id === '__nadie__') - (b.id === '__nadie__') || a.nombre.localeCompare(b.nombre, 'es'));
+}
 
 function agnDayKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function agnKeyOf(iso) { const d = new Date(iso); return agnDayKey(d); }
@@ -27909,12 +27940,19 @@ async function agnLoad() {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const cq = clientId ? '&client_id=' + encodeURIComponent(clientId) : '';
     const res = await fetchAuth('/api/agenda?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + cq);
-    agnActivities = (await res.json()).activities || [];
-  } catch {
+    const d = await res.json().catch(() => ({}));
+    // Un error del servidor también llega con cuerpo JSON: sin mirar `ok`, se
+    // leía como «este mes no hay nada».
+    if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
+    agnActivities = d.activities || [];
+    if (d.truncado) showToast('Este mes tiene más de ' + (d.techo || 'muchas') + ' actividades: se muestran solo las primeras.', 'error');
+  } catch (e) {
     // Un calendario vacío por un fallo de red se lee como «no tengo nada
     // agendado», que es justo lo contrario de lo que hay que entender.
     agnActivities = [];
-    showToast('No se pudo cargar la agenda. Reintenta en unos segundos.', 'error');
+    // El servidor ya explica qué falló y qué hacer; un fallo de red no dice nada útil.
+    const motivo = String((e && e.message) || '');
+    showToast(/agenda/i.test(motivo) ? motivo : 'No se pudo cargar la agenda. Reintenta en unos segundos.', 'error');
   }
   // El estado de Google Calendar sale de una llamada a Google y tardaba ~2s:
   // se consulta en segundo plano y la agenda se pinta sin esperarlo.
@@ -28024,9 +28062,25 @@ async function agnRender() {
   const todayKey = agnDayKey(new Date());
   if (!agnSelDay) agnSelDay = todayKey;
 
+  // Filtro por asesor: solo para quien ve el trabajo de todos. Al perfil
+  // Ventas el servidor ya le manda solo lo suyo.
+  const mandaEnTodo = typeof tarMandaEnTodo === 'function' ? tarMandaEnTodo() : true;
+  const gente = mandaEnTodo ? agnPorAsesor(agnActivities, y, m) : [];
+  const elegido = mandaEnTodo ? agnAsesor : '';
+  if (elegido && !gente.some(p => p.id === elegido)) {
+    // Quien se eligió no tiene nada este mes: se sigue mostrando, con su cero,
+    // para que se entienda por qué el calendario está vacío y se pueda quitar.
+    let nombre = 'Asesor elegido';
+    try { nombre = localStorage.getItem('agn_asesor_nombre') || nombre; } catch (e) {}
+    gente.push({ id: elegido, nombre: elegido === '__nadie__' ? 'Sin asignar' : nombre, total: 0 });
+  }
+  // Viendo a todo el equipo junto, cada actividad dice de quién es.
+  const conAsesorVisible = !elegido && gente.length > 1;
+  const visibles = elegido ? agnActivities.filter(a => (a.asesor_id || '__nadie__') === elegido) : agnActivities;
+
   // Agrupar actividades por día
   const byDay = {};
-  agnActivities.forEach(a => { const k = agnKeyOf(a.due_at); (byDay[k] = byDay[k] || []).push(a); });
+  visibles.forEach(a => { const k = agnKeyOf(a.due_at); (byDay[k] = byDay[k] || []).push(a); });
 
   // Grid del mes (lunes primero)
   const first = new Date(y, m, 1);
@@ -28056,7 +28110,10 @@ async function agnRender() {
       '<span class="agn-item-ico ' + a.type + '">' + icn(a.type === 'meeting' ? 'users' : 'check', 12) + '</span>' +
       '<div style="min-width:0;flex:1">' +
         '<div class="agn-item-title">' + esc(a.title) + '</div>' +
-        '<div class="agn-item-meta">' + hora + (lead ? ' · ' + esc(lead.name) : '') + (a.gcal_event_id ? ' · 📅 en Google' : '') + '</div>' +
+        '<div class="agn-item-meta">' + hora + (lead ? ' · ' + esc(lead.name) : '') +
+          // Viendo a todo el equipo, de quién es cada cosa; filtrado, sobra.
+          (conAsesorVisible ? ' · ' + esc(a.asesor_id ? (a.asesor_nombre || 'Sin nombre') : 'Sin asignar') : '') +
+          (a.gcal_event_id ? ' · 📅 en Google' : '') + '</div>' +
       '</div>' +
       '<div class="agn-item-acts">' +
         '<button class="btn-ghost sm" title="' + (a.done ? 'Reabrir' : 'Completar') + '" onclick="agnToggleDone(\'' + a.id + '\',' + (!a.done) + ')">' + (a.done ? '↺' : '✓') + '</button>' +
@@ -28067,7 +28124,8 @@ async function agnRender() {
   const sidePanel =
     '<div class="agn-side-title">' + selDate.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }) + '</div>' +
     (selActs.length ? selActs.map(itemHtml).join('') :
-      '<div style="font-size:var(--fs-sm);color:var(--muted2);padding:6px 2px">Sin actividades este día.</div>') +
+      '<div style="font-size:var(--fs-sm);color:var(--muted2);padding:6px 2px">' +
+        (elegido ? 'Sin actividades de ' + esc((gente.find(p => p.id === elegido) || {}).nombre || 'este asesor') + ' este día.' : 'Sin actividades este día.') + '</div>') +
     '<button class="btn-sec" style="margin-top:4px" onclick="agnModalOpen(null,\'' + agnSelDay + '\')">' + icn('plus', 12) + ' Agregar en este día</button>';
 
   const gcalBadge = agnGcal.connected
@@ -28080,6 +28138,7 @@ async function agnRender() {
       '<button class="btn-sec sm" onclick="agnCursor=new Date();agnSelDay=null;agnRender()">Hoy</button>' +
       '<button class="btn-ghost sm" onclick="agnCursor=new Date(agnCursor.getFullYear(),agnCursor.getMonth()-1,1);agnRender()">←</button>' +
       '<button class="btn-ghost sm" onclick="agnCursor=new Date(agnCursor.getFullYear(),agnCursor.getMonth()+1,1);agnRender()">→</button>' +
+      agnFiltroAsesores(gente, elegido) +
       '<div style="flex:1"></div>' +
       gcalBadge +
       '<button class="btn-pri" onclick="agnModalOpen()">' + icn('plus', 13) + ' Agregar actividad</button>' +
@@ -28088,6 +28147,21 @@ async function agnRender() {
       '<div class="agn-cal"><div class="agn-grid">' + cells + '</div></div>' +
       '<div class="agn-side">' + sidePanel + '</div>' +
     '</div>';
+}
+
+// El desplegable de asesores, con el mismo aspecto que el filtro de Tareas.
+// Un desplegable y no una fila de botones: con veinte asesores la fila no
+// cabe. Con una sola persona no aporta nada y no se pinta.
+function agnFiltroAsesores(gente, elegido) {
+  if (gente.length < 2 && !elegido) return '';
+  const total = gente.reduce((n, p) => n + p.total, 0);
+  return '<span class="tar-f agn-f">' +
+    '<select id="agn-f-asesor" aria-label="Ver el calendario de" ' +
+      'onchange="agnElegirAsesor(this.value, this.options[this.selectedIndex].dataset.nombre || \'\')">' +
+      '<option value=""' + (!elegido ? ' selected' : '') + '>Todo el equipo (' + total + ')</option>' +
+      gente.map(p => '<option value="' + esc(p.id) + '" data-nombre="' + esc(p.nombre) + '"' +
+        (elegido === p.id ? ' selected' : '') + '>' + esc(p.nombre) + ' (' + p.total + ')</option>').join('') +
+    '</select></span>';
 }
 
 async function agnToggleDone(id, done) {
@@ -41188,11 +41262,21 @@ async function citaRevisarChoque() {
   if (!c) { box.innerHTML = ''; return; }
   try {
     const cli = crmAmbitoCliente();
-    const r = await fetchAuth('/api/agenda?desde=' + c.ini.toISOString().slice(0, 10) +
-      '&hasta=' + c.ini.toISOString().slice(0, 10) + (cli ? '&client_id=' + encodeURIComponent(cli) : ''));
+    // El servidor lee `from`/`to`. Esto mandaba `desde`/`hasta`, que ignoraba,
+    // así que comparaba con las actividades más antiguas de la cuenta y no con
+    // las de ese día: el aviso no saltaba nunca.
+    const dia0 = new Date(c.ini); dia0.setHours(0, 0, 0, 0);
+    const dia1 = new Date(c.ini); dia1.setHours(23, 59, 59, 999);
+    const r = await fetchAuth('/api/agenda?from=' + encodeURIComponent(dia0.toISOString()) +
+      '&to=' + encodeURIComponent(dia1.toISOString()) + (cli ? '&client_id=' + encodeURIComponent(cli) : ''));
     const d = await r.json();
+    // Choca con las REUNIONES de quien va a atender la cita, no con las de
+    // todo el equipo: en Certain hay unas setenta actividades al día y el
+    // aviso saltaría siempre, que es lo mismo que no avisar.
+    const suAsesor = (_citaCtx && _citaCtx.lead && _citaCtx.lead.assigned_to) || null;
     const choques = (d.activities || []).filter(a => {
       if (a.done || a.cancelled_at || !a.due_at) return false;
+      if (a.type !== 'meeting' || (a.asesor_id || null) !== suAsesor) return false;
       const ai = new Date(a.due_at).getTime();
       const af = a.end_at ? new Date(a.end_at).getTime() : ai + 3600000;
       return ai < c.fin.getTime() && af > c.ini.getTime();
