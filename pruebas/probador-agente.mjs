@@ -156,6 +156,35 @@ ok(/Sin filtrar: le está viendo las más baratas de todo el inventario/.test(rx
    'y avisa cuando el catálogo no se filtró, que es el fallo que no se nota en la respuesta');
 ok(/ag-prb-mal/.test(rx) && /ag-prb-bien/.test(rx), 'lo bueno y lo malo se distinguen a la vista');
 
+// Hay dos formas de que un lead tenga dueño: un asesor fijo en la ruta, o el
+// reparto por turnos entre quienes atienden ese tablero. Mirando solo la
+// primera, la radiografía decía «Sin asesor asignado» con el equipo
+// perfectamente repartido, y mandaba a arreglar algo que ya estaba bien.
+ok(/asignada: !!destino\?\.asignar_a \|\| porTurnos > 0/.test(cuerpo),
+   'el reparto por turnos también cuenta como tener dueño');
+ok(/asesoresDelTablero\(userId, destino\.pipeline_id\)/.test(cuerpo),
+   'y se cuenta a quienes atienden ese tablero');
+ok(/Por turnos entre/.test(rx), 'la pantalla dice entre cuántos se reparte');
+
+// Al agente se le pide resaltar con UN asterisco, que es la negrita de
+// WhatsApp. En la prueba se veía el asterisco en crudo y parecía un fallo
+// suyo: lo que el cliente ve en su teléfono es la palabra en negrita. Una
+// prueba que no se parece al resultado no sirve para aprobar nada.
+console.log('\nLa negrita de WhatsApp se ve como negrita');
+const iNeg = app.indexOf('function negritaWa(');
+ok(iNeg > 0, 'existe negritaWa');
+const negritaWa = new Function('esc', app.slice(iNeg, app.indexOf('function agPrbPintar()')) + '; return negritaWa;')(
+  (t) => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])));
+ok(negritaWa('*así* se resalta') === '<strong>así</strong> se resalta', 'un asterisco a cada lado, negrita',
+   negritaWa('*así* se resalta'));
+ok(negritaWa('dos *palabras* y *otra* más') === 'dos <strong>palabras</strong> y <strong>otra</strong> más',
+   'varias en el mismo mensaje');
+ok(negritaWa('2*3 no es negrita') === '2*3 no es negrita', 'una multiplicación no lo es');
+ok(negritaWa('un * suelto') === 'un * suelto', 'ni un asterisco suelto');
+ok(negritaWa('**doble**') === '**doble**', 'ni el doble asterisco, que en WhatsApp no es nada');
+ok(negritaWa('<script>') === '&lt;script&gt;', 'y lo que escriba el contacto se sigue escapando');
+ok(/negritaWa\(m\.content\)/.test(app), 'y se usa al pintar las burbujas');
+
 // ── 6. La pantalla existe y usa piezas que existen ──────────────────────────
 console.log('\nLa interfaz');
 

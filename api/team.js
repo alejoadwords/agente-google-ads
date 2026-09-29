@@ -58,6 +58,16 @@ async function filaDelEquipo(cuenta, id) {
 // se mueven con ellos.
 const CARGA_VACIA = { total: 0, leads: 0, abiertos: 0, formularios: 0, reglas: 0, fuentes: 0 };
 
+// Los tableros que se le pueden marcar a alguien: uuids, sin repetir y con
+// tope. Lo que llegue que no sea un uuid se tira en vez de guardarse: un id
+// inventado no casaría con ningún tablero y la persona quedaría marcada para
+// uno que no existe, sin que nada fallara a la vista.
+const ES_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function normalizarTableros(v) {
+  if (!Array.isArray(v)) return [];
+  return [...new Set(v.map(x => String(x || '').trim()).filter(x => ES_UUID.test(x)))].slice(0, 20);
+}
+
 async function cargaDe(cuenta, suyo) {
   const cuenta1 = (ruta) => fetch(`${SUPABASE_URL}/rest/v1${ruta}`, {
     headers: { ...sbHeaders(), Prefer: 'count=exact', Range: '0-0' },
@@ -493,6 +503,39 @@ export default async function handler(req, contexto) {
   // Qué tiene asignado alguien, para poder preguntar a quién pasa antes de
   // quitarlo. Va aparte del listado porque son cuatro consultas y no tienen
   // por qué correr cada vez que se abre la pestaña de Equipo.
+  // Dónde trabaja de verdad esta persona hoy, tablero por tablero.
+  //
+  // No es lo mismo que los tableros que tenga marcados: es lo que dicen sus
+  // leads. Sirve para proponer lo que ya es cierto en vez de pedirle al dueño
+  // que se acuerde — en Certain, tres personas llevan Arriendo y dos Venta, y
+  // eso estaba en los datos desde el primer día.
+  //
+  // Se cuenta con `count=exact` y no trayendo los leads: PostgREST corta en
+  // 1.000 filas aunque pidas más, así que contar en el navegador mentiría en
+  // cuanto una cuenta pasara de mil leads.
+  if (req.method === 'GET' && url.searchParams.get('donde')) {
+    const fila = await filaDelEquipo(cuenta, url.searchParams.get('donde'));
+    if (!fila) return jsonResp({ error: 'Esa persona no está en tu equipo' }, 404);
+    if (!fila.member_user_id) return jsonResp({ donde: [] });
+
+    const pipes = await fetch(
+      `${SUPABASE_URL}/rest/v1/pipelines?user_id=eq.${encodeURIComponent(cuenta)}&select=id,name&order=position.asc`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+
+    const cuantos = (pipelineId) => fetch(
+      `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(cuenta)}` +
+      `&assigned_to=eq.${encodeURIComponent(fila.member_user_id)}` +
+      `&pipeline_id=eq.${encodeURIComponent(pipelineId)}&deleted_at=is.null&select=id`,
+      { headers: { ...sbHeaders(), Prefer: 'count=exact', Range: '0-0' } }
+    ).then(r => Number((r.headers.get('content-range') || '0-0/0').split('/')[1]) || 0).catch(() => 0);
+
+    const donde = await Promise.all((pipes || []).map(async p => ({
+      id: p.id, nombre: p.name, leads: await cuantos(p.id),
+    })));
+    return jsonResp({ donde: donde.filter(d => d.leads > 0).sort((a, b) => b.leads - a.leads) });
+  }
+
   if (req.method === 'GET' && url.searchParams.get('carga')) {
     const fila = await filaDelEquipo(cuenta, url.searchParams.get('carga'));
     if (!fila) return jsonResp({ error: 'Esa persona no está en tu equipo' }, 404);
@@ -503,7 +546,13 @@ export default async function handler(req, contexto) {
   if (req.method === 'GET') {
     // member_user_id es imprescindible: sin él, cualquier selector de "quién
     // atiende" se queda sin equipo que ofrecer y solo muestra al que mira.
-    const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(cuenta)}&select=id,member_user_id,member_email,member_name,role,status,client_id,created_at,joined_at&order=created_at.asc`, { headers: sbHeaders() }).then(r => r.json());
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(cuenta)}&select=id,member_user_id,member_email,member_name,role,status,client_id,pipeline_ids,created_at,joined_at&order=created_at.asc`, { headers: sbHeaders() }).then(r => r.json());
+    // Los tableros, para pintar nombres en vez de uuids. Van aquí y no en una
+    // llamada aparte porque la pantalla de equipo los necesita siempre.
+    const pipelines = await fetch(
+      `${SUPABASE_URL}/rest/v1/pipelines?user_id=eq.${encodeURIComponent(cuenta)}&select=id,name,client_id&order=position.asc`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     const myEmail = await clerkEmail(userId);
     const isAdmin = ADMIN_EMAILS.includes(myEmail);
     const seats = isAdmin ? 99 : (PLAN_SEATS[_lastPlan] ?? 1) + _seatsExtra;
@@ -511,6 +560,7 @@ export default async function handler(req, contexto) {
     // permiso se comprueba en cada endpoint. Ver api/_perfiles.js.
     return jsonResp({
       members: rows || [],
+      pipelines: pipelines || [],
       seats: { total: seats, used: 1 + (rows || []).length, plan: _lastPlan },
       yo: paraElCliente(quien),
       perfiles: Object.entries(PERFILES).map(([id, p]) => ({ id, etiqueta: p.etiqueta, descripcion: p.descripcion })),
@@ -606,6 +656,9 @@ export default async function handler(req, contexto) {
           // 'client_id' in body distingue «no lo mandes» de «ponlo vacío»:
           // sin eso no habría forma de quitarle el acote a alguien.
           ...('client_id' in (body || {}) ? { client_id: alcanceQuePuedeDar(quien, body.client_id) } : {}),
+          // Los tableros que atiende. Misma distinción: no mandarlos los deja
+          // como están, mandar una lista vacía es «ninguno en concreto».
+          ...('pipeline_ids' in (body || {}) ? { pipeline_ids: normalizarTableros(body.pipeline_ids) } : {}),
         }) }
     );
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);

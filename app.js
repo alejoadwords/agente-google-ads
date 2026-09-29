@@ -22392,6 +22392,17 @@ function agPrbReiniciar() {
   agPrbRadiografia(null);
 }
 
+// La negrita de WhatsApp, *así*, pintada como negrita.
+//
+// Al agente se le pide que resalte con un asterisco porque es lo que entiende
+// WhatsApp. En la prueba se veía el asterisco en crudo y parecía un fallo del
+// agente: lo que el cliente va a ver en su teléfono es la palabra en negrita.
+// Una prueba que no se parece al resultado no sirve para aprobarlo.
+function negritaWa(texto) {
+  return esc(texto).replace(/(^|[\s(¡¿"'])\*([^*\n]{1,120}?)\*(?=$|[\s.,;:!?)"'])/g,
+    (m, antes, dentro) => antes + '<strong>' + dentro + '</strong>');
+}
+
 function agPrbPintar() {
   const c = document.getElementById('ag-prb-chat');
   if (!c) return;
@@ -22402,7 +22413,7 @@ function agPrbPintar() {
   }
   c.innerHTML = agPrbVista.map(m =>
     '<div class="ag-prb-fila crm-inbox-bubble-wrap ' + m.role + '">' +
-      '<div class="crm-inbox-bubble ' + m.role + '">' + esc(m.content) + '</div>' +
+      '<div class="crm-inbox-bubble ' + m.role + '">' + negritaWa(m.content) + '</div>' +
     '</div>'
   ).join('') + (agPrbOcupado
     ? '<div class="ag-prb-fila crm-inbox-bubble-wrap assistant"><div class="crm-inbox-bubble assistant" style="opacity:.6">Escribiendo…</div></div>'
@@ -22434,10 +22445,15 @@ function agPrbRadiografia(r) {
     : nada('Todavía ninguno')));
 
   if (r.ruta) {
+    const quien = r.ruta.asignar_nombre
+      ? 'Asignado a ' + esc(r.ruta.asignar_nombre)
+      : r.ruta.por_turnos
+        ? 'Por turnos entre ' + r.ruta.por_turnos + (r.ruta.por_turnos === 1 ? ' asesor' : ' asesores')
+        : 'Asignado a un asesor';
     partes.push(bloque('Proceso', r.ruta.reconocida
       ? '<p><strong>' + esc(r.ruta.etiqueta || r.ruta.clave) + '</strong><br>' +
         (r.ruta.asignada
-          ? '<span class="ag-prb-bien">Asignado a ' + esc(r.ruta.asignar_nombre || 'un asesor') + '</span>'
+          ? '<span class="ag-prb-bien">' + quien + '</span>'
           : '<span class="ag-prb-mal">Sin asesor asignado</span>') + '</p>'
       : '<p class="ag-prb-mal">Dijo «' + esc(r.ruta.clave) + '», que no está entre tus opciones. ' +
         'En producción el lead se quedaría donde estaba.</p>'));
@@ -31295,6 +31311,7 @@ async function teamRenderSettings() {
     // Los perfiles y el mío los manda el servidor: si se escribieran aquí,
     // el día que cambien habría dos verdades y ganaría la equivocada.
     _teamPerfiles = d.perfiles || [];
+    _teamPipelines = d.pipelines || [];
     _teamYo = d.yo || null;
     teamPintarSelectorPerfil();
     if (seatsEl && _teamSeats) {
@@ -31310,7 +31327,8 @@ async function teamRenderSettings() {
       return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:11px;margin-bottom:7px;background:var(--bg-subtle)">' +
         '<div style="width:30px;height:30px;border-radius:50%;background:var(--blue-lt);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px">' + esc((m.member_name || m.member_email || '?').slice(0, 2).toUpperCase()) + '</div>' +
         '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12.5px">' + esc(m.member_name || m.member_email) + '</div>' +
-        '<div style="font-size:11px;color:var(--muted)">' + esc(m.member_email) + '</div></div>' +
+        '<div style="font-size:11px;color:var(--muted)">' + esc(m.member_email) + '</div>' +
+        teamTablerosFila(m) + '</div>' +
         teamSelectorFila(m) +
         '<div style="font-size:11px">' + st + '</div>' +
         (teamPuedoTocar(m)
@@ -31319,6 +31337,103 @@ async function teamRenderSettings() {
       '</div>';
     }).join('');
   } catch (e) { list.innerHTML = '<div style="font-size:12px;color:var(--muted2)">No se pudo cargar el equipo.</div>'; }
+}
+
+// ── Qué tableros atiende cada quien ─────────────────────────────────────────
+// El agente ya mandaba cada lead a su tablero, pero sin dueño: caía en el
+// sitio correcto y nadie lo llamaba. Elegir un asesor fijo por ruta tampoco
+// servía —el tablero de Arriendo de un cliente lo llevan tres personas—, así
+// que se marca aquí quién atiende cada uno y el reparto por turnos rota entre
+// ellos.
+let _teamPipelines = [];
+let _tbEditando = null;
+let _tbElegidos = [];
+
+function teamTablerosDe(m) {
+  const ids = Array.isArray(m.pipeline_ids) ? m.pipeline_ids : [];
+  return ids.map(id => _teamPipelines.find(p => p.id === id)).filter(Boolean);
+}
+
+function teamTablerosFila(m) {
+  if (_teamPipelines.length < 2) return '';
+  const suyos = teamTablerosDe(m);
+  const texto = suyos.length
+    ? suyos.map(p => esc(p.name)).join(' · ')
+    : '<span style="color:var(--muted2)">Sin tablero asignado</span>';
+  const boton = teamPuedoTocar(m)
+    ? ' <button class="btn-ghost sm" style="padding:1px 6px;font-size:10px;vertical-align:1px" ' +
+      'onclick="teamAbrirTableros(\'' + esc(m.id) + '\')">cambiar</button>'
+    : '';
+  return '<div style="font-size:10.5px;color:var(--muted);margin-top:2px">' + texto + boton + '</div>';
+}
+
+async function teamAbrirTableros(id) {
+  const m = crmTeam.find(x => x.id === id);
+  if (!m) return;
+  _tbEditando = m;
+  _tbElegidos = Array.isArray(m.pipeline_ids) ? [...m.pipeline_ids] : [];
+  document.getElementById('tb-quien').textContent = m.member_name || m.member_email;
+  document.getElementById('tb-modal').classList.add('open');
+  teamPintarTableros(null);
+  // Dónde trabaja HOY, según sus leads. Se pide aparte porque hay que contarlo
+  // y la lista de equipo tiene que seguir siendo barata.
+  try {
+    const d = await fetchAuth('/api/team?donde=' + encodeURIComponent(id)).then(r => r.json());
+    teamPintarTableros(d.donde || []);
+  } catch (e) { /* sin la sugerencia se puede marcar igual */ }
+}
+
+function teamPintarTableros(donde) {
+  const cont = document.getElementById('tb-lista');
+  if (!cont) return;
+  cont.innerHTML = _teamPipelines.map(p => {
+    const d = (donde || []).find(x => x.id === p.id);
+    const marcado = _tbElegidos.includes(p.id);
+    return '<label style="display:flex;align-items:center;gap:9px;padding:8px 10px;border:1.5px solid ' +
+      (marcado ? 'var(--blue)' : 'var(--border)') + ';border-radius:10px;margin-bottom:6px;cursor:pointer">' +
+      '<input type="checkbox" style="width:15px;height:15px;accent-color:var(--blue)"' + (marcado ? ' checked' : '') +
+      ' onchange="teamMarcarTablero(\'' + esc(p.id) + '\', this.checked)">' +
+      '<span style="flex:1;font-size:12.5px;font-weight:600">' + esc(p.name) + '</span>' +
+      (d ? '<span style="font-size:10.5px;color:var(--muted2)">' + d.leads + (d.leads === 1 ? ' lead' : ' leads') + ' hoy</span>' : '') +
+      '</label>';
+  }).join('');
+  const sug = document.getElementById('tb-sugerir');
+  const hay = (donde || []).length;
+  if (sug) {
+    sug.style.display = hay ? '' : 'none';
+    sug.onclick = () => {
+      _tbElegidos = (donde || []).map(x => x.id);
+      teamPintarTableros(donde);
+    };
+  }
+}
+
+function teamMarcarTablero(id, si) {
+  _tbElegidos = si ? [...new Set([..._tbElegidos, id])] : _tbElegidos.filter(x => x !== id);
+}
+
+function teamCerrarTableros() {
+  document.getElementById('tb-modal').classList.remove('open');
+  _tbEditando = null;
+}
+
+async function teamGuardarTableros(btn) {
+  if (!_tbEditando) return;
+  btn.disabled = true;
+  try {
+    const r = await fetchAuth('/api/team', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: _tbEditando.id, perfil: _tbEditando.role, pipeline_ids: _tbElegidos }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) { showToast(d.error || 'No se pudo guardar', 'error'); return; }
+    teamCerrarTableros();
+    showToast('Tableros actualizados');
+    teamRenderSettings();
+  } catch (e) {
+    showToast('No se pudo guardar', 'error');
+  } finally { btn.disabled = false; }
 }
 
 // ── Perfiles de acceso ──────────────────────────────────────────────────────

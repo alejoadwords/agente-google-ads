@@ -105,7 +105,11 @@ console.log('\nAlta y cambio del alcance\n');
   const t = lee('api/team.js');
   chk('la invitacion acepta el cliente', /client_id: alcanceQuePuedeDar\(quien, body\.client_id\)/.test(t));
   chk('vacio = toda la cuenta, como siempre', /status: 'invited', invite_token: token/.test(t));
-  chk('el listado del equipo lo devuelve', /role,status,client_id,created_at,joined_at/.test(t));
+  // Se comprueba que la columna esté en el select del listado, no el orden
+  // exacto de las columnas: al añadir `pipeline_ids` en medio esto se puso rojo
+  // mientras `client_id` seguía viniendo perfectamente.
+  const select = (t.match(/team_members\?owner_user_id=eq\.\$\{encodeURIComponent\(cuenta\)\}&select=([^&`]+)/) || [])[1] || '';
+  chk('el listado del equipo lo devuelve', select.split(',').includes('client_id'), select);
   chk('y se puede quitar despues, no solo poner',
       /'client_id' in \(body \|\| \{\}\)/.test(t));
 }

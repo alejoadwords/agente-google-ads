@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Tableros del equipo</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  Banco de la lista de equipo con sus tableros y del modal para cambiarlos.
+
+  No es una maqueta: carga el CSS de public/index.html, el MARCADO del modal
+  del propio index.html y las funciones de public/app.js. Solo sustituye el
+  servidor.
+
+  Arrancar con:  node pruebas/servidor-boceto.mjs
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle,#F7F8FC);color:var(--text,#0D0F1C);padding:22px 20px 72px}
+  #zona{max-width:760px;margin:0 auto;background:var(--bg-card,#fff);border:1.5px solid var(--border,#E4E6F0);
+    border-radius:14px;padding:18px 20px}
+  h2{margin:0 0 14px;font-size:14px}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:var(--text,#111);color:#fff;padding:9px 14px;
+    display:flex;gap:10px;align-items:center;justify-content:center;font-size:12px;z-index:9000;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:7px;padding:5px 10px;
+    font-family:inherit;font-size:12px;cursor:pointer}
+  .banco button:hover{background:rgba(255,255,255,.26)}
+  .banco span{opacity:.55}
+  #toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--text,#111);color:#fff;
+    padding:10px 16px;border-radius:10px;font-size:13px;z-index:9999;display:none}
+</style>
+</head>
+<body>
+<div id="zona">
+  <h2>Usuarios</h2>
+  <div id="cfg-team-list"></div>
+  <div id="cfg-team-seats" style="margin-top:10px;font-size:11.5px;color:var(--muted2)"></div>
+</div>
+<div id="toast"></div>
+<div class="banco">
+  <span>BANCO ·</span>
+  <button onclick="escenario('certain')">como Certain</button>
+  <button onclick="escenario('sinmarcar')">nadie tiene tablero</button>
+  <button onclick="escenario('untablero')">un solo tablero</button>
+  <button onclick="escenario('mirando')">como vendedor (no toca)</button>
+  <span>· modal:</span>
+  <button onclick="abrir(0)">con sugerencia</button>
+  <button onclick="abrirSinDatos()">sin leads todavía</button>
+  <span>·</span>
+  <button onclick="document.getElementById('zona').style.maxWidth=document.getElementById('zona').style.maxWidth?'':'380px'">móvil</button>
+</div>
+
+<script>
+const PIPES = [
+  { id: '38332899-0000-4000-8000-000000000001', name: 'Principal' },
+  { id: '60ab4849-64ef-4219-9ebb-a6cdfc31299b', name: 'Arriendo' },
+  { id: 'ca989925-2f90-473e-8e80-6756e627abe3', name: 'Venta' },
+  { id: '29281846-d947-430a-8427-2828717b0000', name: 'Captación' },
+];
+const ARR = PIPES[1].id, VEN = PIPES[2].id, CAP = PIPES[3].id;
+
+let MODO = 'certain';
+let GESTIONA = true;
+
+function equipo() {
+  const base = [
+    { id: 'm1', member_user_id: 'u1', member_email: 'asesor1@certainpezzano.com', member_name: 'Asesor Uno', role: 'vendedor', status: 'active', pipeline_ids: [ARR] },
+    { id: 'm2', member_user_id: 'u2', member_email: 'asesora2@certainpezzano.com', member_name: null, role: 'vendedor', status: 'active', pipeline_ids: [ARR] },
+    { id: 'm3', member_user_id: 'u3', member_email: 'mpalacios@certainpezzano.com', member_name: 'M. Palacios', role: 'vendedor', status: 'active', pipeline_ids: [VEN] },
+    { id: 'm4', member_user_id: 'u4', member_email: 'asesor@certainpezzano.com', member_name: null, role: 'vendedor', status: 'active', pipeline_ids: [VEN, CAP] },
+    { id: 'm5', member_user_id: null, member_email: 'ppezzano@certainpezzano.com', member_name: null, role: 'admin', status: 'invited', pipeline_ids: [] },
+  ];
+  if (MODO === 'sinmarcar') return base.map(m => ({ ...m, pipeline_ids: [] }));
+  return base;
+}
+
+function escenario(cual) {
+  MODO = cual;
+  GESTIONA = cual !== 'mirando';
+  teamRenderSettings();
+}
+
+function abrir(i) { teamAbrirTableros(equipo()[i].id); }
+function abrirSinDatos() { SIN_DATOS = true; teamAbrirTableros(equipo()[4].id); }
+let SIN_DATOS = false;
+
+const STUBS = `
+// El servidor de mentira.
+let crmTeam = [];
+function teamPintarClientes(){}
+function asgRender(){}
+function segLoad(){}
+function teamPintarSelectorPerfil(){}
+function showToast(m){ const t=document.getElementById('toast'); t.textContent=m; t.style.display='block'; setTimeout(()=>t.style.display='none',2200); }
+function teamPuedoTocar(m){ return GESTIONA && m.status === 'active'; }
+function teamSelectorFila(m){ return '<div style="font-size:11px;color:var(--muted)">' + (m.role==='admin'?'Administrador':'Ventas') + '</div>'; }
+function teamRemove(){}
+async function fetchAuth(url, opts) {
+  await new Promise(s => setTimeout(s, 220));
+  if (url.startsWith('/api/team?donde=')) {
+    if (SIN_DATOS) return { ok:true, json: async () => ({ donde: [] }) };
+    return { ok:true, json: async () => ({ donde: [
+      { id: ARR, nombre: 'Arriendo', leads: 164 },
+      { id: CAP, nombre: 'Captación', leads: 1 },
+    ] }) };
+  }
+  if (url === '/api/team' && (!opts || !opts.method)) {
+    const pipes = MODO === 'untablero' ? [PIPES[0]] : PIPES;
+    return { ok:true, json: async () => ({
+      members: equipo(), pipelines: pipes,
+      seats: { total: 10, used: 6, plan: 'agency' },
+      yo: { gestiona_equipo: GESTIONA },
+      perfiles: [{ id:'ventas', etiqueta:'Ventas' }, { id:'admin', etiqueta:'Administrador' }],
+    }) };
+  }
+  if (opts && opts.method === 'PUT') return { ok:true, json: async () => ({ member: {} }) };
+  return { ok:false, json: async () => ({ error: 'no contemplado en el banco: ' + url }) };
+}
+`;
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+
+  document.getElementById('estilos-reales').textContent =
+    (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+
+  // El modal, sacado del index.html de verdad.
+  const a = html.indexOf('<!-- MODAL: QUÉ TABLEROS ATIENDE ALGUIEN DEL EQUIPO -->');
+  const b = html.indexOf('<!-- MODAL CONEXIÓN WHATSAPP BUSINESS -->');
+  if (a < 0 || b < 0) throw new Error('No encontré el modal de tableros en index.html');
+  document.body.insertAdjacentHTML('beforeend', html.slice(a, b));
+
+  const trozo = (desde, hasta) => {
+    const i = js.indexOf(desde);
+    if (i < 0) throw new Error('No encontré en app.js: ' + desde);
+    const j = js.indexOf(hasta, i);
+    return js.slice(i, j > i ? j : js.length);
+  };
+
+  const codigo = [
+    (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
+    STUBS,
+    // Un solo trozo: el bloque de tableros va justo antes de «Perfiles de
+    // acceso», así que ya viene dentro. Traerlo dos veces redeclaraba
+    // _teamPipelines y el banco no montaba.
+    trozo('async function teamRenderSettings()', '// ── Perfiles de acceso'),
+  ].join('\n');
+
+  const s = document.createElement('script');
+  s.textContent = codigo;
+  document.body.appendChild(s);
+
+  escenario('certain');
+})().catch(e => {
+  document.getElementById('zona').innerHTML =
+    '<pre style="color:#B91C1C;white-space:pre-wrap">' + e.message + '</pre>';
+});
+</script>
+</body>
+</html>

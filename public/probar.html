@@ -29,8 +29,19 @@ header h1{margin:0;font-size:15px;font-weight:700;line-height:1.2}
 header p{margin:1px 0 0;font-size:11.5px;opacity:.8}
 .aviso{background:#FFF8E1;border-bottom:1px solid #F0E4B8;color:#6B5A16;
   font-size:11.5px;padding:8px 16px;text-align:center;line-height:1.45;flex-shrink:0}
-main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:9px}
-.wrap{max-width:620px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:9px}
+main{flex:1;overflow-y:auto;padding:16px}
+.cols{max-width:960px;width:100%;margin:0 auto;display:grid;grid-template-columns:1fr 250px;gap:16px;align-items:start}
+.wrap{display:flex;flex-direction:column;gap:9px;min-width:0}
+/* Lo que el agente entendió. En el teléfono va debajo del chat, no al lado. */
+.rx{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 13px;position:sticky;top:0}
+.rx h5{margin:0 0 3px;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2)}
+.rx .g{margin-bottom:11px}
+.rx .g:last-child{margin-bottom:0}
+.rx p{margin:0;font-size:11.5px;line-height:1.5;color:var(--text);word-break:break-word}
+.rx .vacio{color:var(--muted2)}
+.rx .bien{color:#059669;font-weight:700}
+.rx .mal{color:#B91C1C;font-weight:700}
+@media(max-width:820px){.cols{grid-template-columns:1fr}.rx{position:static}}
 .fila{display:flex}
 .fila.yo{justify-content:flex-end}
 .b{max-width:80%;padding:9px 13px;border-radius:14px;font-size:14px;line-height:1.45;
@@ -57,6 +68,7 @@ button:disabled{opacity:.5;cursor:default}
 @media (prefers-color-scheme: dark){
   :root{--bg:#0E1120;--card:#151930;--text:#E8EAF6;--muted:#A7ACC8;--muted2:#6E7494;--border:#262B47}
   .aviso{background:#2A2410;border-bottom-color:#3D3518;color:#D6C78A}
+  .rx .bien{color:#34D399} .rx .mal{color:#F87171}
   .error{background:#2A1416;border-color:#4A2226;color:#F87171}
 }
 </style>
@@ -71,7 +83,7 @@ button:disabled{opacity:.5;cursor:default}
 </header>
 <div class="aviso">Esto es una prueba. Escríbele como lo haría un cliente real; nada de lo que digas aquí se guarda como contacto.</div>
 
-<main><div class="wrap" id="chat"></div></main>
+<main><div class="cols"><div class="wrap" id="chat"></div><div class="rx" id="rx"></div></div></main>
 <div id="aviso"></div>
 
 <footer>
@@ -98,6 +110,14 @@ let ocupado = false;
 
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
+// Al agente se le pide resaltar con UN asterisco, que es como se pone negrita
+// en WhatsApp. Aquí se veía el asterisco en crudo y parecía un fallo suyo: lo
+// que el cliente verá en su teléfono es la palabra en negrita. Una prueba que
+// no se parece al resultado no sirve para aprobarlo.
+const negritaWa = (t) => esc(t).replace(
+  /(^|[\s(¡¿"'])\*([^*\n]{1,120}?)\*(?=$|[\s.,;:!?)"'])/g,
+  (m, antes, dentro) => antes + '<strong>' + dentro + '</strong>');
+
 function pintar() {
   if (!vista.length && !ocupado) {
     chat.innerHTML = '<div class="vacio">Escríbele como si fueras un cliente.<br>' +
@@ -105,9 +125,65 @@ function pintar() {
     return;
   }
   chat.innerHTML = vista.map(m =>
-    '<div class="fila ' + m.r + '"><div class="b ' + m.r + '">' + esc(m.t) + '</div></div>'
+    '<div class="fila ' + m.r + '"><div class="b ' + m.r + '">' + negritaWa(m.t) + '</div></div>'
   ).join('') + (ocupado ? '<div class="fila el"><div class="b el" style="opacity:.55">Escribiendo…</div></div>' : '');
   chat.parentElement.scrollTop = chat.parentElement.scrollHeight;
+}
+
+// La radiografía: lo que el agente entendió. Es la mitad del valor de la
+// prueba —sin ella solo se juzga si la conversación «suena bien»— y la pide
+// quien comparte el enlace, que es el dueño del negocio y no un comprador.
+function radiografia(r) {
+  const el = document.getElementById('rx');
+  if (!el) return;
+  if (!r) {
+    el.innerHTML = '<div class="g"><h5>Lo que entendió</h5>' +
+      '<p class="vacio">Aquí verás los datos que el agente recoge de la conversación ' +
+      'y qué te ofrece de su inventario.</p></div>';
+    return;
+  }
+  const g = (t, c) => '<div class="g"><h5>' + t + '</h5>' + c + '</div>';
+  const nada = (t) => '<p class="vacio">' + t + '</p>';
+  const partes = [];
+
+  const datos = Object.entries(r.capturado || {}).filter(([, v]) => v);
+  partes.push(g('Datos que recogió', datos.length
+    ? '<p>' + datos.map(([k, v]) => esc(k) + ': <strong>' + esc(String(v)) + '</strong>').join('<br>') + '</p>'
+    : nada('Todavía ninguno')));
+
+  if (r.ruta && r.ruta.reconocida) {
+    partes.push(g('A dónde lo manda', '<p><strong>' + esc(r.ruta.etiqueta || r.ruta.clave) + '</strong><br>' +
+      (r.ruta.asignada
+        ? '<span class="bien">' + (r.ruta.asignar_nombre
+            ? 'Para ' + esc(r.ruta.asignar_nombre)
+            : 'Se reparte entre ' + r.ruta.por_turnos + (r.ruta.por_turnos === 1 ? ' asesor' : ' asesores')) + '</span>'
+        : '<span class="mal">Sin asesor asignado</span>') + '</p>'));
+  }
+
+  const cal = r.calificacion || {};
+  if (cal.activa) {
+    const nombre = { calificado: 'Calificado', descartado: 'Descartado', pendiente: 'Todavía preguntando' };
+    partes.push(g('Calificación',
+      '<p><strong class="' + (cal.estado === 'calificado' ? 'bien' : cal.estado === 'descartado' ? 'mal' : '') + '">' +
+      esc(nombre[cal.estado] || cal.estado) + '</strong>' +
+      (cal.total ? ' <span style="color:var(--muted2)">(' + cal.cumplidas + ' de ' + cal.total + ')</span>' : '') +
+      (cal.resumen ? '<br>' + esc(cal.resumen).replace(/\n/g, '<br>') : '') + '</p>'));
+  }
+
+  const cat = r.catalogo || {};
+  const pistas = Object.entries(cat.pistas || {}).filter(([, v]) => v);
+  partes.push(g('De tu inventario', cat.ofrecidas
+    ? '<p><strong>' + cat.ofrecidas + '</strong> ' + (cat.ofrecidas === 1 ? 'opción' : 'opciones') + ' a la vista<br>' +
+      (pistas.length
+        ? '<span style="color:var(--muted2)">Filtrado por ' +
+          pistas.map(([k, v]) => esc(k) + ': ' + esc(k === 'presupuesto' ? '$' + Number(v).toLocaleString('es-CO') : String(v))).join(', ') +
+          '</span>'
+        : '<span class="mal">Sin filtrar</span>') + '</p>'
+    : nada('Ninguna opción todavía')));
+
+  if (r.escalar) partes.push(g('Escalada', '<p class="bien">Pidió pasar a un asesor</p>'));
+
+  el.innerHTML = partes.join('');
 }
 
 let relojAviso;
@@ -155,6 +231,7 @@ async function enviar() {
     hist.push({ role: 'assistant', content: d.bruto });
     vista.push({ r: 'el', t: d.texto });
     pintar();
+    radiografia(d);
     txt.focus();
   } catch (e) {
     ocupado = false; btn.disabled = false;
@@ -177,6 +254,7 @@ txt.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault
     document.title = 'Prueba a ' + d.nombre + ' · Acuarius';
     txt.disabled = btn.disabled = false;
     pintar();
+    radiografia(null);
     txt.focus();
   } catch (e) {
     fallo('No se pudo abrir la prueba. Revisa tu conexión y vuelve a intentarlo.');
