@@ -232,6 +232,29 @@ for (const t of ['en cualquier rango de precio', 'sin limite', 'no importa el pr
 ok(presupuestoDelTexto('hasta 3 millones') === 3000000, 'y un tope de verdad sigue siendo un número');
 
 // El tipo: pidió una casa y le ofrecieron un local «como lo más cercano».
+// Dentro de UN mensaje también se corrige: «busco casa de 4 habitaciones. No,
+// mejor apartamento de 3». Se quedaba en cuatro, el catálogo devolvía cero, y
+// con cero y sin nada más que decirle el agente se inventó tres apartamentos
+// con precios que no existen.
+console.log('\nY dentro de un mismo mensaje también');
+ok(habitacionesDelTexto('busco casa de 4 habitaciones. no mejor apartamento de 3 habitaciones') === 3,
+   'gana la última mención de habitaciones',
+   habitacionesDelTexto('busco casa de 4 habitaciones. no mejor apartamento de 3 habitaciones'));
+ok(presupuestoDelTexto('hasta 3 millones, bueno, mejor hasta 5 millones') === 5000000,
+   'y la última cifra con unidad');
+ok(presupuestoDelTexto('entre 2 y 3 millones') === 3000000,
+   'que en un rango es el tope, justo lo que hay que usar: se busca por debajo');
+
+// Y el hueco que provocó la invención: con cero opciones el prompt no decía
+// NADA, y el modelo llenó el silencio con inmuebles que no existen.
+console.log('\nCon cero opciones, se le dice');
+ok(/NO TIENES NADA QUE ENCAJE CON LO QUE TE HAN PEDIDO/.test(eng),
+   'el prompt avisa explícitamente cuando no hay ni una opción');
+ok(/Ni un barrio, ni un precio, ni una administración/.test(eng),
+   'y le nombra lo que no puede inventarse');
+ok(/\$\{propiedades && !propiedades\.lineas\.length \?/.test(eng),
+   'solo cuando de verdad se buscó y no salió nada, no cuando aún no se ha buscado');
+
 console.log('\nY el tipo de inmueble también filtra');
 ok(/if \(pistas\.tipo\) q \+= `&tipo=eq\./.test(eng),
    'quien pide una casa no ve locales');

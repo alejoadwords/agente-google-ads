@@ -235,9 +235,12 @@ export async function zonasDelCliente(userId, clientId) {
   } catch { return { ciudades: new Map(), barrios: new Map(), tipos: new Map() }; }
 }
 
-// El nombre más largo que aparezca en el texto. El más largo y no el primero
-// porque «Alto Prado» contiene «Prado»: con el primero, quien pide Alto Prado
-// acabaría viendo El Prado.
+// El nombre que aparezca MÁS TARDE en el texto; a igualdad de posición, el más
+// largo.
+//
+// Más tarde, porque dentro de un mensaje la gente se corrige: «busco casa, no,
+// mejor apartamento». Y el más largo porque «Alto Prado» contiene «Prado»: sin
+// eso, quien pide Alto Prado acabaría viendo El Prado.
 function nombreEnTexto(texto, mapa) {
   const t = sinTildes(texto);
   let mejor = null;
@@ -248,8 +251,13 @@ function nombreEnTexto(texto, mapa) {
     // habitaciones» después de haber dicho «casa» dejaba el tipo en Casa y el
     // agente seguía buscando casas toda la conversación.
     const esc = clave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (!new RegExp('(^|[^a-z0-9])' + esc + '(e?s)?($|[^a-z0-9])').test(t)) continue;
-    if (!mejor || clave.length > mejor.clave.length) mejor = { clave, original };
+    const re = new RegExp('(^|[^a-z0-9])' + esc + '(e?s)?($|[^a-z0-9])', 'g');
+    let donde = -1;
+    for (const m of t.matchAll(re)) donde = m.index;
+    if (donde < 0) continue;
+    if (!mejor || donde > mejor.donde || (donde === mejor.donde && clave.length > mejor.clave.length)) {
+      mejor = { clave, original, donde };
+    }
   }
   return mejor?.original || null;
 }
@@ -257,8 +265,13 @@ function nombreEnTexto(texto, mapa) {
 // Cuántas habitaciones pidió: «3 habitaciones», «de 3 alcobas», «3 hab».
 export function habitacionesDelTexto(texto) {
   const t = sinTildes(texto);
-  const m = t.match(/(\d{1,2})\s*(habitacion|habitaciones|alcoba|alcobas|cuarto|cuartos|dormitorio|dormitorios|hab\b|alc\b)/);
-  const n = m ? parseInt(m[1], 10) : null;
+  // La ÚLTIMA mención del mensaje, no la primera. «Busco casa de 4
+  // habitaciones. No, mejor apartamento de 3 habitaciones» se quedaba en
+  // cuatro, y el catálogo devolvía cero: con cero y sin nada más que decirle,
+  // el agente se inventó tres apartamentos con precios que no existen.
+  const todas = [...t.matchAll(/(\d{1,2})\s*(habitacion|habitaciones|alcoba|alcobas|cuarto|cuartos|dormitorio|dormitorios|hab\b|alc\b)/g)];
+  if (!todas.length) return null;
+  const n = parseInt(todas[todas.length - 1][1], 10);
   return n > 0 && n <= 20 ? n : null;
 }
 
@@ -277,10 +290,12 @@ export function presupuestoDelTexto(texto) {
   // presupuesto desaparecía.
   const frases = t.split(/[;\n]|\.\s+/)
     .filter(f => /\$|millon|millones|mil\b|presupuesto|pagar|canon|mensual|maximo|hasta/.test(f));
-  for (const f of frases) {
+  // De la última frase hacia atrás, por lo mismo: dentro de un mensaje puede
+  // corregirse («hasta 3 millones, bueno, mejor hasta 5»).
+  for (let i = frases.length - 1; i >= 0; i--) {
     // Una frase que habla de habitaciones no habla de plata.
-    if (/habitacion|alcoba|cuarto|dormitorio|bano/.test(f)) continue;
-    const v = aPlata(f);
+    if (/habitacion|alcoba|cuarto|dormitorio|bano/.test(frases[i])) continue;
+    const v = aPlata(frases[i]);
     if (v) return v;
   }
   return null;
@@ -398,7 +413,12 @@ export function aPlata(texto) {
 
   // «3,5 millones», «2.5 M», «800 mil». La coma y el punto valen de decimal
   // cuando hay una unidad detrás; sin unidad son separadores de miles.
-  const conUnidad = t.match(/(\d+(?:[.,]\d+)?)\s*(millon|millón|millones|mill|m\b|mm\b|mil\b|k\b)/);
+  // La ÚLTIMA cifra con unidad de la frase. Con la primera, «hasta 3 millones,
+  // bueno, mejor hasta 5» se quedaba en tres. Y en un rango —«entre 2 y 3
+  // millones»— la última es el tope, que es justo lo que hay que usar: el
+  // filtro busca por DEBAJO del presupuesto.
+  const conUnidades = [...t.matchAll(/(\d+(?:[.,]\d+)?)\s*(millon|millón|millones|mill|m\b|mm\b|mil\b|k\b)/g)];
+  const conUnidad = conUnidades.length ? conUnidades[conUnidades.length - 1] : null;
   if (conUnidad) {
     const n = parseFloat(conUnidad[1].replace(',', '.'));
     const esMillon = /^m(illon|illón|illones|ill|m)?$/.test(conUnidad[2]);
@@ -456,6 +476,30 @@ ${titular ? `Titular: ${titular}` : ''}${cuerpo ? `\nTexto: ${cuerpo}` : ''}
 `;
 }
 
+// El prompt, partido en dos: lo que NO cambia entre mensajes y lo que sí.
+//
+// Se parte justo antes del inventario, que es el primer trozo variable. Todo lo
+// anterior —quién es, el contexto del negocio, sus preguntas frecuentes y las
+// reglas de comportamiento— es idéntico en cada respuesta, y eso es lo que se
+// puede cachear.
+//
+// El texto NO cambia ni un carácter: `buildSystemPrompt` sigue devolviendo
+// exactamente lo mismo de antes, que es la unión de las dos partes. Una prueba
+// lo comprueba, porque cambiar el prompt sin querer cambiaría el agente.
+export function partesDelPrompt(...args) {
+  const entero = buildSystemPrompt(...args);
+  // El corte, buscado por su texto y no por una posición: si mañana se añade
+  // una sección antes del inventario, el corte se mueve solo.
+  const i = entero.indexOf(CORTE_CACHE);
+  if (i < 0) return { estable: entero, variable: '' };
+  const fin = i + CORTE_CACHE.length;
+  return { estable: entero.slice(0, fin), variable: entero.slice(fin) };
+}
+
+// La última línea de lo que NO cambia. Justo después vienen el inventario y los
+// datos capturados, que son distintos en cada mensaje.
+const CORTE_CACHE = 'un precio inventado lo tiene que desmentir despues una persona\n';
+
 export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null, canal = 'whatsapp', referral = null, reservas = null, suyas = null) {
   const faqs = (agent.faqs || []).map(f => `P: ${f.q}\nR: ${f.a}`).join('\n\n');
   const captured = Object.entries(capturedData || {})
@@ -507,7 +551,14 @@ PUEDES ENSEÑAR FOTOS:
 - De una opción que NO esté marcada «con fotos», no las ofrezcas ni prometas mandarlas: dile que se las hace llegar un asesor
 - Videos no tienes de ninguna. Si los piden, eso lo ve un asesor
 
-SI TE MANDAN UN PDF:
+${propiedades && !propiedades.lineas.length ? `NO TIENES NADA QUE ENCAJE CON LO QUE TE HAN PEDIDO.
+Busqué en el inventario y no hay ni una opción con esas características. Esto es lo que toca hacer, y no hay alternativa:
+- Dilo claramente: "en este momento no tengo nada así"
+- NO te inventes opciones. Ni un barrio, ni un precio, ni una administración, ni "algo parecido". Si escribes un inmueble que no existe, esa persona va a pedir verlo
+- Puedes preguntarle si flexibiliza algo —otra zona, otro número de habitaciones, otro presupuesto— y volvemos a buscar
+- O pásale la conversación a un asesor, que puede mirar inmuebles que todavía no están publicados. En ese caso incluye [ESCALAR] al final
+
+` : ''}SI TE MANDAN UN PDF:
 - Lo lees. Usa lo que dice para responder: si trae un pago, una cedula, un certificado o una ficha, dilo con sus datos
 - Si el PDF no trae lo que hacia falta, di que falta y que se necesita
 
@@ -545,6 +596,35 @@ const ESCRIBIENDO_MIN_MS = 3000;
 
 // Devuelve el texto y, aparte, lo que consumió. El uso se registra donde se
 // sabe de quién es la conversación; aquí solo se recoge.
+// Cuánto texto estable hace falta para que cachear valga la pena.
+//
+// Anthropic no cachea por debajo de 1.024 tokens. En español son unos 3.500
+// caracteres; se pide 4.500 para no quedarse justo en el filo y pagar una
+// escritura que luego no sirve.
+//
+// Esta guarda es la que hace que un agente recién creado —cuatro líneas de
+// contexto— siga funcionando igual y sin coste extra.
+const MINIMO_CACHE = 4500;
+
+// El `system` que se le manda a la API.
+//
+// Cuando la parte estable es grande, va como bloque aparte marcado para
+// cachear: el prompt de un agente bien entrenado son 5.682 tokens que NO
+// cambian entre mensajes, y volver a procesarlos en cada respuesta es pagar
+// cuatro veces por lo mismo.
+//
+// No cambia ni una palabra de lo que lee el modelo: es el mismo texto, partido.
+function systemParaLaApi(system) {
+  if (typeof system === 'string') return system;
+  const { estable, variable } = system || {};
+  if (!estable) return variable || '';
+  if (estable.length < MINIMO_CACHE) return estable + variable;
+  return [
+    { type: 'text', text: estable, cache_control: { type: 'ephemeral' } },
+    ...(variable ? [{ type: 'text', text: variable }] : []),
+  ];
+}
+
 async function callClaude(systemPrompt, messages, alRegistrar) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -555,7 +635,7 @@ async function callClaude(systemPrompt, messages, alRegistrar) {
       // del texto; con 300 se truncaba a mitad y el bloque se le escapaba al
       // contacto.
       max_tokens: 700,
-      system: systemPrompt,
+      system: systemParaLaApi(systemPrompt),
       messages,
     }),
   });
@@ -619,7 +699,7 @@ export async function sugerirRespuesta(userId, conversationId) {
 
   // Sin la regla de calificación: los bloques ocultos solo tienen sentido cuando
   // el mensaje se guarda, y este no se guarda.
-  const system = buildSystemPrompt(
+  const system = partesDelPrompt(
     agent,
     { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) },
     null,
@@ -695,7 +775,7 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   // Sin citas propias (null): el ensayo no tiene contacto en el CRM. Se pasa a
   // propósito para que el prompt se arme con los mismos argumentos que en la
   // conversación real.
-  const system = buildSystemPrompt(agent, capturado, regla, inventario, canal, null, reservas, null);
+  const system = partesDelPrompt(agent, capturado, regla, inventario, canal, null, reservas, null);
 
   let bruto;
   try {
@@ -1212,7 +1292,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
       })
     : null;
 
-  const system = buildSystemPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas);
+  const system = partesDelPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas);
   // «Escribiendo…» antes de pensar.
   //
   // El modelo contesta en medio segundo y eso delata al bot más que cualquier

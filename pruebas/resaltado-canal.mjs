@@ -55,7 +55,11 @@ console.log('\nTodas las llamadas pasan el canal\n');
   const js = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
   // El `(?<!function )` deja fuera la propia definición, que si no se cuenta
   // como una llamada más y encima sin canal.
-  const llamadas = [...js.matchAll(/(?<!function )buildSystemPrompt\(([\s\S]{0,400}?)\);/g)];
+  // Se miran las llamadas a `partesDelPrompt`, que es por donde pasan todas
+  // desde que el prompt se parte para cachearlo. Le reenvía los argumentos tal
+  // cual a `buildSystemPrompt`, así que la posición del canal es la misma.
+  const llamadas = [...js.matchAll(/(?<!function )partesDelPrompt\(([\s\S]{0,400}?)\);/g)]
+    .filter(m => !m[1].includes('...args'));
   chk('hay al menos dos sitios que la llaman', llamadas.length >= 2, String(llamadas.length));
 
   // Los argumentos de primer nivel: el canal es el quinto.
