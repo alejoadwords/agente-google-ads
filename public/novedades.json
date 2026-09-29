@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-pauta-diagnostico",
+      "fecha": "2026-09-29",
+      "tipo": "nuevo",
+      "titulo": "Diagnóstico de campañas: qué está fallando y dónde puedes mejorar",
+      "texto": "En Marketing → Plataformas de pauta hay una pestaña nueva, «Diagnóstico». Revisa tus campañas de Google Ads y Meta y te dice, con el número que lo sostiene, qué está mal: campañas activas que no están saliendo, anuncios rechazados (y por qué, por ejemplo «la página de destino no carga»), cuentas con un pago pendiente o campañas que gastan sin traer ni un lead a tu CRM. También te muestra oportunidades: campañas donde cada lead cuesta mucho más que tu promedio, anuncios en los que casi nadie hace clic, públicos cansados de ver el mismo anuncio y leads de pauta que llevan días sin atender. Y lo que funciona, para saber dónde poner más presupuesto. Cuando una campaña gasta sin resultados, puedes pausarla desde ahí mismo con un clic.",
+      "accion": {
+        "texto": "Diagnosticar mis campañas",
+        "ir": "marketing"
+      }
+    },
+    {
       "id": "2026-09-29-no-inventar",
       "fecha": "2026-09-29",
       "tipo": "arreglo",

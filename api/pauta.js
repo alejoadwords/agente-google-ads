@@ -11,9 +11,12 @@
 //   GET  /api/pauta?cartera=1&desde=&hasta=      una fila por cliente (agencia)
 //   GET  /api/pauta?cuentas=<conexion_id>        cuentas publicitarias a las que llega
 //   POST /api/pauta  {conexion_id, account_id…}  cuál de ellas leer, y de qué cliente
+//   GET  /api/pauta?diagnostico=1&...            errores y oportunidades de mejora
+//   POST /api/pauta  {accion:'pausar', conexion_id, campana_id}   pausar una campaña
 //
-// De Google y de Meta solo LEE: nunca crea, pausa ni cambia nada allí. Lo
-// único que escribe es en nuestra propia tabla de conexiones.
+// De Google y de Meta casi todo es LEER. Lo único que se hace allí es PAUSAR
+// una campaña desde el diagnóstico, cuando gasta sin traer resultados: pausar
+// no gasta dinero. Activar, crear o tocar presupuestos no se hace desde aquí.
 
 export const config = { runtime: 'edge' };
 
@@ -24,6 +27,7 @@ import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { dondePreguntar } from './_google-login.js';
 import { resolverClics, consultaDelDia, filasAClics, pendientes as clicsPendientes } from './_gclid.js';
+import { diagnosticar } from './_diagnostico-pauta.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -224,10 +228,16 @@ async function campanasMeta(fila, desde, hasta) {
 
   // El estado no viene en insights; se pide aparte y se cruza por id.
   let estados = {};
+  // El objetivo decide qué se le puede pedir: a una campaña de tráfico no se le
+  // reprocha que no traiga leads, porque no es para eso.
+  const objetivos = {};
   try {
-    const re = await fetch(`${GRAPH}/act_${act}/campaigns?fields=id,status&limit=200&access_token=${encodeURIComponent(fila.access_token)}`);
+    const re = await fetch(`${GRAPH}/act_${act}/campaigns?fields=id,status,objective&limit=200&access_token=${encodeURIComponent(fila.access_token)}`);
     const de = await re.json();
-    for (const c of de.data || []) estados[String(c.id)] = String(c.status || '').toLowerCase();
+    for (const c of de.data || []) {
+      estados[String(c.id)] = String(c.status || '').toLowerCase();
+      objetivos[String(c.id)] = String(c.objective || '');
+    }
   } catch { /* sin estado se pinta «—», no se cae la pantalla */ }
 
   return (d.data || []).map(f => {
@@ -240,6 +250,7 @@ async function campanasMeta(fila, desde, hasta) {
       id: String(f.campaign_id || ''),
       nombre: f.campaign_name || '(sin nombre)',
       estado: estados[String(f.campaign_id)] || '',
+      objetivo: objetivos[String(f.campaign_id)] || '',
       moneda: f.account_currency || null,
       inversion: Number(f.spend || 0),
       impresiones: Number(f.impressions || 0),
@@ -725,6 +736,228 @@ async function guardarEleccion(quien, req) {
   return jsonResp({ ok: true });
 }
 
+// ── diagnóstico ─────────────────────────────────────────────────────────────
+// Lo que los informes de métricas NO traen: el estado de la cuenta, los
+// anuncios rechazados, la frecuencia y —sobre todo— las campañas activas que no
+// entregaron nada. Una campaña sin impresiones no sale en los insights, porque
+// la red solo devuelve filas con datos; y esa es justo la que hay que encontrar.
+async function extraMeta(fila, desde7, hasta) {
+  const act = String(fila.account_id || '').replace(/^act_/, '');
+  const tok = encodeURIComponent(fila.access_token);
+  const j = (u) => fetch(u).then(r => r.json()).catch(() => ({ error: { message: 'sin respuesta' } }));
+  const [cuenta, ins7, activas, ads] = await Promise.all([
+    j(`${GRAPH}/act_${act}?fields=name,account_status&access_token=${tok}`),
+    j(`${GRAPH}/act_${act}/insights?level=campaign&time_range=${encodeURIComponent(JSON.stringify({ since: desde7, until: hasta }))}` +
+      `&fields=campaign_id,impressions,frequency&limit=200&access_token=${tok}`),
+    j(`${GRAPH}/act_${act}/campaigns?fields=id,name,effective_status,created_time,objective` +
+      `&effective_status=${encodeURIComponent(JSON.stringify(['ACTIVE']))}&limit=200&access_token=${tok}`),
+    j(`${GRAPH}/act_${act}/ads?fields=name,effective_status,campaign%7Bid,name%7D,ad_review_feedback` +
+      `&filtering=${encodeURIComponent(JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['DISAPPROVED', 'WITH_ISSUES'] }]))}` +
+      `&limit=100&access_token=${tok}`),
+  ]);
+  if (cuenta.error) throw new Error('meta-auth:' + String(cuenta.error.message || '').slice(0, 160));
+
+  const u7 = {};
+  for (const f of ins7.data || []) u7[String(f.campaign_id)] = { impresiones: Number(f.impressions || 0), frecuencia: Number(f.frequency || 0) };
+  const motivo = (fb) => {
+    const g = fb && fb.global;
+    if (!g) return '';
+    return (typeof g === 'object' ? Object.values(g) : [g]).join(' ').slice(0, 160);
+  };
+  return {
+    cuenta: { red: 'meta', conexion_id: fila.id, nombre: cuenta.name || fila.account_name, estado_meta: cuenta.account_status },
+    ultimos7: u7,
+    activas: (activas.data || []).map(c => ({ id: String(c.id), nombre: c.name, creada: c.created_time || null, objetivo: c.objective || '' })),
+    rechazados: (ads.data || []).map(a => ({
+      red: 'meta', conexion_id: fila.id,
+      campana_id: String(a.campaign?.id || ''), campana_nombre: a.campaign?.name || '',
+      anuncio: a.name, motivo: motivo(a.ad_review_feedback) || (a.effective_status === 'WITH_ISSUES' ? 'con problemas' : 'rechazado'),
+    })),
+  };
+}
+
+// Los motivos de Google llegan en clave técnica. Los frecuentes, en cristiano;
+// el resto, al menos legibles.
+const MOTIVOS_GOOGLE = {
+  DESTINATION_NOT_WORKING: 'la página de destino no carga o da error',
+  DESTINATION_MISMATCH: 'la dirección que se muestra no coincide con la de destino',
+  DESTINATION_NOT_CRAWLABLE: 'Google no puede revisar la página de destino',
+  MALWARE: 'Google detectó software malicioso en el destino',
+  TRADEMARKS_IN_AD_TEXT: 'usa una marca registrada en el texto',
+  MISREPRESENTATION: 'Google considera que el anuncio engaña sobre lo que ofrece',
+  HEALTHCARE: 'toca temas de salud con restricciones',
+  EDITORIAL: 'problemas de redacción (mayúsculas, símbolos, puntuación)',
+  PUNCTUATION: 'puntuación o símbolos no permitidos',
+  CAPITALIZATION: 'uso excesivo de mayúsculas',
+};
+function motivoGoogle(topic) {
+  const t = String(topic || '');
+  return MOTIVOS_GOOGLE[t] || t.toLowerCase().replace(/_/g, ' ');
+}
+
+async function extraGoogle(fila) {
+  if (!fila.account_id) throw new SinCuenta();
+  const token = await refrescarGoogle(fila);
+  if (!token) throw new Error('google-auth:sin token');
+  const cid = String(fila.account_id || '').replace(/-/g, '');
+  const login = await porDondePreguntar(fila, token, cid);
+  const [u7, activas, rech] = await Promise.all([
+    gaql(cid, token, `SELECT campaign.id, metrics.impressions FROM campaign
+      WHERE campaign.status = 'ENABLED' AND segments.date DURING LAST_7_DAYS`, login),
+    gaql(cid, token, `SELECT campaign.id, campaign.name, campaign.serving_status FROM campaign
+      WHERE campaign.status = 'ENABLED'`, login),
+    gaql(cid, token, `SELECT campaign.id, campaign.name, ad_group.name, ad_group_ad.ad.id, ad_group_ad.ad.name,
+        ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.policy_topic_entries
+      FROM ad_group_ad
+      WHERE ad_group_ad.policy_summary.approval_status = 'DISAPPROVED' AND ad_group_ad.status = 'ENABLED'`, login).catch(() => []),
+  ]);
+  const ult = {};
+  for (const f of u7) {
+    const id = String(f.campaign?.id || '');
+    ult[id] = { impresiones: (ult[id]?.impresiones || 0) + Number(f.metrics?.impressions || 0) };
+  }
+  return {
+    cuenta: { red: 'google', conexion_id: fila.id, nombre: fila.account_name || fila.account_id },
+    ultimos7: ult,
+    // Una campaña que ya terminó (su fecha de fin pasó) no «deja de entregar»:
+    // terminó. No se cuenta como fallo.
+    activas: activas.filter(f => String(f.campaign?.servingStatus || '') !== 'ENDED')
+      .map(f => ({ id: String(f.campaign?.id || ''), nombre: f.campaign?.name || '' })),
+    rechazados: rech.map(f => ({
+      red: 'google', conexion_id: fila.id,
+      campana_id: String(f.campaign?.id || ''), campana_nombre: f.campaign?.name || '',
+      // Los anuncios adaptables no llevan nombre: se nombra su grupo, que es lo
+      // que el cliente reconoce en su Google Ads.
+      anuncio: f.adGroupAd?.ad?.name || ('Anuncio del grupo ' + (f.adGroup?.name || 'sin nombre')),
+      motivo: (f.adGroupAd?.policySummary?.policyTopicEntries || []).map(t => motivoGoogle(t.topic)).filter(Boolean).slice(0, 3).join('; ')
+        || 'rechazado por políticas de Google',
+    })),
+  };
+}
+
+async function diagnostico(quien, url) {
+  const { desde, hasta } = rangoPorDefecto(url);
+  const clientId = alcanceDeCliente(quien, url.searchParams.get('client_id'));
+  const soloDe = soloSusLeads(quien.perfil) ? quien.actorId : null;
+  const hoy = new Date();
+  const desde7 = new Date(hoy.getTime() - 6 * 86400000).toISOString().slice(0, 10);
+  const hasta7 = hoy.toISOString().slice(0, 10);
+
+  const conexiones = await conexionesDe(quien.userId, clientId, !quien.cliente);
+  const [resultados, leads, extras] = await Promise.all([
+    traerCampanas(conexiones, desde, hasta),
+    leadsDelPeriodo(quien.userId, clientId, desde, hasta, soloDe),
+    Promise.all(conexiones.map(async c => {
+      try {
+        return { conexion: c, ...(c.platform === 'google_ads' ? await extraGoogle(c) : await extraMeta(c, desde7, hasta7)) };
+      } catch (e) {
+        return { conexion: c, error: e.sinCuenta ? 'Falta elegir cuál cuenta publicitaria leer.'
+          : /auth/.test(String(e.message)) ? 'El permiso de esta cuenta caducó. Hay que volver a conectarla.'
+          : 'No se pudo revisar esta cuenta ahora mismo.' };
+      }
+    })),
+  ]);
+
+  // A qué conexión pertenece cada campaña: la acción de pausar lo necesita.
+  const deConexion = new Map();
+  for (const r of resultados) for (const f of r.filas) deConexion.set(r.conexion.platform + ':' + f.id, r.conexion.id);
+  const campanas = resultados.flatMap(r => r.filas);
+  const { filas } = unir(campanas, leads);
+
+  const extraDe = new Map(extras.map(x => [x.conexion.id, x]));
+  const vistas = new Set(filas.map(f => f.red + ':' + f.id));
+  const todas = filas.map(f => {
+    const conexion_id = deConexion.get((f.red === 'google' ? 'google_ads' : 'meta_ads') + ':' + f.id);
+    const ex = extraDe.get(conexion_id);
+    return { ...f, conexion_id, claves: ['id:' + f.id, 'nom:' + normNombre(f.nombre)],
+      ultimos7: ex && ex.ultimos7 ? (ex.ultimos7[f.id] || { impresiones: 0, frecuencia: 0 }) : null };
+  });
+  // Las activas que no entregaron nada en todo el periodo: no venían en los
+  // insights, así que se añaden a mano, con cero.
+  for (const ex of extras) {
+    if (!ex.activas) continue;
+    const r = ex.conexion.platform === 'google_ads' ? 'google' : 'meta';
+    for (const a of ex.activas) {
+      if (vistas.has(r + ':' + a.id)) continue;
+      todas.push({ red: r, id: a.id, nombre: a.nombre, estado: 'active', creada: a.creada || null, objetivo: a.objetivo || '', moneda: null, inversion: 0, impresiones: 0, clics: 0, conv: 0,
+        crm: { leads: 0 }, cpl_real: null, conexion_id: ex.conexion.id, claves: ['id:' + a.id, 'nom:' + normNombre(a.nombre)],
+        ultimos7: ex.ultimos7[a.id] || { impresiones: 0, frecuencia: 0 } });
+    }
+  }
+
+  const hallazgos = diagnosticar({
+    cuentas: extras.filter(x => x.cuenta).map(x => x.cuenta),
+    campanas: todas,
+    rechazados: extras.flatMap(x => x.rechazados || []),
+    leads: leads.map(l => ({ ...l, campana_clave: claveDeLead(l) })),
+    ahora: hoy,
+  });
+  return jsonResp({
+    desde, hasta,
+    hallazgos,
+    revisadas: todas.length,
+    cuentas: extras.map(x => ({
+      id: x.conexion.id, red: x.conexion.platform === 'google_ads' ? 'google' : 'meta',
+      nombre: x.conexion.account_name || x.conexion.account_id, error: x.error || null,
+    })),
+    puede_pausar: !soloSusLeads(quien.perfil),
+  });
+}
+
+// ── pausar una campaña ──────────────────────────────────────────────────────
+// Lo único que esta pantalla hace en la red. Se comprueba que la campaña sea de
+// la cuenta publicitaria de ESA conexión —un id ajeno no se pausa— y solo se
+// pausa: nunca se activa ni se toca el presupuesto.
+async function pausarCampana(quien, body) {
+  if (soloSusLeads(quien.perfil)) {
+    return jsonResp({ error: 'Tu perfil no puede pausar campañas. Pídeselo al administrador.' }, 403);
+  }
+  const campanaId = String(body.campana_id || '').replace(/\D/g, '');
+  if (!campanaId || !body.conexion_id) return jsonResp({ error: 'Falta la campaña.' }, 400);
+  const fila = (await Promise.all((await sb(`/platform_connections?id=eq.${encodeURIComponent(body.conexion_id)}` +
+    `&user_id=eq.${encodeURIComponent(quien.userId)}&platform=in.(google_ads,meta_ads)&select=*&limit=1`)).map(abrirConexion)))[0];
+  if (!fila) return jsonResp({ error: 'Esa conexión no es de tu cuenta.' }, 404);
+  if (quien.cliente && fila.client_id && fila.client_id !== quien.cliente) {
+    return jsonResp({ error: 'Esa cuenta publicitaria es de otro cliente.' }, 403);
+  }
+
+  if (fila.platform === 'meta_ads') {
+    const tok = encodeURIComponent(fila.access_token);
+    const c = await fetch(`${GRAPH}/${campanaId}?fields=account_id,status,name&access_token=${tok}`).then(r => r.json()).catch(() => ({}));
+    const act = String(fila.account_id || '').replace(/^act_/, '');
+    if (c.error || String(c.account_id || '') !== act) {
+      return jsonResp({ error: 'Esa campaña no es de la cuenta publicitaria conectada.' }, 404);
+    }
+    const r = await fetch(`${GRAPH}/${campanaId}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'PAUSED', access_token: fila.access_token }),
+    }).then(x => x.json()).catch(e => ({ error: { message: String(e?.message || e) } }));
+    if (r.error || !r.success) return jsonResp({ error: 'Meta no dejó pausarla: ' + String(r.error?.message || 'sin detalle').slice(0, 160) }, 502);
+    return jsonResp({ ok: true, red: 'meta', campana: c.name || campanaId });
+  }
+
+  const token = await refrescarGoogle(fila);
+  if (!token) return jsonResp({ error: 'El permiso de Google caducó. Vuelve a conectar la cuenta.' }, 502);
+  const cid = String(fila.account_id || '').replace(/-/g, '');
+  const login = await porDondePreguntar(fila, token, cid);
+  const h = { Authorization: `Bearer ${token}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
+  if (login) h['login-customer-id'] = login;
+  let ultimo = 'ninguna versión de la API respondió';
+  for (const v of VERSIONES) {
+    // El recurso lleva el id de la cuenta: una campaña de otra cuenta no existe
+    // aquí y Google contesta con error, no la pausa.
+    const r = await fetch(`https://googleads.googleapis.com/v${v}/customers/${cid}/campaigns:mutate`, {
+      method: 'POST', headers: h,
+      body: JSON.stringify({ operations: [{ update: { resourceName: `customers/${cid}/campaigns/${campanaId}`, status: 'PAUSED' }, updateMask: 'status' }] }),
+    });
+    if (r.ok) return jsonResp({ ok: true, red: 'google', campana: campanaId });
+    const t = await r.text();
+    ultimo = t.slice(0, 200);
+    if (r.status !== 404) break;
+  }
+  return jsonResp({ error: 'Google no dejó pausarla: ' + ultimo }, 502);
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'GET' && req.method !== 'POST') return jsonResp({ error: 'Method not allowed' }, 405);
@@ -738,11 +971,16 @@ export default async function handler(req) {
     const corte = exigeModulo(quien, 'marketing');
     if (corte) return corte;
 
-    if (req.method === 'POST') return await guardarEleccion(quien, req);
+    if (req.method === 'POST') {
+      const body = await req.clone().json().catch(() => ({}));
+      if (body.accion === 'pausar') return await pausarCampana(quien, body);
+      return await guardarEleccion(quien, req);
+    }
 
     const url = new URL(req.url);
     if (url.searchParams.get('cuentas')) return await cuentasDisponibles(quien, url);
     if (url.searchParams.get('cartera')) return await vistaDeCartera(quien, url);
+    if (url.searchParams.get('diagnostico')) return await diagnostico(quien, url);
     if (url.searchParams.get('campana')) return await detalleDeCampana(quien, url);
     return await listaDeCampanas(quien, url);
   } catch (e) {

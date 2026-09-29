@@ -148,8 +148,9 @@ console.log('\nLa pauta no se cuela por la puerta de atras\n');
       /async function conexionesDe\(userId, clientId, sueltasTambien = true\)/.test(pa));
   chk('a un acotado NO se le incluyen',
       /\} else if \(clientId\) \{\s*\n\s*ruta \+= `&client_id=eq\./.test(pa));
-  chk('las dos vistas de campaña lo pasan',
-      (pa.match(/conexionesDe\(quien\.userId, clientId, !quien\.cliente\)/g) || []).length === 2);
+  // Tres: la lista, el detalle y el diagnóstico (28-09-2026).
+  chk('las tres vistas de campaña lo pasan',
+      (pa.match(/conexionesDe\(quien\.userId, clientId, !quien\.cliente\)/g) || []).length === 3);
   chk('y la vista de cartera se encoge a lo suyo',
       /const soloMio = quien\.cliente \|\| null;/.test(pa) &&
       /conexionesDe\(quien\.userId, soloMio, !soloMio\)/.test(pa));

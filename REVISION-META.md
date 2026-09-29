@@ -43,7 +43,15 @@ entra con contraseña, **sin 2FA**, sin bloqueos, plan Pro de cortesía hasta
 propósito). Se le creó el agente del inbox **«Asistente de prueba»** para que el
 revisor pueda conectar Messenger e Instagram sin pasar por el asistente de creación.
 
-### BLOQUEO: los agentes de chat están apagados
+### RESUELTO (28-09-2026): `ads_management` se justifica con «Pausar campaña»
+
+Alejandro eligió construir un **Diagnóstico** en Plataformas de pauta. Justifica
+`ads_read` (campañas y hallazgos) y `ads_management` (pausar una campaña que gasta sin
+traer leads, con confirmación). Para el video hace falta que la cuenta tenga una
+campaña que dispare ese hallazgo: una campaña de LEADS con gasto y sin leads en el CRM
+(una de tráfico no cuenta: su objetivo no son leads).
+
+### (Histórico) BLOQUEO: los agentes de chat están apagados
 
 Las instrucciones y el guion usan el **agente de Meta Ads** (analizar y crear una
 campaña), pero los agentes de marketing están apagados para todos desde el
@@ -192,21 +200,23 @@ Párrafo común que abre todas (Meta valora que se repita el contexto):
 
 ### ads_read
 
-> We use `ads_read` to display the advertising performance of the account the user
-> connects: campaigns, ad sets, ads and their metrics (reach, impressions, clicks, spend,
-> CPC, CPM and conversions). These are shown in the user's own dashboard and are the input
-> our AI agent analyses when the user asks questions such as "why did my cost per result
-> go up this week?". Without this permission the product has nothing to show and the agent
-> can only speak in generic terms. Seen in the video at the dashboard and agent steps.
+> We use `ads_read` to show the advertising performance of the ad account the user
+> connects, in Marketing → Ad platforms: each campaign with its spend, impressions and
+> clicks, next to what happened with those leads inside the user's CRM (how many arrived,
+> how many were won, the real cost per lead). The same data powers the "Diagnosis" tab,
+> which flags campaigns that are active but not delivering, ads that were rejected, a cost
+> per lead far above the account average, a low click-through rate or a high frequency.
+> Without this permission the screen has nothing to show. Seen in the video on the
+> Campaigns and Diagnosis tabs.
 
 ### ads_management
 
-> We use `ads_management` so the user can create and pause campaigns from the chat with
-> our AI agent, using plain language instead of the Ads Manager interface. **Every campaign
-> we create is left PAUSED** and is only delivered if the user activates it themselves in
-> Meta. This is a deliberate safety decision: we never spend a user's budget without an
-> explicit action from them. Shown in the video when a campaign is created and remains
-> paused.
+> We use `ads_management` for one action only: **pausing** a campaign from the Diagnosis
+> tab when it keeps spending without bringing any lead into the user's CRM. The user sees
+> the finding with its numbers, presses "Pause campaign", confirms, and the campaign is
+> paused in Meta. We never activate campaigns, change budgets or delete anything: pausing
+> stops spend, it never creates it, and turning a campaign back on is left to the user in
+> Ads Manager. Shown in the video on the Diagnosis tab.
 
 ### business_management
 
@@ -344,12 +354,13 @@ Texto para pegar (en inglés):
 > 3. Complete the Facebook login dialog and select a business portfolio, an ad account and
 >    a Page. (`business_management`, `ads_read`, `pages_show_list`)
 > 4. Back in Acuarius the connected account is shown with its name and id.
-> 5. Open the dashboard: campaigns, impressions, clicks, spend, CPC and CPM of the
->    connected ad account are displayed. (`ads_read`)
-> 6. Open the chat with the "Meta Ads" agent and ask it to analyse a campaign. The answer
->    uses the real numbers of the connected account. (`ads_read`)
-> 7. Ask the agent to create a campaign. It is created **paused** in the connected account
->    and never delivers unless you activate it in Meta. (`ads_management`)
+> 5. Open Marketing → Plataformas de pauta → "Campañas": campaigns of the connected ad
+>    account with spend, impressions and clicks, next to their leads in the CRM. (`ads_read`)
+> 6. Open the "Diagnóstico" tab: it lists errors and improvement opportunities for those
+>    campaigns, each with the numbers behind it. (`ads_read`)
+> 7. On a finding marked "gastó … y no trajo ningún lead", press "Pausar campaña" and
+>    confirm: the campaign is paused in Meta. Nothing is ever activated or re-budgeted
+>    from Acuarius. (`ads_management`)
 > 8. Send a message to the connected Page from any Facebook account. It appears in
 >    Conversaciones (inbox); reply from there and the reply is delivered to Messenger.
 >    (`pages_messaging`, `pages_manage_metadata`, `pages_read_engagement`)

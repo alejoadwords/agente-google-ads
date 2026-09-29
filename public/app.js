@@ -37841,7 +37841,7 @@ function lpCerrarEditor() {
 // nunca ve los tokens de Google ni de Meta.
 
 let pautaDatos = null;
-let pautaVista = 'campanas';       // campanas | conexiones | cartera
+let pautaVista = 'campanas';       // campanas | diagnostico | conexiones | cartera
 let pautaDias = 30;
 let pautaCargando = false;
 
@@ -37892,6 +37892,7 @@ function pautaRender() {
       '</div>' +
       '<div class="pauta-tabs">' +
         '<button class="pauta-tab' + (pautaVista === 'campanas' ? ' active' : '') + '" onclick="pautaIr(\'campanas\')">Campañas</button>' +
+        '<button class="pauta-tab' + (pautaVista === 'diagnostico' ? ' active' : '') + '" onclick="pautaIr(\'diagnostico\')">Diagnóstico</button>' +
         (hayCartera ? '<button class="pauta-tab' + (pautaVista === 'cartera' ? ' active' : '') + '" onclick="pautaIr(\'cartera\')">Cartera</button>' : '') +
         '<button class="pauta-tab' + (pautaVista === 'conexiones' ? ' active' : '') + '" onclick="pautaIr(\'conexiones\')">Conexiones</button>' +
       '</div>' +
@@ -37927,7 +37928,7 @@ async function pautaCargar() {
   const c = document.getElementById('pauta-cuerpo');
   if (!c || pautaCargando) return;
   pautaCargando = true;
-  c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo tus campañas…</div>';
+  c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + (pautaVista === 'diagnostico' ? ' Revisando tus campañas…' : ' Leyendo tus campañas…') + '</div>';
 
   const hasta = new Date();
   const desde = new Date(hasta.getTime() - (pautaDias - 1) * 86400000);
@@ -37937,6 +37938,7 @@ async function pautaCargar() {
   let qs = 'desde=' + f(desde) + '&hasta=' + f(hasta);
   if (cliente) qs += '&client_id=' + encodeURIComponent(cliente);
   if (pautaVista === 'cartera') qs += '&cartera=1';
+  if (pautaVista === 'diagnostico') qs += '&diagnostico=1';
 
   try {
     const r = await fetchAuth('/api/pauta?' + qs);
@@ -37945,11 +37947,88 @@ async function pautaCargar() {
     pautaDatos = d;
     pautaCargando = false;
     if (pautaVista === 'cartera') pautaPintarCartera(d);
+    else if (pautaVista === 'diagnostico') pautaPintarDiagnostico(d);
     else if (pautaVista === 'conexiones') pautaPintarConexiones(d);
     else pautaPintarCampanas(d);
   } catch (e) {
     pautaCargando = false;
     pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+// ── Diagnóstico ─────────────────────────────────────────────────────────────
+// Errores que cuestan dinero ahora mismo, oportunidades de mejora y lo que
+// funciona. Cada hallazgo trae el número que lo sostiene: sin el porqué no se
+// puede ni creer ni arreglar. La única acción es pausar lo que gasta sin
+// resultado; activar o subir presupuesto se decide en la red, no aquí.
+function pautaPintarDiagnostico(d) {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  const cuentas = d.cuentas || [];
+  if (!cuentas.length) {
+    c.innerHTML = emptyAgua('trend', 'No hay ninguna cuenta de pauta que revisar',
+      'Conecta Google Ads o Meta y aquí verás qué campañas tienen errores y dónde puedes mejorar.',
+      '<button class="btn-pri" onclick="pautaIr(\'conexiones\')">Conectar una cuenta</button>');
+    return;
+  }
+  const hs = d.hallazgos || [];
+  const errores = hs.filter(h => h.tipo === 'error');
+  const oport = hs.filter(h => h.tipo === 'oportunidad');
+  const bien = hs.filter(h => h.tipo === 'bien');
+  // Una cuenta que no se pudo revisar se dice: si no, «todo en orden» mentiría.
+  const caidas = cuentas.filter(x => x.error);
+
+  const tarjeta = (h) => {
+    const ico = h.tipo === 'error' ? 'alert' : h.tipo === 'bien' ? 'check' : 'trend';
+    const acc = h.accion && h.accion.tipo === 'pausar' && d.puede_pausar
+      ? '<div class="pauta-diag-acc"><button class="btn-ghost sm" onclick="pautaPausar(' +
+          esc(JSON.stringify({ conexion_id: h.accion.conexion_id, campana_id: h.accion.campana_id, nombre: (h.campana && h.campana.nombre) || '' })) +
+        ', this)">' + icn('alert', 12) + ' Pausar campaña</button></div>'
+      : '';
+    return '<div class="pauta-diag ' + h.tipo + '">' +
+      '<div class="pauta-diag-ico">' + icn(ico, 16) + '</div>' +
+      '<div class="pauta-diag-cuerpo">' +
+        '<div class="pauta-diag-tit">' + pautaRedChip(h.red) + '<span>' + esc(h.titulo) + '</span></div>' +
+        '<div class="pauta-diag-det">' + esc(h.detalle) + '</div>' +
+      '</div>' + acc + '</div>';
+  };
+  const grupo = (titulo, lista) => lista.length
+    ? '<div class="pauta-diag-grupo">' + titulo + '</div><div class="pauta-diag-lista">' + lista.map(tarjeta).join('') + '</div>' : '';
+
+  c.innerHTML =
+    caidas.map(x => '<div class="pauta-aviso pauta-aviso-mal">' + icn('alert', 16) +
+      '<div style="flex:1"><b>No se pudo revisar ' + esc(x.nombre || 'una cuenta') + '.</b> ' + esc(x.error) + '</div></div>').join('') +
+    '<div class="pauta-diag-res">' +
+      '<div class="pauta-diag-cifra mal"><b>' + errores.length + '</b><span>' + (errores.length === 1 ? 'error' : 'errores') + '</span></div>' +
+      '<div class="pauta-diag-cifra ojo"><b>' + oport.length + '</b><span>' + (oport.length === 1 ? 'oportunidad' : 'oportunidades') + '</span></div>' +
+      '<div class="pauta-diag-cifra bien"><b>' + bien.length + '</b><span>funcionando bien</span></div>' +
+      '<div class="pauta-diag-cifra"><b>' + pautaNum(d.revisadas || 0) + '</b><span>campañas revisadas · ' +
+        esc(pautaFecha(d.desde)) + ' a ' + esc(pautaFecha(d.hasta)) + '</span></div>' +
+    '</div>' +
+    (!hs.length && !caidas.length
+      ? emptyAgua('check', 'No encontramos nada que corregir',
+          'Ninguna campaña está parada, gastando sin traer leads ni muy por encima de tu costo medio. Vuelve a revisar en unos días.', '')
+      : grupo('Errores — cuestan dinero ahora', errores) +
+        grupo('Oportunidades de mejora', oport) +
+        grupo('Lo que funciona', bien));
+}
+
+async function pautaPausar(p, btn) {
+  if (!confirm('¿Pausar «' + (p.nombre || 'esta campaña') + '»?\n\nDeja de gastar desde ya. La puedes volver a activar cuando quieras desde ' +
+    'el administrador de anuncios.')) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Pausando…'; }
+  try {
+    const r = await fetchAuth('/api/pauta', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'pausar', conexion_id: p.conexion_id, campana_id: p.campana_id }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast('Campaña pausada: ' + (p.nombre || d.campana || ''), 'success');
+    pautaCargar();
+  } catch (e) {
+    showToast('No se pudo pausar: ' + String(e.message || e), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Pausar campaña'; }
   }
 }
 

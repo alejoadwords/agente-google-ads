@@ -106,44 +106,33 @@ Vuelve solo a Ajustes → Integraciones.
 > Que se vea la tarjeta de Meta Ads ya **conectada, con el nombre y el
 > identificador de la cuenta**. Detente 3 segundos.
 
-### 8 · El panel con datos reales (1:55 – 2:30)
+### 8 · Las campañas con datos reales (1:55 – 2:30)
 
-Cerrar Ajustes y abrir el agente **Meta Ads** en la barra lateral izquierda. El
-panel de campañas se carga solo.
+Ir a **Marketing → Plataformas de pauta → Campañas**. Se ven las campañas de la
+cuenta de Meta conectada con su inversión, impresiones y clics, y al lado lo que
+pasó con esos leads en el CRM.
 
-> **Es la escena más importante del video.** Detente 8-10 segundos y **recorre
-> con el cursor** las cifras: alcance, impresiones, clics, gasto, CPC, CPM. Que
-> se lean. Si hay varias campañas, pasa el cursor por dos o tres.
->
-> **Justifica `ads_read`.** Si aquí sale un cero, el video no sirve.
+> **Justifica `ads_read`.** Las cifras tienen que ser distintas de cero: por eso
+> se graba después de 3-5 días de campaña entregando.
 
-### 9 · El agente analizando (2:30 – 3:10)
+### 9 · El diagnóstico (2:30 – 3:10)
 
-En el chat, escribir algo como:
+Pestaña **Diagnóstico**. Señalar con el cursor el resumen (errores,
+oportunidades, lo que funciona) y abrir uno o dos hallazgos para que se lean sus
+números.
 
-> «Analiza el rendimiento de mis campañas de los últimos 7 días y dime cuál está
-> gastando de más.»
+> **Justifica `ads_read`**: es lectura de campañas, anuncios y estado de la cuenta.
 
-Esperar la respuesta completa y **desplazarse por ella despacio**.
+### 10 · Pausar una campaña que gasta sin resultados (3:10 – 4:00)
 
-> **Justifica `ads_read` otra vez, y mejor.** Aquí se ve que los datos no son
-> decorativos: alimentan el producto. Que en la respuesta se reconozcan los
-> mismos números del panel.
+En un hallazgo «gastó … y no trajo ningún lead», pulsar **Pausar campaña**,
+confirmar, y enseñar el aviso «Campaña pausada». Después, abrir el Administrador de
+anuncios de Meta y enseñar esa campaña **en pausa**.
 
-### 10 · Crear una campaña, que queda en pausa (3:10 – 4:00)
-
-Pedirle al agente que cree una campaña. Cuando muestre el panel de revisión,
-confirmarla.
-
-> **Justifica `ads_management`, y es la escena delicada.** No basta con crearla:
-> **tienes que enseñar que queda PAUSADA**. Dos formas, haz las dos si puedes:
->
-> 1. Que se vea el estado «en pausa» en la confirmación dentro de Acuarius.
-> 2. Abrir el Administrador de anuncios de Meta en otra pestaña y enseñar la
->    campaña recién creada **con el estado Desactivada**.
->
-> Esto es lo que le dice al revisor que no vas a gastarle el presupuesto a nadie
-> sin que lo active. Es el argumento que sostiene todo el permiso.
+> **Justifica `ads_management`.** Antes de grabar: la cuenta necesita una campaña
+> de **leads** que haya gastado sin traer leads al CRM (una de tráfico no dispara el
+> hallazgo, a propósito). Decir en voz alta —o con un texto en pantalla— que desde
+> Acuarius solo se pausa: nunca se activa ni se cambia presupuesto.
 
 ### 11 · Un mensaje real de Messenger (4:00 – 4:45)
 
@@ -209,9 +198,9 @@ tarjeta volviendo a **«sin conectar»**.
 | Permiso | Escena | ¿Se ve? |
 |---|---|---|
 | `business_management` | 4 | ☐ |
-| `ads_read` | 5, 8, 9 | ☐ |
+| `ads_read` | 5, 8, 9 (Campañas y Diagnóstico) | ☐ |
 | `pages_show_list` | 6 | ☐ |
-| `ads_management` | 10 (**y en pausa**) | ☐ |
+| `ads_management` | 10 (**Pausar campaña**) | ☐ |
 | `pages_messaging` | 11 | ☐ |
 | `pages_manage_metadata` | 11 | ☐ |
 | `pages_read_engagement` | 12 | ☐ |
