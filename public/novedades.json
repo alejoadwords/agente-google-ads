@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-no-inventar",
+      "fecha": "2026-09-29",
+      "tipo": "arreglo",
+      "titulo": "Un dato que el agente no tenga, ya no puede llegarle a tu cliente",
+      "texto": "Pedirle al agente que no invente nunca fue suficiente: la instrucción estaba, en mayúsculas, y aun así ante «muéstreme lo que tenga» podía sacarse un inmueble con barrio y precio. Ahora eso no depende de que el modelo obedezca. Antes de enviar cualquier mensaje comprobamos que cada precio y cada código que menciona esté de verdad en tu inventario, en su entrenamiento o en lo que escribió la persona. Si no está, el mensaje no sale: se le señala el error y se corrige, y si insiste, la conversación pasa a un asesor con un mensaje neutro. Queda registrado para que puedas verlo."
+    },
+    {
       "id": "2026-09-29-agente-corrige",
       "fecha": "2026-09-29",
       "tipo": "arreglo",

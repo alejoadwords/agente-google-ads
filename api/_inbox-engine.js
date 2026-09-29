@@ -360,6 +360,69 @@ export async function fotosPedidas(texto, userId, clientId) {
   } catch { return []; }
 }
 
+// ── El guardián: lo que el agente dice tiene que estar en lo que le dimos ────
+//
+// La regla de "no inventes" lleva en el prompt desde siempre, en mayúsculas y
+// con la palabra INNEGOCIABLE. Y aun así, ante «muéstreme lo que tenga» y sin
+// nada que enseñar, Haiku se inventó apartamentos con barrio y precio 7 de cada
+// 8 veces. No es que no lea la regla: es que una regla es texto compitiendo con
+// texto, y la conversación entera empuja hacia producir una lista.
+//
+// Una regla que de verdad no se puede romper no se le pide al modelo: se
+// comprueba después. Nosotros sabemos exactamente qué lista le dimos.
+//
+// Se comprueban importes y códigos porque son verificables sin ambigüedad. Un
+// barrio inventado no se puede distinguir de uno mencionado de paso; un
+// «$1.800.000» que no está en ningún sitio, sí.
+
+// Las cifras que hay que comprobar: importes y códigos. Solo esas tres formas,
+// y no «cualquier número largo».
+//
+// Con un colador ancho, «contrato de 2026 a 2027» se leía como la cifra
+// 20262027 y se marcaba como inventada: un mensaje perfectamente bueno se
+// habría quedado sin enviar. Un falso positivo aquí cuesta una conversación
+// escalada sin motivo, así que el colador va estrecho a propósito: prefiere
+// dejar pasar un caso raro antes que bloquear lo bueno.
+const FORMAS = [
+  /\$\s?([\d][\d.,]*\d)/g,          // «$1.800.000»
+  /\b(\d{1,3}(?:\.\d{3})+)\b/g,     // «1.800.000» sin el símbolo
+  /\b(\d{6,10})\b/g,                // «121513056», un código
+];
+
+function cifrasDe(texto) {
+  const t = String(texto || '');
+  const out = new Set();
+  for (const re of FORMAS) {
+    for (const m of t.matchAll(re)) {
+      const d = m[1].replace(/[^\d]/g, '');
+      if (d.length >= 6 && d.length <= 12) out.add(d);
+    }
+  }
+  return out;
+}
+
+// Lo que el agente dijo y no estaba en ninguna parte.
+//
+// `permitido` es todo lo que legítimamente puede citar: el inventario que se le
+// pasó, su propio entrenamiento y lo que el contacto escribió —si la persona
+// dice «puedo pagar 2.500.000», el agente puede repetirlo—.
+export function inventos(respuesta, permitido) {
+  // Un solo chorro de dígitos: así da igual cómo esté escrito el número a un
+  // lado y al otro («$1.800.000» y «1800000» son lo mismo).
+  const colchon = String(permitido || '').replace(/[^\d]/g, '');
+  return [...cifrasDe(respuesta)].filter(c => !colchon.includes(c));
+}
+
+// Todo lo que el agente puede citar sin inventar.
+export function loQuePuedeCitar(agent, inventario, mensajes) {
+  return [
+    agent?.persona, agent?.business_ctx,
+    ...(agent?.faqs || []).map(f => `${f.q} ${f.a}`),
+    ...(inventario?.lineas || []),
+    ...(mensajes || []).map(m => String(m?.content || '')),
+  ].filter(Boolean).join(' \n ');
+}
+
 // Las pistas con las que se filtra el inventario, sacadas de los dos sitios
 // donde el agente deja lo que ha entendido.
 //
@@ -1306,6 +1369,41 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   }
 
   let reply = await responderViendo(system, hist, [], { userId: connection.user_id, origen: 'whatsapp' });
+
+  // ── El guardián ──────────────────────────────────────────────────────────
+  // Si el agente citó un importe o un código que no está en ninguna parte, ese
+  // mensaje NO sale. Se le da una oportunidad de corregirse con el fallo
+  // señalado, y si vuelve a inventar se manda un texto seguro y lo coge una
+  // persona.
+  //
+  // Esto es lo único que hace la regla irrompible: no depende de que el modelo
+  // obedezca. Un precio inventado no se desmiente después, porque el contacto
+  // ya lo leyó.
+  const citable = loQuePuedeCitar(agent, inventario, hist);
+  let invento = inventos(cleanForUser(reply), citable);
+  let inventoForzado = false;
+  if (invento.length) {
+    const otra = await responderViendo(system, hist, [
+      { role: 'assistant', content: reply },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) En tu mensaje anterior diste estos datos que NO están en tu inventario ni en tu contexto: ' +
+        invento.join(', ') + '. Eso es inventado y no se le puede decir a nadie. Reescribe tu mensaje usando SOLO lo que tienes delante. Si no tienes nada que encaje, dilo con naturalidad y ofrece pasar la conversación a un asesor añadiendo [ESCALAR] al final.' },
+    ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
+    const segundo = otra ? inventos(cleanForUser(otra), citable) : ['sin respuesta'];
+    if (otra && !segundo.length) {
+      reply = otra;
+      invento = [];
+    } else {
+      inventoForzado = true;
+      reply = 'Déjeme confirmar eso con un asesor especializado y le respondemos enseguida. [ESCALAR]';
+    }
+    await registrarError({
+      origen: 'inbox', donde: 'el agente se inventó datos',
+      error: new Error('Datos que no están en el inventario: ' + invento.concat(segundo).join(', ')),
+      usuario: connection.user_id,
+      detalle: (inventoForzado ? 'NO se pudo corregir, se escaló' : 'corregido al segundo intento') +
+        ' · inventario a la vista: ' + (inventario?.total ?? 0),
+    }).catch(() => {});
+  }
 
   // «Te estoy agendando, en un momento te llega la confirmación»… sin el
   // bloque. Pasó con Claude de verdad: la persona se quedaría esperando una
