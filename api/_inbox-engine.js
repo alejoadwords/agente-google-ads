@@ -235,9 +235,12 @@ export async function zonasDelCliente(userId, clientId) {
   } catch { return { ciudades: new Map(), barrios: new Map(), tipos: new Map() }; }
 }
 
-// El nombre más largo que aparezca en el texto. El más largo y no el primero
-// porque «Alto Prado» contiene «Prado»: con el primero, quien pide Alto Prado
-// acabaría viendo El Prado.
+// El nombre que aparezca MÁS TARDE en el texto; a igualdad de posición, el más
+// largo.
+//
+// Más tarde, porque dentro de un mensaje la gente se corrige: «busco casa, no,
+// mejor apartamento». Y el más largo porque «Alto Prado» contiene «Prado»: sin
+// eso, quien pide Alto Prado acabaría viendo El Prado.
 function nombreEnTexto(texto, mapa) {
   const t = sinTildes(texto);
   let mejor = null;
@@ -248,8 +251,13 @@ function nombreEnTexto(texto, mapa) {
     // habitaciones» después de haber dicho «casa» dejaba el tipo en Casa y el
     // agente seguía buscando casas toda la conversación.
     const esc = clave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (!new RegExp('(^|[^a-z0-9])' + esc + '(e?s)?($|[^a-z0-9])').test(t)) continue;
-    if (!mejor || clave.length > mejor.clave.length) mejor = { clave, original };
+    const re = new RegExp('(^|[^a-z0-9])' + esc + '(e?s)?($|[^a-z0-9])', 'g');
+    let donde = -1;
+    for (const m of t.matchAll(re)) donde = m.index;
+    if (donde < 0) continue;
+    if (!mejor || donde > mejor.donde || (donde === mejor.donde && clave.length > mejor.clave.length)) {
+      mejor = { clave, original, donde };
+    }
   }
   return mejor?.original || null;
 }
@@ -257,8 +265,13 @@ function nombreEnTexto(texto, mapa) {
 // Cuántas habitaciones pidió: «3 habitaciones», «de 3 alcobas», «3 hab».
 export function habitacionesDelTexto(texto) {
   const t = sinTildes(texto);
-  const m = t.match(/(\d{1,2})\s*(habitacion|habitaciones|alcoba|alcobas|cuarto|cuartos|dormitorio|dormitorios|hab\b|alc\b)/);
-  const n = m ? parseInt(m[1], 10) : null;
+  // La ÚLTIMA mención del mensaje, no la primera. «Busco casa de 4
+  // habitaciones. No, mejor apartamento de 3 habitaciones» se quedaba en
+  // cuatro, y el catálogo devolvía cero: con cero y sin nada más que decirle,
+  // el agente se inventó tres apartamentos con precios que no existen.
+  const todas = [...t.matchAll(/(\d{1,2})\s*(habitacion|habitaciones|alcoba|alcobas|cuarto|cuartos|dormitorio|dormitorios|hab\b|alc\b)/g)];
+  if (!todas.length) return null;
+  const n = parseInt(todas[todas.length - 1][1], 10);
   return n > 0 && n <= 20 ? n : null;
 }
 
@@ -277,10 +290,12 @@ export function presupuestoDelTexto(texto) {
   // presupuesto desaparecía.
   const frases = t.split(/[;\n]|\.\s+/)
     .filter(f => /\$|millon|millones|mil\b|presupuesto|pagar|canon|mensual|maximo|hasta/.test(f));
-  for (const f of frases) {
+  // De la última frase hacia atrás, por lo mismo: dentro de un mensaje puede
+  // corregirse («hasta 3 millones, bueno, mejor hasta 5»).
+  for (let i = frases.length - 1; i >= 0; i--) {
     // Una frase que habla de habitaciones no habla de plata.
-    if (/habitacion|alcoba|cuarto|dormitorio|bano/.test(f)) continue;
-    const v = aPlata(f);
+    if (/habitacion|alcoba|cuarto|dormitorio|bano/.test(frases[i])) continue;
+    const v = aPlata(frases[i]);
     if (v) return v;
   }
   return null;
@@ -398,7 +413,12 @@ export function aPlata(texto) {
 
   // «3,5 millones», «2.5 M», «800 mil». La coma y el punto valen de decimal
   // cuando hay una unidad detrás; sin unidad son separadores de miles.
-  const conUnidad = t.match(/(\d+(?:[.,]\d+)?)\s*(millon|millón|millones|mill|m\b|mm\b|mil\b|k\b)/);
+  // La ÚLTIMA cifra con unidad de la frase. Con la primera, «hasta 3 millones,
+  // bueno, mejor hasta 5» se quedaba en tres. Y en un rango —«entre 2 y 3
+  // millones»— la última es el tope, que es justo lo que hay que usar: el
+  // filtro busca por DEBAJO del presupuesto.
+  const conUnidades = [...t.matchAll(/(\d+(?:[.,]\d+)?)\s*(millon|millón|millones|mill|m\b|mm\b|mil\b|k\b)/g)];
+  const conUnidad = conUnidades.length ? conUnidades[conUnidades.length - 1] : null;
   if (conUnidad) {
     const n = parseFloat(conUnidad[1].replace(',', '.'));
     const esMillon = /^m(illon|illón|illones|ill|m)?$/.test(conUnidad[2]);
@@ -507,7 +527,14 @@ PUEDES ENSEÑAR FOTOS:
 - De una opción que NO esté marcada «con fotos», no las ofrezcas ni prometas mandarlas: dile que se las hace llegar un asesor
 - Videos no tienes de ninguna. Si los piden, eso lo ve un asesor
 
-SI TE MANDAN UN PDF:
+${propiedades && !propiedades.lineas.length ? `NO TIENES NADA QUE ENCAJE CON LO QUE TE HAN PEDIDO.
+Busqué en el inventario y no hay ni una opción con esas características. Esto es lo que toca hacer, y no hay alternativa:
+- Dilo claramente: "en este momento no tengo nada así"
+- NO te inventes opciones. Ni un barrio, ni un precio, ni una administración, ni "algo parecido". Si escribes un inmueble que no existe, esa persona va a pedir verlo
+- Puedes preguntarle si flexibiliza algo —otra zona, otro número de habitaciones, otro presupuesto— y volvemos a buscar
+- O pásale la conversación a un asesor, que puede mirar inmuebles que todavía no están publicados. En ese caso incluye [ESCALAR] al final
+
+` : ''}SI TE MANDAN UN PDF:
 - Lo lees. Usa lo que dice para responder: si trae un pago, una cedula, un certificado o una ficha, dilo con sus datos
 - Si el PDF no trae lo que hacia falta, di que falta y que se necesita
 
