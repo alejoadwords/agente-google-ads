@@ -13,6 +13,8 @@ export const config = { runtime: 'edge' };
 import { quienPregunta, alcanceDeCliente, clienteAjeno, normalizarPerfil, exigeModulo } from './_perfiles.js';
 import { iconoValido, ICONO_POR_DEFECTO } from './_iconos-reserva.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+import { crearEnlaceCalendario, DIAS_ENLACE_CALENDARIO } from './_enlace-calendario.js';
+import { abrirConexion, cerrarConexion } from './_cifrado.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -227,14 +229,33 @@ async function traerServicios(userId, cliente) {
 }
 
 async function traerRecursos(userId, cliente) {
+  // Del calendario de cada uno se trae SOLO lo que la pantalla enseña. Los
+  // tokens no salen nunca de aquí: ni cifrados.
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/booking_resources?user_id=eq.${encodeURIComponent(userId)}&${filtroCliente(cliente)}` +
-    `&select=*&order=orden.asc,created_at.asc`,
+    `&select=*,booking_resource_calendars(email,error,error_at,updated_at)&order=orden.asc,created_at.asc`,
     { headers: sbHeaders() }
   );
   if (!res.ok) throw new Error('recursos: HTTP ' + res.status);
   const filas = await res.json();
-  return Array.isArray(filas) ? filas : [];
+  return (Array.isArray(filas) ? filas : []).map(r => {
+    const { booking_resource_calendars: c, ...resto } = r;
+    // Uno a uno por la clave primaria: PostgREST lo da como objeto, pero si
+    // algún día lo diera como lista, que no desaparezca el calendario.
+    const cal = Array.isArray(c) ? c[0] : c;
+    return { ...resto, calendario: cal ? { email: cal.email || '', error: cal.error || null, error_at: cal.error_at || null } : null };
+  });
+}
+
+/** El Google conectado en la Agenda, para ofrecérselo al dueño como el suyo. */
+async function cuentaGoogle(userId) {
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.google_calendar` +
+    `&select=account_name,refresh_token&limit=1`,
+    { headers: sbHeaders() }
+  ).catch(() => null);
+  const f = r && r.ok ? (await r.json())?.[0] : null;
+  return f && f.refresh_token ? { email: f.account_name || '' } : null;
 }
 
 /** ¿Esta fila es de esta cuenta y de este cliente? Se comprueba antes de tocarla. */
@@ -308,13 +329,16 @@ export default async function handler(req) {
   try {
     // ── GET — todo lo que la pantalla necesita, de una vez ──────────────────
     if (req.method === 'GET') {
-      const [config, servicios, recursos, bloqueos] = await Promise.all([
+      const [config, servicios, recursos, bloqueos, google] = await Promise.all([
         traerConfig(userId, cliente),
         traerServicios(userId, cliente),
         traerRecursos(userId, cliente),
         traerBloqueos(userId, cliente),
+        // Solo al dueño: es SU Google, y a nadie más le toca decidir que sea
+        // el calendario de otra persona.
+        quien.esDueno ? cuentaGoogle(userId) : null,
       ]);
-      return jsonResp({ config, servicios, recursos, bloqueos, puede_configurar: esAdmin });
+      return jsonResp({ config, servicios, recursos, bloqueos, puede_configurar: esAdmin, cuenta_google: google });
     }
 
     let body = {};
@@ -537,6 +561,61 @@ export default async function handler(req) {
         if (!await mia('booking_resources', id, userId, cliente)) return jsonResp({ error: 'No encontrado' }, 404);
         const res = await fetch(
           `${SUPABASE_URL}/rest/v1/booking_resources?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}`,
+          { method: 'DELETE', headers: sbHeaders('return=minimal') }
+        );
+        if (!res.ok) return jsonResp({ error: await res.text() }, 500);
+        return jsonResp({ ok: true });
+      }
+    }
+
+    // ── El Google Calendar de cada persona ──────────────────────────────────
+    //
+    // POST   → un enlace firmado para conectarlo. Lo abre el administrador si
+    //          es su propio calendario, o se lo manda a la persona.
+    // POST   con usar_cuenta → el dueño usa el Google que ya conectó en la
+    //          Agenda, sin volver a pasar por la pantalla de permisos.
+    // DELETE → desconectar. Solo se borra la fila: revocar en Google tumbaría
+    //          también la conexión de la Agenda si es la misma cuenta.
+    if (que === 'calendario') {
+      const rid = req.method === 'DELETE' ? url.searchParams.get('resource_id') : body.resource_id;
+      if (!rid) return jsonResp({ error: 'Falta a quién' }, 400);
+      if (!await mia('booking_resources', rid, userId, cliente)) return jsonResp({ error: 'No encontrado' }, 404);
+
+      if (req.method === 'POST' && body.usar_cuenta) {
+        if (!quien.esDueno) return jsonResp({ error: 'Solo el dueño puede usar el Google de la cuenta.' }, 403);
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/platform_connections?user_id=eq.${encodeURIComponent(userId)}&platform=eq.google_calendar` +
+          `&select=account_name,access_token,refresh_token,token_expires_at&limit=1`,
+          { headers: sbHeaders() }
+        );
+        const c = await abrirConexion(r.ok ? (await r.json())?.[0] : null);
+        if (!c?.refresh_token) return jsonResp({ error: 'No hay ningún Google conectado en la Agenda.' }, 400);
+        // Se abren y se vuelven a cerrar en vez de copiarlos tal cual: las
+        // conexiones más viejas de la Agenda pueden estar aún en plano, y la
+        // copia nueva tiene que nacer cifrada igual que las demás.
+        const fila = await cerrarConexion({
+          resource_id: rid, user_id: userId, email: c.account_name || '',
+          access_token: c.access_token, refresh_token: c.refresh_token, token_expires_at: c.token_expires_at,
+          error: null, error_at: null, updated_at: new Date().toISOString(),
+        });
+        const g = await fetch(`${SUPABASE_URL}/rest/v1/booking_resource_calendars?on_conflict=resource_id`, {
+          method: 'POST',
+          headers: sbHeaders('resolution=merge-duplicates,return=minimal'),
+          body: JSON.stringify(fila),
+        });
+        if (!g.ok) return jsonResp({ error: await g.text() }, 500);
+        return jsonResp({ ok: true, email: c.account_name || '' });
+      }
+
+      if (req.method === 'POST') {
+        const t = await crearEnlaceCalendario(userId, rid);
+        if (!t) return jsonResp({ error: 'Falta la clave para firmar enlaces en el servidor.' }, 500);
+        return jsonResp({ url: 'https://app.acuarius.app/api/gcal-auth?r=' + t, dias: DIAS_ENLACE_CALENDARIO });
+      }
+
+      if (req.method === 'DELETE') {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/booking_resource_calendars?resource_id=eq.${encodeURIComponent(rid)}&user_id=eq.${encodeURIComponent(userId)}`,
           { method: 'DELETE', headers: sbHeaders('return=minimal') }
         );
         if (!res.ok) return jsonResp({ error: await res.text() }, 500);

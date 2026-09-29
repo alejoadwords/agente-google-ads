@@ -21,7 +21,7 @@ export const config = { runtime: 'edge' };
 
 import { franjasLibres, sigueLibre, diasConCupo, diaLocal } from './_disponibilidad.js';
 import { intakeLead } from './_lead-intake.js';
-import { getGcalToken, gcalEventBody, gcalRequest } from './_gcal.js';
+import { getGcalToken, gcalEventBody, gcalRequest, tokenDeRecurso, ocupadoDeCalendarios, gcalEnSuCalendario } from './_gcal.js';
 import { emailHtml, bloque, RESPONDER_A, esc } from './_email-layout.js';
 import { registrarError } from './_registro-errores.js';
 import { enviarResend } from './_correo.js';
@@ -111,7 +111,7 @@ async function ocupadoDe(neg, ids, desdeISO, hastaISO) {
   if (!ids.length) return porRecurso;
   const cliente = neg.client_id || null;
 
-  const [filas, bloqueos] = await Promise.all([
+  const [filas, bloqueos, google] = await Promise.all([
     sb(
       `/activities?user_id=eq.${encodeURIComponent(neg.user_id)}` +
       `&resource_id=in.(${ids.map(encodeURIComponent).join(',')})` +
@@ -130,6 +130,8 @@ async function ocupadoDe(neg, ids, desdeISO, hastaISO) {
       `&inicio=lt.${encodeURIComponent(hastaISO)}&fin=gt.${encodeURIComponent(desdeISO)}` +
       `&select=inicio,fin,resource_id&limit=500`
     ).catch(() => []),
+    // Lo que cada persona tiene en SU Google Calendar.
+    ocupadoGoogle(neg, ids, desdeISO, hastaISO),
   ]);
 
   for (const f of filas || []) {
@@ -147,7 +149,51 @@ async function ocupadoDe(neg, ids, desdeISO, hastaISO) {
     const destino = b.resource_id ? [b.resource_id] : ids;
     for (const id of destino) if (porRecurso[id]) porRecurso[id].push({ ini, fin });
   }
+  for (const [id, tramos] of Object.entries(google || {})) {
+    if (porRecurso[id]) porRecurso[id].push(...tramos);
+  }
   return porRecurso;
+}
+
+/**
+ * Lo ocupado en el Google Calendar de cada persona que lo tenga conectado.
+ *
+ * SI NO SE PUEDE LEER, ESA PERSONA SE DA POR OCUPADA en todo el rango. Es la
+ * decisión que más pesa del módulo: con el calendario caído hay dos fallos
+ * posibles —no ofrecer horas que estaban libres u ofrecer una que ya tenía una
+ * cita apuntada en Google— y el segundo es el que un negocio de citas no
+ * perdona. El primero, además, se ve: la pantalla de Reservas enseña en rojo
+ * el calendario que dejó de responder, y el error queda en el registro.
+ */
+async function ocupadoGoogle(neg, ids, desdeISO, hastaISO) {
+  const todo = () => ({ ini: new Date(desdeISO).getTime(), fin: new Date(hastaISO).getTime() });
+  // Las citas que ya escribimos en Google no se cuentan dos veces, y sobre
+  // todo no tapan a otra persona si cayeron en un calendario compartido. Las
+  // nuevas llevan una marca; esto cubre las que se escribieron antes de ella.
+  const nuestras = () => sb(
+    `/activities?user_id=eq.${encodeURIComponent(neg.user_id)}&resource_id=not.is.null&gcal_event_id=not.is.null` +
+    `&due_at=gte.${encodeURIComponent(new Date(new Date(desdeISO).getTime() - 86400000).toISOString())}` +
+    `&due_at=lt.${encodeURIComponent(hastaISO)}&select=gcal_event_id&limit=2000`
+  ).then(f => new Set((f || []).map(x => x.gcal_event_id))).catch(() => new Set());
+
+  let lecturas;
+  try {
+    lecturas = await ocupadoDeCalendarios(ids, desdeISO, hastaISO, nuestras);
+  } catch (e) {
+    // Ni siquiera se supo quién tiene calendario: se tapa a todos.
+    await registrarError({ origen: 'booking-public', donde: 'calendarios', error: e, detalle: 'Negocio: ' + neg.user_id });
+    return Object.fromEntries(ids.map(id => [id, [todo()]]));
+  }
+  const out = {};
+  for (const [id, v] of Object.entries(lecturas)) {
+    if (Array.isArray(v)) { out[id] = v; continue; }
+    await registrarError({
+      origen: 'booking-public', donde: 'leer google calendar', error: new Error(v.fallo),
+      detalle: 'Recurso ' + id + ' de ' + neg.user_id + ': se da por ocupado mientras no se pueda leer.',
+    });
+    out[id] = [todo()];
+  }
+  return out;
 }
 
 /** Las reglas con las que se calculan los huecos de un recurso concreto. */
@@ -419,11 +465,25 @@ async function reservar(req, url, neg, contexto) {
 }
 
 async function sincronizarGcal(neg, cita, correoCliente) {
-  const conn = await getGcalToken(neg.user_id).catch(() => null);
+  // En el calendario de quien atiende, si lo conectó. Si no —o si su conexión
+  // falla—, en el de la cuenta, como siempre: la cita tiene que verse en
+  // algún Google.
+  let conn = null;
+  if (cita.resource_id) {
+    conn = await tokenDeRecurso(cita.resource_id).catch(async (e) => {
+      await registrarError({ origen: 'booking-public', donde: 'google calendar del recurso', error: e,
+        detalle: 'Cita ' + cita.id + ': se escribe en el calendario de la cuenta.' });
+      return null;
+    });
+  }
+  if (!conn?.token) conn = await getGcalToken(neg.user_id).catch(() => null);
   if (!conn?.token) return;
   try {
-    const ev = await gcalRequest(conn.token, 'POST', '',
-      gcalEventBody(cita, correoCliente || null, !!correoCliente, neg.zona_horaria), !!correoCliente);
+    const cuerpo = gcalEventBody(cita, correoCliente || null, !!correoCliente, neg.zona_horaria);
+    // La marca con la que, al leer lo ocupado, se reconoce que este evento es
+    // una cita nuestra y no algo que la persona apuntó a mano.
+    cuerpo.extendedProperties = { private: { acuarius_cita: String(cita.id) } };
+    const ev = await gcalRequest(conn.token, 'POST', '', cuerpo, !!correoCliente);
     await fetch(`${SUPABASE_URL}/rest/v1/activities?id=eq.${cita.id}`, {
       method: 'PATCH', headers: sbHeaders('return=minimal'),
       body: JSON.stringify({ gcal_event_id: ev.id }),
@@ -536,9 +596,12 @@ async function manejarCita(req, url, citaTok) {
   if (!res.ok) return jsonResp({ error: 'No se pudo cancelar. Inténtalo otra vez.' }, 500);
 
   if (cita.gcal_event_id) {
-    const conn = await getGcalToken(cita.user_id).catch(() => null);
-    if (conn?.token) {
-      try { await gcalRequest(conn.token, 'DELETE', '/' + cita.gcal_event_id, null, true); } catch {}
+    try {
+      await gcalEnSuCalendario(cita.user_id, cita.resource_id, 'DELETE', '/' + cita.gcal_event_id, null, true);
+    } catch (e) {
+      // La cita ya está cancelada y el hueco libre en Acuarius; lo que queda
+      // es un evento huérfano en Google. Se anota para que alguien lo vea.
+      await registrarError({ origen: 'booking-public', donde: 'cancelar en google', error: e, detalle: 'Cita ' + cita.id });
     }
   }
   return jsonResp({ ok: true, cita: { ...vista, estado: 'cancelada' } });

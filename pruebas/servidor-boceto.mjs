@@ -23,4 +23,7 @@ createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': TIPOS[p.split('.').pop()] || 'text/plain; charset=utf-8' });
     res.end(b);
   } catch { res.writeHead(404).end('no está: ' + p); }
-}).listen(4173, () => console.log('banco en http://localhost:4173/pruebas/banco-reservas.html'));
+// PUERTO=4183 para tener dos a la vez: cada worktree sirve SU copia, y con el
+// mismo puerto el segundo en arrancar se queda con el banco del primero.
+}).listen(+process.env.PUERTO || 4173, () =>
+  console.log('banco en http://localhost:' + (+process.env.PUERTO || 4173) + '/pruebas/banco-reservas.html'));

@@ -1611,12 +1611,26 @@ a.lf-prop:hover{border-color:var(--blue)}
 .rsv-ojo{color:var(--warning);display:inline-flex;align-items:center;gap:5px}
 .rsv-chip{font-size:var(--fs-xs);font-weight:700;padding:2px 7px;border-radius:99px;flex-shrink:0}
 .rsv-chip.off{background:var(--bg-muted);color:var(--muted)}
+.rsv-chip.ok{background:var(--success-bg);color:var(--success)}
+.rsv-chip.mal{background:var(--danger-bg);color:var(--danger)}
+.rsv-cal{display:inline-flex;align-items:center;gap:5px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rsv-cal-linea{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.rsv-cal-enlace{display:flex;gap:6px;align-items:center;margin-top:8px}
+.rsv-cal-enlace input{flex:1;min-width:0;font-size:var(--fs-sm)}
+.rsv-cal-error{background:var(--danger-bg);color:var(--danger);border-radius:var(--r);padding:9px 11px;font-size:var(--fs-sm);line-height:1.45;display:flex;gap:7px;align-items:flex-start}
+.rsv-cal-error svg{flex-shrink:0;margin-top:2px}
 .rsv-borrar:hover{color:var(--danger);border-color:var(--danger)}
 
 .rsv-lista{display:flex;flex-direction:column;gap:8px}
 .rsv-fila{display:flex;align-items:center;gap:11px;background:var(--bg-card);border:1px solid var(--border);
   border-radius:var(--r);padding:11px 13px}
 .rsv-fila.apagada{opacity:.6}
+/* Con el botón de Calendario son tres botones por fila: en un teléfono le
+   dejaban al nombre dos dedos de ancho. Por debajo de 560 px bajan a su línea. */
+@media (max-width:560px){
+  .rsv-fila{flex-wrap:wrap}
+  .rsv-fila > div[style*="flex:1"]{flex-basis:calc(100% - 45px)}
+}
 .rsv-fila-nom{font-size:var(--fs-base);font-weight:600}
 .rsv-fila-meta{font-size:var(--fs-sm);color:var(--muted);margin-top:2px}
 .rsv-av{width:34px;height:34px;border-radius:50%;background:var(--agua-grad);color:#fff;flex-shrink:0;

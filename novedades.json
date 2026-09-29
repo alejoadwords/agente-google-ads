@@ -20,6 +20,17 @@
       "texto": "Cuando el agente aún no tenía una respuesta —el presupuesto, por ejemplo— a veces la apuntaba como «sin información» y el sistema la contaba como respondida. Eso adelantaba el veredicto: un contacto podía llegarle a tu comercial marcado como calificado sin haber dado los datos, o descartado sin haber dicho nada. Ahora lo que falta se sigue preguntando, y el veredicto espera a tenerlo todo."
     },
     {
+      "id": "2026-09-28-reservas-google-por-persona",
+      "fecha": "2026-09-28",
+      "tipo": "nuevo",
+      "titulo": "Lo que cada persona tenga en su Google Calendar ya no se ofrece en tus reservas",
+      "texto": "Hasta ahora, una cita que alguien de tu equipo apuntaba a mano en su Google Calendar no bloqueaba nada, y tu página de reservas podía ofrecerle esa misma hora a un cliente. Ya no. En Reservas → Quién atiende, cada persona tiene un botón «Calendario»: conecta su propio Google y, desde ese momento, lo que tenga ocupado ahí deja de ofrecerse en tu página, y cada cita nueva le llega a su calendario. Lo de Ana bloquea a Ana, no a Luis. Si es el calendario de otra persona, le mandas un enlace: lo abre desde su teléfono, elige su cuenta de Google y listo, sin necesidad de tener cuenta en Acuarius. Y si alguna vez ese calendario deja de responder, te lo avisamos en rojo y, mientras tanto, no ofrecemos sus horas: preferimos perder una reserva a citar a alguien encima de algo que ya estaba apuntado.",
+      "accion": {
+        "texto": "Conectar calendarios",
+        "ir": "reservas"
+      }
+    },
+    {
       "id": "2026-09-28-reservas-bloqueos",
       "fecha": "2026-09-28",
       "tipo": "nuevo",

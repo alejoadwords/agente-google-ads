@@ -39,6 +39,9 @@ async function ocupado({ citas = [], bloqueos = [], ids, desde, hasta, cliente =
       return ruta.startsWith('/booking_blocks') ? bloqueos : citas;
     },
     filtroCliente: (c) => (c ? `client_id=eq.${encodeURIComponent(c)}` : 'client_id=is.null'),
+    // Lo de Google tiene su propia suite (reservas-google.mjs); aquí, nadie
+    // tiene calendario conectado.
+    ocupadoGoogle: async () => ({}),
   };
   const nombres = Object.keys(entorno);
   const f = new Function(...nombres, src + '\n; return ocupadoDe;');

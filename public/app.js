@@ -38487,6 +38487,8 @@ function rsvRender() {
         '<div>Puedes consultar la configuración, pero solo el administrador de la cuenta la cambia.</div></div>'
       : '') +
 
+    rsvAvisoCalendarios(puede) +
+
     '<div class="rsv-enlace">' +
       '<div class="rsv-enlace-l">' + icn('file', 14) + '<span>' + (rsvEnlace() ? esc(rsvEnlace()) : 'Sin enlace todavía') + '</span></div>' +
       (puede ? '<button class="btn-ghost sm" onclick="rsvEditarDireccion()">' +
@@ -38578,11 +38580,13 @@ function rsvPintarRecursos(puede) {
         '<div style="flex:1;min-width:0">' +
           '<div class="rsv-fila-nom">' + esc(String(r.nombre || '')) + '</div>' +
           '<div class="rsv-fila-meta">' +
-            (r.member_user_id ? 'Su agenda se cruza con la del CRM' : 'Solo para reservas') +
+            (r.member_user_id ? 'Del equipo' : 'Solo para reservas') +
             (r.horario ? ' · Horario propio' : ' · Sigue el horario del negocio') +
           '</div>' +
+          '<div class="rsv-cal-linea">' + rsvChipCalendario(r) + '</div>' +
         '</div>' +
         (r.activo === false ? '<span class="rsv-chip off">Inactivo</span>' : '') +
+        (puede ? '<button class="btn-ghost sm" onclick="rsvCalendario(\'' + esc(String(r.id)) + '\')">' + icn('calendar', 12) + ' Calendario</button>' : '') +
         (puede ? '<button class="btn-ghost sm" onclick="rsvEditarRecurso(\'' + esc(String(r.id)) + '\')">Editar</button>' +
           '<button class="btn-ghost sm rsv-borrar" onclick="rsvBorrarRecurso(\'' + esc(String(r.id)) + '\')">Quitar</button>' : '') +
       '</div>').join('') + '</div>';
@@ -39372,7 +39376,7 @@ function rsvEditarRecurso(id) {
         // agenda no guardan de qué miembro son, así que decir «no se le puede
         // reservar encima de una reunión» sería mentira: sus huecos salen de
         // sus propias reservas, no de su agenda.
-        '<div class="rsv-nota">Sirve para saber de quién es cada cita. Sus horas libres se calculan con las reservas que ya tiene.</div></div>' +
+        '<div class="rsv-nota">Sirve para saber de quién es cada cita. Sus horas libres salen de sus reservas, sus bloqueos y, si lo conecta, su Google Calendar (botón «Calendario»).</div></div>' +
       '<label class="rsv-check rsv-solo"><input type="checkbox" id="rsv-r-activo"' + (rsvBorrador.activo !== false ? ' checked' : '') + '>' +
         'Disponible para reservar</label>' +
     '</div>' +
@@ -39412,6 +39416,173 @@ async function rsvGuardarRecurso(id) {
     showToast(String(e.message || e), 'error');
     if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
   }
+}
+
+// ── El Google Calendar de cada persona ──────────────────────────────────────
+// Lo que Ana apunte en SU Google la bloquea a ella y no a Luis: cada persona
+// conecta el suyo. Quien lo conecta puede no tener cuenta en Acuarius, por eso
+// el camino principal es un enlace que se le manda.
+
+function rsvChipCalendario(r) {
+  const c = r && r.calendario;
+  if (!c) return '<span class="rsv-chip off rsv-cal">' + icn('calendar', 11) + ' Sin Google Calendar</span>';
+  if (c.error) return '<span class="rsv-chip mal rsv-cal" title="' + esc(String(c.error)) + '">' +
+    icn('alert', 11) + ' Google no responde · sus horas no se ofrecen</span>';
+  return '<span class="rsv-chip ok rsv-cal" title="Lo ocupado en este Google no se ofrece en la página">' +
+    icn('check', 11) + ' ' + esc(String(c.email || 'Google conectado')) + '</span>';
+}
+
+/**
+ * Un calendario caído TAPA las horas de esa persona (es preferible a citar
+ * encima de algo que tenía apuntado). Sin este aviso, el negocio solo vería
+ * que a Ana le dejaron de llegar reservas.
+ */
+function rsvAvisoCalendarios(puede) {
+  const caidos = ((rsvDatos && rsvDatos.recursos) || []).filter(r => r.activo !== false && r.calendario && r.calendario.error);
+  if (!caidos.length) return '';
+  const nombres = caidos.map(r => '«' + esc(String(r.nombre || '')) + '»').join(', ');
+  return '<div class="rsv-aviso">' + icn('alert', 14) +
+    '<div><b>No podemos leer el Google Calendar de ' + nombres + '.</b> Mientras tanto no se ofrecen sus horas, ' +
+    'para no citar a nadie encima de algo que tenga apuntado. ' +
+    (puede ? 'Vuelve a conectarlo desde «Quién atiende» → Calendario.' : 'Avísale al administrador de la cuenta.') +
+    '</div></div>';
+}
+
+let rsvCalEnlace = null;   // { id, url, dias } del último enlace generado
+
+function rsvCalendario(id) {
+  const r0 = ((rsvDatos && rsvDatos.recursos) || []).find(x => String(x.id) === String(id));
+  if (!r0) return;
+  const c = r0.calendario;
+  const cuenta = rsvDatos.cuenta_google;
+  const nom = esc(String(r0.nombre || ''));
+  const enlace = rsvCalEnlace && rsvCalEnlace.id === id ? rsvCalEnlace : null;
+
+  rsvCerrarModal();
+  const ov = document.createElement('div');
+  ov.id = 'rsv-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.dataset.calendario = id;
+  ov.addEventListener('mousedown', e => { if (e.target === ov) rsvCerrarModal(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:500px">' +
+    '<div class="auto-modal-head">' +
+      '<div style="font-size:var(--fs-md);font-weight:800">Google Calendar de ' + nom + '</div>' +
+      '<div style="flex:1"></div>' +
+      '<button class="btn-ghost sm" onclick="rsvCerrarModal()">&#10005;</button>' +
+    '</div>' +
+    '<div class="rsv-modal-cuerpo">' +
+      '<div class="rsv-nota" style="margin:0 0 14px">Lo que ' + nom + ' tenga ocupado en su Google deja de ofrecerse en tu página, ' +
+        'y cada cita nueva le llega a su calendario. Solo bloquea lo marcado como «Ocupado»: los eventos de todo el día ' +
+        'nacen como «Disponible» en Google, así que unas vacaciones hay que marcarlas como «Ocupado».</div>' +
+
+      (c
+        ? '<div class="rsv-campo"><label>Su Google</label>' +
+            (c.error
+              // Con error, la pastilla y la caja dirían lo mismo dos veces: va
+              // solo la caja, con la cuenta para saber CUÁL hay que reconectar.
+              ? '<div class="rsv-cal-error">' + icn('alert', 13) +
+                  '<div><b>' + esc(String(c.email || 'Google')) + '</b> · ' + esc(String(c.error)) +
+                  ' Mientras no se arregle, sus horas no se ofrecen.</div></div>'
+              : '<div class="rsv-cal-linea" style="margin:0">' + rsvChipCalendario(r0) + '</div>') +
+          '</div>'
+        : '') +
+
+      (!c && cuenta
+        ? '<div class="rsv-campo"><label>Si es tu calendario</label>' +
+            '<button class="btn-pri sm" id="rsv-cal-cuenta" onclick="rsvCalUsarCuenta(\'' + esc(String(id)) + '\')">Usar mi Google · ' + esc(String(cuenta.email || '')) + '</button>' +
+            '<div class="rsv-nota">El que ya conectaste en la Agenda. No hace falta volver a dar permisos.</div>' +
+          '</div>'
+        : '') +
+
+      '<div class="rsv-campo"><label>' + (c ? 'Volver a conectar' : (cuenta ? 'Si es el de otra persona' : 'Conectar')) + '</label>' +
+        (enlace
+          ? '<div class="rsv-cal-enlace"><input class="auto-input" id="rsv-cal-url" readonly value="' + esc(enlace.url) + '" onclick="this.select()">' +
+              '<button class="btn-ghost sm" onclick="rsvCalCopiar()">Copiar</button>' +
+              '<a class="btn-ghost sm" href="' + esc(enlace.url) + '" target="_blank" rel="noopener">Abrir</a></div>' +
+            '<div class="rsv-nota">Mándaselo a ' + nom + ': lo abre desde su móvil, elige su cuenta de Google y listo, sin cuenta en Acuarius. ' +
+              'Vale ' + (enlace.dias || 7) + ' días. Si es tu calendario, pulsa «Abrir».</div>'
+          : '<button class="' + ((!c && !cuenta) || (c && c.error) ? 'btn-pri' : 'btn-ghost') + ' sm" id="rsv-cal-generar" onclick="rsvCalGenerar(\'' + esc(String(id)) + '\')">Sacar el enlace para conectar</button>' +
+            '<div class="rsv-nota">Un enlace que ' + nom + ' abre para dar permiso a su Google. Lo puedes abrir tú si es tu calendario.</div>') +
+      '</div>' +
+
+      (!c ? '<div class="rsv-nota">Mientras no lo conecte, sus citas se siguen escribiendo en el Google de la Agenda, si hay uno.</div>' : '') +
+    '</div>' +
+    '<div class="rsv-modal-pie">' +
+      (c ? '<button class="btn-ghost sm rsv-borrar" onclick="rsvCalDesconectar(\'' + esc(String(id)) + '\')">Desconectar</button>' : '') +
+      '<div style="flex:1"></div>' +
+      '<button class="btn-ghost sm" onclick="rsvCalRefrescar(\'' + esc(String(id)) + '\')">' + icn('refresh', 12) + ' Actualizar</button>' +
+      '<button class="btn-ghost sm" onclick="rsvCerrarModal()">Cerrar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+}
+
+async function rsvCalRefrescar(id) {
+  await rsvCargar(true);
+  // Solo se vuelve a pintar si el modal de ESA persona sigue abierto: abrirlo
+  // de nuevo por sorpresa encima de otra cosa sería peor que no refrescar.
+  const ov = document.getElementById('rsv-overlay');
+  if (ov && ov.dataset.calendario === String(id)) rsvCalendario(id);
+}
+
+async function rsvCalGenerar(id) {
+  const btn = document.getElementById('rsv-cal-generar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generando…'; }
+  try {
+    const r = await fetchAuth(rsvUrlCon({ que: 'calendario' }), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ que: 'calendario', resource_id: id }),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.url) throw new Error(d.error || ('HTTP ' + r.status));
+    rsvCalEnlace = { id, url: d.url, dias: d.dias };
+    rsvCalendario(id);
+    // Quien abre el enlace aquí mismo vuelve a esta pestaña cuando termina en
+    // Google: al volver, se refresca para que vea su calendario ya conectado.
+    window.addEventListener('focus', () => rsvCalRefrescar(id), { once: true });
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Sacar el enlace para conectar'; }
+  }
+}
+
+function rsvCalCopiar() {
+  const u = (document.getElementById('rsv-cal-url') || {}).value || '';
+  if (!u) return;
+  navigator.clipboard.writeText(u)
+    .then(() => showToast('Enlace copiado'))
+    .catch(() => showToast('No se pudo copiar. Selecciónalo a mano.', 'error'));
+}
+
+async function rsvCalUsarCuenta(id) {
+  const btn = document.getElementById('rsv-cal-cuenta');
+  if (btn) { btn.disabled = true; btn.textContent = 'Conectando…'; }
+  try {
+    const r = await fetchAuth(rsvUrlCon({ que: 'calendario' }), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ que: 'calendario', resource_id: id, usar_cuenta: true }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast('Calendario conectado');
+    await rsvCalRefrescar(id);
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Reintentar'; }
+  }
+}
+
+async function rsvCalDesconectar(id) {
+  const r0 = ((rsvDatos && rsvDatos.recursos) || []).find(x => String(x.id) === String(id)) || {};
+  if (!confirm('¿Desconectar el Google Calendar de «' + (r0.nombre || '') + '»?\n\n' +
+    'Lo que tenga apuntado en Google dejará de bloquear sus horas en la página.')) return;
+  try {
+    const r = await fetchAuth(rsvUrlCon({ que: 'calendario', resource_id: id }), { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast('Desconectado');
+    if (rsvCalEnlace && rsvCalEnlace.id === id) rsvCalEnlace = null;
+    await rsvCalRefrescar(id);
+  } catch (e) { showToast(String(e.message || e), 'error'); }
 }
 
 // ── Bloqueos ────────────────────────────────────────────────────────────────

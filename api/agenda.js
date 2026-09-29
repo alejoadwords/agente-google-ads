@@ -8,7 +8,7 @@ export const config = { runtime: 'edge' };
 import { soloSusLeads } from './_perfiles.js';
 // El puente con Google Calendar vive en _gcal.js desde que las reservas también
 // crean citas: dos copias de la renovación del token acaban divergiendo.
-import { getGcalToken, gcalEventBody, gcalRequest } from './_gcal.js';
+import { getGcalToken, gcalEventBody, gcalRequest, gcalEnSuCalendario } from './_gcal.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 const CORS = {
@@ -295,12 +295,11 @@ export default async function handler(req) {
     // Reflejar cambios de la reunión en Google Calendar
     let gcalWarning = null;
     if (act?.gcal_event_id && (update.title || update.description || update.due_at || update.end_at)) {
-      const conn = await getGcalToken(userId);
-      if (conn) {
-        try {
-          await gcalRequest(conn.token, 'PATCH', '/' + act.gcal_event_id, gcalEventBody(act, null, false));
-        } catch (e) { gcalWarning = 'El evento de Google Calendar no se pudo actualizar: ' + e.message; }
-      }
+      // Si es una reserva, su evento puede vivir en el calendario de la persona
+      // que atiende y no en el de la cuenta.
+      try {
+        await gcalEnSuCalendario(userId, act.resource_id, 'PATCH', '/' + act.gcal_event_id, gcalEventBody(act, null, false));
+      } catch (e) { gcalWarning = 'El evento de Google Calendar no se pudo actualizar: ' + e.message; }
     }
     return jsonResp({ activity: act, gcal_warning: gcalWarning });
   }
@@ -309,16 +308,16 @@ export default async function handler(req) {
   if (req.method === 'DELETE') {
     const id = url.searchParams.get('id');
     if (!id) return jsonResp({ error: 'Falta id' }, 400);
-    const pre = await fetch(`${SUPABASE_URL}/rest/v1/activities?id=eq.${id}&user_id=eq.${userId}&select=gcal_event_id`, { headers: sbHeaders() });
-    const gcalId = (await pre.json())?.[0]?.gcal_event_id;
+    const pre = await fetch(`${SUPABASE_URL}/rest/v1/activities?id=eq.${id}&user_id=eq.${userId}&select=gcal_event_id,resource_id`, { headers: sbHeaders() });
+    const previa = (await pre.json())?.[0] || {};
+    const gcalId = previa.gcal_event_id;
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/activities?id=eq.${id}&user_id=eq.${userId}`,
       { method: 'DELETE', headers: sbHeaders() }
     );
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
     if (gcalId) {
-      const conn = await getGcalToken(userId);
-      if (conn) { try { await gcalRequest(conn.token, 'DELETE', '/' + gcalId, null, true); } catch {} }
+      try { await gcalEnSuCalendario(userId, previa.resource_id, 'DELETE', '/' + gcalId, null, true); } catch {}
     }
     return jsonResp({ ok: true });
   }
