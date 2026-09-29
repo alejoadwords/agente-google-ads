@@ -153,6 +153,38 @@ console.log('\nY cuando algo falla, se nota');
   process.env.SUPABASE_URL = urlBuena;
 }
 
+// Dos cuentas seguidas en la misma instancia no se mezclan.
+//
+// En Vercel el módulo se queda caliente entre peticiones de clientes
+// DISTINTOS. Un `let _lastPlan` a nivel de módulo hizo que, tras una cuenta de
+// pago, la siguiente gratis heredara su plan y pasara los gates (arreglado el
+// 29-09-2026 en campaigns, automations, team y proposals). Aquí la caché va en
+// un Map por usuario; esta prueba existe para que siga siendo así.
+console.log('\nDos cuentas seguidas no se contagian');
+{
+  const CERTAIN = 'user_3HYi3uHYQyth190Tr2HXZKmHbTk';   // agency
+  const OTRA = 'user_3HmDHM5d0TB2I4DQbCY91jQsoOc';      // asesora, plan propio
+
+  const a1 = await estadoDeCupo(CERTAIN);
+  const b1 = await estadoDeCupo(OTRA);
+  const a2 = await estadoDeCupo(CERTAIN);   // otra vez, ya con la caché caliente
+  const b2 = await estadoDeCupo(OTRA);
+
+  ok(a1.plan === a2.plan && a1.cupo === a2.cupo,
+     'la misma cuenta da lo mismo las dos veces', `${a1.plan}/${a1.cupo} vs ${a2.plan}/${a2.cupo}`);
+  ok(b1.plan === b2.plan && b1.cupo === b2.cupo,
+     'y la otra también', `${b1.plan}/${b1.cupo} vs ${b2.plan}/${b2.cupo}`);
+  ok(b2.plan !== 'agency' || a1.plan === b2.plan,
+     'la segunda cuenta NO hereda el plan de la primera', `${a1.plan} → ${b2.plan}`);
+  ok(a1.usados !== b1.usados || a1.usados === 0,
+     'y cada una cuenta su propio consumo', `${a1.usados} vs ${b1.usados}`);
+
+  const src = fs.readFileSync(new URL('../api/_cupo-agente.js', import.meta.url), 'utf8');
+  ok(/_planCache = new Map\(\)/.test(src), 'la caché es un Map, no una variable suelta');
+  ok(!/let _ultimoPlan|let _lastPlan|let _plan =/.test(src),
+     'y no hay ninguna variable de módulo con el plan de alguien');
+}
+
 console.log('\nEl endpoint que lo sirve');
 {
   const src = fs.readFileSync(new URL('../api/uso-agente.js', import.meta.url), 'utf8');
