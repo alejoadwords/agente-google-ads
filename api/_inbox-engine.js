@@ -1385,8 +1385,10 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   if (invento.length) {
     const otra = await responderViendo(system, hist, [
       { role: 'assistant', content: reply },
-      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) En tu mensaje anterior diste estos datos que NO están en tu inventario ni en tu contexto: ' +
-        invento.join(', ') + '. Eso es inventado y no se le puede decir a nadie. Reescribe tu mensaje usando SOLO lo que tienes delante. Si no tienes nada que encaje, dilo con naturalidad y ofrece pasar la conversación a un asesor añadiendo [ESCALAR] al final.' },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió. Traía estos datos que no están en tu inventario ni en tu contexto: ' +
+        invento.join(', ') + '. Eso es inventado y no se le puede decir a nadie.\n' +
+        'Escribe otra vez ese mensaje usando SOLO lo que tienes delante. Si no tienes nada que encaje, dilo con naturalidad y ofrece pasar la conversación a un asesor añadiendo [ESCALAR] al final.\n' +
+        'IMPORTANTE: el contacto no vio nada de esto y no te ha corregido. No empieces con «tienes razón», «disculpa» ni «me equivoqué»: quedaría pidiéndole perdón por algo que él no dijo. Escribe tu mensaje como si fuera el primero.' },
     ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
     const segundo = otra ? inventos(cleanForUser(otra), citable) : ['sin respuesta'];
     if (otra && !segundo.length) {

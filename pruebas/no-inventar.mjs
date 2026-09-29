@@ -85,6 +85,11 @@ ok(/responderViendo\(system, hist, \[/.test(g),
    'y se le da UNA oportunidad de corregirse');
 ok(/Eso es inventado y no se le puede decir a nadie/.test(g),
    'señalándole exactamente qué se inventó');
+// El contacto no vio el mensaje que se bloqueó. Sin decírselo, el agente
+// empezaba con «Tienes razón, disculpa» —pidiéndole perdón por algo que la
+// persona no dijo, y tuteándola de paso.
+ok(/No empieces con «tienes razón», «disculpa» ni «me equivoqué»/.test(g),
+   'y avisándole de que el contacto no vio nada, para que no le pida perdón');
 ok(/inventoForzado = true;/.test(g) && /\[ESCALAR\]/.test(g),
    'y si vuelve a inventar, se manda un texto seguro y lo coge una persona');
 ok(/registrarError\(\{[\s\S]*?donde: 'el agente se inventó datos'/.test(g),
