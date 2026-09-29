@@ -338,36 +338,43 @@ export async function aplicarVeredicto({ userId, leadId, regla, veredicto, respu
       const deseada = update.stage || lead.stage;
       update.stage = claves.has(deseada) ? deseada : 'nuevo';
     }
-    if (ruta && ruta.asignar_a) {
-      update.assigned_to = ruta.asignar_a;
-      update.assigned_name = ruta.asignar_nombre || null;
-    } else if (ruta && ruta.pipeline_id) {
-      // Sin asesor fijo, reparte entre quienes atienden ESE tablero.
-      //
-      // Antes, una ruta sin `asignar_a` dejaba el lead en el tablero correcto y
-      // sin dueño, que es un lead que nadie llama. La salida fácil —elegir un
-      // asesor por ruta— tampoco servía: el tablero de Arriendo de Certain lo
-      // llevan tres personas, y un fijo le habría dado todos los arriendos
-      // nuevos a una sola.
-      //
-      // Si nadie tiene ese tablero marcado, no se fuerza nada: lo recogerá la
-      // regla de la fuente, que es quien decidía hasta ahora.
-      const quienes = await asesoresDelTablero(userId, ruta.pipeline_id);
-      if (quienes.length) {
-        try {
-          const { siguienteComercial } = await import('./_assign.js');
-          const elegido = await siguienteComercial(userId, 'tablero:' + ruta.pipeline_id, quienes, true);
-          if (elegido) {
-            update.assigned_to = elegido.id;
-            update.assigned_name = elegido.nombre || null;
-          }
-        } catch (e) { /* que falle el reparto no puede tumbar la calificación */ }
-      }
-    }
+
 
     await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}`, {
       method: 'PATCH', headers: sb(), body: JSON.stringify(update),
     });
+
+    // A quién le toca este lead.
+    //
+    // Dos caminos: el asesor fijo que alguien puso en la ruta, o el reparto
+    // entre quienes atienden ese tablero.
+    //
+    // Antes, una ruta sin `asignar_a` dejaba el lead en el tablero correcto y
+    // sin dueño, que es un lead que nadie llama. La salida fácil —un asesor
+    // fijo por ruta— tampoco servía: el tablero de Arriendo de Certain lo
+    // llevan tres personas, y le habría dado todos los arriendos a una sola.
+    //
+    // Va por `asignarLead` y no escribiendo `assigned_to` a mano, que es como
+    // estaba primero. Escribiéndolo a mano el lead cambiaba de dueño EN
+    // SILENCIO: sin correo al comercial, sin tarea de primer contacto y sin
+    // nota en el historial. Exactamente «no me llegan las notificaciones».
+    //
+    // `asignarLead` además no toca un lead que ya tenga dueño, así que no le
+    // quita a nadie lo suyo. Cuando hay calificación activa el lead se crea a
+    // propósito sin asignar, esperando este momento.
+    if (ruta && !lead.assigned_to) {
+      try {
+        const quienes = ruta.asignar_a ? null : await asesoresDelTablero(userId, ruta.pipeline_id);
+        // Si nadie tiene ese tablero marcado no se fuerza nada: sigue decidiendo
+        // la regla de la fuente, que es quien decidía hasta ahora.
+        if (ruta.asignar_a || quienes?.length) {
+          const { asignarLead } = await import('./_assign.js');
+          // `forzarTurnos` para que la regla de la fuente —que en varias cuentas
+          // es «fijo a una persona»— no se salte la lista del tablero.
+          await asignarLead(userId, { ...lead, ...update }, canal, ruta.asignar_a || null, quienes, true);
+        }
+      } catch (e) { /* que falle el reparto no puede tumbar la calificación */ }
+    }
 
     await fetch(`${SUPABASE_URL}/rest/v1/lead_activities`, {
       method: 'POST', headers: sb(),
