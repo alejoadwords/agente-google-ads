@@ -47,6 +47,9 @@ process.on('exit', () => { try { rmSync(TURNO, { recursive: true }); } catch {} 
 
 const PROYECTO = 'qgznzzhkuwxcknmcnrzn';
 const CUENTA = `user_prueba_recordatorios_${SUFIJO}`;
+// Otra cuenta con una cita en la ventana: hace de «cliente real» que la
+// prueba NO puede tocar.
+const AJENA = `user_prueba_recordatorios_ajena_${SUFIJO}`;
 
 function tokenDelLlavero() {
   const cru = execSync('security find-generic-password -s "Supabase CLI" -w', { encoding: 'utf8' }).trim();
@@ -107,7 +110,10 @@ function correr() {
   enviados.correo.length = 0; enviados.whatsapp.length = 0;
   let salida = null;
   const res = { status: () => ({ json: (d) => { salida = d; } }) };
-  return cron({ headers: { authorization: 'Bearer secreto-de-prueba' } }, res).then(() => salida);
+  // Acotado a SU cuenta: sin esto el cron recorría todas, y como aquí Resend y
+  // Meta contestan «ok» sin mandar nada, una cita real en la ventana quedaba
+  // marcada como avisada sin que su cliente recibiera nada.
+  return cron({ headers: { authorization: 'Bearer secreto-de-prueba' }, query: { cuenta: CUENTA } }, res).then(() => salida);
 }
 
 async function limpiar() {
@@ -115,7 +121,10 @@ async function limpiar() {
     delete from public.activities where user_id = '${CUENTA}';
     delete from public.leads where user_id = '${CUENTA}';
     delete from public.booking_settings where user_id = '${CUENTA}';
-    delete from public.channel_connections where user_id = '${CUENTA}';`);
+    delete from public.channel_connections where user_id = '${CUENTA}';
+    delete from public.activities where user_id = '${AJENA}';
+    delete from public.leads where user_id = '${AJENA}';
+    delete from public.booking_settings where user_id = '${AJENA}';`);
 }
 
 // ── Siembra ────────────────────────────────────────────────────────────────
@@ -135,6 +144,16 @@ values ('${CUENTA}','Cliente Prueba','cliente@ejemplo-prueba.test','+57 300 000 
 `);
 
 const lead = (await sql(`select id from public.leads where user_id='${CUENTA}' limit 1;`))[0].id;
+
+await sql(`
+insert into public.booking_settings (user_id, client_id, token, nombre_negocio, zona_horaria, horario, excepciones, recordatorios, activo)
+values ('${AJENA}','', 'eeee2222ffff3333${SUFIJO}','Negocio Ajeno','America/Bogota','{}'::jsonb,'{}'::jsonb,'[24, 2]'::jsonb, true);
+insert into public.leads (user_id, name, email, phone, stage, source)
+values ('${AJENA}','Cliente Ajeno','ajeno@ejemplo-prueba.test','+57 300 000 2222','nuevo','reserva');`);
+const leadAjeno = (await sql(`select id from public.leads where user_id='${AJENA}' limit 1;`))[0].id;
+await sql(`insert into public.activities (user_id, client_id, lead_id, type, title, due_at, end_at, booking_token, booking_status)
+values ('${AJENA}', null, '${leadAjeno}', 'meeting', 'cita ajena', now() + interval '20 hours', now() + interval '20 hours 30 minutes',
+  md5('ajena_${SUFIJO}'), 'confirmada');`);
 
 const cita = (nombre, minutosDesdeAhora, extra = '') => `
 insert into public.activities (user_id, client_id, lead_id, type, title, due_at, end_at,
@@ -178,6 +197,8 @@ console.log('\nA quién avisa, y a quién no\n');
   // reservas. Avisar de cualquiera de las dos sería escribirle a alguien por
   // algo que no existe.
   chk('a la cancelada no se le avisa', m['cancelada'] == null);
+  const ajena = (await sql(`select recordatorios_enviados::text as m from public.activities where user_id='${AJENA}';`))[0];
+  chk('la cita de OTRA cuenta en la ventana no se toca', ajena && ajena.m == null, ajena && ajena.m);
   chk('a una reunión normal de la agenda tampoco', m['reunion a mano'] == null);
 }
 
@@ -226,6 +247,21 @@ console.log('\nUna ejecución perdida no pierde el aviso\n');
   chk('y manda el aviso CERCANO, no el que ya pasó', m === '[2]', m);
 }
 
+console.log('\nUn contacto sin correo no es un fallo en el aviso de 24 h\n');
+{
+  // Las citas que agenda el agente de WhatsApp casi nunca traen correo. En el
+  // aviso de 24 h no hay por dónde avisar —WhatsApp solo va en el último—, y
+  // contarlo como fallo mandaba una alerta cada 10 minutos por cada una.
+  await sql(`update public.leads set email = null where id='${lead}';
+    update public.activities set due_at = now() + interval '20 hours', end_at = now() + interval '20 hours 30 minutes',
+      recordatorios_enviados = null where user_id='${CUENTA}' and title='dentro de 30 h';`);
+  const r = await correr();
+  chk('no cuenta como fallo', r.fallos === 0, JSON.stringify(r));
+  chk('queda contado aparte, como sin canal', r.sinCanal === 1, JSON.stringify(r));
+  const m = (await sql(`select recordatorios_enviados::text as m from public.activities where user_id='${CUENTA}' and title='dentro de 30 h';`))[0].m;
+  chk('y no se marca como enviado: el de 2 h sigue pendiente', m == null, m);
+}
+
 console.log('\nSin recordatorios configurados no se manda nada\n');
 {
   await sql(`update public.activities set recordatorios_enviados = null where user_id='${CUENTA}';
@@ -252,7 +288,8 @@ const queda = await sql(`select
   (select count(*) from public.activities where user_id='${CUENTA}') as a,
   (select count(*) from public.leads where user_id='${CUENTA}') as l,
   (select count(*) from public.booking_settings where user_id='${CUENTA}') as s,
-  (select count(*) from public.channel_connections where user_id='${CUENTA}') as c;`);
+  (select count(*) from public.channel_connections where user_id='${CUENTA}') as c,
+  (select count(*) from public.activities where user_id='${AJENA}') as aj;`);
 console.log('\nLimpieza\n');
 chk('no queda ni un dato de prueba en la base',
     Object.values(queda[0]).every(v => Number(v) === 0), JSON.stringify(queda[0]));

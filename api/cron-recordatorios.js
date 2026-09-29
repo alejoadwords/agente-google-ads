@@ -91,9 +91,9 @@ async function porCorreo(neg, cita, lead, horas) {
           (neg.detalle_direccion ? '<br><span style="color:#5B6072">' + esc(neg.detalle_direccion) + '</span>' : '') : '')
       ) +
       (neg.mensaje_confirmacion ? '<p style="font-size:14px;line-height:1.6">' + esc(neg.mensaje_confirmacion) + '</p>' : '') +
-      '<p style="font-size:14px;line-height:1.6;color:#5B6072">Si no puedes venir, cancela desde el botón de abajo ' +
+      '<p style="font-size:14px;line-height:1.6;color:#5B6072">Si no puedes venir, cámbiala o cancélala desde el botón de abajo ' +
       'para dejarle el turno a alguien más.</p>',
-    cta: { texto: 'Ver o cancelar mi cita', url: enlace },
+    cta: { texto: 'Ver, cambiar o cancelar mi cita', url: enlace },
     pie: negocio,
   });
 
@@ -169,26 +169,38 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'No autorizado' });
   }
 
+  // `?cuenta=` acota la pasada a UNA cuenta. Es para la prueba, que ejecuta
+  // este cron de verdad contra la base: sin acotar recorría TODAS las cuentas,
+  // y como la prueba responde «ok» por Resend y por Meta sin mandar nada, una
+  // cita real que cayera en la ventana quedaba marcada como avisada sin que su
+  // cliente recibiera nada — y ya no se le volvía a mandar. Solo con el secreto,
+  // como todo lo demás de aquí.
+  const soloCuenta = String(req.query?.cuenta || '').trim() || null;
+  // Una pasada acotada NO late: su latido diría que el cron de verdad corrió, y
+  // taparía uno caído.
+  const latido = (...args) => (soloCuenta ? Promise.resolve() : latir(...args));
+
   // La entrada, aparte de la salida: un latido que solo se escribe al terminar
   // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
-  await latir('cron-recordatorios', { empezo: new Date().toISOString() });
+  await latido('cron-recordatorios', { empezo: new Date().toISOString() });
 
 
   const ahora = Date.now();
   const bitacora = [];
-  let avisados = 0, fallos = 0;
+  let avisados = 0, fallos = 0, sinCanal = 0;
 
   try {
     // Las citas vivas de la ventana. `booking_token` distingue una reserva de
     // una reunión que alguien puso a mano en la agenda: a esas no se les avisa.
     const citas = await consulta(
       `/activities?booking_token=not.is.null&cancelled_at=is.null` +
+      (soloCuenta ? `&user_id=eq.${encodeURIComponent(soloCuenta)}` : '') +
       `&due_at=gte.${encodeURIComponent(new Date(ahora).toISOString())}` +
       `&due_at=lte.${encodeURIComponent(new Date(ahora + VENTANA_H * 3600000).toISOString())}` +
       `&select=id,user_id,client_id,lead_id,due_at,booking_token,recordatorios_enviados` +
       `&order=due_at.asc&limit=${TOPE}`
     );
-    if (!citas.length) { await latir('cron-recordatorios', { ok: true, citas: 0, avisados: 0 }); return res.status(200).json({ ok: true, citas: 0, avisados: 0 }); }
+    if (!citas.length) { await latido('cron-recordatorios', { ok: true, citas: 0, avisados: 0 }); return res.status(200).json({ ok: true, citas: 0, avisados: 0 }); }
 
     // Una sola lectura por cuenta y por lead, no una por cita.
     const cuentas = [...new Set(citas.map(c => c.user_id))];
@@ -271,6 +283,13 @@ export default async function handler(req, res) {
           body: JSON.stringify({ recordatorios_enviados: [...new Set([...yaEnviados, h])] }),
         }).catch(() => {});
         avisados++;
+      } else if (correo.motivo === 'sin correo' && whats.estado === 'saltado') {
+        // No es un fallo: ese contacto no tiene correo y WhatsApp solo va en el
+        // último aviso —dos por cita es como bloquean el número—, así que este
+        // aviso no tiene por dónde salir, a propósito. Le llegará el último.
+        // Contarlo como fallo escribía una alerta cada 10 minutos por cada cita
+        // agendada por WhatsApp, que casi nunca traen correo.
+        sinCanal++;
       } else {
         fallos++;
         bitacora.push(`cita ${cita.id} (${h} h): correo ${correo.motivo || correo.estado}, wa ${whats.motivo || whats.estado}`);
@@ -288,8 +307,8 @@ export default async function handler(req, res) {
         detalle: bitacora.slice(0, 20).join(' · '),
       }).catch(() => {});
     }
-    await latir('cron-recordatorios', { citas: citas.length, avisados, fallos }, fallos ? fallos + ' aviso(s) fallaron' : null);
-    return res.status(200).json({ ok: true, citas: citas.length, avisados, fallos });
+    await latido('cron-recordatorios', { citas: citas.length, avisados, fallos, sinCanal }, fallos ? fallos + ' aviso(s) fallaron' : null);
+    return res.status(200).json({ ok: true, citas: citas.length, avisados, fallos, sinCanal });
   } catch (e) {
     const { registrarError } = await import('./_registro-errores.js');
     await registrarError({ origen: 'cron', donde: 'cron-recordatorios', error: e }).catch(() => {});
