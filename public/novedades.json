@@ -66,6 +66,17 @@
       "texto": "Cuando el agente aún no tenía una respuesta —el presupuesto, por ejemplo— a veces la apuntaba como «sin información» y el sistema la contaba como respondida. Eso adelantaba el veredicto: un contacto podía llegarle a tu comercial marcado como calificado sin haber dado los datos, o descartado sin haber dicho nada. Ahora lo que falta se sigue preguntando, y el veredicto espera a tenerlo todo."
     },
     {
+      "id": "2026-09-28-instagram-canal-comprobado",
+      "fecha": "2026-09-28",
+      "tipo": "arreglo",
+      "titulo": "Conectar Instagram al inbox ya no deja un canal que no recibe nada",
+      "texto": "Al conectar una cuenta de Instagram a tu agente, ahora comprobamos en ese momento que sus mensajes directos se pueden leer. Si falta el permiso de mensajes de Instagram, o si la cuenta tiene cerrado el acceso en Configuración → Mensajes → Herramientas conectadas, te lo decimos con el paso exacto para arreglarlo. Antes el canal aparecía conectado y los mensajes nunca llegaban.",
+      "accion": {
+        "texto": "Ir a Conversaciones",
+        "ir": "conversaciones"
+      }
+    },
+    {
       "id": "2026-09-28-meta-conexion-segura",
       "fecha": "2026-09-28",
       "tipo": "mejora",

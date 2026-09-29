@@ -29,6 +29,30 @@ async function metaTokenDe(userId) {
   } catch { return null; }
 }
 
+/**
+ * Por qué no se pueden leer los mensajes de Instagram, dicho de forma que se
+ * sepa qué hacer. Exportado para probarlo.
+ */
+export function errorMensajesInstagram(err) {
+  const msg = String(err?.message || '');
+  const code = Number(err?.code);
+  if (code === 230 || /instagram_manage_messages/i.test(msg)) {
+    return {
+      error: 'Falta el permiso de mensajes de Instagram. Cuando esté activo en la app de Meta, ve a Configuración → Integraciones → Meta Ads, desconecta y vuelve a conectar para aceptarlo.',
+      falta_permiso: 'instagram_manage_messages',
+      detail: msg,
+    };
+  }
+  // La cuenta de Instagram tiene cerrado el acceso de apps a sus mensajes.
+  if (/access to messages|allow access|connected tools|herramientas conectadas/i.test(msg) || code === 10) {
+    return {
+      error: 'Instagram no deja leer los mensajes de esta cuenta. En la app de Instagram: Configuración → Mensajes → Herramientas conectadas → activa «Permitir acceso a los mensajes», y vuelve a intentarlo.',
+      detail: msg,
+    };
+  }
+  return { error: 'Instagram no dejó leer los mensajes de esta cuenta: ' + (msg || 'sin detalle'), detail: msg };
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const sesion = await verificarSesion(req);
@@ -54,7 +78,8 @@ export default async function handler(req) {
 
   // GET — list pages from Meta user token (to show which pages to connect)
   if (req.method === 'GET' && url.searchParams.get('action') === 'list_pages') {
-    const metaToken = url.searchParams.get('token') || await metaTokenDe(userId);
+    // Solo el token guardado de la cuenta: el navegador ya no tiene ninguno.
+    const metaToken = await metaTokenDe(userId);
     if (!metaToken) return jsonResp({ error: 'Conecta tu cuenta de Meta en Configuración → Integraciones → Meta Ads' }, 409);
     const res = await fetch(
       `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,picture,instagram_business_account{id,name,profile_picture_url}&access_token=${metaToken}`
@@ -195,6 +220,17 @@ export default async function handler(req) {
     if (channel === 'instagram' && !ig?.id) {
       return jsonResp({ error: 'Esa página no tiene una cuenta de Instagram Business conectada' }, 400);
     }
+    // Instagram: antes de dar el canal por conectado, se comprueba que los
+    // mensajes se PUEDEN leer. Sin el permiso instagram_manage_messages la
+    // conexión «funcionaba» —la página quedaba suscrita— y Meta no entregaba ni
+    // un mensaje directo: el canal parecía vivo y estaba sordo.
+    if (channel === 'instagram') {
+      const prueba = await fetch(
+        `https://graph.facebook.com/v19.0/${encodeURIComponent(page_id)}/conversations?platform=instagram&limit=1&access_token=${pagina.access_token}`
+      ).then(r => r.json()).catch(e => ({ error: { message: String(e && e.message || e) } }));
+      if (prueba?.error) return jsonResp(errorMensajesInstagram(prueba.error), 400);
+    }
+
     const externalId = channel === 'instagram' ? String(ig.id) : String(page_id);
     const nombre = channel === 'instagram' ? ('@' + (ig.username || pagina.name)) : pagina.name;
 

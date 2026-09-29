@@ -159,7 +159,20 @@ enseñar que la respuesta llega a Messenger en el otro dispositivo.
 > Enseña **las dos pantallas**: la entrada y la respuesta llegando. Es lo que
 > prueba que el ciclo se cierra.
 
-### 12 · La identidad de la página (4:45 – 5:00)
+### 11 bis · Un mensaje directo de Instagram (4:45 – 5:15)
+
+Desde el segundo dispositivo, mandarle un **mensaje directo** a la cuenta de
+Instagram conectada: «Hola, ¿tienen disponibilidad esta semana?».
+
+Volver a Acuarius → **Conversaciones**. El mensaje entra con el nombre de la
+cuenta de Instagram. Responder desde ahí y enseñar que la respuesta llega a
+Instagram en el otro dispositivo.
+
+> **Justifica `instagram_manage_messages` e `instagram_basic`.** Antes de grabar:
+> los dos permisos añadidos en el panel, la cuenta de Instagram con «Permitir
+> acceso a los mensajes» activado, y Meta Ads reconectado para aceptarlos.
+
+### 12 · La identidad de la página (5:15 – 5:30)
 
 En la misma conversación, señalar con el cursor **el nombre y la foto de la
 página** conectada.
@@ -202,9 +215,11 @@ tarjeta volviendo a **«sin conectar»**.
 | `pages_messaging` | 11 | ☐ |
 | `pages_manage_metadata` | 11 | ☐ |
 | `pages_read_engagement` | 12 | ☐ |
+| `instagram_manage_messages` | 11 bis | ☐ |
+| `instagram_basic` | 11 bis | ☐ |
 
-Los siete van en **una sola solicitud**. Sueltos, cada uno abre su propio ciclo
-de revisión y multiplicas la espera por siete.
+Los nueve van en **una sola solicitud**. Sueltos, cada uno abre su propio ciclo
+de revisión y multiplicas la espera por nueve.
 
 ## Después de grabar
 

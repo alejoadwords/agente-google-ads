@@ -49,6 +49,11 @@ export default async function handler(req, res) {
       // mensajes de Messenger e Instagram nunca llegan al webhook.
       'pages_manage_metadata',
       'pages_messaging',
+      // Mensajes directos de Instagram en el inbox: sin estos dos, conectar
+      // Instagram suscribía la página y Meta no entregaba ni un mensaje
+      // (#230 Requires instagram_manage_messages).
+      'instagram_basic',
+      'instagram_manage_messages',
       'public_profile',
     ].join(','),
     response_type: 'code',
