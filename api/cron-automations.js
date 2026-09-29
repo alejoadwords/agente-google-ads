@@ -5,6 +5,7 @@
 //    evalúa condiciones y registra todo en automation_logs.
 // Los triggers lead_created y stage_changed encolan desde api/leads.js.
 
+import crypto from 'crypto';
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { enviarResend } from './_correo.js';
 import { leerNps } from './_nps.js';
@@ -145,18 +146,43 @@ function renderVars(text, lead) {
 }
 
 // ── Acciones ─────────────────────────────────────────────────────────────────
+// ¿Se dio de baja del correo? La etiqueta la pone api/unsubscribe.js al pulsar
+// el enlace de baja. Las campañas ya la respetaban; las automatizaciones no, y
+// seguían escribiéndole a quien había pedido que no — que es justo lo que la
+// ley de habeas data (1581 de 2012) prohíbe.
+export function dadoDeBajaCorreo(lead) {
+  return (lead?.tags || []).includes('no-email');
+}
+
+// El mismo enlace firmado que usan las campañas (cron-campaigns.js): lo valida
+// api/unsubscribe.js con el mismo secreto y el mismo prefijo, así que un
+// cambio aquí sin cambiar allí rompe la baja.
+export function enlaceBaja(leadId) {
+  const sig = crypto.createHmac('sha256', CRON_SECRET || '').update('unsub:' + leadId).digest('hex').slice(0, 32);
+  return `https://app.acuarius.app/api/unsubscribe?l=${leadId}&s=${sig}`;
+}
+
 async function actionSendEmail(step, lead, auto, job) {
   if (!lead.email) return { result: 'skipped', detail: 'El lead no tiene email' };
+  if (dadoDeBajaCorreo(lead)) return { result: 'skipped', detail: 'Se dio de baja del correo' };
   if (!RESEND_API_KEY) return { result: 'failed', detail: 'RESEND_API_KEY no configurada' };
   const subject = renderVars(step.subject, lead);
   const bodyTxt = renderVars(step.body, lead);
+  // Con enlace de baja, como las campañas: antes quien recibía estos correos
+  // no tenía forma de pedir que pararan.
+  const baja = enlaceBaja(lead.id);
   const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
     bodyTxt.split('\n').map(p => '<p style="margin:0 0 14px">' + p + '</p>').join('') +
+    '<p style="margin:22px 0 0;font-size:11.5px;color:#9ca3af">¿No quieres recibir más correos? ' +
+    '<a href="' + baja + '" style="color:#9ca3af">Darte de baja</a></p>' +
     '</div>';
   const r = await fetchResend({
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: 'Acuarius <notificaciones@app.acuarius.app>', to: [lead.email], subject, html }),
+    body: JSON.stringify({
+      from: 'Acuarius <notificaciones@app.acuarius.app>', to: [lead.email], subject, html,
+      headers: { 'List-Unsubscribe': '<' + baja + '>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+    }),
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) return { result: 'failed', detail: 'Resend: ' + JSON.stringify(d).slice(0, 200) };
@@ -203,6 +229,7 @@ export async function yaSeEncuesto(leadId) {
 
 async function actionSendNps(step, lead, auto) {
   if (!lead.email) return { result: 'skipped', detail: 'El lead no tiene email' };
+  if (dadoDeBajaCorreo(lead)) return { result: 'skipped', detail: 'Se dio de baja del correo' };
   if (!RESEND_API_KEY) return { result: 'failed', detail: 'RESEND_API_KEY no configurada' };
   // Se comprueba ANTES de insertar la fila: la fila ES el envío, así que
   // crearla y decidir después ya habría ensuciado el reporte.
@@ -302,6 +329,7 @@ async function actionPedirResena(step, lead, auto) {
     envio = await actionSendWhatsapp({ ...step, message: texto + '\n' + enlace }, lead);
   } else {
     if (!lead.email) return { result: 'skipped', detail: 'El lead no tiene email' };
+    if (dadoDeBajaCorreo(lead)) return { result: 'skipped', detail: 'Se dio de baja del correo' };
     if (!RESEND_API_KEY) return { result: 'failed', detail: 'RESEND_API_KEY no configurada' };
     const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
       '<p style="margin:0 0 18px">' + texto.replace(/\n/g, '<br>') + '</p>' +
@@ -837,3 +865,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: e.message });
   }
 }
+
+// Para las pruebas: los tres pasos que envían correo, y que deben respetar la baja.
+export { actionSendEmail, actionSendNps, actionPedirResena };

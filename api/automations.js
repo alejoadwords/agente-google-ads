@@ -27,7 +27,10 @@ function sbHeaders() {
 }
 
 // ── Gate por plan: crear/editar automatizaciones es feature Pro ──────────────
-let _lastPlan = 'free';
+// El plan se pregunta por usuario (clerkMeta cachea un minuto por usuario).
+// Aquí había un `_lastPlan` del módulo que compartían todas las peticiones de
+// la misma instancia: tras pasar una cuenta de pago, cualquier cuenta gratis
+// que llegara después quedaba dentro del gate sin preguntar.
 
 // ── Plan del usuario ──────────────────────────────────────────────────────────
 // Clerk dejó de incluir public_metadata en el token de sesión (formato v2), así
@@ -54,9 +57,8 @@ const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia', 'trial'];
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 
 async function isPaidOrAdmin(userId) {
-  if (PAID_PLANS.includes(_lastPlan)) return true;
   const meta = await clerkMeta(userId);
-  if (PAID_PLANS.includes(meta.plan)) { _lastPlan = meta.plan; return true; }
+  if (PAID_PLANS.includes(meta.plan)) return true;
   if (ADMIN_EMAILS.includes(meta._email)) return true;
   return false;
 }

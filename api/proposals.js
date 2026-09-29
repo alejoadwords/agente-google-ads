@@ -28,7 +28,6 @@ function sbHeaders() {
   };
 }
 
-let _lastPlan = 'free';
 
 // ── Plan del usuario ──────────────────────────────────────────────────────────
 // Clerk dejó de incluir public_metadata en el token de sesión (formato v2), así
@@ -54,9 +53,10 @@ async function clerkMeta(userId) {
 const PAID_PLANS = ['pro', 'agency', 'individual', 'agencia', 'trial'];
 const ADMIN_EMAILS = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 async function isPaidOrAdmin(userId) {
-  if (PAID_PLANS.includes(_lastPlan)) return true;
+  // Sin atajo por un plan recordado del módulo: lo compartían las peticiones
+  // de clientes distintos, y una cuenta gratis heredaba el de la anterior.
   const meta = await clerkMeta(userId);
-  if (PAID_PLANS.includes(meta.plan)) { _lastPlan = meta.plan; return true; }
+  if (PAID_PLANS.includes(meta.plan)) return true;
   if (ADMIN_EMAILS.includes(meta._email)) return true;
   return false;
 }
