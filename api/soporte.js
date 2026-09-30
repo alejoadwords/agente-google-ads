@@ -228,8 +228,10 @@ export default async function handler(req) {
     // Abrir un ticket y no volver a saber nada es lo que hace que la gente
     // escriba tres veces lo mismo. Aquí cada quien ve el estado de los suyos.
     const actorId = payload.sub;
-    const email = await correoDe(actorId, payload);
 
+    // El GET no necesita el correo, y la pantalla lo consulta cada 2 minutos
+    // por pestaña: pedirlo a Clerk aquí eran ~300 llamadas por minuto a 600
+    // usuarios, para nada (30-09-2026). Se pide solo al escribir.
     if (req.method === 'GET') {
       const conv = await conversacionDe(actorId);
       const rows = await fetch(
@@ -252,6 +254,7 @@ export default async function handler(req) {
     }
 
     if (!ANTHROPIC_KEY) return jsonResp({ error: 'El asistente no está disponible ahora mismo.' }, 503);
+    const email = await correoDe(actorId, payload);
 
     // El soporte es de la persona que escribe, no de la cuenta del dueño: si es
     // miembro de un equipo, su radiografía es la del espacio donde trabaja.

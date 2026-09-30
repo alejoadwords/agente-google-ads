@@ -801,46 +801,89 @@ async function ejecutarTrabajo(job, auto, lead) {
 }
 
 // ── Triggers de inactividad ──────────────────────────────────────────────────
-async function processInactiveTriggers() {
-  const autos = await sb(`/automations?active=eq.true&trigger->>type=eq.lead_inactive&select=*`);
-  let enqueued = 0;
-  const closed = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
+//
+// Reescrito el 30-09-2026. Antes, por cada automatización se pedían 100 leads
+// inactivos SIN orden ni exclusión y se hacía una consulta de duplicado POR
+// LEAD. Dos fallos:
+//  - Lento: ~200 llamadas por automatización en CADA corrida, antes de
+//    ejecutar ningún paso. Con ~10 automatizaciones de inactividad la función
+//    agotaba sus 120 s aquí y no ejecutaba ni un trabajo de ninguna cuenta.
+//  - Ciego: como los 100 ya encolados no se excluían, cada corrida volvía a
+//    traer los mismos 100 y los demás leads inactivos no entraban nunca.
+// Ahora: los que ya tienen trabajo se leen de una vez, los inactivos se
+// recorren por páginas (el más inactivo primero) saltándose esos, los trabajos
+// se crean en una sola escritura, y la fase tiene un tope de tiempo para que
+// siempre quede tiempo de ejecutar pasos.
+export const TOPE_DISPARADORES_MS = 45 * 1000;
+export const NUEVOS_POR_AUTOMATIZACION = 100;
+const CERRADAS = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
 
-  for (const auto of (autos || [])) {
+// Todas las filas, de mil en mil: PostgREST no devuelve más de mil por petición.
+async function sbTodas(path) {
+  const filas = [];
+  for (let desde = 0; desde < 100000; desde += 1000) {
+    const lote = (await sb(`${path}&order=id.asc&limit=1000&offset=${desde}`)) || [];
+    filas.push(...lote);
+    if (lote.length < 1000) return filas;
+  }
+  return filas;
+}
+
+// Leads inactivos de una automatización que todavía no tienen trabajo suyo.
+export async function candidatosInactivos(auto, hasta) {
+  const days = parseInt(auto.trigger.days) || 3;
+  const cutoff = new Date(Date.now() - days * 864e5).toISOString();
+  const scope = auto.client_id ? `&client_id=eq.${auto.client_id}` : '&client_id=is.null';
+  // Dedupe histórico: un trabajo por automatización+lead, como siempre.
+  const yaTienen = new Set((await sbTodas(`/automation_jobs?automation_id=eq.${auto.id}&select=lead_id`)).map(j => j.lead_id));
+  const nuevos = [];
+  for (let desde = 0; nuevos.length < NUEVOS_POR_AUTOMATIZACION && Date.now() < hasta; desde += 1000) {
+    const pagina = (await sb(
+      `/leads?user_id=eq.${encodeURIComponent(auto.user_id)}${scope}&deleted_at=is.null&closed_at=is.null` +
+      `&updated_at=lt.${encodeURIComponent(cutoff)}&select=id,stage,closed_at&order=updated_at.asc,id.asc&limit=1000&offset=${desde}`
+    )) || [];
+    for (const l of pagina) {
+      if (yaTienen.has(l.id) || CERRADAS.includes(String(l.stage || '').toLowerCase())) continue;
+      nuevos.push(l);
+      if (nuevos.length >= NUEVOS_POR_AUTOMATIZACION) break;
+    }
+    if (pagina.length < 1000) break;
+  }
+  if (!nuevos.length) return [];
+  // Un lead con una tarea agendada para más adelante NO está inactivo: está en
+  // curso. Escribirle «hace días que no sabemos de ti» al que tiene visita el
+  // jueves queda fatal (lo reportó el cliente en el Pulso).
+  const hoy = new Date().toISOString();
+  const tareas = await sb(`/activities?done=is.false&cancelled_at=is.null&due_at=gte.${encodeURIComponent(hoy)}&lead_id=in.(${nuevos.map(l => l.id).join(',')})&select=lead_id`);
+  const conSeguimiento = new Set((tareas || []).map(t => t.lead_id).filter(Boolean));
+  return nuevos.filter(l => !conSeguimiento.has(l.id));
+}
+
+async function processInactiveTriggers(hasta = Date.now() + TOPE_DISPARADORES_MS) {
+  const autos = (await sb(`/automations?active=eq.true&trigger->>type=eq.lead_inactive&select=*`)) || [];
+  // Orden al azar: si el tope corta la vuelta, que no sean siempre las mismas
+  // las que se quedan fuera.
+  for (let i = autos.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [autos[i], autos[j]] = [autos[j], autos[i]]; }
+  let enqueued = 0, sinTiempo = 0;
+
+  for (const auto of autos) {
+    if (Date.now() >= hasta) { sinTiempo++; continue; }
     try {
       if (!(await userIsPaid(auto.user_id))) continue;
+      const leads = await candidatosInactivos(auto, hasta);
+      if (!leads.length) continue;
+      const ahora = new Date().toISOString();
+      await sb('/automation_jobs', 'POST', leads.map(lead => ({
+        automation_id: auto.id, user_id: auto.user_id, lead_id: lead.id,
+        step_index: 0, status: 'pending', run_at: ahora,
+      })), 'return=minimal');
       const days = parseInt(auto.trigger.days) || 3;
-      const cutoff = new Date(Date.now() - days * 864e5).toISOString();
-      const scope = auto.client_id ? `&client_id=eq.${auto.client_id}` : '&client_id=is.null';
-      const leads = await sb(`/leads?user_id=eq.${encodeURIComponent(auto.user_id)}${scope}&deleted_at=is.null&updated_at=lt.${encodeURIComponent(cutoff)}&select=id,stage,closed_at&limit=100`);
-
-      // Un lead con una tarea agendada para más adelante NO está inactivo:
-      // está en curso. Escribirle «hace días que no sabemos de ti» al que tiene
-      // visita el jueves queda fatal, y es justo lo que reportó el cliente en
-      // el Pulso. Se piden de una vez las tareas pendientes de esos leads.
-      const ids = (leads || []).map(l => l.id);
-      let conSeguimiento = new Set();
-      if (ids.length) {
-        const hoy = new Date().toISOString();
-        const tareas = await sb(`/activities?done=is.false&cancelled_at=is.null&due_at=gte.${encodeURIComponent(hoy)}&lead_id=in.(${ids.join(',')})&select=lead_id`);
-        (tareas || []).forEach(t => t.lead_id && conSeguimiento.add(t.lead_id));
-      }
-
-      for (const lead of (leads || [])) {
-        if (closed.includes(String(lead.stage || '').toLowerCase()) || lead.closed_at) continue;
-        if (conSeguimiento.has(lead.id)) continue;
-        // Dedupe: un job por automatización+lead (histórico completo)
-        const existing = await sb(`/automation_jobs?automation_id=eq.${auto.id}&lead_id=eq.${lead.id}&select=id&limit=1`);
-        if (existing?.length) continue;
-        await sb('/automation_jobs', 'POST', {
-          automation_id: auto.id, user_id: auto.user_id, lead_id: lead.id,
-          step_index: 0, status: 'pending', run_at: new Date().toISOString(),
-        }, 'return=minimal');
-        await log(auto.id, auto.user_id, lead.id, 0, 'trigger', 'enqueued', 'Lead inactivo ' + days + '+ días');
-        enqueued++;
-      }
+      for (const lead of leads) await log(auto.id, auto.user_id, lead.id, 0, 'trigger', 'enqueued', 'Lead inactivo ' + days + '+ días');
+      enqueued += leads.length;
     } catch (e) { console.error('[automations] inactive trigger error:', e.message); }
   }
+  // Las que no alcanzaron quedan para la próxima corrida (10 min), y se dice.
+  if (sinTiempo) console.warn('[automations] disparadores sin tiempo en esta corrida:', sinTiempo);
   return enqueued;
 }
 

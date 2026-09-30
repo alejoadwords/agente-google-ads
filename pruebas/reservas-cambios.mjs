@@ -270,7 +270,8 @@ function conCanal() {
 async function turno(respuesta) {
   const enviados = [];
   let system = '';
-  claude = (s) => { system = s; return respuesta; };
+  // El prompt llega como texto o como bloques (desde que se cachea): se lee el texto.
+  claude = (s) => { system = Array.isArray(s) ? s.map(b => b.text || '').join('\n') : String(s); return respuesta; };
   const c = conCanal();
   try {
     const r = await processIncoming({ channel: 'whatsapp', externalId: 'x', contactId: '573001112233', contactName: 'Laura',

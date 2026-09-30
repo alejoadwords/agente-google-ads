@@ -35209,13 +35209,29 @@ function vozMicPermitido() {
 
 // Solo se pinta el botón si el servidor dice que esta persona está en la beta.
 // Se pregunta una vez por sesión.
+// Se pregunta UNA vez por sesión. sopMostrarBurbuja corre cada 3 s y llamaba
+// aquí cada vez: cada pestaña abierta preguntaba al servidor 1.200 veces por
+// hora si estaba en la beta —una respuesta que no cambia— y, si lo estaba,
+// volvía a enchufar la voz cada 3 s. A 600 usuarios eran millones de
+// llamadas al día para nada (30-09-2026). Si la pregunta falla, se reintenta
+// a los 5 minutos, no a los 3 segundos.
+let _vozEstado = null;          // null (sin preguntar) | 'preguntando' | 'si' | 'no'
+let _vozReintentoDesde = 0;
 async function vozArrancar() {
   if (!VozReco || !vozMicPermitido()) return;
+  if (_vozEstado !== null || Date.now() < _vozReintentoDesde) return;
+  _vozEstado = 'preguntando';
   try {
     const r = await fetchAuth('/api/voz');
     const d = await r.json();
-    if (!r.ok || !d.habilitado) return;
-  } catch { return; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _vozEstado = d.habilitado ? 'si' : 'no';
+  } catch {
+    _vozEstado = null;
+    _vozReintentoDesde = Date.now() + 5 * 60 * 1000;
+    return;
+  }
+  if (_vozEstado !== 'si') return;
   document.getElementById('voz-zona')?.classList.add('viva');
   document.getElementById('voz-zona')?.setAttribute('aria-hidden', 'false');
   vozColocar();
