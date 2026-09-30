@@ -124,7 +124,9 @@ ok(/const loteCambio = fuente\.pase_lote != null && fuente\.pase_lote !== LOTE/.
    'se guarda con qué lote empezó la pasada');
 ok(/const pagina = loteCambio \? 1 :/.test(cat),
    'y si cambia, la pasada se reinicia desde la página 1 en vez de corromperse');
-ok(/pase_lote: terminado \? null : LOTE/.test(cat), 'el lote en curso se guarda con el corte');
+// El cierre de pasada es compartido (WordPress y Domus): recibe su lote.
+ok(/pase_lote: terminado \? null : lote/.test(cat) && /cerrarPasada\(\{[^}]*lote: LOTE[,\s]/.test(cat),
+   'el lote en curso se guarda con el corte');
 
 // ── 3. Las pistas llegan al filtro ──────────────────────────────────────────
 console.log('\nLo que la persona dijo llega a la búsqueda');

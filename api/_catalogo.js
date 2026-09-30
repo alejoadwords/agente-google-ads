@@ -11,6 +11,8 @@
 // precio, que hay que leer de la ficha — y eso es lo que hace lenta la
 // sincronización, así que va por lotes con un cursor.
 
+import { descifrar } from './_cifrado.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -42,7 +44,7 @@ export const num = (v) => {
 };
 
 // Ejecuta las tareas de A_LA_VEZ en A_LA_VEZ conservando el orden del resultado.
-async function enTandas(items, fn) {
+async function enTandas(items, fn, aLaVez = A_LA_VEZ) {
   const salida = new Array(items.length);
   let i = 0;
   async function obrero() {
@@ -51,7 +53,7 @@ async function enTandas(items, fn) {
       salida[mio] = await fn(items[mio], mio);
     }
   }
-  await Promise.all(Array.from({ length: Math.min(A_LA_VEZ, items.length) }, obrero));
+  await Promise.all(Array.from({ length: Math.min(aLaVez, items.length) }, obrero));
   return salida;
 }
 
@@ -167,6 +169,10 @@ async function terminos(base, tax) {
 // Devuelve un objeto plano: quien llama decide si eso es una respuesta HTTP o
 // una línea de registro del cron.
 export async function sincronizarLote(fuente) {
+  // Domus es la plataforma donde Certain (y muchas inmobiliarias de Colombia)
+  // gestiona su inventario; la web solo lo repite. Leerlo de ahí es leerlo de
+  // la fuente: ver sincronizarDomus más abajo.
+  if (fuente?.tipo === 'domus') return sincronizarDomus(fuente);
   const { user_id: userId, client_id: clientId } = fuente;
   const base = fuente.base_url;
   if (!base) return { error: 'Esta fuente no tiene web: el inventario se cargó de un archivo.', estado: 400 };
@@ -335,6 +341,181 @@ export async function sincronizarLote(fuente) {
     }
   }
 
+  const { terminado, barridos, aviso } = await cerrarPasada({ fuente, alcance, paseDesde, pagina, totalPaginas, lote: LOTE, anotar });
+  return {
+    guardadas: unicas.length, releidas, reusadas, reiniciada: loteCambio,
+    pagina, de: totalPaginas, terminado,
+    sin_precio: unicas.filter(f => !f.precio).length,
+    codigos_repetidos: repetidos,
+    barridos, aviso,
+  };
+}
+
+// ── Domus ───────────────────────────────────────────────────────────────────
+// La API de Domus (api.domus.la/3.0) es de donde la web de Certain saca los
+// inmuebles; leerla directo sobrevive a que la web cambie. El token es de la
+// inmobiliaria y se guarda CIFRADO en client_knowledge_sources.credencial.
+//
+// Lo que NO se guarda, a propósito: `comment` (trae el nombre y el celular del
+// propietario y cómo se visita), el asesor asignado, la comisión, la matrícula
+// ni la dirección exacta. El agente solo necesita lo que ve un cliente en la
+// ficha pública; lo demás, dicho por un bot, es una filtración.
+export const DOMUS_API = 'https://api.domus.la/3.0';
+// 25 por tanda y 10 fichas a la vez. Con 50 la tanda tardaba ~22 s, y el cron
+// corre en una función que tiene ~25 s para responder: demasiado justo. La
+// primera vuelta es la cara (todas las fichas); las siguientes reutilizan casi
+// todo y cada tanda cuesta una consulta.
+const LOTE_DOMUS = 25;
+const A_LA_VEZ_DOMUS = 10;
+
+// «APARTAMENTO» → «Apartamento», «CASA CONDOMINIO» → «Casa condominio»: igual
+// que venían de la web, para que el filtro por tipo siga reconociéndolos.
+const bonito = (t) => {
+  const x = String(t || '').trim().toLowerCase();
+  return x ? x.charAt(0).toUpperCase() + x.slice(1) : null;
+};
+const OPERACION_DOMUS = { VENTA: 'Venta', ARRIENDO: 'Arriendo', 'ARRIENDO/VENTA': 'Arriendo/Venta' };
+// Domus da la hora de Colombia sin zona: «2026-09-30 12:01:10».
+const fechaDomus = (t) => {
+  const m = String(t || '').match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
+  return m ? new Date(m[1] + 'T' + m[2] + '-05:00').toISOString() : null;
+};
+
+export function filaDeDomus(p, userId, clientId, fotos, ahora) {
+  const operacion = OPERACION_DOMUS[String(p.biz || '').trim().toUpperCase()] || bonito(p.biz);
+  const precios = {
+    precio_arriendo: Number(p.rent) > 0 ? Number(p.rent) : null,
+    precio_venta: Number(p.saleprice) > 0 ? Number(p.saleprice) : null,
+  };
+  return {
+    user_id: userId, client_id: clientId, codigo: String(p.codpro),
+    operacion,
+    tipo: bonito(p.type),
+    ciudad: String(p.city || '').trim() || null,
+    barrio: String(p.neighborhood || '').trim() || null,
+    habitaciones: num(p.bedrooms),
+    banos: num(p.bathrooms),
+    estrato: num(p.stratum),
+    area: Number(p.area_cons) > 0 ? Math.round(Number(p.area_cons)) : (Number(p.area_lot) > 0 ? Math.round(Number(p.area_lot)) : null),
+    precio: precioPrincipal(operacion, precios),
+    ...precios,
+    administracion: Number(p.administration) > 0 ? Number(p.administration) : null,
+    fotos: fotos?.length ? fotos : null,
+    url: null,
+    modificado: fechaDomus(p.updated_at),
+    visto_en: ahora,
+  };
+}
+
+async function domusGet(ruta, token, cabeceras = {}) {
+  const r = await fetch(DOMUS_API + ruta, { headers: { Authorization: token, ...cabeceras } }).catch(() => null);
+  if (!r) throw new Error('No se pudo alcanzar Domus');
+  if (r.status === 401 || r.status === 403) throw new Error('Domus rechazó el token (' + r.status + '): revisa que siga vigente');
+  if (!r.ok) throw new Error('Domus respondió ' + r.status);
+  return r.json();
+}
+
+// ¿El token sirve? Se usa ANTES de guardar la fuente.
+export async function probarDomus(token) {
+  const d = await domusGet('/properties?page=1', token, { perpage: '1' });
+  return { total: d.total ?? null };
+}
+
+async function sincronizarDomus(fuente) {
+  const { user_id: userId, client_id: clientId } = fuente;
+  const alcance = `user_id=eq.${encodeURIComponent(userId)}&` +
+    (clientId ? `client_id=eq.${encodeURIComponent(clientId)}` : 'client_id=is.null');
+  const anotar = (campos) => fetch(
+    `${SUPABASE_URL}/rest/v1/client_knowledge_sources?id=eq.${fuente.id}`,
+    { method: 'PATCH', headers: sb(), body: JSON.stringify(campos) }
+  ).catch(() => {});
+
+  let token;
+  try { token = await descifrar(fuente.credencial); } catch (e) { token = null; }
+  if (!token) {
+    await anotar({ ultimo_estado: 'error', ultimo_error: 'Falta el token de Domus', ultimo_sync: new Date().toISOString() });
+    return { error: 'Falta el token de Domus', estado: 400 };
+  }
+
+  const loteCambio = fuente.pase_lote != null && fuente.pase_lote !== LOTE_DOMUS;
+  const pagina = loteCambio ? 1 : Math.max(1, fuente.cursor_pagina || 1);
+  const paseDesde = (pagina === 1 || !fuente.pase_desde || loteCambio)
+    ? new Date().toISOString()
+    : new Date(fuente.pase_desde).toISOString();
+
+  let listado;
+  try {
+    // Orden estable entre páginas: la pasada dura varias ejecuciones y un
+    // inmueble que salta de página se quedaría sin ver — y se borraría.
+    listado = await domusGet(`/properties?page=${pagina}&order=codpro&sort=asc`, token, { perpage: String(LOTE_DOMUS) });
+  } catch (e) {
+    await anotar({ ultimo_estado: 'error', ultimo_error: e.message, ultimo_sync: new Date().toISOString() });
+    return { error: e.message, estado: 502 };
+  }
+  const props = (listado.data || []).filter(p => p && p.codpro && String(p.status) === '1');
+  const totalPaginas = Math.max(1, parseInt(listado.last_page || '1', 10) || 1);
+
+  // Las fotos solo vienen completas en la ficha. Se pide la ficha únicamente
+  // de lo nuevo o de lo que Domus marca como cambiado; lo demás se reutiliza.
+  const codigos = props.map(p => String(p.codpro));
+  const guardadas = new Map();
+  if (codigos.length) {
+    const filas = await fetch(
+      `${SUPABASE_URL}/rest/v1/client_properties?${alcance}&codigo=in.(${codigos.join(',')})&select=codigo,modificado,fotos`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    for (const f of filas || []) guardadas.set(f.codigo, f);
+  }
+  let releidas = 0, reusadas = 0;
+  const fotos = await enTandas(props, async (p) => {
+    const g = guardadas.get(String(p.codpro));
+    const mod = fechaDomus(p.updated_at);
+    if (g && g.fotos?.length && g.modificado && mod && new Date(g.modificado).getTime() === new Date(mod).getTime()
+        && g.fotos.every(u => /pictures\.domus\.la/.test(u))) {
+      reusadas++;
+      return g.fotos;
+    }
+    releidas++;
+    try {
+      const d = await domusGet('/properties/' + encodeURIComponent(p.codpro), token);
+      const x = d.data || d;
+      return (x.images || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map(i => i.imageurl).filter(Boolean).slice(0, TOPE_FOTOS);
+    } catch {
+      // Sin ficha, las tres primeras del listado: mejor tres fotos que ninguna.
+      return [p.image1, p.image2, p.image3].filter(Boolean).slice(0, TOPE_FOTOS);
+    }
+  }, A_LA_VEZ_DOMUS);
+
+  const ahora = new Date().toISOString();
+  const unicas = props.map((p, i) => filaDeDomus(p, userId, clientId, fotos[i], ahora));
+  if (unicas.length) {
+    const up = await fetch(`${SUPABASE_URL}/rest/v1/client_properties?on_conflict=user_id,client_id,codigo`, {
+      method: 'POST',
+      headers: { ...sb(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(unicas),
+    });
+    if (!up.ok) {
+      const det = await up.text().catch(() => '');
+      await anotar({ ultimo_estado: 'error', ultimo_error: det.slice(0, 300), ultimo_sync: new Date().toISOString() });
+      return { error: 'No se pudieron guardar las propiedades: ' + det.slice(0, 300), estado: 500 };
+    }
+  }
+
+  const { terminado, barridos, aviso } = await cerrarPasada({ fuente, alcance, paseDesde, pagina, totalPaginas, lote: LOTE_DOMUS, anotar });
+  return {
+    guardadas: unicas.length, releidas, reusadas, reiniciada: loteCambio,
+    pagina, de: totalPaginas, terminado,
+    sin_precio: unicas.filter(f => !f.precio).length,
+    codigos_repetidos: 0,
+    barridos, aviso,
+  };
+}
+
+// ── Cerrar un lote: avanzar el cursor y, al final de la pasada, barrer ──────
+// Compartido por todas las fuentes (WordPress, Domus): la regla de qué se
+// borra —y sobre todo cuándo NO se borra nada— tiene que ser una sola.
+async function cerrarPasada({ fuente, alcance, paseDesde, pagina, totalPaginas, lote, anotar }) {
   const terminado = pagina >= totalPaginas;
   const siguiente = terminado ? 1 : pagina + 1;
 
@@ -381,19 +562,13 @@ export async function sincronizarLote(fuente) {
     cursor_pagina: siguiente,
     // Al cerrar la pasada se limpia el corte: la siguiente fija el suyo.
     pase_desde: terminado ? null : paseDesde,
-    pase_lote: terminado ? null : LOTE,
+    pase_lote: terminado ? null : lote,
     ultimo_sync: new Date().toISOString(),
     ultimo_estado: terminado ? 'ok' : 'en_curso',
     ultimo_error: aviso,
   });
 
-  return {
-    guardadas: unicas.length, releidas, reusadas, reiniciada: loteCambio,
-    pagina, de: totalPaginas, terminado,
-    sin_precio: unicas.filter(f => !f.precio).length,
-    codigos_repetidos: repetidos,
-    barridos, aviso,
-  };
+  return { terminado, barridos, aviso };
 }
 
 // Las fuentes que hay que mantener al día: las que leen de una web.

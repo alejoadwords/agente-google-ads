@@ -15,7 +15,8 @@
 export const config = { runtime: 'edge' };
 
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
-import { sincronizarLote, UA } from './_catalogo.js';
+import { sincronizarLote, UA, probarDomus, DOMUS_API } from './_catalogo.js';
+import { cifrar, estaCifrado } from './_cifrado.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -165,7 +166,37 @@ async function manejar(req) {
     const total = await fetch(`${SUPABASE_URL}/rest/v1/client_properties?${filtroFuente}&select=id`,
       { headers: { ...sb(), 'Prefer': 'count=exact', 'Range': '0-0' } })
       .then(r => (r.headers.get('content-range') || '').split('/')[1]).catch(() => null);
+    // La credencial (el token de Domus) no sale nunca al navegador, ni cifrada.
+    if (fuente) { fuente.tiene_credencial = !!fuente.credencial; delete fuente.credencial; }
     return jsonResp({ fuente, propiedades: parseInt(total || '0', 10) || 0 });
+  }
+
+  // ── Conectar Domus ────────────────────────────────────────────────────────
+  // El token se prueba contra Domus ANTES de guardarlo, y se guarda cifrado: si
+  // no hay llave de cifrado, no se guarda (un token en claro en la base es lo
+  // que no puede pasar). Reemplaza la fuente que hubiera —la web— y empieza una
+  // pasada nueva; la barrida de siempre no borra nada si de golpe falta más de
+  // un tercio, así que el cambio de fuente no deja al agente sin inventario.
+  if (req.method === 'PUT' && url.searchParams.get('tipo') === 'domus') {
+    const body = await req.json().catch(() => ({}));
+    const token = String(body.token || '').trim();
+    if (token.length < 10) return jsonResp({ error: 'Pega el token de la API de Domus' }, 400);
+    let prueba;
+    try { prueba = await probarDomus(token); }
+    catch (e) { return jsonResp({ error: e.message }, 400); }
+    const credencial = await cifrar(token);
+    if (!estaCifrado(credencial)) return jsonResp({ error: 'No se pudo cifrar el token: falta la llave de cifrado del servidor' }, 500);
+    const previa = await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources?${filtroFuente}&select=id&limit=1`, { headers: sb() })
+      .then(r => (r.ok ? r.json() : [])).catch(() => []);
+    const fila = { user_id: userId, client_id: clientId, tipo: 'domus', base_url: DOMUS_API, credencial, activo: true,
+      cursor_pagina: 1, pase_desde: null, pase_lote: null, post_type: null, mapeo: {}, ultimo_estado: null, ultimo_error: null };
+    const res = previa?.[0]?.id
+      ? await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources?id=eq.${previa[0].id}`, { method: 'PATCH', headers: sb(), body: JSON.stringify(fila) })
+      : await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources`, { method: 'POST', headers: sb(), body: JSON.stringify(fila) });
+    if (!res.ok) return jsonResp({ error: 'No se pudo guardar: ' + (await res.text()).slice(0, 200) }, 500);
+    const g = (await res.json())?.[0] || null;
+    if (g) delete g.credencial;
+    return jsonResp({ fuente: g, en_domus: prueba.total });
   }
 
   // ── Guardar la web de la que se lee ───────────────────────────────────────
@@ -193,13 +224,17 @@ async function manejar(req) {
       return jsonResp({ error: 'No se pudo identificar cuál campo dice si es arriendo o venta. ' +
         'Indícalo a mano antes de guardar.', mapeo_incompleto: true }, 400);
     }
+    // Volver a la web borra el token de Domus que hubiera: una credencial que ya
+    // no se usa no se guarda.
     const fila = { user_id: userId, client_id: clientId, tipo: 'wordpress', base_url: base, activo: true,
-      cursor_pagina: 1, post_type, mapeo };
+      cursor_pagina: 1, post_type, mapeo, credencial: null };
     const res = previa?.[0]?.id
       ? await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources?id=eq.${previa[0].id}`, { method: 'PATCH', headers: sb(), body: JSON.stringify(fila) })
       : await fetch(`${SUPABASE_URL}/rest/v1/client_knowledge_sources`, { method: 'POST', headers: sb(), body: JSON.stringify(fila) });
     if (!res.ok) return jsonResp({ error: 'No se pudo guardar: ' + (await res.text()).slice(0, 200) }, 500);
-    return jsonResp({ fuente: (await res.json())?.[0] || null });
+    const g = (await res.json())?.[0] || null;
+    if (g) delete g.credencial;
+    return jsonResp({ fuente: g });
   }
 
   // ── Sincronizar un lote ───────────────────────────────────────────────────
