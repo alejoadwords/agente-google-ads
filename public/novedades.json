@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-30-festivos",
+      "fecha": "2026-09-30",
+      "tipo": "mejora",
+      "titulo": "Tu agente conoce los festivos de Colombia",
+      "texto": "Si alguien escribe un festivo y pide que lo llamen, tu agente sabe que la oficina está cerrada y le ofrece el siguiente día hábil, con fecha: después de un puente dice «el martes 13 de octubre», no «el lunes». La víspera de un festivo tampoco ofrece llamadas para el día siguiente. Además, si alguien dice desde el primer mensaje que busca en arriendo o para comprar, el agente ya solo le muestra inmuebles de esa operación."
+    },
+    {
       "id": "2026-09-30-metraje",
       "fecha": "2026-09-30",
       "tipo": "mejora",

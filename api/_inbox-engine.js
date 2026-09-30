@@ -460,6 +460,21 @@ export function areaDelTexto(texto) {
   return x ? { min: Math.round(x * 0.8), max: Math.round(x * 1.5) } : null;
 }
 
+// ¿Busca arrendar o comprar? «Busco apartamento en arriendo» en el primer
+// mensaje no filtraba nada: la operación solo salía de la calificación, que
+// llega después, y el agente le ofreció a quien quería arrendar una casa en
+// venta de 460 millones (30-09-2026). Quien quiere VENDER o ARRENDAR lo suyo es
+// captación, no una búsqueda: eso no se toca aquí.
+export function operacionDelTexto(texto) {
+  const t = sinTildes(texto);
+  if (/\b(vender|arrendar|alquilar|administr\w*)\s+(mi|mis|nuestro|nuestra)\b/.test(t)) return null;
+  const arriendo = /\b(arriendo|arrendar|arrienda|alquiler|alquilar|renta|rentar|en arriendo|para arrendar)\b/.test(t);
+  const compra = /\b(comprar|compra|compro|en venta|para comprar|adquirir)\b/.test(t);
+  if (arriendo && !compra) return 'arriendo';
+  if (compra && !arriendo) return 'venta';
+  return null;
+}
+
 // Cuántas habitaciones pidió: «3 habitaciones», «de 3 alcobas», «3 hab».
 export function habitacionesDelTexto(texto) {
   const t = sinTildes(texto);
@@ -536,6 +551,7 @@ export async function pistasDelContacto(userId, clientId, mensajes = []) {
     presupuesto: plata === 'libre' ? null : plata,
     habitaciones: buscar(habitacionesDelTexto),
     metraje: buscar(areaDelTexto),
+    operacion: buscar(operacionDelTexto),
   };
 }
 
@@ -695,7 +711,8 @@ export function pistasDeBusqueda(capturado = {}, respuestas = {}, delContacto = 
   // no una interpretación. Y el modelo llegó a poner como zona la del inmueble
   // que él mismo estaba ofreciendo.
   return {
-    operacion: respuestas?._ruta || null,
+    // La ruta de la calificación manda; si aún no hay, lo que dijo la persona.
+    operacion: respuestas?._ruta || delContacto.operacion || null,
     ciudad: delContacto.ciudad || capturado.ciudad || deCriterio('ciudad') || null,
     tipo: delContacto.tipo || null,
     barrio: delContacto.barrio || capturado.zona || capturado.barrio || deCriterio('zona', 'barrio', 'sector') || null,
@@ -838,23 +855,76 @@ function horaBonita(min) {
   return (h % 12 || 12) + ':' + m + (h < 12 ? ' a. m.' : ' p. m.');
 }
 // ¿Dentro o fuera, y cuándo es la próxima franja? `dia` 0=domingo, `min` desde medianoche.
-export function veredictoHorario(franjas, dia, min) {
-  const hoy = franjas.filter(f => f.dias.has(dia)).sort((a, b) => a.desde - b.desde);
+// `festivo(k)` dice si el día que está a k días de hoy es festivo (0 = hoy).
+// Un festivo no tiene franjas: ni se está dentro ni se ofrece ese día. Se mira
+// hasta dos semanas: un lunes festivo después de un fin de semana largo, o
+// Semana Santa, empujan la próxima franja varios días.
+export function veredictoHorario(franjas, dia, min, festivo = () => false) {
+  const franjasDe = (k) => (festivo(k) ? [] : franjas.filter(f => f.dias.has((dia + k) % 7)).sort((a, b) => a.desde - b.desde));
+  const hoy = franjasDe(0);
   const dentro = hoy.find(f => min >= f.desde && min < f.hasta);
   if (dentro) return { dentro: true, hasta: dentro.hasta };
   const luegoHoy = hoy.find(f => f.desde > min);
   if (luegoHoy) return { dentro: false, proxima: { enDias: 0, dia, desde: luegoHoy.desde } };
-  for (let k = 1; k <= 7; k++) {
-    const d = (dia + k) % 7;
-    const f = franjas.filter(x => x.dias.has(d)).sort((a, b) => a.desde - b.desde)[0];
-    if (f) return { dentro: false, proxima: { enDias: k, dia: d, desde: f.desde } };
+  for (let k = 1; k <= 14; k++) {
+    const f = franjasDe(k)[0];
+    if (f) return { dentro: false, proxima: { enDias: k, dia: (dia + k) % 7, desde: f.desde } };
   }
   return null;
 }
 
+// ── Festivos de Colombia ─────────────────────────────────────────────────────
+// Calculados, no copiados de una lista que habría que actualizar cada año:
+// los fijos; los que la Ley Emiliani (Ley 51 de 1983) pasa al lunes siguiente;
+// y los que cuelgan de la Pascua. El 12-10-2026 (Día de la Raza, lunes) el
+// agente habría dicho «estamos atendiendo» con la oficina cerrada.
+function pascua(y) {
+  // Algoritmo de Meeus/Jones/Butcher (calendario gregoriano).
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31), diaMes = ((h + l - 7 * m + 114) % 31) + 1;
+  return Date.UTC(y, mes - 1, diaMes);
+}
+const DIA_MS = 86400000;
+const aLunes = (t) => { const w = new Date(t).getUTCDay(); return w === 1 ? t : t + ((8 - w) % 7) * DIA_MS; };
+const clave = (t) => new Date(t).toISOString().slice(0, 10);
+const _festivos = new Map();
+export function festivosColombia(y) {
+  if (_festivos.has(y)) return _festivos.get(y);
+  const P = pascua(y);
+  const f = new Map();
+  const pon = (t, nombre) => f.set(clave(t), nombre);
+  pon(Date.UTC(y, 0, 1), 'Año Nuevo');
+  pon(aLunes(Date.UTC(y, 0, 6)), 'Reyes Magos');
+  pon(aLunes(Date.UTC(y, 2, 19)), 'San José');
+  pon(P - 3 * DIA_MS, 'Jueves Santo');
+  pon(P - 2 * DIA_MS, 'Viernes Santo');
+  pon(Date.UTC(y, 4, 1), 'Día del Trabajo');
+  pon(aLunes(P + 39 * DIA_MS), 'Ascensión del Señor');
+  pon(aLunes(P + 60 * DIA_MS), 'Corpus Christi');
+  pon(aLunes(P + 68 * DIA_MS), 'Sagrado Corazón');
+  pon(aLunes(Date.UTC(y, 5, 29)), 'San Pedro y San Pablo');
+  pon(Date.UTC(y, 6, 20), 'Día de la Independencia');
+  pon(Date.UTC(y, 7, 7), 'Batalla de Boyacá');
+  pon(aLunes(Date.UTC(y, 7, 15)), 'Asunción de la Virgen');
+  pon(aLunes(Date.UTC(y, 9, 12)), 'Día de la Raza');
+  pon(aLunes(Date.UTC(y, 10, 1)), 'Todos los Santos');
+  pon(aLunes(Date.UTC(y, 10, 11)), 'Independencia de Cartagena');
+  pon(Date.UTC(y, 11, 8), 'Inmaculada Concepción');
+  pon(Date.UTC(y, 11, 25), 'Navidad');
+  _festivos.set(y, f);
+  return f;
+}
+// El nombre del festivo de una fecha 'aaaa-mm-dd', o null.
+export function festivoDeColombia(ymd) {
+  return festivosColombia(+ymd.slice(0, 4)).get(ymd) || null;
+}
+
 export function bloqueDeAhora(zona, ahora = new Date(), contexto = '') {
   const tz = zona || 'America/Bogota';
-  let cuando, manana, dia, min;
+  let cuando, manana, dia, min, hoyYmd;
   try {
     const f = (d, o) => new Intl.DateTimeFormat('es-CO', { timeZone: tz, ...o }).format(d);
     cuando = f(ahora, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -864,21 +934,36 @@ export function bloqueDeAhora(zona, ahora = new Date(), contexto = '') {
     const v = t => partes.find(p => p.type === t)?.value;
     dia = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(v('weekday'));
     min = (+v('hour') % 24) * 60 + +v('minute');
+    // La fecha de HOY en la zona del negocio (a las 8 p. m. de Bogotá ya es
+    // mañana en UTC): de ahí se cuentan los festivos.
+    hoyYmd = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ahora);
   } catch (e) {
     return '';   // una zona inválida no puede tumbar la respuesta: sin reloj, como antes
   }
   const donde = PAIS_DE_ZONA[tz] ? 'hora de ' + PAIS_DE_ZONA[tz] : 'hora local del negocio';
+  // Festivos: solo se conocen los de Colombia. Otro país, sin festivos (como
+  // antes) hasta que alguien los necesite.
+  const colombia = tz === 'America/Bogota';
+  const ymdEn = (k) => clave(Date.parse(hoyYmd + 'T00:00:00Z') + k * DIA_MS);
+  const festivo = (k) => (colombia ? !!festivoDeColombia(ymdEn(k)) : false);
+  const festivoHoy = colombia ? festivoDeColombia(hoyYmd) : null;
+  const festivoManana = colombia ? festivoDeColombia(ymdEn(1)) : null;
   const franjas = horarioDelTexto(contexto);
-  const ver = franjas ? veredictoHorario(franjas, dia, min) : null;
+  const ver = franjas ? veredictoHorario(franjas, dia, min, festivo) : null;
   let estado = '';
+  if (festivoHoy) estado += `HOY ES FESTIVO EN COLOMBIA (${festivoHoy}).\n`;
+  else if (festivoManana) estado += `MAÑANA ES FESTIVO EN COLOMBIA (${festivoManana}): no ofrezcas llamadas ni visitas para mañana.\n`;
   if (ver && ver.dentro) {
-    estado = `AHORA MISMO SE ESTA DENTRO DEL HORARIO DE ATENCION (hasta las ${horaBonita(ver.hasta)}). Si piden que les llamen ya, di que un asesor le contacta en cuanto pueda, sin prometer minutos exactos. No digas que no hay nadie.\n`;
+    estado += `AHORA MISMO SE ESTA DENTRO DEL HORARIO DE ATENCION (hasta las ${horaBonita(ver.hasta)}). Si piden que les llamen ya, di que un asesor le contacta en cuanto pueda, sin prometer minutos exactos. No digas que no hay nadie.\n`;
   } else if (ver) {
     const p = ver.proxima;
     const cuandoAbre = p.enDias === 0 ? 'hoy a las ' + horaBonita(p.desde)
       : p.enDias === 1 ? 'mañana a las ' + horaBonita(p.desde)
-      : 'el ' + DIAS[p.dia].replace('miercoles', 'miércoles').replace('sabado', 'sábado') + ' a las ' + horaBonita(p.desde);
-    estado = `AHORA MISMO SE ESTA FUERA DEL HORARIO DE ATENCION: nadie puede llamar ahora. La proxima franja en la que un asesor puede contactar es ${cuandoAbre}; si piden que les llamen ya, dilo con naturalidad y ofrece esa franja. Por chat sigues atendiendo, pero una llamada no es ahora.\n`;
+      // A dos o más días, con fecha: tras Semana Santa o un puente, «el lunes»
+      // a secas puede leerse como el lunes equivocado.
+      : 'el ' + new Intl.DateTimeFormat('es-CO', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })
+          .format(new Date(ymdEn(p.enDias) + 'T12:00:00Z')).replace(',', '') + ' a las ' + horaBonita(p.desde);
+    estado += `AHORA MISMO SE ESTA FUERA DEL HORARIO DE ATENCION: nadie puede llamar ahora. La proxima franja en la que un asesor puede contactar es ${cuandoAbre}; si piden que les llamen ya, dilo con naturalidad y ofrece esa franja. Por chat sigues atendiendo, pero una llamada no es ahora.\n`;
   }
   return `QUE DIA Y HORA ES AHORA MISMO (${donde}):
 ${cuando}
