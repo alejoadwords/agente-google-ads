@@ -6786,9 +6786,9 @@ if (window.AGENTES_ACTIVOS) {
             <div class="cfg-row">
               <div>
                 <div class="cfg-label">Contraseña</div>
-                <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">Actualiza tu contraseña de acceso</div>
+                <div style="font-size:11.5px;color:var(--text-3);margin-top:2px" id="cfg-clave-sub">Actualiza tu contraseña de acceso</div>
               </div>
-              <button class="cfg-edit-btn" onclick="clerkInstance?.openUserProfile?.()">Cambiar contraseña</button>
+              <button class="cfg-edit-btn" id="cfg-clave-btn" onclick="cfgCambiarClave()">Cambiar contraseña</button>
             </div>
             <div class="cfg-row">
               <div>
