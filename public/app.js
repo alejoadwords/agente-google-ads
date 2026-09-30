@@ -103,13 +103,15 @@ function soporteBanner() {
   b.setAttribute('role', 'status');
   b.innerHTML = '<span class="sb-soporte-ico">' + icn('eye', 15) + '</span>'
     + '<span class="sb-soporte-txt">Estás dentro de la cuenta de <strong>' + esc(quien || correo) + '</strong>'
-    + (quien && correo ? ' <span class="sb-soporte-mail">' + esc(correo) + '</span>' : '')
-    + ' · lo que hagas queda hecho en su cuenta</span>'
+    + (quien && correo ? ' <span class="sb-soporte-mail sb-soporte-extra">' + esc(correo) + '</span>' : '')
+    + '<span class="sb-soporte-extra"> · lo que hagas queda hecho en su cuenta</span></span>'
     + '<span class="sb-soporte-min" id="soporte-min"></span>'
     + '<button class="sb-soporte-btn" onclick="soporteVolver(this)">Volver a mi cuenta</button>';
   document.body.appendChild(b);
   document.body.classList.add('con-soporte');
-  document.title = 'Soporte · ' + (quien || correo) + ' — Acuarius';
+  const ajustar = () => { document.body.style.paddingTop = b.offsetHeight + 'px'; };
+  ajustar();
+  window.addEventListener('resize', ajustar);
   const pintar = () => {
     const el = document.getElementById('soporte-min');
     if (!el || !expira) return;

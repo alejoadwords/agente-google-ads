@@ -3499,8 +3499,13 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .sb-soporte-min{font-size:var(--fs-xs);font-weight:700;opacity:.9;white-space:nowrap}
 .sb-soporte-btn{background:#fff;color:var(--text);border:0;border-radius:8px;padding:6px 12px;font-family:var(--font);font-weight:700;font-size:var(--fs-xs);cursor:pointer;white-space:nowrap}
 .sb-soporte-btn:disabled{opacity:.6;cursor:default}
-body.con-soporte{padding-top:40px}
-@media(max-width:640px){body.con-soporte{padding-top:64px}}
+/* El relleno de arriba lo fija soporteBanner() con la altura REAL del banner:
+   con un número fijo, en un teléfono el banner ocupa dos o tres líneas y tapa
+   la cabecera. */
+@media(max-width:640px){.sb-soporte-extra{display:none}#soporte-banner{padding:7px 12px;gap:8px}}
+/* Clerk pinta su propio botón flotante de suplantación, en inglés y encima del
+   contenido. El banner de arriba ya dice lo mismo y trae el regreso correcto. */
+.cl-impersonationFab{display:none!important}
 
 /* ── Cuentas de clientes (solo equipo) ── */
 #cu-full{position:fixed;inset:0;z-index:9700;background:var(--bg);display:none;flex-direction:column}
