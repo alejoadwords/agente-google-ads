@@ -35787,14 +35787,6 @@ function sopVideoEmbed(url) {
 async function sopAbrirBienvenida() {
   const panel = document.getElementById('sop-panel');
   if (!panel) return;
-  let velo = document.getElementById('sop-velo');
-  if (!velo) {
-    velo = document.createElement('div');
-    velo.id = 'sop-velo';
-    velo.addEventListener('click', sopCerrar);
-    document.body.appendChild(velo);
-  }
-  velo.classList.add('abierto');
   panel.classList.add('bienvenida');
   await sopAbrir();
   const hilo = document.getElementById('sop-hilo');
@@ -35804,7 +35796,6 @@ async function sopAbrirBienvenida() {
 function sopCerrar() {
   const eraBienvenida = document.getElementById('sop-panel')?.classList.contains('bienvenida');
   document.getElementById('sop-panel')?.classList.remove('abierto', 'bienvenida');
-  document.getElementById('sop-velo')?.classList.remove('abierto');
   // En el alta pidió importar sus contactos al entrar (public/registro.html):
   // se le abre el importador en cuanto cierra la bienvenida, no encima de ella.
   if (eraBienvenida) {

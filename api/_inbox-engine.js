@@ -1224,6 +1224,13 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
     if (corregido && !inventos(cleanForUser(corregido), citable).length) { bruto = corregido; texto = cleanForUser(corregido).trim(); }
   }
 
+  if (condicionaAlDato(texto)) {
+    const sinCobrar = await reintento('Tu mensaje anterior NO se envió: le condicionabas lo que pidió a que te diera un dato («antes de…», «primero necesito…»). ' +
+      'Escríbelo otra vez dándole PRIMERO lo que pidió —las opciones, las fotos, la respuesta— y, al final y sin condiciones, pide el dato que te falte. ' +
+      'El contacto no vio nada: no te disculpes ni lo menciones.');
+    if (sinCobrar && !condicionaAlDato(cleanForUser(sinCobrar))) { bruto = sinCobrar; texto = cleanForUser(sinCobrar).trim(); }
+  }
+
   if (quiereOfrecerInmueble(limpios) && descartaAlContacto(texto)) {
     const sinDescarte = await reintento('Tu mensaje anterior NO se envió. Esta persona viene a ofrecernos su inmueble, y le has dicho que no encaja: ' +
       'eso no lo decides tú, lo decide el asesor con el caso delante. Escríbelo otra vez SIN ninguna mención a estratos, portafolio, ' +
@@ -1625,6 +1632,24 @@ export function quiereOfrecerInmueble(mensajes = []) {
     || /\btengo (un|una|el|la|unos|unas)\s+[\wáéíóúñ]+.{0,40}?\bpara\s+(vender|arrendar|alquilar|administrar|promocionar)/.test(suyo);
 }
 
+// ¿Le estamos cobrando un dato por lo que pidió?
+//
+// «Antes de mostrarle las disponibles, ¿cuál es su nombre? Y también un
+// número…» (30-09-2026, agente de Certain). La regla está escrita en el prompt
+// —«PRIMERO haces lo que te piden»— y con Haiku no basta: se gana con un
+// guardián que mira la respuesta antes de que salga. Se mira frase a frase:
+// hace falta que la misma frase condicione («antes de», «primero», «para
+// poder…») y pida un dato de contacto.
+export function condicionaAlDato(texto) {
+  const frases = sinTildes(texto).split(/(?<=[.?!])\s+|\n+/);
+  const dato = /\b(nombre|numero|celular|telefono|whatsapp|correo|email|datos|contacto)\b/;
+  return frases.some(f => dato.test(f) && (
+    /\bantes de (mostrar|enviar|pasar|dar|compartir|mandar|ensenar|contar|seguir|continuar)\w*/.test(f)
+    || /\bprimero\b[^.?!]{0,40}\b(necesito|requiero|me (comparte|da|dice|regala|indica|confirma)|digame|compartame|regaleme)/.test(f)
+    || /\bpara (poder )?(mostrar|enviar|mandar|pasar|compartir|ensenar)\w*[^.?!]{0,60}\b(necesito|requiero|debo tener|tengo que tener)/.test(f)
+  ));
+}
+
 // ¿Le estamos diciendo que no?
 export function descartaAlContacto(texto) {
   const t = String(texto || '').toLowerCase();
@@ -1952,6 +1977,22 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   //
   // Quien viene a ofrecernos algo es una oportunidad, y quien decide si encaja
   // es un asesor con el caso delante.
+  if (condicionaAlDato(cleanForUser(reply))) {
+    const sinCobrar = await responderViendo(system, hist, [
+      { role: 'assistant', content: reply },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió: le condicionabas lo que pidió a que te diera un dato («antes de…», «primero necesito…»). ' +
+        'Escríbelo otra vez dándole PRIMERO lo que pidió —las opciones, las fotos, la respuesta— y, al final y sin condiciones, pide el dato que te falte. ' +
+        'El contacto no vio nada y no te ha corregido: no te disculpes ni lo menciones.' },
+    ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
+    const arreglado = sinCobrar && !condicionaAlDato(cleanForUser(sinCobrar));
+    if (arreglado) reply = sinCobrar;
+    await registrarError({
+      origen: 'inbox', donde: 'el agente condicionó lo pedido a un dato de contacto',
+      error: new Error((arreglado ? 'corregido: ' : 'NO corregido: ') + cleanForUser(reply).slice(0, 160)),
+      usuario: connection.user_id,
+    }).catch(() => {});
+  }
+
   if (quiereOfrecerInmueble(hist) && descartaAlContacto(cleanForUser(reply))) {
     const sinDescarte = await responderViendo(system, hist, [
       { role: 'assistant', content: reply },

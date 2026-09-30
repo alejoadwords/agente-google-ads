@@ -3548,9 +3548,13 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .cu-scroll{overflow-x:auto}
 
 /* ── Bienvenida: el chat de soporte a tamaño de carta ── */
-#sop-panel.bienvenida{top:50%;left:50%;right:auto;bottom:auto;transform:translate(-50%,-50%);width:min(720px,calc(100vw - 32px));height:min(640px,calc(100vh - 48px));max-height:none}
-#sop-velo{position:fixed;inset:0;background:rgba(10,12,30,.45);z-index:9598;display:none}
-#sop-velo.abierto{display:block}
+#sop-panel.bienvenida{top:50%;left:50%;right:auto;bottom:auto;transform:translate(-50%,-50%);width:min(640px,calc(100vw - 32px));height:min(680px,calc(100vh - 48px));max-height:none}
+/* Sin velo oscuro detrás: la bienvenida se lee como una carta sobre la app,
+   no como un aviso que bloquea. Y el mensaje ocupa todo el ancho, sin burbuja:
+   con la burbuja al 88% quedaba un hueco a la derecha del video. */
+#sop-panel.bienvenida .sop-hilo{padding:22px 26px}
+#sop-panel.bienvenida .sop-msg.equipo{max-width:100%;align-self:stretch;background:transparent;border:0;padding:0;font-size:14px;line-height:1.65}
+#sop-panel.bienvenida .sop-video{margin-top:14px}
 .sop-video{position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;margin-top:10px;background:var(--bg-muted)}
 .sop-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 
