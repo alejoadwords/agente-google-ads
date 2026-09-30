@@ -36,11 +36,11 @@ console.log('\nEl selector del tablero\n');
 }
 
 console.log('\nCrear procesos\n');
-const gestor = (clientes, cargada, cliente) => {
+const gestor = (clientes, cargada, cliente, agencia = true) => {
   const dom = { 'pipe-lista': el(), 'pipe-conteo': el(), 'pipe-ambito': el(), 'pipe-btn-nuevo': el(), 'pipe-lat-cta': el() };
-  const f = new Function('document', 'crmPipelines', 'pipeGestorSel', 'PIPE_MAX', 'pipeAmbitoNombre', 'esc', 'pipeRenderPanel', 'agencyClients', '_agencyCargada',
+  const f = new Function('document', 'crmPipelines', 'pipeGestorSel', 'PIPE_MAX', 'pipeAmbitoNombre', 'esc', 'pipeRenderPanel', 'agencyClients', '_agencyCargada', 'esCuentaAgencia',
     cuerpo('function crmCuentaSinCartera() {') + '\n' + cuerpo('function pipeRenderLista() {') + '; return pipeRenderLista;');
-  f({ getElementById: id => dom[id] }, [{ id: 'p1', name: 'X', is_default: true }], 'p1', 10, () => cliente, x => x, () => {}, clientes, cargada)();
+  f({ getElementById: id => dom[id] }, [{ id: 'p1', name: 'X', is_default: true }], 'p1', 10, () => cliente, x => x, () => {}, clientes, cargada, () => agencia)();
   return dom;
 };
 {
@@ -57,12 +57,12 @@ const gestor = (clientes, cargada, cliente) => {
 }
 
 console.log('\nEl tablero filtra por proceso\n');
-const leadsPide = async (clientId, cargada, clientes, pipes, actual) => {
+const leadsPide = async (clientId, cargada, clientes, pipes, actual, agencia = true) => {
   let pedida = null;
-  const f = new Function('crmAmbito', 'agencyActiveClientId', 'fetchAuth', 'crmPipelineId', 'crmPipelines', 'agencyClients', '_agencyCargada',
+  const f = new Function('crmAmbito', 'agencyActiveClientId', 'fetchAuth', 'crmPipelineId', 'crmPipelines', 'agencyClients', '_agencyCargada', 'esCuentaAgencia',
     'crmLeads', 'crmLeadsLoaded', 'crmFalloResuelto', 'crmFallo', 'console',
     'let crmTodos;' + cuerpo('function crmCuentaSinCartera() {') + '\n' + cuerpo('async function crmLoadLeads() {') + '; return crmLoadLeads;');
-  await f(() => 'a', clientId, async (u) => { pedida = u; return { ok: false, status: 500, json: async () => ({}) }; }, actual, pipes, clientes, cargada,
+  await f(() => 'a', clientId, async (u) => { pedida = u; return { ok: false, status: 500, json: async () => ({}) }; }, actual, pipes, clientes, cargada, () => agencia,
     [], false, () => {}, () => {}, { error() {}, warn() {} })();
   return pedida;
 };
@@ -84,6 +84,54 @@ console.log('\nEl servidor entiende con_sueltos\n');
   ok(src.includes("query += `&or=(pipeline_id.eq.${encodeURIComponent(pipelineId)},pipeline_id.is.null)`;"), 'con_sueltos pide el proceso O sin proceso');
   ok(/const scopeFilter = clientId\s*\n\s*\? `user_id=eq\.\$\{userId\}&client_id=eq\.\$\{clientId\}&deleted_at=is\.null`\s*\n\s*: `user_id=eq\.\$\{userId\}&deleted_at=is\.null`;/.test(src),
      'y no choca con otro or= en el alcance (que no lo tiene)');
+}
+
+console.log('\nEl tablero enseña las etapas del proceso\n');
+{
+  // Karvio editó su proceso, guardó, y el tablero seguía con tres columnas:
+  // Abiertas/Ganadas/Perdidas, la vista pensada para una agencia mirando a
+  // todos sus clientes a la vez. Una cuenta sin cartera caía ahí siempre.
+  const cols = (agencia, clientes, cargada, cliente) => new Function('crmStages', 'agencyActiveClientId', 'esCuentaAgencia', 'agencyClients', '_agencyCargada',
+    cuerpo('function crmAmbitoCliente() {') + '\n' + cuerpo('function crmCuentaSinCartera() {') + '\n' + cuerpo('function crmVistaGlobal() {') + '\n' +
+    cuerpo('function crmColumnasTablero(leads) {') + '; return crmColumnasTablero([]).map(c => c.label);')(
+    [{ key: 'nuevo', label: 'Nuevo lead' }, { key: 'contactado', label: 'Contactado' }, { key: 'negociacion', label: 'Negociación' }, { key: 'ganado', label: 'Ganado' }, { key: 'perdido', label: 'Perdido' }],
+    cliente, () => agencia, clientes, cargada);
+  const pro = cols(false, [], false, null);
+  ok(pro.join('|') === 'Nuevo lead|Contactado|Negociación|Ganado|Perdido', 'una cuenta Pro sin clientes ve SUS etapas, aunque la cartera no haya cargado', pro.join('|'));
+  ok(cols(true, [], true, null).join('|') === 'Nuevo lead|Contactado|Negociación|Ganado|Perdido', 'una agencia sin clientes, también');
+  ok(cols(true, [{ id: 'c1' }], true, null).join('|') === 'Abiertas|Ganadas|Perdidas', 'una agencia mirando a TODOS sus clientes sigue con la vista común');
+  ok(cols(true, [{ id: 'c1' }], true, 'c1').join('|') === 'Nuevo lead|Contactado|Negociación|Ganado|Perdido', 'y dentro de un cliente, sus etapas');
+}
+
+console.log('\nEl selector de cliente, solo para agencias\n');
+{
+  // Decisión del 29-09-2026: una cuenta Pro es UN negocio. Su perfil vive como
+  // un único «cliente» (pro_main) y trabaja siempre dentro de él; el selector
+  // y la salida a «Mi cuenta» son solo de las agencias.
+  const hdr = (plan, admin, clientes, activo) => {
+    const dom = { 'hdr-client-switch': el(), 'hdr-client-name': el() };
+    new Function('document', 'userPlan', 'isAdminUser', 'agencyClients', 'agencyActiveClientId',
+      cuerpo('function esCuentaAgencia() {') + '\n' + cuerpo('function hdrClientRender() {') + '; return hdrClientRender;')(
+      { getElementById: id => dom[id] }, plan, () => admin, clientes, activo)();
+    return dom['hdr-client-switch'].style.display;
+  };
+  ok(hdr('pro', false, [{ id: 'pro_main' }], 'pro_main') === 'none', 'una Pro con su perfil de negocio ya no ve el selector');
+  ok(hdr('trial', false, [{ id: 'pro_main' }], 'pro_main') === 'none', 'ni una cuenta de prueba');
+  ok(hdr('agency', false, [{ id: 'c1' }], null) === '', 'una agencia con clientes sí');
+  ok(hdr('agencia', false, [{ id: 'c1' }], null) === '', 'escrita «agencia» también');
+  ok(hdr('pro', true, [{ id: 'c1' }], null) === '', 'y el administrador');
+
+  let cambio = null;
+  const pick = new Function('userPlan', 'isAdminUser', 'agencyOpenClient', 'hdrClientRender', 'showView', 'document',
+    'let agencyActiveClientId = "pro_main", activeClientContext = {};' +
+    cuerpo('function esCuentaAgencia() {') + '\n' + cuerpo('function hdrClientPick(id) {') + '; return (id) => { hdrClientPick(id); return agencyActiveClientId; };');
+  const quedo = pick('pro', () => false, (id) => { cambio = id; }, () => {}, () => {}, { getElementById: () => null })(null);
+  ok(quedo === 'pro_main' && cambio === null, 'una Pro no puede salir a «Mi cuenta» aunque la llamen por otro lado');
+
+  const init = cuerpo('async function agencyInit() {');
+  ok(/if \(isAgency\) try \{\s*\n\s*const guardado = localStorage\.getItem\('acuarius_cliente_activo'\)/.test(init),
+     'al arrancar, restaurar «el último cliente» es solo de agencias');
+  ok(/const isPro\s+= !isAgency;/.test(init), 'y Pro es todo lo que no es agencia');
 }
 
 console.log(mal ? `\n  ${mal} fallo(s)\n` : '\n  Todo en verde\n');

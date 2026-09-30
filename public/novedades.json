@@ -16,6 +16,20 @@
       "texto": "Si alguien deja de responder, a los 10 minutos el agente vuelve a escribirle — y no con un «¿sigues ahí?», sino con la pregunta que falta para poder pasarlo a un asesor: el teléfono, la zona o el presupuesto, según lo que ya haya dicho. Solo una vez por cada mensaje suyo, solo entre las 7 de la mañana y las 9 de la noche, y nunca en una conversación que ya esté atendiendo alguien de tu equipo."
     },
     {
+      "id": "2026-09-29-tablero-con-tus-etapas",
+      "fecha": "2026-09-29",
+      "tipo": "arreglo",
+      "titulo": "El tablero del CRM ya muestra las etapas de tu proceso",
+      "texto": "En algunas cuentas el tablero mostraba solo tres columnas —Abiertas, Ganadas y Perdidas— aunque el proceso de venta tuviera más etapas, y editar las etapas no cambiaba nada en el tablero. Ahora ves una columna por cada etapa de tu proceso, y cualquier cambio que hagas en «Procesos de venta» aparece en el tablero al guardar."
+    },
+    {
+      "id": "2026-09-29-un-solo-negocio",
+      "fecha": "2026-09-29",
+      "tipo": "mejora",
+      "titulo": "Tu cuenta es tu negocio: sin selector de clientes",
+      "texto": "Si tu plan no es de agencia, ya no verás el selector «Cliente» en la parte de arriba. Tu cuenta trabaja siempre sobre tu negocio: tus leads, tus procesos de venta y tus etapas están en un solo lugar, sin un segundo espacio donde algo pudiera quedar escondido. Las cuentas de agencia siguen eligiendo cliente como siempre."
+    },
+    {
       "id": "2026-09-29-corte-cupo",
       "fecha": "2026-09-29",
       "tipo": "nuevo",
