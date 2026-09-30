@@ -11,6 +11,7 @@ import { ensureCatalog, enqueueAutomations, pipelinePrincipal } from './_lead-in
 import { getPolicy } from './_channel-policy.js';
 import { asignarLead } from './_assign.js';
 import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredicto, resumenLegible, asesoresDelTablero } from './_qualify.js';
+import { estadoDeCupo, sumarUno, avisarDelCupo } from './_cupo-agente.js';
 import { pautaDeReferral } from './_lead-intake.js';
 import { registrarUso } from './_uso-ia.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
@@ -1447,6 +1448,50 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     body: JSON.stringify({ last_inbound_at: new Date().toISOString() }),
   }).catch(() => {});
 
+  // ── El cupo del mes ────────────────────────────────────────────────────────
+  //
+  // Si la cuenta agotó sus mensajes, el agente no contesta. Pero agotar el cupo
+  // NO puede ser un silencio: el mensaje del cliente ya está guardado, la
+  // conversación pasa a manos del equipo con su aviso, y al cliente se le dice
+  // que le responde una persona. Un cliente que escribe y no recibe nada es un
+  // lead perdido, y la culpa sería nuestra, no suya.
+  //
+  // Un fallo al consultar el cupo NO corta. Dejar mudo al agente de un cliente
+  // que paga porque una consulta nuestra falló es mucho peor que dejar pasar
+  // unos mensajes de más.
+  const cupo = await estadoDeCupo(connection.user_id, { cacheado: true }).catch(() => ({ error: true }));
+  if (cupo && !cupo.error && cupo.agotado) {
+    await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
+      method: 'PATCH', headers: sb(),
+      body: JSON.stringify({
+        status: 'human',
+        unread_count: (conv.unread_count || 0) + 1,
+        last_message: textoMensaje.slice(0, 200),
+        last_message_at: new Date().toISOString(),
+      }),
+    }).catch(() => {});
+
+    // El aviso de cortesía sale UNA sola vez porque la conversación queda en
+    // 'human': el siguiente mensaje entra por la rama de arriba y ya no llega
+    // aquí. Es texto fijo, no cuesta un mensaje de agente.
+    const cortes = agent?.tone === 'informal'
+      ? 'Gracias por escribirnos. En un momento te responde una persona del equipo.'
+      : 'Gracias por escribirnos. En un momento le responde una persona del equipo.';
+    if (typeof send === 'function') {
+      await send(connection, contactId, cortes).catch(() => {});
+      await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
+        method: 'POST', headers: sb(),
+        body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: cortes }),
+      }).catch(() => {});
+    }
+
+    await avisarAlResponsable(connection.user_id, conv, textoMensaje).catch(() => {});
+    await avisarDelCupo(connection.user_id, cupo).catch(() => {});
+    return { ok: true, cupoAgotado: true, conversationId: conv.id, leadId: conv.lead_id || null };
+  }
+  // Y si le queda poco, se le avisa a la cuenta antes de que se acabe.
+  if (cupo && !cupo.error && cupo.avisar) await avisarDelCupo(connection.user_id, cupo).catch(() => {});
+
   const hist = await fetch(
     `${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=eq.${conv.id}&select=role,content,adjunto_url,adjunto_tipo,adjunto_mime&order=created_at.desc&limit=12`,
     { headers: sb() }
@@ -1726,6 +1771,10 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     if (faltan > 0) await new Promise(r => setTimeout(r, faltan));
     if (visible) {
       try { await send(connection, contactId, visible); } catch (e) { console.error('send error', e); }
+      // Ese mensaje ya está gastado. Se suma al vuelo porque el conteo se
+      // cachea un minuto: sin esto, una ráfaga de mensajes seguidos seguiría
+      // viendo el número de hace un rato y el corte llegaría tarde.
+      sumarUno(connection.user_id);
     }
     // Las fotos, detrás del mensaje. Si el envío de una falla, se sigue con las
     // demás: media galería es mejor que ninguna, y el texto ya salió.

@@ -9,6 +9,17 @@
       "texto": "Si tu plan no es de agencia, ya no verás el selector «Cliente» en la parte de arriba. Tu cuenta trabaja siempre sobre tu negocio: tus leads, tus procesos de venta y tus etapas están en un solo lugar, sin un segundo espacio donde algo pudiera quedar escondido. Las cuentas de agencia siguen eligiendo cliente como siempre."
     },
     {
+      "id": "2026-09-29-corte-cupo",
+      "fecha": "2026-09-29",
+      "tipo": "nuevo",
+      "titulo": "Si se acaban los mensajes, tu contacto no se queda esperando",
+      "texto": "Cuando tu cuenta agota los mensajes del mes, el agente deja de responder, pero la conversación no se queda muda: el mensaje se guarda, el contacto recibe un aviso de que le responde una persona, y la conversación entra al inbox marcada como no leída para que la atienda tu equipo. Además te avisamos por correo cuando te queda el 20% y cuando se acaban, una sola vez cada uno. Y si por algo nuestro no podemos consultar tu consumo, el agente sigue contestando: un problema nuestro no puede dejarte sin servicio.",
+      "accion": {
+        "texto": "Ver mi consumo",
+        "ir": "conversaciones"
+      }
+    },
+    {
       "id": "2026-09-29-consumo-agente",
       "fecha": "2026-09-29",
       "tipo": "nuevo",

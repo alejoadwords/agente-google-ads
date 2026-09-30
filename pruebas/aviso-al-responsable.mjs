@@ -53,9 +53,19 @@ console.log('\nY se llama desde donde el agente ya no contesta');
   ok(rama > 0 && finRama > rama, 'la rama de «en manos de una persona» existe');
   ok(motor.slice(rama, finRama).includes('avisarAlResponsable'),
      'y el aviso se dispara ahí dentro');
-  const despues = motor.slice(finRama);
-  ok(!despues.slice(0, 4000).includes('avisarAlResponsable('),
-     'y NO en la rama donde contesta el agente');
+  // La regla no es «solo en esa rama», es «solo cuando la conversación queda en
+  // manos de una persona». Eso pasa en dos sitios: cuando ya lo estaba, y
+  // cuando el cupo del mes se agota y el agente deja de contestar. Lo que no
+  // puede pasar es que suene mientras el agente atiende con normalidad, que
+  // sería un aviso por cada mensaje de cada conversación.
+  const llamadas = [...motor.matchAll(/await avisarAlResponsable\(/g)].map(m => m.index);
+  const iCorte = motor.indexOf('const cupo = await estadoDeCupo(connection.user_id');
+  const finCorte = motor.indexOf('return { ok: true, cupoAgotado: true', iCorte);
+  const dentroDeAlguno = (i) => (i > rama && i < finRama) || (i > iCorte && i < finCorte);
+  ok(llamadas.length > 0 && llamadas.every(dentroDeAlguno),
+     'y NO se avisa mientras el agente atiende con normalidad',
+     llamadas.length + ' llamada(s), fuera de sitio: ' + llamadas.filter(i => !dentroDeAlguno(i)).length);
+  ok(iCorte > 0 && finCorte > iCorte, 'el corte por cupo agotado también avisa al responsable');
 }
 
 console.log('\nEl enlace del aviso abre la conversación');
