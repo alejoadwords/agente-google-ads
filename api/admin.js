@@ -24,6 +24,11 @@ const CORS = {
 };
 
 function authCheck(req) {
+  // Sin ADMIN_SECRET configurado, `undefined === undefined` dejaba pasar una
+  // petición SIN cabecera como si fuera el panel. En producción está puesta
+  // (comprobado el 30-09-2026), pero un entorno sin ella no puede abrir el
+  // panel a cualquiera.
+  if (!ADMIN_SECRET) return false;
   return req.headers['x-admin-secret'] === ADMIN_SECRET;
 }
 
@@ -421,8 +426,13 @@ async function handleDeleteTestUser(req, res) {
 // transacción: descubre las tablas por su columna (user_id, owner_user_id…) en
 // cada llamada, así que una tabla nueva queda cubierta sola; si algo choca,
 // no se borra nada. acceso_cuentas se conserva (quién entró a qué cuenta).
+// Los correos del equipo de Acuarius, que el panel NUNCA puede borrar. La
+// variable se suma a los tres de siempre (los mismos que usa el resto de la
+// API): si ADMIN_EMAILS faltara en algún entorno, el bloqueo no se apaga solo.
+const ADMIN_BASE = ['alejandro.gonzalez.ads@gmail.com', 'alejandro@acuarius.app', 'admin@acuarius.app'];
 function correosDeAdmin() {
-  return String(process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const deVariable = String(process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  return Array.from(new Set([...ADMIN_BASE, ...deVariable]));
 }
 
 async function rpc(fn, args) {

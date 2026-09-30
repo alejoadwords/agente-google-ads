@@ -51,6 +51,9 @@ const NECESARIAS = [
   'SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'CLERK_SECRET_KEY', 'TOKENS_KEY',
   'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN',
   'GOOGLE_ADS_MCC_ID', 'CRON_SECRET', 'LINK_SECRET',
+  // borrar-cuenta.mjs las necesita: sin ADMIN_EMAILS la prueba no podía ver el
+  // bloqueo de las cuentas del equipo y salía en rojo con el código bien.
+  'ADMIN_EMAILS', 'ADMIN_SECRET',
 ];
 
 async function entorno() {
