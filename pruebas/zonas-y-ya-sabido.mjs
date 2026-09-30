@@ -61,4 +61,12 @@ for (const [t, e] of [
 ]) ok(m.pideNumero(t) === e, (e ? 'se detecta: ' : 'pasa: ') + t);
 ok((eng.match(/pideNumero\(/g) || []).length >= 4, 'el guardián está en producción y en el probador');
 ok(m.tutea('Déjame mostrarle las opciones') && !m.tutea('Déjeme mostrarle las opciones'), '«déjame» es tuteo; «déjeme», no');
+console.log('Metraje');
+const A = t => JSON.stringify(m.areaDelTexto(t));
+ok(A('busco un local de unos 100 metros') === '{"min":80,"max":150}', '«unos 100 metros» es aproximado: de 80 a 150 m²');
+ok(A('mínimo 80 m²') === '{"min":80,"max":null}' && A('máximo 60 metros cuadrados') === '{"min":null,"max":60}', 'mínimo y máximo');
+ok(A('entre 80 y 120 metros') === '{"min":80,"max":120}', 'un rango');
+ok(A('a 100 metros de la playa') === 'null', 'una distancia no es un tamaño');
+ok(A('hasta 6.000.000') === 'null' && m.presupuestoDelTexto('máximo 60 metros cuadrados') === null, 'ni la plata es metraje ni el metraje es plata');
+ok(/area=not\.is\.null/.test(eng) && /otroTamano/.test(eng), 'solo filtra si el catálogo tiene metraje, y si no hay de ese tamaño lo dice');
 process.exit(mal ? 1 : 0);

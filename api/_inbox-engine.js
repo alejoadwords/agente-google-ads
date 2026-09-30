@@ -265,6 +265,20 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
   // `gte` y no `eq`: nunca se ofrece menos de lo que pidió, y si algo más
   // grande le cabe en el presupuesto, que lo vea.
   if (pistas.habitaciones) q += `&habitaciones=gte.${pistas.habitaciones}`;
+  // Por tamaño, solo si el catálogo lo tiene (el de Domus sí; el de una web o
+  // un archivo, no). Filtrar un catálogo sin metraje lo dejaría vacío y el
+  // agente diría «no tengo nada» teniendo de todo.
+  let filtroArea = '';
+  if (pistas.metraje && (pistas.metraje.min || pistas.metraje.max)) {
+    const conArea = await fetch(`${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
+      (clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null') + '&area=not.is.null&select=id&limit=1',
+      { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    if (conArea.length) {
+      if (pistas.metraje.min) filtroArea += `&area=gte.${pistas.metraje.min}`;
+      if (pistas.metraje.max) filtroArea += `&area=lte.${pistas.metraje.max}`;
+      q += filtroArea;
+    }
+  }
   // Y por tipo. Alguien que pide una casa no quiere que le ofrezcan un local:
   // pasó, y el agente lo presentó como «lo más cercano que tengo».
   if (pistas.tipo) q += `&tipo=eq.${encodeURIComponent(pistas.tipo)}`;
@@ -291,11 +305,23 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
     // se quedaba sin nada que enseñar justo cuando tenía la respuesta buena, y
     // acababa ofreciendo lo primero que pillaba. Se avisa de que son otras
     // zonas para que lo diga, no para que lo disimule.
-    let ampliado = false;
+    let ampliado = false, otroTamano = false;
+    const traer = (u) => fetch(u, { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    const sinArea = (u) => (filtroArea ? u.replace(filtroArea, '') : u);
+    // Primero se suelta el tamaño y se mantiene la zona: quien pide un local de
+    // 100 m² en el norte prefiere uno de 70 en el norte que uno de 100 en
+    // Soledad. Si ni así, se suelta la zona.
+    if (!filas.length && filtroArea) {
+      filas = await traer(sinArea(q));
+      if (filas.length) otroTamano = true;
+    }
     if (!filas.length && pistas.barrio) {
       ampliado = true;
-      filas = await fetch(q.replace(filtroBarrio, ''),
-        { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      filas = await traer(q.replace(filtroBarrio, ''));
+      if (!filas.length && filtroArea) {
+        filas = await traer(sinArea(q.replace(filtroBarrio, '')));
+        if (filas.length) otroTamano = true;
+      }
     }
 
     const lineas = (filas || []).map(f => {
@@ -320,7 +346,11 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
         f.fotos?.length ? 'con fotos' : null,
       ].filter(Boolean).join(' · ');
     });
-    return { lineas, total: lineas.length, ampliado, barrioPedido: pistas.barrio || null, zona: zona?.zona || null };
+    const tamanoPedido = filtroArea ? (pistas.metraje.min && pistas.metraje.max
+      ? `entre ${pistas.metraje.min} y ${pistas.metraje.max} m²`
+      : pistas.metraje.min ? `de ${pistas.metraje.min} m² o más` : `de hasta ${pistas.metraje.max} m²`) : null;
+    return { lineas, total: lineas.length, ampliado, barrioPedido: pistas.barrio || null, zona: zona?.zona || null,
+      otroTamano, tamanoPedido };
   } catch { return { lineas: [], total: 0 }; }
 }
 
@@ -406,6 +436,30 @@ function nombreEnTexto(texto, mapa) {
   return mejor?.original || null;
 }
 
+// Qué tamaño pidió: «de unos 100 metros», «100 m2», «mínimo 80 m²», «máximo
+// 60 metros», «entre 80 y 120 metros». Devuelve {min, max} en m² o null.
+//
+// Un número suelto se lee como aproximado: quien pide «un local de 100 metros»
+// acepta uno de 96 y probablemente uno de 140, pero no uno de 40 ni uno de
+// 400. De ahí el margen (80 % a 150 %). «A 100 metros de la playa» es una
+// distancia, no un tamaño, y no cuenta.
+const M2 = '(?:m2|m²|mts2?|mt2?|metros?(?: cuadrados)?|mtrs)';
+export function areaDelTexto(texto) {
+  const t = sinTildes(texto).replace(/(\d)\.(\d{3})\b/g, '$1$2');
+  const sinDistancias = t.replace(new RegExp('\\ba\\s+(?:unos\\s+)?\\d+\\s*' + M2 + '\\s+de\\b', 'g'), ' ');
+  const n = (v) => { const x = parseInt(v, 10); return x >= 10 && x <= 100000 ? x : null; };
+  let m = sinDistancias.match(new RegExp('entre\\s+(\\d+)\\s*(?:' + M2 + ')?\\s+y\\s+(\\d+)\\s*' + M2));
+  if (m && n(m[1]) && n(m[2])) return { min: Math.min(n(m[1]), n(m[2])), max: Math.max(n(m[1]), n(m[2])) };
+  m = sinDistancias.match(new RegExp('(minimo|al menos|mas de|desde|mayor a|superior a|no menos de)\\s+(?:de\\s+)?(\\d+)\\s*' + M2));
+  if (m && n(m[2])) return { min: n(m[2]), max: null };
+  m = sinDistancias.match(new RegExp('(maximo|hasta|menos de|no mas de|no mayor a)\\s+(?:de\\s+)?(\\d+)\\s*' + M2));
+  if (m && n(m[2])) return { min: null, max: n(m[2]) };
+  const todas = [...sinDistancias.matchAll(new RegExp('(\\d+)\\s*' + M2 + '(?![a-z])', 'g'))];
+  if (!todas.length) return null;
+  const x = n(todas[todas.length - 1][1]);
+  return x ? { min: Math.round(x * 0.8), max: Math.round(x * 1.5) } : null;
+}
+
 // Cuántas habitaciones pidió: «3 habitaciones», «de 3 alcobas», «3 hab».
 export function habitacionesDelTexto(texto) {
   const t = sinTildes(texto);
@@ -481,6 +535,7 @@ export async function pistasDelContacto(userId, clientId, mensajes = []) {
     // «cualquier rango de precio» no es un presupuesto: es quitarlo.
     presupuesto: plata === 'libre' ? null : plata,
     habitaciones: buscar(habitacionesDelTexto),
+    metraje: buscar(areaDelTexto),
   };
 }
 
@@ -646,6 +701,7 @@ export function pistasDeBusqueda(capturado = {}, respuestas = {}, delContacto = 
     barrio: delContacto.barrio || capturado.zona || capturado.barrio || deCriterio('zona', 'barrio', 'sector') || null,
     presupuesto: delContacto.presupuesto || aPlata(capturado.presupuesto) || aPlata(deCriterio('presupuesto', 'canon', 'precio')),
     habitaciones: delContacto.habitaciones || cuantas(capturado.habitaciones) || cuantas(deCriterio('habitacion', 'alcoba', 'cuarto', 'dormitorio')),
+    metraje: delContacto.metraje || areaDelTexto(String(deCriterio('metr', 'tamano', 'tamaño', 'area', 'área') || '').replace(/^(\d+)$/, '$1 m2')) || null,
   };
 }
 
@@ -933,7 +989,8 @@ LO QUE NO PUEDES INVENTAR — ESTO ES INNEGOCIABLE:
 ${propiedades && propiedades.lineas.length ? `LO QUE HAY DISPONIBLE AHORA MISMO (${propiedades.total} opciones que encajan con lo que te dijeron):
 ${propiedades.lineas.join('\n')}
 
-Sobre esta lista:${propiedades.ampliado ? `
+Sobre esta lista:${propiedades.otroTamano ? `
+- OJO: del tamaño que pidió (${propiedades.tamanoPedido}) no hay NADA. Estas son de otros tamaños: fíjate en los m² de cada una. Dilo antes de enseñarlas —"de ese tamaño no tengo ahora mismo, pero tengo estas"— y no las presentes como si fueran del tamaño pedido` : ''}${propiedades.ampliado ? `
 - OJO: en ${propiedades.zona ? 'la zona ' + propiedades.zona : propiedades.barrioPedido} no hay NADA que encaje. Estas son de OTRAS zonas de la misma ciudad. Dilo antes de enseñarlas —"en ${propiedades.barrioPedido} no tengo nada ahora mismo, pero sí en otras zonas"— y no las presentes como si fueran de ahí` : ''}
 - Es lo unico que puedes ofrecer. Si te preguntan por algo que no esta aqui, no lo inventes: dilo y ofrece pasar la conversacion a un asesor
 - Menciona como mucho tres opciones por mensaje y pregunta cual le interesa
