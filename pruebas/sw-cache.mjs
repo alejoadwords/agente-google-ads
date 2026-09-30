@@ -19,7 +19,7 @@ const chk = (n, ok, extra) => {
 };
 
 // ── Un navegador de mentira, con lo justo ───────────────────────────────────
-function montar({ enRed = {}, enCache = {}, redCae = false } = {}) {
+function montar({ enRed = {}, enCache = {}, redCae = false, tarda = 0, error500 = false } = {}) {
   const guardado = new Map(Object.entries(enCache));
   const pedidasARed = [];
   const cache = {
@@ -38,6 +38,8 @@ function montar({ enRed = {}, enCache = {}, redCae = false } = {}) {
     const p = clave(req);
     pedidasARed.push({ p, metodo: (req && req.method) || 'GET' });
     if (redCae) throw new Error('sin red');
+    if (tarda) await new Promise(r => setTimeout(r, tarda));
+    if (error500) return { ok: false, status: 500, clone: () => ({}), cuerpo: 'ERROR' };
     const v = enRed[p];
     if (v === undefined) return { ok: false, status: 404, clone: () => ({}), cuerpo: null };
     return { ok: true, status: 200, cuerpo: v, clone() { return { ...this }; } };
@@ -71,17 +73,35 @@ async function pedir(entorno, req) {
 
 const R = (u, o) => ({ url: new URL(u, 'https://app.acuarius.app').href, method: (o && o.method) || 'GET', mode: (o && o.mode) || 'cors' });
 
-console.log('\nAbre al instante con lo guardado\n');
+console.log('\nUna recarga trae SIEMPRE la versión nueva\n');
 {
+  // El 29-09-2026 se arregló un fallo en producción, el cliente recargó delante
+  // de Alejandro y siguió viéndolo: la caché respondía primero y lo nuevo
+  // quedaba «para la próxima». Esto es lo que no puede volver a pasar.
   const e = montar({ enCache: { '/app.js': { ok: true, cuerpo: 'VIEJO', clone() { return this; } } },
                      enRed:   { '/app.js': 'NUEVO' } });
   const res = await pedir(e, R('/app.js'));
-  chk('responde con la copia guardada, no espera a la red', res?.cuerpo === 'VIEJO', JSON.stringify(res?.cuerpo));
-  // Y la red va por detrás: la próxima vez ya estará lo nuevo.
+  chk('con red, responde con la versión NUEVA aunque haya una guardada', res?.cuerpo === 'NUEVO', JSON.stringify(res?.cuerpo));
   await new Promise(r => setTimeout(r, 10));
-  chk('pero pide la nueva por detrás', e.pedidasARed.some(x => x.p === '/app.js'));
-  chk('y la guarda para la próxima', e.guardado.get('/app.js')?.cuerpo === 'NUEVO',
+  chk('y la guarda, para cuando no haya red', e.guardado.get('/app.js')?.cuerpo === 'NUEVO',
       JSON.stringify(e.guardado.get('/app.js')?.cuerpo));
+  chk('el plazo es de 3 segundos', /const ESPERA_RED = 3000;/.test(sw));
+}
+
+console.log('\nSin red útil, lo guardado\n');
+{
+  const guardada = { '/app.js': { ok: true, cuerpo: 'GUARDADO', clone() { return this; } } };
+  const lenta = montar({ enCache: guardada, enRed: { '/app.js': 'NUEVO' }, tarda: 3600 });
+  const t0 = Date.now();
+  const r1 = await pedir(lenta, R('/app.js'));
+  chk('si el servidor no empieza a responder en 3 s, abre con lo guardado', r1?.cuerpo === 'GUARDADO' && Date.now() - t0 < 3500,
+      JSON.stringify(r1?.cuerpo) + ' en ' + (Date.now() - t0) + ' ms');
+  const caido = montar({ enCache: guardada, error500: true });
+  const r2 = await pedir(caido, R('/app.js'));
+  chk('un error del servidor no reemplaza a la copia buena', r2?.cuerpo === 'GUARDADO', JSON.stringify(r2?.cuerpo));
+  const lentaSinNada = montar({ enRed: { '/app.js': 'NUEVO' }, tarda: 3200 });
+  const r3 = await pedir(lentaSinNada, R('/app.js'));
+  chk('sin nada guardado, espera a la red aunque tarde', r3?.cuerpo === 'NUEVO', JSON.stringify(r3?.cuerpo));
 }
 
 console.log('\nLa primera visita no se queda sin nada\n');
@@ -171,14 +191,19 @@ console.log('\nLas páginas que NO son la aplicación llegan a la red\n');
   }
 }
 
-console.log('\nY las rutas que SÍ son la aplicación siguen abriendo al instante\n');
+console.log('\nY las rutas que SÍ son la aplicación reciben la carcasa nueva\n');
 {
+  // Con red, la carcasa NUEVA; guardada, solo de respaldo. Antes esto
+  // comprobaba que salía de la caché, que era justo el problema.
   for (const ruta of ['/', '/crm', '/crm/lead/abc-123', '/marketing/campanas', '/analisis']) {
-    const e = montar({ enCache: { '/': { ok: true, cuerpo: 'SHELL', clone() { return this; } } },
-                       enRed: { '/': 'SHELL' } });
+    const e = montar({ enCache: { '/': { ok: true, cuerpo: 'SHELL-VIEJO', clone() { return this; } } },
+                       enRed: { '/': 'SHELL-NUEVO' } });
     const res = await pedir(e, R(ruta, { mode: 'navigate' }));
-    chk(`${ruta} sale de la caché`, res?.cuerpo === 'SHELL', res ? JSON.stringify(res.cuerpo) : 'no respondió');
+    chk(`${ruta} recibe la carcasa nueva`, res?.cuerpo === 'SHELL-NUEVO', res ? JSON.stringify(res.cuerpo) : 'no respondió');
   }
+  const sinRed = montar({ redCae: true, enCache: { '/': { ok: true, cuerpo: 'SHELL-VIEJO', clone() { return this; } } } });
+  const r = await pedir(sinRed, R('/crm', { mode: 'navigate' }));
+  chk('y sin red, abre con la guardada', r?.cuerpo === 'SHELL-VIEJO', r ? JSON.stringify(r.cuerpo) : 'no respondió');
 }
 
 console.log('\nSubir la versión de la caché tira la anterior\n');

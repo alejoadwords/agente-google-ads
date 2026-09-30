@@ -15,10 +15,19 @@
 // app.js antes de pintar nada. Abrir y ver el logo girando es el delator
 // número uno de que aquello es una web, no una app.
 //
-// La estrategia es «de la caché al instante, y se revalida por detrás»:
-//   · se responde con lo guardado, que es lo que hace que abra de golpe
-//   · en paralelo se pide la versión nueva y se guarda para la próxima
-//   · si cambió, la barra de versión se lo dice al usuario
+// La estrategia, desde el 29-09-2026, es «primero la red, con plazo»:
+//   · se pide la versión nueva; si el servidor empieza a responder en
+//     ESPERA_RED, se usa esa y se guarda
+//   · sin red, o si tarda más, se usa lo guardado, que es lo que hace que la
+//     app instalada abra igual en un sitio sin cobertura
+//
+// Antes era «de la caché al instante, y se revalida por detrás», y eso tenía
+// un coste que no se veía desde aquí: la PRIMERA recarga después de un
+// despliegue enseñaba siempre la versión anterior. El 29-09-2026 se arregló en
+// producción el fallo de Karvio con sus procesos de venta, el cliente recargó
+// delante de Alejandro en plena capacitación… y siguió viendo el fallo. Un
+// arreglo que no llega al recargar es, para quien lo mira, un arreglo que no
+// existe.
 //
 // Lo que NUNCA se cachea, y por qué:
 //   · /api/*        — son los datos. Servir un lead viejo sería mentir.
@@ -79,9 +88,15 @@ function esRutaDeApp(p) {
   return RUTAS_APP.some((r) => r !== '/' && (ruta === r || ruta.startsWith(r + '/')));
 }
 
-// De la caché al instante; la copia nueva se guarda para la próxima vez.
-function deCacheYRevalida(req) {
-  return caches.open(CACHE).then((c) => c.match(req).then((hit) => {
+// Cuánto se espera a que el servidor EMPIECE a responder. `fetch` se resuelve
+// con las cabeceras, no con los 2,2 MB del cuerpo, así que esto mide si hay
+// red, no si la red es rápida: una conexión lenta pero viva sigue trayendo la
+// versión nueva.
+const ESPERA_RED = 3000;
+
+// Primero la red; lo guardado solo si no hay red o no contesta a tiempo.
+function redPrimero(req) {
+  return caches.open(CACHE).then((c) => {
     const enRed = fetch(req).then((res) => {
       // Solo se guarda lo que vino bien. Cachear un 500 o el HTML de un error
       // deja la aplicación rota hasta que alguien limpie el navegador, que es
@@ -89,10 +104,15 @@ function deCacheYRevalida(req) {
       if (res && res.ok && res.status === 200) c.put(req, res.clone()).catch(() => {});
       return res;
     }).catch(() => null);
-    // Con algo guardado se responde YA y la red va por detrás. Sin nada
-    // guardado —primera visita— se espera a la red, como antes.
-    return hit || enRed.then((r) => r || caches.match(OFFLINE));
-  }));
+    const plazo = new Promise((ok) => setTimeout(() => ok(null), ESPERA_RED));
+    return Promise.race([enRed, plazo]).then((res) => {
+      if (res && res.ok) return res;
+      // La red falló, contestó con error o no llegó a tiempo: lo guardado. Sin
+      // nada guardado, lo que diga la red —aunque sea tarde o un error—, y si
+      // no hay red, la página de cortesía.
+      return c.match(req).then((hit) => hit || res || enRed.then((r) => r || caches.match(OFFLINE)));
+    });
+  });
 }
 
 self.addEventListener('fetch', (e) => {
@@ -121,12 +141,12 @@ self.addEventListener('fetch', (e) => {
     // Se pide siempre '/' y no la ruta concreta: el catch-all de vercel.json
     // devuelve el mismo shell para todas, así que guardar por ruta dejaría una
     // copia idéntica por cada pantalla visitada.
-    e.respondWith(deCacheYRevalida(new Request('/', { credentials: 'same-origin' })));
+    e.respondWith(redPrimero(new Request('/', { credentials: 'same-origin' })));
     return;
   }
 
   if (esApp(url) || PRECARGA.includes(url.pathname)) {
-    e.respondWith(deCacheYRevalida(req));
+    e.respondWith(redPrimero(req));
   }
 });
 // ── Avisos push ─────────────────────────────────────────────────────────────
