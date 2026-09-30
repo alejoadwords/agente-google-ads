@@ -528,6 +528,9 @@ const TUTEA = new RegExp('(^|[^a-záéíóúñ])(' + [
   // serían «mire» y «elija»: no hay forma de confundirlos.
   'hayas', 'hagas', 'digas', 'puedas', 'quieras', 'tengas', 'necesites', 'estés',
   'seas', 'sepas', 'vengas', 'vayas', 'mira', 'elige', 'dame',
+  // «Déjame mostrarle…» (30-09-2026, agente de Certain en usted): en usted es
+  // «déjeme», así que tampoco hay confusión posible.
+  'déjame', 'dejame', 'mírame', 'mirame', 'escúchame', 'escuchame', 'espérame', 'esperame',
 ].join('|') + ')([^a-záéíóúñ]|$)', 'i');
 
 export function tutea(texto) {
@@ -1227,6 +1230,13 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
     if (corregido && !inventos(cleanForUser(corregido), citable).length) { bruto = corregido; texto = cleanForUser(corregido).trim(); }
   }
 
+  if (capturado.celular && pideNumero(texto)) {
+    const sinPedir = await reintento('Tu mensaje anterior NO se envió: le pedías su número, y YA lo tienes (' + capturado.celular + '). ' +
+      'Escríbelo otra vez sin pedirle el número. Si hace falta que le llamen, a lo sumo confirma «¿le llamamos a este mismo número?». ' +
+      'El contacto no vio nada: no te disculpes ni lo menciones.');
+    if (sinPedir && !pideNumero(cleanForUser(sinPedir))) { bruto = sinPedir; texto = cleanForUser(sinPedir).trim(); }
+  }
+
   if (condicionaAlDato(texto)) {
     const sinCobrar = await reintento('Tu mensaje anterior NO se envió: le condicionabas lo que pidió a que te diera un dato («antes de…», «primero necesito…»). ' +
       'Escríbelo otra vez dándole PRIMERO lo que pidió —las opciones, las fotos, la respuesta— y, al final y sin condiciones, pide el dato que te falte. ' +
@@ -1653,6 +1663,17 @@ export function condicionaAlDato(texto) {
   ));
 }
 
+// ¿Pide un número que ya tenemos? Con el número en el prompt («YA TIENES SU
+// NUMERO») Haiku lo seguía pidiendo en WhatsApp —«¿me comparte un número para
+// que un asesor le confirme?»— a quien escribía desde ese mismo número. Confirmar
+// «¿le llamamos a este mismo número?» SÍ vale: eso no es pedirlo.
+export function pideNumero(texto) {
+  const t = sinTildes(texto);
+  if (/(este|ese|mismo|este mismo) (numero|celular|whatsapp)/.test(t)) return false;
+  return /\b(me (comparte|da|regala|indica|pasa|deja|facilita|confirma)|comparta(me)?|compartame|regaleme|indiqueme|digame|me podria (dar|compartir|pasar)|puede (darme|compartirme|pasarme)|cual es)\b[^.?!]{0,40}\b(numero|celular|telefono|whatsapp)\b/.test(t)
+    || /\b(su|tu) (numero|celular|telefono)( de contacto| celular)?\s*\?/.test(t);
+}
+
 // ¿Le estamos diciendo que no?
 export function descartaAlContacto(texto) {
   const t = String(texto || '').toLowerCase();
@@ -1980,6 +2001,17 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   //
   // Quien viene a ofrecernos algo es una oportunidad, y quien decide si encaja
   // es un asesor con el caso delante.
+  const numeroSabido = capturedData.celular || conocido.celular || null;
+  if (numeroSabido && pideNumero(cleanForUser(reply))) {
+    const sinPedir = await responderViendo(system, hist, [
+      { role: 'assistant', content: reply },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió: le pedías su número, y YA lo tienes (' + numeroSabido + '). ' +
+        'Escríbelo otra vez sin pedirle el número. Si hace falta que le llamen, a lo sumo confirma «¿le llamamos a este mismo número?». ' +
+        'El contacto no vio nada y no te ha corregido: no te disculpes ni lo menciones.' },
+    ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
+    if (sinPedir && !pideNumero(cleanForUser(sinPedir))) reply = sinPedir;
+  }
+
   if (condicionaAlDato(cleanForUser(reply))) {
     const sinCobrar = await responderViendo(system, hist, [
       { role: 'assistant', content: reply },

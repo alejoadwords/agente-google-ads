@@ -52,4 +52,13 @@ for (const [t, e] of [
   ['Antes de agendar la visita, revise que el horario le sirva. ¿Le queda bien el martes?', false],
 ]) ok(m.condicionaAlDato(t) === e, (e ? 'se detecta: ' : 'pasa: ') + t.slice(0, 60));
 ok((eng.match(/if \(condicionaAlDato\(/g) || []).length === 2, 'el guardián está en producción y en el probador');
+console.log('No se pide un número que ya tenemos');
+for (const [t, e] of [
+  ['¿Me comparte un número para que un asesor le confirme disponibilidad?', true],
+  ['Para que lo llamen ya, ¿me comparte su número de celular?', true],
+  ['¿Le llamamos a este mismo número?', false],
+  ['¿Me dice su nombre para dejarlo anotado?', false],
+]) ok(m.pideNumero(t) === e, (e ? 'se detecta: ' : 'pasa: ') + t);
+ok((eng.match(/pideNumero\(/g) || []).length >= 4, 'el guardián está en producción y en el probador');
+ok(m.tutea('Déjame mostrarle las opciones') && !m.tutea('Déjeme mostrarle las opciones'), '«déjame» es tuteo; «déjeme», no');
 process.exit(mal ? 1 : 0);
