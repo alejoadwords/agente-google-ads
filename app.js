@@ -1065,6 +1065,9 @@ function agencySoloElMio() {
 // agencia por un solo proceso y le escondería leads.
 let _agencyCargada = false;
 function crmCuentaSinCartera() {
+  // Lo que no es agencia nunca tiene cartera: es un solo negocio. Se sabe por
+  // el plan, sin esperar a leer los clientes.
+  if (typeof esCuentaAgencia === 'function' && !esCuentaAgencia()) return true;
   return _agencyCargada && !(agencyClients || []).length;
 }
 
@@ -18038,8 +18041,13 @@ function crmSetView(v) {
 // cliente estas viendo TODOS los clientes a la vez, y cada uno tiene etapas
 // propias: no hay un tablero comun posible salvo por las tres claves que todo
 // proceso comparte por diseño. Asi ninguna oportunidad se queda fuera.
+//
+// Y eso es SOLO de una agencia con cartera. Una cuenta sin clientes también
+// está siempre «sin cliente activo», y caía aquí: Karvio y cualquier cuenta
+// nueva veían Abiertas/Ganadas/Perdidas en lugar de sus etapas, y editar el
+// proceso no cambiaba nada en el tablero (29-09-2026).
 function crmVistaGlobal() {
-  return !crmAmbitoCliente();
+  return !crmAmbitoCliente() && !crmCuentaSinCartera();
 }
 
 function crmColumnasTablero(leads) {

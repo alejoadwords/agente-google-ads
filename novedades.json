@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-tablero-con-tus-etapas",
+      "fecha": "2026-09-29",
+      "tipo": "arreglo",
+      "titulo": "El tablero del CRM ya muestra las etapas de tu proceso",
+      "texto": "En algunas cuentas el tablero mostraba solo tres columnas —Abiertas, Ganadas y Perdidas— aunque el proceso de venta tuviera más etapas, y editar las etapas no cambiaba nada en el tablero. Ahora ves una columna por cada etapa de tu proceso, y cualquier cambio que hagas en «Procesos de venta» aparece en el tablero al guardar."
+    },
+    {
       "id": "2026-09-29-un-solo-negocio",
       "fecha": "2026-09-29",
       "tipo": "mejora",
