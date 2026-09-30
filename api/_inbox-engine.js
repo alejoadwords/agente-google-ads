@@ -641,7 +641,7 @@ ${reglaDeResaltado(canal)}
 - No menciones que eres IA, bot ni asistente virtual. Si alguien pregunta directamente si eres IA o humano, responde con naturalidad sin confirmar ni negar, como haría alguien que quiere mantener la conversación
 - Si no sabes algo, dilo con naturalidad y ofrece ayudar de otra forma
 - Cuando alguien muestre interés genuino, busca conocer su nombre de forma natural en la conversación
-- Para conseguir su contacto (${(agent.capture_fields || ['nombre', 'celular']).join(', ')}), hazlo dentro del flujo natural, no como formulario
+- Los datos que necesitas de esta persona son: ${(agent.capture_fields || ['nombre', 'celular']).join(', ')}. Pídelos dentro de la conversación, no de golpe como un formulario — pero el número de contacto no espera, mira más abajo
 - Si alguien quiere hablar con una persona real, responde: "${agent.escalate_phrase || 'Claro, en un momento te comunico con un asesor. ¿Me das un segundo?'}" y en ese caso incluye [ESCALAR] al final de tu mensaje
 - Nunca seas agresivo ni insistente con la venta
 
@@ -650,19 +650,22 @@ NINGUN MENSAJE TUYO TERMINA SIN UNA PREGUNTA:
 - Tambien despues de mandar fotos, despues de responder una duda y despues de dar un precio. Un mensaje que termina sin pregunta deja a la persona sin saber que sigue, y ahi es donde se enfrian las conversaciones
 - La unica excepcion es cuando te despides porque la persona se despidio
 
-EL TELEFONO, CUANTO ANTES:
-- Pidelo en tus primeros mensajes, en cuanto la persona muestre el mas minimo interes concreto. No esperes al final
+EL TELEFONO, EN TU SEGUNDO MENSAJE COMO MUY TARDE:
+- No esperes a tenerlo todo. En cuanto la persona diga QUE busca, pideselo, y da la razon: "para que un asesor le confirme disponibilidad, ¿me comparte un numero?"
+- Puedes pedirlo y seguir conversando en el mismo mensaje. No hace falta que te lo de para continuar
 - Una conversacion que avanza mucho y se corta sin telefono es un cliente al que ya no se puede llamar: eso es lo que hay que evitar
-- Pidelo con una razon —para que un asesor le confirme, para mandarle la informacion— no como formulario
 
-EL HORARIO DE ATENCION SE RESPETA:
+EL HORARIO DE ATENCION SE RESPETA — Y SE DICE:
 - Si en tu contexto hay un horario de atencion, cualquier contacto que acuerdes tiene que caer DENTRO de el
-- Si la persona pide una hora que queda fuera, no se la confirmes: dile cual es el horario y ofrecele la franja valida mas cercana
+- Si la persona pide una hora que queda fuera, NO respondas "perfecto" ni "de acuerdo". Di que a esa hora no hay nadie, cual es el horario, y ofrece la franja valida mas cercana
+- Asi, no de otra forma: "A esa hora ya no estamos; atendemos hasta las 5:00 p. m. ¿Le viene bien que le llamen mañana sobre las 4:00?"
 - Por chat puedes atender a cualquier hora, pero una llamada o un contacto de un asesor solo en horario
 
-SI QUIEREN QUE LES VENDAMOS O ADMINISTREMOS SU INMUEBLE:
-- Eso lo decide un asesor, no tu. No descartes a nadie por la zona, el estrato, el tipo de inmueble ni sus caracteristicas, aunque en tu contexto figure que no se manejan
-- Tu trabajo aqui es tomar los datos del inmueble y de la persona, y pasarla a un asesor. Decirle que no a alguien que viene a ofrecernos un inmueble cierra una puerta que quiza estaba abierta
+SI QUIEREN QUE LES VENDAMOS, ARRENDEMOS O ADMINISTREMOS SU INMUEBLE:
+- NO digas que no. Ni "no manejamos ese estrato", ni "no esta en nuestro portafolio", ni "no trabajamos esa zona". Aunque en tu contexto figure que no se maneja
+- Quien viene a ofrecernos un inmueble es una oportunidad, y quien decide si encaja es un asesor con el caso delante, no tu
+- Tu trabajo aqui es uno solo: tomar los datos del inmueble y de la persona, y pasarla a un asesor. Nada de aclaraciones sobre lo que no hacemos
+- Si sientes la tentacion de avisar de que quiza no encaje, callatelo y pasa la conversacion
 
 LO QUE NO PUEDES INVENTAR — ESTO ES INNEGOCIABLE:
 - Solo puedes afirmar precios, disponibilidad, direcciones, medidas, plazos y condiciones si aparecen literalmente aqui arriba, en tu contexto o en las preguntas frecuentes
@@ -1304,6 +1307,29 @@ async function avisarAlResponsable(userId, conv, texto) {
   } catch (e) { console.error('[push] mensaje al responsable:', e?.message); }
 }
 
+// ¿Esta persona viene a OFRECERNOS su inmueble?
+//
+// Se mira lo que escribió ella, no lo que dedujo el modelo: es la fuente, y el
+// enrutado puede no haberse decidido todavía en el primer mensaje.
+export function quiereOfrecerInmueble(mensajes = []) {
+  const suyo = (mensajes || []).filter(m => m?.role === 'user').map(m => String(m.content || '')).join(' ').toLowerCase();
+  // «vender mi apartamento», «que me lo administren», «tengo un local para arrendar».
+  return /(vender|arrendar|alquilar|administr\w+|promocionar|captar)\s+(mi|mis|nuestro|nuestra|su)\b/.test(suyo)
+    || /\b(mi|nuestro)\s+(apartamento|casa|local|oficina|bodega|inmueble|propiedad|lote|finca)\b/.test(suyo)
+    || /(quiero|quisiera|necesito|me ayudan|pueden)\s+(que\s+)?(me\s+)?(lo\s+)?(vend|arriend|alquil|administr|promocion)/.test(suyo)
+    // «tengo un local para arrendar»: el inmueble es suyo aunque no diga «mi».
+    || /\btengo (un|una|el|la|unos|unas)\s+[\wáéíóúñ]+.{0,40}?\bpara\s+(vender|arrendar|alquilar|administrar|promocionar)/.test(suyo);
+}
+
+// ¿Le estamos diciendo que no?
+export function descartaAlContacto(texto) {
+  const t = String(texto || '').toLowerCase();
+  return /no (manejamos|trabajamos|atendemos|tenemos|se manejan|maneja)/.test(t)
+    || /(no|fuera de)\s+(esta|está|estaría|estarían|entra|entran)\s+(dentro\s+)?(de\s+)?(nuestro|el)\s+portafolio/.test(t)
+    || /normalmente no (est|entr)/.test(t)
+    || /solo (manejamos|trabajamos) (con )?(vivienda|inmuebles|estratos)/.test(t);
+}
+
 // La pregunta del final, separada del resto del mensaje.
 //
 // Cuando el agente manda fotos, su texto sale ANTES de las imágenes: la persona
@@ -1605,6 +1631,33 @@ export async function processIncoming({ channel, externalId, contactId, contactN
       error: new Error('Tuteo en un agente formal'),
       usuario: connection.user_id,
       detalle: (deUsted && !tutea(cleanForUser(deUsted))) ? 'corregido al segundo intento' : 'NO se pudo corregir, salió tuteando',
+    }).catch(() => {});
+  }
+
+  // Y no descartar a quien viene a OFRECERNOS un inmueble.
+  //
+  // Pedírselo al modelo no basta: el contexto del cliente dice «NO se manejan
+  // estratos 1, 2 y 3» y el modelo lo trata como un hecho que debe contarle a
+  // la persona, por encima de cualquier instrucción de estilo. Se comprobó
+  // midiendo: con la regla escrita de tres formas distintas, siguió diciendo
+  // «no está dentro de nuestro portafolio».
+  //
+  // Quien viene a ofrecernos algo es una oportunidad, y quien decide si encaja
+  // es un asesor con el caso delante.
+  if (quiereOfrecerInmueble(hist) && descartaAlContacto(cleanForUser(reply))) {
+    const sinDescarte = await responderViendo(system, hist, [
+      { role: 'assistant', content: reply },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió. ' +
+        'Esta persona viene a ofrecernos su inmueble, y le has dicho que no encaja: eso no lo decides tú, lo decide el asesor con el caso delante. ' +
+        'Escríbelo otra vez SIN ninguna mención a estratos, portafolio, zonas que no se manejan ni a que quizá no podamos ayudarle. ' +
+        'Solo: toma nota de lo que te ha dicho, pídele lo que te falte del inmueble o su contacto, y sigue. ' +
+        'El contacto no vio nada y no te ha corregido: no te disculpes ni lo menciones.' },
+    ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
+    if (sinDescarte && !descartaAlContacto(cleanForUser(sinDescarte))) reply = sinDescarte;
+    await registrarError({
+      origen: 'inbox', donde: 'el agente descartó a quien ofrecía un inmueble',
+      error: new Error('descarte en captación: ' + cleanForUser(reply).slice(0, 160)),
+      usuario: connection.user_id,
     }).catch(() => {});
   }
 

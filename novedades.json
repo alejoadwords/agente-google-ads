@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-captacion-sin-descarte",
+      "fecha": "2026-09-29",
+      "tipo": "mejora",
+      "titulo": "A quien viene a ofrecer su inmueble ya no se le dice que no",
+      "texto": "Si alguien escribe para que le vendas, arriendes o administres su propiedad, el agente ya no le comenta que su zona o su estrato no encajan, aunque tu contexto lo diga: toma los datos del inmueble, pide el contacto y se lo pasa a un asesor, que es quien puede valorar el caso. Decirle que no a alguien que viene a ofrecernos algo cierra una puerta que quizá estaba abierta. Y si el agente se despista, el mensaje no sale: se reescribe antes de llegar al contacto."
+    },
+    {
       "id": "2026-09-29-agente-preguntas",
       "fecha": "2026-09-29",
       "tipo": "mejora",
