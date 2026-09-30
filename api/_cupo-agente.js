@@ -130,6 +130,35 @@ export async function planDeCuenta(userId) {
   } catch { return { ok: false }; }
 }
 
+// El conteo, cacheado un minuto por cuenta.
+//
+// Esto se consulta ahora en CADA mensaje entrante para decidir si el agente
+// contesta, y el cupo de entrada/salida de Supabase es lo que se agota primero
+// en este proyecto. Un minuto de desfase significa que una cuenta puede pasarse
+// del cupo por unos pocos mensajes; cortar al cliente en seco a cambio de
+// ahorrarle a nadie esos mensajes sería un mal cambio.
+//
+// El Map va por userId a propósito: una variable suelta la comparten cuentas
+// distintas en la misma instancia caliente de Vercel, que es como una cuenta
+// gratis acabó heredando el plan de una de pago.
+const _conteoCache = new Map();
+export async function consumoCacheado(userId) {
+  const hit = _conteoCache.get(userId);
+  if (hit && hit.exp > Date.now()) return hit.n;
+  const n = await consumoDelMes(userId);
+  // Un fallo no se cachea: se reintenta al siguiente mensaje.
+  if (n !== null) _conteoCache.set(userId, { n, exp: Date.now() + 60000 });
+  return n;
+}
+
+// Al gastar un mensaje se suma al vuelo, sin volver a preguntar. Sin esto, con
+// la caché de un minuto, una ráfaga de mensajes seguiría viendo el conteo de
+// hace un rato y el corte llegaría tarde.
+export function sumarUno(userId) {
+  const hit = _conteoCache.get(userId);
+  if (hit) hit.n += 1;
+}
+
 /**
  * El estado completo, que es lo que pinta la pantalla y lo que mirará el corte.
  *
@@ -138,8 +167,11 @@ export async function planDeCuenta(userId) {
  * una consulta caída está mintiendo con mucha seguridad, y quien la mire creerá
  * que no ha gastado nada.
  */
-export async function estadoDeCupo(userId) {
-  const [res, usados] = await Promise.all([planDeCuenta(userId), consumoDelMes(userId)]);
+export async function estadoDeCupo(userId, { cacheado = false } = {}) {
+  const [res, usados] = await Promise.all([
+    planDeCuenta(userId),
+    cacheado ? consumoCacheado(userId) : consumoDelMes(userId),
+  ]);
   if (usados === null) return { error: true, motivo: 'no se pudo contar el consumo' };
   if (!res.ok) return { error: true, motivo: 'no se pudo consultar el plan de la cuenta' };
   const plan = res.plan;
@@ -157,4 +189,130 @@ export async function estadoDeCupo(userId) {
     avisar: cupo > 0 && usados >= cupo * 0.8,
     desde: inicioDelMes().toISOString(),
   };
+}
+
+// ── Avisar a la cuenta ──────────────────────────────────────────────────────
+//
+// Dos correos y nada más: uno cuando queda el 20% y otro cuando se acaba. Cada
+// uno sale UNA vez al mes, porque el agente pasa por aquí en cada mensaje
+// entrante y sin freno serían decenas de correos en una tarde — la forma más
+// rápida de enseñarle a un cliente a ignorar nuestros avisos.
+//
+// La marca vive en `user_profiles` con su propia clave, que es donde ya viven
+// las reglas de calificación. Ninguna tabla nueva para guardar dos booleanos.
+const CLAVE_AVISOS = '__cupo_avisos__';
+
+function mesActual() {
+  return inicioDelMes().toISOString().slice(0, 7);   // «2026-09»
+}
+
+async function avisosDelMes(userId) {
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${encodeURIComponent(userId)}` +
+    `&agent_key=eq.${encodeURIComponent(CLAVE_AVISOS)}&select=profile_data&limit=1`,
+    { headers: sb() }
+  ).then(x => (x.ok ? x.json() : [])).catch(() => []);
+  const d = r?.[0]?.profile_data || {};
+  // De otro mes no vale: el contador se reinicia y los avisos también.
+  return d.mes === mesActual() ? d : { mes: mesActual() };
+}
+
+// Respaldo en memoria: si la marca en la base no se puede guardar, el correo
+// NO se repite en cada mensaje entrante.
+//
+// `user_profiles` cuelga de `public.users` por clave foránea, y hay cuentas
+// antiguas sin su fila espejo: para esas, el guardado falla con un 23503 que
+// además va silenciado. Sin este respaldo, un cliente así recibiría un correo
+// por cada mensaje que le entre. La clave lleva el usuario y el mes, así que no
+// se mezclan cuentas en una instancia caliente.
+const _avisadoAqui = new Set();
+const claveAviso = (userId, cual) => `${userId}|${mesActual()}|${cual}`;
+
+async function marcarAviso(userId, cual) {
+  _avisadoAqui.add(claveAviso(userId, cual));
+  const d = await avisosDelMes(userId);
+  d[cual] = true;
+  // on_conflict obligatorio: sin él, el segundo guardado choca con el índice
+  // único (user_id, agent_key).
+  await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?on_conflict=user_id,agent_key`, {
+    method: 'POST',
+    headers: { ...sb(), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({
+      user_id: userId, agent_key: CLAVE_AVISOS,
+      profile_data: d, updated_at: new Date().toISOString(),
+    }),
+  }).then(async (r) => {
+    if (r.ok) return;
+    // Que no se pueda dejar la marca no tumba nada —el respaldo en memoria
+    // sostiene el freno mientras la instancia viva— pero hay que verlo: suele
+    // significar que a esa cuenta le falta su fila en `users`.
+    const { registrarError } = await import('./_registro-errores.js').catch(() => ({}));
+    if (registrarError) {
+      await registrarError({
+        origen: 'cupo', donde: 'marcar el aviso de cupo',
+        error: new Error('no se pudo guardar la marca: HTTP ' + r.status),
+        usuario: userId,
+      }).catch(() => {});
+    }
+  }).catch(() => {});
+}
+
+async function correoDelDueno(userId) {
+  if (!process.env.CLERK_SECRET_KEY) return null;
+  try {
+    const r = await fetch('https://api.clerk.com/v1/users/' + encodeURIComponent(userId), {
+      headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+    });
+    if (!r.ok) return null;
+    const u = await r.json();
+    return u.email_addresses?.[0]?.email_address || null;
+  } catch { return null; }
+}
+
+export async function avisarDelCupo(userId, estado) {
+  if (!userId || !estado || estado.error || !estado.cupo) return;
+  const cual = estado.agotado ? 'agotado' : (estado.avisar ? 'ochenta' : null);
+  if (!cual) return;
+
+  if (_avisadoAqui.has(claveAviso(userId, cual))) return;
+  const yaAvisado = await avisosDelMes(userId);
+  if (yaAvisado[cual]) return;
+
+  const email = await correoDelDueno(userId);
+  // Sin correo no hay aviso, pero SÍ se marca: si no, se reintentaría en cada
+  // mensaje y cada intento son dos consultas.
+  if (!email || !process.env.RESEND_API_KEY) { await marcarAviso(userId, cual); return; }
+
+  const { emailHtml, bloque, esc, RESPONDER_A } = await import('./_email-layout.js');
+  const { enviarResend } = await import('./_correo.js');
+
+  const agotado = cual === 'agotado';
+  const asunto = agotado
+    ? 'Tu agente dejó de responder: se acabaron los mensajes del mes'
+    : 'A tu agente le quedan pocos mensajes este mes';
+
+  await enviarResend('_cupo-agente', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
+      to: email,
+      subject: asunto,
+      html: emailHtml({
+        titulo: agotado ? 'Tu agente dejó de responder' : 'Te quedan pocos mensajes',
+        intro: agotado
+          ? 'Se acabaron los mensajes de este mes. Las conversaciones que lleguen a partir de ahora <strong>no las contesta el agente</strong>: entran al inbox para que las atienda tu equipo, y el contacto recibe un aviso de que le responde una persona.'
+          : `Has usado <strong>${esc(String(estado.usados))}</strong> de los ${esc(String(estado.cupo))} mensajes de tu plan. Cuando se acaben, el agente deja de responder y las conversaciones pasan a tu equipo.`,
+        preheader: `${estado.usados} de ${estado.cupo} mensajes este mes`,
+        cuerpo: bloque(
+          `<div style="font-size:16px;font-weight:800">${esc(String(estado.usados))} de ${esc(String(estado.cupo))} mensajes</div>` +
+          `<div style="color:#5B6072;font-size:13px;margin-top:4px">El contador se reinicia el día 1.</div>`
+        ),
+        cta: { texto: 'Ver mi consumo', url: 'https://app.acuarius.app/conversaciones' },
+        pie: 'Si necesitas más mensajes este mes, escríbenos y lo resolvemos.',
+      }),
+    }),
+  }, userId).catch(() => {});
+
+  await marcarAviso(userId, cual);
 }
