@@ -166,6 +166,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron-seguimiento",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/cron-conectores",
       "schedule": "0 14 * * 1-5"
     },

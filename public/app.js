@@ -22217,6 +22217,26 @@ let agEditingId = null;
 let agFaqs = [];
 
 // ── Vista de Agentes ──────────────────────────────────────────────────────────
+// Una foto a tamaño completo, encima de todo.
+//
+// En WhatsApp la persona toca la foto y se abre; en estas pantallas de prueba
+// se quedaban en miniaturas de 82 píxeles, donde no se distingue una cocina de
+// un baño. Se cierra con un clic o con Escape.
+function fotoGrande(src) {
+  const previo = document.getElementById('foto-grande');
+  if (previo) previo.remove();
+  const capa = document.createElement('div');
+  capa.id = 'foto-grande';
+  capa.className = 'foto-grande';
+  capa.innerHTML = '<img src="' + esc(src) + '" alt="Foto del inmueble a tamaño completo">' +
+    '<button class="foto-grande-x" aria-label="Cerrar">&times;</button>';
+  const cerrar = () => { capa.remove(); document.removeEventListener('keydown', porEscape); };
+  const porEscape = (e) => { if (e.key === 'Escape') cerrar(); };
+  capa.addEventListener('click', cerrar);
+  document.addEventListener('keydown', porEscape);
+  document.body.appendChild(capa);
+}
+
 // ── Consumo de mensajes del agente ─────────────────────────────────────────
 // El landing vende un cupo por plan; dentro no había forma de saber cuántos se
 // llevan gastados. Cobrar por algo que el cliente no puede mirar es cómo se
@@ -22516,7 +22536,8 @@ function agPrbPintar() {
       // ensayo decía «le mando unas fotos» y no aparecía ninguna.
       ((m.fotos || []).length
         ? '<div class="ag-prb-fotos">' + m.fotos.map(u =>
-            '<img src="' + esc(u) + '" alt="Foto del inmueble" loading="lazy">').join('') + '</div>'
+            '<img src="' + esc(u) + '" alt="Foto del inmueble" loading="lazy" ' +
+            'onclick="fotoGrande(this.src)" title="Ver más grande">').join('') + '</div>'
         : '') +
     '</div>'
   ).join('') + (agPrbOcupado

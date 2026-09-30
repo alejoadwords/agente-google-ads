@@ -98,7 +98,26 @@ ok(/if \(deUsted && !tutea\(cleanForUser\(deUsted\)\)\) reply = deUsted;/.test(g
 ok(/no te disculpes ni lo menciones/.test(g),
    'sin pedirle perdón al contacto, que no vio nada');
 ok(/donde: 'el agente tuteó estando en usted'/.test(g), 'y queda registrado');
-ok(eng.indexOf("donde: 'el agente tuteó estando en usted'") < eng.indexOf('await send(connection, contactId, visible)'),
+// El envío de la respuesta que el guardián vigila.
+//
+// No vale «el primer envío del fichero»: el corte por cupo agotado manda un
+// aviso de texto fijo ANTES, y ese no pasa por ningún guardián porque lo
+// escribimos nosotros. El que importa es el primero que sale DESPUÉS de que
+// el modelo haya respondido.
+const primerEnvio = (src) => {
+  // Dentro de processIncoming: `responderViendo` se llama también desde el
+  // probador y desde la sugerencia del inbox, y anclar en la primera
+  // aparición del fichero apuntaba a otra función.
+  const iFn = src.indexOf('export async function processIncoming(');
+  if (iFn < 0) return -1;          // -1 pone la comprobación en rojo
+  const iRespuesta = src.indexOf('await responderViendo(system', iFn);
+  if (iRespuesta < 0) return -1;
+  // El primero DESPUÉS de que el modelo responda: el aviso del corte por cupo
+  // sale antes y no pasa por ningún guardián, porque lo escribimos nosotros.
+  const i = src.indexOf('await send(connection, contactId,', iRespuesta);
+  return i < 0 ? -1 : i;
+};
+ok(eng.indexOf("donde: 'el agente tuteó estando en usted'") < primerEnvio(eng),
    'la comprobación va antes del envío');
 
 console.log('');

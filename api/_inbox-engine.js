@@ -645,6 +645,25 @@ ${reglaDeResaltado(canal)}
 - Si alguien quiere hablar con una persona real, responde: "${agent.escalate_phrase || 'Claro, en un momento te comunico con un asesor. ¿Me das un segundo?'}" y en ese caso incluye [ESCALAR] al final de tu mensaje
 - Nunca seas agresivo ni insistente con la venta
 
+NINGUN MENSAJE TUYO TERMINA SIN UNA PREGUNTA:
+- Cierra SIEMPRE con una pregunta que te acerque a saber lo que te falta de esta persona. Una sola, la mas util ahora mismo
+- Tambien despues de mandar fotos, despues de responder una duda y despues de dar un precio. Un mensaje que termina sin pregunta deja a la persona sin saber que sigue, y ahi es donde se enfrian las conversaciones
+- La unica excepcion es cuando te despides porque la persona se despidio
+
+EL TELEFONO, CUANTO ANTES:
+- Pidelo en tus primeros mensajes, en cuanto la persona muestre el mas minimo interes concreto. No esperes al final
+- Una conversacion que avanza mucho y se corta sin telefono es un cliente al que ya no se puede llamar: eso es lo que hay que evitar
+- Pidelo con una razon —para que un asesor le confirme, para mandarle la informacion— no como formulario
+
+EL HORARIO DE ATENCION SE RESPETA:
+- Si en tu contexto hay un horario de atencion, cualquier contacto que acuerdes tiene que caer DENTRO de el
+- Si la persona pide una hora que queda fuera, no se la confirmes: dile cual es el horario y ofrecele la franja valida mas cercana
+- Por chat puedes atender a cualquier hora, pero una llamada o un contacto de un asesor solo en horario
+
+SI QUIEREN QUE LES VENDAMOS O ADMINISTREMOS SU INMUEBLE:
+- Eso lo decide un asesor, no tu. No descartes a nadie por la zona, el estrato, el tipo de inmueble ni sus caracteristicas, aunque en tu contexto figure que no se manejan
+- Tu trabajo aqui es tomar los datos del inmueble y de la persona, y pasarla a un asesor. Decirle que no a alguien que viene a ofrecernos un inmueble cierra una puerta que quiza estaba abierta
+
 LO QUE NO PUEDES INVENTAR — ESTO ES INNEGOCIABLE:
 - Solo puedes afirmar precios, disponibilidad, direcciones, medidas, plazos y condiciones si aparecen literalmente aqui arriba, en tu contexto o en las preguntas frecuentes
 - Si no aparecen, NO los estimes, NO des rangos, NO digas lo que suele costar ni lo que normalmente hay. Tampoco menciones nombres de productos, inmuebles, proyectos o sectores concretos que no esten en tu contexto
@@ -1285,6 +1304,30 @@ async function avisarAlResponsable(userId, conv, texto) {
   } catch (e) { console.error('[push] mensaje al responsable:', e?.message); }
 }
 
+// La pregunta del final, separada del resto del mensaje.
+//
+// Cuando el agente manda fotos, su texto sale ANTES de las imágenes: la persona
+// ve tres o cuatro fotos y el último mensaje de la pantalla es una foto, así
+// que la conversación se queda ahí parada. Lo dijo el cliente mirando sus
+// propias pruebas: «después de enviarlas queda ahí y el usuario queda en el
+// aire».
+//
+// Partiendo la última pregunta y mandándola detrás de las fotos, lo último que
+// se lee vuelve a ser una pregunta. Solo se hace cuando hay fotos: en un
+// mensaje normal partirlo en dos sería ruido.
+export function partirPregunta(texto) {
+  const t = String(texto || '').trimEnd();
+  if (!t) return { cuerpo: '', pregunta: '' };
+  const lineas = t.split('\n');
+  const ultima = lineas[lineas.length - 1].trim();
+  // Solo si de verdad es una pregunta y va suelta al final. Y no si es lo único
+  // que hay: entonces no hay nada que partir.
+  if (!/[?？]\s*$/.test(ultima) || lineas.length < 2 || !ultima) return { cuerpo: t, pregunta: '' };
+  const cuerpo = lineas.slice(0, -1).join('\n').trimEnd();
+  if (!cuerpo) return { cuerpo: t, pregunta: '' };
+  return { cuerpo, pregunta: ultima };
+}
+
 export async function processIncoming({ channel, externalId, contactId, contactName, text, providerMessageId, send, escribiendo, resolverNombre, media, referral }) {
   // Un mensaje puede ser solo un archivo, sin una palabra. Exigir texto era lo
   // que hacía desaparecer las fotos que manda el cliente.
@@ -1769,19 +1812,28 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     // seguidos de la misma persona, que es como escribe la gente.
     const faltan = ESCRIBIENDO_MIN_MS - (Date.now() - empezoAPensar);
     if (faltan > 0) await new Promise(r => setTimeout(r, faltan));
-    if (visible) {
-      try { await send(connection, contactId, visible); } catch (e) { console.error('send error', e); }
+    const fotos = await fotosPedidas(reply, connection.user_id, clienteDelCanal).catch(() => []);
+    // Con fotos, la pregunta final viaja detrás de ellas: si no, lo último que
+    // ve la persona es una imagen y la conversación se queda parada ahí.
+    const { cuerpo, pregunta } = fotos.length ? partirPregunta(visible) : { cuerpo: visible, pregunta: '' };
+
+    if (cuerpo) {
+      try { await send(connection, contactId, cuerpo); } catch (e) { console.error('send error', e); }
       // Ese mensaje ya está gastado. Se suma al vuelo porque el conteo se
       // cachea un minuto: sin esto, una ráfaga de mensajes seguidos seguiría
       // viendo el número de hace un rato y el corte llegaría tarde.
       sumarUno(connection.user_id);
     }
-    // Las fotos, detrás del mensaje. Si el envío de una falla, se sigue con las
-    // demás: media galería es mejor que ninguna, y el texto ya salió.
-    const fotos = await fotosPedidas(reply, connection.user_id, clienteDelCanal).catch(() => []);
+    // Si el envío de una falla, se sigue con las demás: media galería es mejor
+    // que ninguna, y el texto ya salió.
     for (const url of fotos) {
       try { await send(connection, contactId, '', { tipo: 'image', url }); }
       catch (e) { console.error('foto no enviada', e); }
+    }
+    // La pregunta no cuenta como mensaje aparte del cupo: es el mismo mensaje
+    // del agente, partido para que se lea en el orden correcto.
+    if (pregunta) {
+      try { await send(connection, contactId, pregunta); } catch (e) { console.error('send error', e); }
     }
     if (confirmacionCita) {
       try { await send(connection, contactId, confirmacionCita); } catch (e) { console.error('send error', e); }

@@ -121,7 +121,26 @@ ok(/const inventoOriginal = \[\.\.\.invento\];/.test(g),
    'y con lo que se inventó, no con la lista ya vaciada');
 ok(/inventoOriginal\.join/.test(g), 'que es lo que se escribe');
 // El orden importa: comprobar DESPUÉS de enviar no sirve de nada.
-ok(eng.indexOf("donde: 'el agente se inventó datos'") < eng.indexOf("await send(connection, contactId, visible)"),
+// El envío de la respuesta que el guardián vigila.
+//
+// No vale «el primer envío del fichero»: el corte por cupo agotado manda un
+// aviso de texto fijo ANTES, y ese no pasa por ningún guardián porque lo
+// escribimos nosotros. El que importa es el primero que sale DESPUÉS de que
+// el modelo haya respondido.
+const primerEnvio = (src) => {
+  // Dentro de processIncoming: `responderViendo` se llama también desde el
+  // probador y desde la sugerencia del inbox, y anclar en la primera
+  // aparición del fichero apuntaba a otra función.
+  const iFn = src.indexOf('export async function processIncoming(');
+  if (iFn < 0) return -1;          // -1 pone la comprobación en rojo
+  const iRespuesta = src.indexOf('await responderViendo(system', iFn);
+  if (iRespuesta < 0) return -1;
+  // El primero DESPUÉS de que el modelo responda: el aviso del corte por cupo
+  // sale antes y no pasa por ningún guardián, porque lo escribimos nosotros.
+  const i = src.indexOf('await send(connection, contactId,', iRespuesta);
+  return i < 0 ? -1 : i;
+};
+ok(eng.indexOf("donde: 'el agente se inventó datos'") < primerEnvio(eng),
    'la comprobación va antes del envío, que es lo único que la hace servir de algo');
 
 console.log('');

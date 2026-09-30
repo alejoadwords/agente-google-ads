@@ -2,6 +2,20 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-agente-preguntas",
+      "fecha": "2026-09-29",
+      "tipo": "mejora",
+      "titulo": "Tu agente ya no deja conversaciones sin salida",
+      "texto": "Cuatro cambios en cómo conversa: ningún mensaje suyo termina sin una pregunta que acerque a calificar al contacto, ni siquiera después de mandar fotos —la pregunta va ahora detrás de las imágenes, que es donde se lee—; pide el teléfono en los primeros mensajes y no al final, para que una conversación que se corta no se quede sin forma de contactar; respeta el horario de atención que tengas escrito y no acuerda contactos fuera de él; y a quien viene a ofrecer su inmueble no lo descarta por zona ni estrato, porque eso lo decide un asesor. Además, las fotos del probador se amplían al hacer clic."
+    },
+    {
+      "id": "2026-09-29-agente-continua",
+      "fecha": "2026-09-29",
+      "tipo": "nuevo",
+      "titulo": "El agente retoma la conversación que se quedó a medias",
+      "texto": "Si alguien deja de responder, a los 10 minutos el agente vuelve a escribirle — y no con un «¿sigues ahí?», sino con la pregunta que falta para poder pasarlo a un asesor: el teléfono, la zona o el presupuesto, según lo que ya haya dicho. Solo una vez por cada mensaje suyo, solo entre las 7 de la mañana y las 9 de la noche, y nunca en una conversación que ya esté atendiendo alguien de tu equipo."
+    },
+    {
       "id": "2026-09-29-corte-cupo",
       "fecha": "2026-09-29",
       "tipo": "nuevo",
