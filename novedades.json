@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-30-agente-sabe-la-hora",
+      "fecha": "2026-09-30",
+      "tipo": "arreglo",
+      "titulo": "Tu agente ya sabe qué hora es y si estás en horario",
+      "texto": "Si en el contexto de tu agente está escrito tu horario de atención, ahora sabe con exactitud si en este momento estás dentro o fuera de él, en la hora de tu país. Cuando alguien pide que le llamen ya, en horario lo pasa a un asesor, y fuera de horario le ofrece la próxima franja en la que alguien puede llamarle: hoy después del almuerzo, mañana a primera hora o el lunes. Antes el agente no tenía reloj y podía decirle a un cliente que la oficina estaba cerrada a media mañana."
+    },
+    {
       "id": "2026-09-30-soporte-dentro-de-tu-cuenta",
       "fecha": "2026-09-30",
       "tipo": "nuevo",

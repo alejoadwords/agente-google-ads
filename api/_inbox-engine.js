@@ -579,6 +579,129 @@ function reglaDeResaltado(canal) {
 // El titular es del ANUNCIO, no algo que la persona haya dicho: por eso se
 // advierte de no darlo por confirmado. Alguien puede pulsar un anuncio de
 // arriendo y venir buscando compra.
+// QUÉ HORA ES. El agente tenía el horario de atención en su contexto, pero
+// nadie le decía la hora: la adivinaba. El 30-09-2026, a las 9:55 a. m. en
+// Barranquilla, le dijo a una clienta de Certain que «a esta hora ya no
+// estamos en la oficina». Con el horario escrito y sin reloj, la regla de
+// respetarlo solo sirve para rechazar llamadas que sí se podían hacer.
+//
+// Va en la parte VARIABLE del prompt (después del corte de caché): cambia en
+// cada mensaje y, arriba, invalidaría la caché de todas las conversaciones.
+//
+// La zona es la del negocio (la de su configuración de reservas cuando la
+// tiene). Todas las cuentas de hoy están en Colombia, de ahí el valor por
+// defecto; una cuenta de otro país necesita su zona_horaria en reservas.
+const PAIS_DE_ZONA = {
+  'America/Bogota': 'Colombia', 'America/Mexico_City': 'México', 'America/Lima': 'Perú',
+  'America/Santiago': 'Chile', 'America/Argentina/Buenos_Aires': 'Argentina', 'America/Guayaquil': 'Ecuador',
+  'America/Panama': 'Panamá', 'America/Costa_Rica': 'Costa Rica', 'America/Guatemala': 'Guatemala',
+  'America/Santo_Domingo': 'República Dominicana', 'Europe/Madrid': 'España',
+};
+// El horario, leído del texto del contexto. Con Haiku no basta con darle la
+// hora y el horario y pedirle que compare: con los dos delante, a las 7:00 p. m.
+// seguía diciendo «estamos atendiendo» (y lo confunde «por chat se recibe a
+// cualquier hora»). Así que la comparación la hace el código y al modelo le
+// llega el veredicto. Si el horario no se entiende, no se inventa uno: el
+// agente recibe solo la hora, como antes.
+const DIAS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+function minutosDe(h, m, suf, sufPar) {
+  let hh = +h; const mm = +(m || 0);
+  const s = (suf || sufPar || '').replace(/[\s.]/g, '');
+  if (s === 'm') return 12 * 60 + mm;                  // «12:00 m.» es mediodía
+  if (s === 'pm' && hh < 12) hh += 12;
+  if (s === 'am' && hh === 12) hh = 0;
+  if (!s && hh < 7) hh += 12;                           // «de 2 a 5» sin sufijo: la tarde
+  return hh * 60 + mm;
+}
+export function horarioDelTexto(texto) {
+  const franjas = [];   // { dias:Set, desde, hasta } en minutos
+  const T = '(\\d{1,2})(?::(\\d{2}))?\\s*(a\\.?\\s?m\\.?|p\\.?\\s?m\\.?|m\\.(?!\\w))?';
+  for (const linea of sinTildes(texto).split(/\n|(?<=\.)\s+(?=[A-Z])/)) {
+    if (!/atencion|horario|atendemos|abrimos|oficina/.test(linea)) continue;
+    // Tramos de la línea que empiezan por días: «lunes a viernes de …», «sábados de …»
+    // Se corta antes de cada día que ABRE un tramo, no del que lo cierra: en
+    // «lunes a viernes» el viernes es el final del rango, no un tramo nuevo.
+    const tramos = linea.split(/(?<!\ba\s)(?=\b(?:lunes|martes|miercoles|jueves|viernes|sabados?|domingos?|todos los dias)\b)/);
+    for (const tramo of tramos) {
+      let dias = null;
+      const rango = tramo.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)s?\s+a\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)s?\b/);
+      if (/todos los dias/.test(tramo)) dias = [0, 1, 2, 3, 4, 5, 6];
+      else if (rango) {
+        const a = DIAS.indexOf(rango[1]), b = DIAS.indexOf(rango[2]);
+        dias = []; for (let d = a; ; d = (d + 1) % 7) { dias.push(d); if (d === b || dias.length > 7) break; }
+      } else {
+        const uno = tramo.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)s?\b/);
+        if (uno) dias = [DIAS.indexOf(uno[1])];
+      }
+      if (!dias) continue;
+      const re = new RegExp('de\\s+' + T + '\\s+a\\s+' + T, 'g');
+      let m;
+      while ((m = re.exec(tramo))) {
+        const desde = minutosDe(m[1], m[2], m[3], m[6]);
+        const hasta = minutosDe(m[4], m[5], m[6], null);
+        if (hasta > desde) franjas.push({ dias: new Set(dias), desde, hasta });
+      }
+    }
+  }
+  return franjas.length ? franjas : null;
+}
+function horaBonita(min) {
+  const h = Math.floor(min / 60), m = String(min % 60).padStart(2, '0');
+  if (h === 12 && m === '00') return '12:00 m.';
+  return (h % 12 || 12) + ':' + m + (h < 12 ? ' a. m.' : ' p. m.');
+}
+// ¿Dentro o fuera, y cuándo es la próxima franja? `dia` 0=domingo, `min` desde medianoche.
+export function veredictoHorario(franjas, dia, min) {
+  const hoy = franjas.filter(f => f.dias.has(dia)).sort((a, b) => a.desde - b.desde);
+  const dentro = hoy.find(f => min >= f.desde && min < f.hasta);
+  if (dentro) return { dentro: true, hasta: dentro.hasta };
+  const luegoHoy = hoy.find(f => f.desde > min);
+  if (luegoHoy) return { dentro: false, proxima: { enDias: 0, dia, desde: luegoHoy.desde } };
+  for (let k = 1; k <= 7; k++) {
+    const d = (dia + k) % 7;
+    const f = franjas.filter(x => x.dias.has(d)).sort((a, b) => a.desde - b.desde)[0];
+    if (f) return { dentro: false, proxima: { enDias: k, dia: d, desde: f.desde } };
+  }
+  return null;
+}
+
+export function bloqueDeAhora(zona, ahora = new Date(), contexto = '') {
+  const tz = zona || 'America/Bogota';
+  let cuando, manana, dia, min;
+  try {
+    const f = (d, o) => new Intl.DateTimeFormat('es-CO', { timeZone: tz, ...o }).format(d);
+    cuando = f(ahora, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      + ', ' + f(ahora, { hour: 'numeric', minute: '2-digit', hour12: true });
+    manana = f(new Date(ahora.getTime() + 86400000), { weekday: 'long', day: 'numeric', month: 'long' });
+    const partes = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(ahora);
+    const v = t => partes.find(p => p.type === t)?.value;
+    dia = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(v('weekday'));
+    min = (+v('hour') % 24) * 60 + +v('minute');
+  } catch (e) {
+    return '';   // una zona inválida no puede tumbar la respuesta: sin reloj, como antes
+  }
+  const donde = PAIS_DE_ZONA[tz] ? 'hora de ' + PAIS_DE_ZONA[tz] : 'hora local del negocio';
+  const franjas = horarioDelTexto(contexto);
+  const ver = franjas ? veredictoHorario(franjas, dia, min) : null;
+  let estado = '';
+  if (ver && ver.dentro) {
+    estado = `AHORA MISMO SE ESTA DENTRO DEL HORARIO DE ATENCION (hasta las ${horaBonita(ver.hasta)}). Si piden que les llamen ya, di que un asesor le contacta en cuanto pueda, sin prometer minutos exactos. No digas que no hay nadie.\n`;
+  } else if (ver) {
+    const p = ver.proxima;
+    const cuandoAbre = p.enDias === 0 ? 'hoy a las ' + horaBonita(p.desde)
+      : p.enDias === 1 ? 'mañana a las ' + horaBonita(p.desde)
+      : 'el ' + DIAS[p.dia].replace('miercoles', 'miércoles').replace('sabado', 'sábado') + ' a las ' + horaBonita(p.desde);
+    estado = `AHORA MISMO SE ESTA FUERA DEL HORARIO DE ATENCION: nadie puede llamar ahora. La proxima franja en la que un asesor puede contactar es ${cuandoAbre}; si piden que les llamen ya, dilo con naturalidad y ofrece esa franja. Por chat sigues atendiendo, pero una llamada no es ahora.\n`;
+  }
+  return `QUE DIA Y HORA ES AHORA MISMO (${donde}):
+${cuando}
+Mañana es ${manana}.
+${estado}- Esta es la hora real: no la supongas ni la deduzcas de la conversacion
+- "Hoy", "mañana" y los dias de la semana se cuentan desde esta fecha
+
+`;
+}
+
 function bloqueDeAnuncio(referral) {
   if (!referral || typeof referral !== 'object') return '';
   const t = (v) => String(v || '').trim().slice(0, 200);
@@ -710,7 +833,7 @@ SI TE MANDAN UNA FOTO:
 - Que se parezca a algo del listado NO significa que sea eso. No afirmes que es una propiedad concreta salvo que te lo diga la persona; si crees reconocerla, preguntale
 - Si la foto no se entiende o no tiene que ver, dilo con amabilidad y pide lo que necesitas
 
-${bloqueDeAnuncio(referral)}${bloqueReservas(reservas, canal)}${bloqueCitas(suyas)}DATOS CAPTURADOS HASTA AHORA:
+${bloqueDeAhora(reservas?.zona, new Date(), [agent.business_ctx, faqs].filter(Boolean).join('\n'))}${bloqueDeAnuncio(referral)}${bloqueReservas(reservas, canal)}${bloqueCitas(suyas)}DATOS CAPTURADOS HASTA AHORA:
 ${captured}
 
 Cuando detectes un dato nuevo en la conversación, incluye al final de tu respuesta (invisible para el usuario):
