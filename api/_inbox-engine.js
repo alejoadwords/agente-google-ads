@@ -1054,15 +1054,27 @@ const ESCRIBIENDO_MIN_MS = 3000;
 
 // Devuelve el texto y, aparte, lo que consumió. El uso se registra donde se
 // sabe de quién es la conversación; aquí solo se recoge.
-// Cuánto texto estable hace falta para que cachear valga la pena.
+// Cuánto texto estable hace falta para marcarlo como cacheable.
 //
-// Anthropic no cachea por debajo de 1.024 tokens. En español son unos 3.500
-// caracteres; se pide 4.500 para no quedarse justo en el filo y pagar una
-// escritura que luego no sirve.
+// El mínimo lo pone Anthropic y DEPENDE DEL MODELO: Haiku 4.5 —el del agente—
+// no cachea por debajo de 4.096 tokens; Sonnet 4.6 (la alternativa de
+// AGENTE_WA_MODELO), desde 1.024. Aquí decía «1.024» para todos, y con Haiku
+// eso era falso: un prompt de 1.700 tokens se marcaba y no se cacheaba nunca.
+// Por debajo del mínimo marcar no da error ni cuesta más —simplemente no
+// cachea—, así que el umbral no protege de un gasto: evita marcar en balde y
+// deja claro qué agentes se benefician.
 //
-// Esta guarda es la que hace que un agente recién creado —cuatro líneas de
-// contexto— siga funcionando igual y sin coste extra.
-const MINIMO_CACHE = 4500;
+// Medido el 30-09-2026 con count_tokens: estos prompts en español salen a ~3,1
+// caracteres por token (5.211 → 1.710; 19.770 → 6.352). Se usa 3 para quedarse
+// del lado seguro: marcar uno que se queda corto no cuesta nada; no marcar uno
+// que sí cabía, sí.
+const MINIMO_TOKENS_CACHE = { haiku: 4096, 'sonnet-4-6': 1024, 'sonnet-4-5': 1024 };
+export function minimoCacheCaracteres(modelo = MODELO_WA) {
+  const m = String(modelo || '');
+  const clave = Object.keys(MINIMO_TOKENS_CACHE).find(k => m.includes(k));
+  return (clave ? MINIMO_TOKENS_CACHE[clave] : 4096) * 3;
+}
+const MINIMO_CACHE = minimoCacheCaracteres(MODELO_WA);
 
 // El `system` que se le manda a la API.
 //
