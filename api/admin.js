@@ -409,6 +409,99 @@ async function handleDeleteTestUser(req, res) {
   return res.json({ success: true, id });
 }
 
+// ── ELIMINAR UNA CUENTA POR COMPLETO ─────────────────────
+// Dos pasos, a propósito: primero se ENSEÑA qué se va a borrar (huella) y
+// después se borra escribiendo el correo de la cuenta. Un botón que borra de
+// un clic lo acaba pulsando alguien en la fila de al lado.
+//
+//   GET ?action=user-footprint&id=X   → qué tiene la cuenta, bloqueos y avisos
+//   PUT ?action=delete-user {id, confirmar}  → borra base + Clerk, deja constancia
+//
+// El borrado de la base lo hace la función borrar_cuenta() de Supabase, en UNA
+// transacción: descubre las tablas por su columna (user_id, owner_user_id…) en
+// cada llamada, así que una tabla nueva queda cubierta sola; si algo choca,
+// no se borra nada. acceso_cuentas se conserva (quién entró a qué cuenta).
+function correosDeAdmin() {
+  return String(process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+}
+
+async function rpc(fn, args) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  });
+  const txt = await r.text();
+  let d; try { d = JSON.parse(txt); } catch { d = txt; }
+  if (!r.ok) throw new Error(d?.message || String(txt).slice(0, 300));
+  return d;
+}
+
+async function fichaParaBorrar(id) {
+  const r = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${CLERK_SECRET}` } });
+  if (!r.ok && r.status !== 404) throw new Error('Clerk devolvió ' + r.status + ' al leer la cuenta');
+  const u = r.status === 404 ? null : await r.json();
+  const correo = u ? String((u.email_addresses || []).find(e => e.id === u.primary_email_address_id)?.email_address || u.email_addresses?.[0]?.email_address || '').toLowerCase() : null;
+  const meta = u?.public_metadata || {};
+  const [huella, miembroDe, susMiembros] = await Promise.all([
+    rpc('cuenta_huella', { uid: id }),
+    supabaseReq(`/team_members?member_user_id=eq.${encodeURIComponent(id)}&status=eq.active&select=owner_user_id,owner_name`),
+    supabaseReq(`/team_members?owner_user_id=eq.${encodeURIComponent(id)}&status=eq.active&select=member_email`),
+  ]);
+  const bloqueos = [], avisos = [];
+  if (correo && correosDeAdmin().includes(correo)) bloqueos.push('Es una cuenta del equipo de Acuarius.');
+  if ((miembroDe || []).length) bloqueos.push('Es miembro activo del equipo de ' + (miembroDe[0].owner_name || 'otra cuenta') + '. Quítalo del equipo desde esa cuenta primero, para que sus leads se traspasen.');
+  if ((susMiembros || []).length) avisos.push('Tiene ' + susMiembros.length + ' persona(s) en su equipo (' + susMiembros.map(m => m.member_email).join(', ') + '). Sus usuarios siguen existiendo, pero se quedan sin la cuenta de la que dependían.');
+  const pagada = ['pro', 'agency', 'agencia', 'individual'].includes(meta.plan) && meta.origen !== 'cortesia'
+    && (!meta.hasta || new Date(meta.hasta) > new Date());
+  if (pagada) avisos.push('Tiene un plan de pago vigente (' + meta.plan + '). Borrar la cuenta NO cancela la suscripción en Hotmart: cancélala allí o seguirá cobrándose.');
+  if (!u) avisos.push('No existe en Clerk: solo quedan datos sueltos en la base.');
+  return { id, correo, nombre: u ? [u.first_name, u.last_name].filter(Boolean).join(' ') : null, plan: meta.plan || null, estado: meta.status || null, huella, bloqueos, avisos };
+}
+
+async function handleUserFootprint(req, res) {
+  const id = String(req.query.id || '');
+  if (!/^user_[A-Za-z0-9_]+$/.test(id)) return res.status(400).json({ error: 'id de cuenta inválido' });
+  return res.json(await fichaParaBorrar(id));
+}
+
+async function handleDeleteUser(req, res) {
+  if (req.method !== 'PUT' && req.method !== 'POST') return res.status(405).json({ error: 'PUT o POST' });
+  const { id, confirmar, motivo } = req.body || {};
+  if (!/^user_[A-Za-z0-9_]+$/.test(String(id || ''))) return res.status(400).json({ error: 'id de cuenta inválido' });
+  const ficha = await fichaParaBorrar(id);
+  if (ficha.bloqueos.length) return res.status(409).json({ error: ficha.bloqueos.join(' '), ficha });
+  // Se confirma escribiendo el correo (o el id, si ya no está en Clerk): la
+  // misma confirmación que piden GitHub o Vercel para borrar un proyecto.
+  const esperado = ficha.correo || id;
+  if (String(confirmar || '').trim().toLowerCase() !== esperado.toLowerCase()) {
+    return res.status(400).json({ error: 'Para confirmar, escribe exactamente: ' + esperado });
+  }
+
+  // 1) La base, en una transacción. Si falla, no se ha tocado nada y Clerk
+  //    tampoco: la cuenta sigue entera y se puede reintentar.
+  let filas;
+  try { filas = await rpc('borrar_cuenta', { uid: id }); }
+  catch (e) { return res.status(500).json({ error: 'No se borró nada: ' + e.message }); }
+
+  // 2) Clerk. Si falla aquí, los datos ya no están pero el usuario podría
+  //    entrar a una cuenta vacía: se dice claro y reintentar es seguro.
+  let clerkOk = true, clerkError = null;
+  const rc = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${CLERK_SECRET}` } }).catch(e => ({ ok: false, status: 0, _e: e }));
+  if (!rc.ok && rc.status !== 404) { clerkOk = false; clerkError = rc._e?.message || ('HTTP ' + rc.status); }
+
+  // 3) Constancia. Sin datos de sus clientes: qué cuenta era y cuánto se borró.
+  await supabaseReq('/cuentas_eliminadas', 'POST', {
+    cuenta_id: id, correo: ficha.correo, plan: ficha.plan, borrado_por: 'admin.acuarius.app',
+    motivo: String(motivo || '').slice(0, 300) || null, filas, clerk_ok: clerkOk,
+  }).catch(e => console.error('[admin] no se anotó el borrado:', e.message));
+
+  if (!clerkOk) {
+    return res.status(502).json({ error: 'Los datos se borraron, pero Clerk no eliminó el usuario (' + clerkError + '). Vuelve a pulsar «Eliminar» para terminar.', filas });
+  }
+  return res.json({ ok: true, filas, correo: ficha.correo });
+}
+
 // ── SYNC ──────────────────────────────────────────────────
 async function handleSync(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -1052,6 +1145,8 @@ export default async function handler(req, res) {
     if (action === 'set-plan')         return await handleSetPlan(req, res);
     if (action === 'create-test-user') return await handleCreateTestUser(req, res);
     if (action === 'delete-test-user')   return await handleDeleteTestUser(req, res);
+    if (action === 'user-footprint')   return await handleUserFootprint(req, res);
+    if (action === 'delete-user')      return await handleDeleteUser(req, res);
     if (action === 'reset-test-password') return await handleResetTestPassword(req, res);
     if (action === 'sync')             return await handleSync(req, res);
     return res.status(400).json({ error: 'action requerido' });
