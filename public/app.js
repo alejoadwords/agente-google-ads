@@ -23264,7 +23264,7 @@ async function kbEstado() {
     box.innerHTML =
       '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:200px">' +
-          '<div style="color:var(--text);font-weight:700">' + esc(f.base_url) + '</div>' +
+          '<div style="color:var(--text);font-weight:700">' + (f.tipo === 'domus' ? 'Domus · inventario directo de la inmobiliaria' : esc(f.base_url)) + '</div>' +
           '<div style="margin-top:3px">' + d.propiedades + ' propiedades · última sincronización: ' + esc(cuando) +
           (f.ultimo_estado === 'en_curso' ? ' · <strong>en curso</strong>' : '') + '</div>' +
         '</div>' +
@@ -23294,7 +23294,19 @@ function kbAbrir() {
     '<div class="auto-modal-body">' +
       '<div class="kb-tabs">' +
         '<button class="kb-tab activo" id="kb-tab-web" onclick="kbPestana(\'web\')">Desde la web</button>' +
+        '<button class="kb-tab" id="kb-tab-domus" onclick="kbPestana(\'domus\')">Desde Domus</button>' +
         '<button class="kb-tab" id="kb-tab-archivo" onclick="kbPestana(\'archivo\')">Desde un archivo</button>' +
+      '</div>' +
+      '<div id="kb-pane-domus" style="display:none">' +
+        '<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px">' +
+          'Si la inmobiliaria gestiona sus inmuebles en <b>Domus</b>, conéctalo directo: el agente verá el inventario tal como está allí, ' +
+          'con precios, fotos y metraje, aunque la web cambie. El token lo da Domus (soporte@domus.la) o el proveedor de la web.' +
+        '</div>' +
+        '<label class="auto-label">Token de la API de Domus</label>' +
+        '<input class="auto-input" id="kb-domus-token" type="password" autocomplete="off" placeholder="APP_USR_…" ' +
+          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();kbConectarDomus()}">' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:5px">Se guarda cifrado y no se vuelve a mostrar. Reemplaza la fuente que haya (la web o un archivo).</div>' +
+        '<div id="kb-domus-res" style="margin-top:14px"></div>' +
       '</div>' +
       '<div id="kb-pane-web">' +
         '<label class="auto-label">Dirección de la web</label>' +
@@ -23323,6 +23335,7 @@ function kbAbrir() {
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
       '<button class="btn-pri sm" id="kb-btn-guardar" style="display:none" onclick="kbGuardar()">Guardar y sincronizar</button>' +
       '<button class="btn-pri sm" id="kb-btn-subir" style="display:none" onclick="kbSubirArchivo()">Cargar inventario</button>' +
+      '<button class="btn-pri sm" id="kb-btn-domus" style="display:none" onclick="kbConectarDomus()">Conectar y sincronizar</button>' +
     '</div></div>';
   document.body.appendChild(ov);
   setTimeout(() => document.getElementById('kb-url')?.focus(), 80);
@@ -23366,15 +23379,44 @@ function kbPlantilla() {
 }
 
 function kbPestana(cual) {
-  const web = cual === 'web';
+  const web = cual === 'web', archivo = cual === 'archivo', domus = cual === 'domus';
   document.getElementById('kb-pane-web').style.display = web ? '' : 'none';
-  document.getElementById('kb-pane-archivo').style.display = web ? 'none' : '';
+  document.getElementById('kb-pane-archivo').style.display = archivo ? '' : 'none';
+  document.getElementById('kb-pane-domus').style.display = domus ? '' : 'none';
   document.getElementById('kb-tab-web').classList.toggle('activo', web);
-  document.getElementById('kb-tab-archivo').classList.toggle('activo', !web);
+  document.getElementById('kb-tab-archivo').classList.toggle('activo', archivo);
+  document.getElementById('kb-tab-domus').classList.toggle('activo', domus);
   // Cada pestaña tiene su botón: dejar el otro visible invita a pulsar el que no es.
-  document.getElementById('kb-btn-guardar').style.display = 'none';
-  document.getElementById('kb-btn-subir').style.display = (!web && _kbFilas?.length) ? '' : 'none';
-  if (web && _kbDeteccion) document.getElementById('kb-btn-guardar').style.display = '';
+  document.getElementById('kb-btn-guardar').style.display = (web && _kbDeteccion) ? '' : 'none';
+  document.getElementById('kb-btn-subir').style.display = (archivo && _kbFilas?.length) ? '' : 'none';
+  document.getElementById('kb-btn-domus').style.display = domus ? '' : 'none';
+  if (domus) setTimeout(() => document.getElementById('kb-domus-token')?.focus(), 50);
+}
+
+// Domus: el token se prueba en el servidor antes de guardarse (y se guarda
+// cifrado). Después se lanza la primera tanda; el resto lo sigue el cron cada
+// media hora, igual que con la web.
+async function kbConectarDomus() {
+  const cliente = crmAmbitoCliente();
+  const token = String(document.getElementById('kb-domus-token')?.value || '').trim();
+  const res = document.getElementById('kb-domus-res');
+  const btn = document.getElementById('kb-btn-domus');
+  if (!token) { res.innerHTML = '<div style="color:var(--danger);font-size:12px">Pega el token de Domus.</div>'; return; }
+  btn.disabled = true; btn.textContent = 'Conectando…';
+  res.innerHTML = '<div style="font-size:12px;color:var(--muted)">Probando el token con Domus…</div>';
+  try {
+    const r = await fetchAuth('/api/knowledge-sync?tipo=domus&client_id=' + encodeURIComponent(cliente), {
+      method: 'PUT', body: JSON.stringify({ token }),
+    });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    document.getElementById('kb-overlay')?.remove();
+    showToast('Domus conectado: ' + (d.en_domus ?? '—') + ' inmuebles. Sincronizando…', 'success');
+    kbSincronizar();
+  } catch (e) {
+    res.innerHTML = '<div style="color:var(--danger);font-size:12px;line-height:1.5">' + esc(String(e.message || e)) + '</div>';
+    btn.disabled = false; btn.textContent = 'Conectar y sincronizar';
+  }
 }
 
 // Un CSV de verdad: comillas, comas dentro de comillas, saltos de línea dentro

@@ -222,7 +222,7 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
   if (!userId) return { lineas: [], total: 0 };
   let q = `${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
     (clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null') +
-    '&select=codigo,operacion,tipo,ciudad,barrio,habitaciones,banos,precio,' +
+    '&select=codigo,operacion,tipo,ciudad,barrio,habitaciones,banos,area,precio,' +
     `precio_arriendo,precio_venta,administracion,fotos,url&limit=${TOPE_PROPIEDADES}`;
 
   // La operacion sale del enrutado: si el agente ya dedujo 'arriendo', no tiene
@@ -309,6 +309,9 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
         [f.barrio, f.ciudad].filter(Boolean).join(', '),
         f.habitaciones ? f.habitaciones + ' hab' : null,
         f.banos ? f.banos + ' baños' : null,
+        // El área viene de Domus (la web no la daba fiable). Para un local es lo
+        // primero que se pregunta: «un local de 100 metros».
+        f.area ? f.area + ' m²' : null,
         importe ? plata(importe) : 'precio a confirmar',
         // La administracion se publica aparte del canon y cambia: se le pasa
         // marcada para que no la sume ni la presente como definitiva.
