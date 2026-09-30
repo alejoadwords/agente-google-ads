@@ -203,7 +203,14 @@ async function enviarLote(sobres, usuario) {
  * 80 personas hacía 160 consultas para leer siempre lo mismo.
  */
 async function indiceDeWhatsapp(userId) {
-  const convs = await sb(`/chat_conversations?user_id=eq.${encodeURIComponent(userId)}&select=id,contact_id,channel,connection_id&order=last_message_at.desc&limit=1000`);
+  // Todas, paginando: con el tope de mil, en una cuenta con más conversaciones
+  // los contactos antiguos se saltaban como «sin conversación».
+  const convs = [];
+  for (let offset = 0; offset < 50000; offset += TOPE_POSTGREST) {
+    const pagina = await sb(`/chat_conversations?user_id=eq.${encodeURIComponent(userId)}&select=id,contact_id,channel,connection_id&order=last_message_at.desc.nullslast,id.asc&limit=${TOPE_POSTGREST}&offset=${offset}`);
+    convs.push(...(pagina || []));
+    if (!pagina || pagina.length < TOPE_POSTGREST) break;
+  }
   const conns = await sb(`/channel_connections?user_id=eq.${encodeURIComponent(userId)}&select=*`);
   // Los tokens salen descifrados: el resto del cron no tiene por qué
   // saber que en la base se guardan cifrados.

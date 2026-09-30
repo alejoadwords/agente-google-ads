@@ -402,7 +402,10 @@ async function actionSendWhatsapp(step, lead) {
   const digits = String(lead.phone).replace(/\D/g, '');
   if (digits.length < 7) return { result: 'skipped', detail: 'Teléfono inválido' };
   // Buscar conversación del Inbox cuyo contact_id termine en los dígitos del lead
-  const convs = await sb(`/chat_conversations?user_id=eq.${encodeURIComponent(lead.user_id)}&select=id,contact_id,channel,connection_id&order=last_message_at.desc&limit=200`);
+  // Filtrado en la base por los cuatro últimos dígitos: antes se miraban las
+  // 200 conversaciones más recientes, y un lead que escribió hace semanas en
+  // una cuenta con movimiento quedaba «sin conversación» aunque la tuviera.
+  const convs = await sb(`/chat_conversations?user_id=eq.${encodeURIComponent(lead.user_id)}&contact_id=like.*${digits.slice(-4)}&select=id,contact_id,channel,connection_id&order=last_message_at.desc&limit=1000`);
   const conv = (convs || []).find(c => {
     const cid = String(c.contact_id || '').replace(/\D/g, '');
     return cid && (cid.endsWith(digits.slice(-10)) || digits.endsWith(cid.slice(-10)));

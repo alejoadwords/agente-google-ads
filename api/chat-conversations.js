@@ -5,6 +5,9 @@ import { getPolicy } from './_channel-policy.js';
 import { enviarPorCanal } from './_enviar-canal.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+import { traerTodo } from './_paginado.js';
+const TECHO_INFORME = 20000;
+const LOTE_INFORME = 500;
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
@@ -67,25 +70,55 @@ export default async function handler(req) {
 
   // GET ?report=1&from= — datos agregados para el informe de Conversaciones
   if (req.method === 'GET' && url.searchParams.get('report')) {
+    // Antes: mil conversaciones como mucho, y los mensajes de solo las primeras
+    // 300 con otro tope de mil filas. En una cuenta con volumen el informe
+    // contaba una fracción y lo presentaba como el total. Y si la base fallaba,
+    // devolvía listas vacías: «Aún no hay conversaciones», que es mentira.
     const from = url.searchParams.get('from');
-    let cq = `${SUPABASE_URL}/rest/v1/chat_conversations?user_id=eq.${userId}${filtroCanales}&select=id,channel,status,unread_count,created_at,last_message_at,lead_id&order=created_at.desc&limit=1000`;
+    let cq = `${SUPABASE_URL}/rest/v1/chat_conversations?user_id=eq.${userId}${filtroCanales}&select=id,channel,status,unread_count,created_at,last_message_at,lead_id&order=created_at.desc`;
     if (from) cq += `&created_at=gte.${encodeURIComponent(from)}`;
-    const convs = await fetch(cq, { headers: sbHeaders() }).then(r => r.ok ? r.json() : []).catch(() => []);
+    try {
+      const { filas: convs, truncado } = await traerTodo(cq, sbHeaders(), { techo: TECHO_INFORME });
 
-    // Mensajes de esas conversaciones, para medir el tiempo de primera respuesta
-    let msgs = [];
-    const ids = (convs || []).map(c => c.id).slice(0, 300);
-    if (ids.length) {
-      const mq = `${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=in.(${ids.join(',')})` +
-        `&select=conversation_id,role,created_at&order=created_at.asc&limit=5000`;
-      msgs = await fetch(mq, { headers: sbHeaders() }).then(r => r.ok ? r.json() : []).catch(() => []);
+      // Los tiempos de respuesta se calculan en la base (informe_conversaciones):
+      // mandar todos los mensajes al navegador sería pesado, y de cada
+      // conversación solo hacen falta tres datos.
+      const ids = convs.map(c => c.id);
+      const lotes = [];
+      for (let i = 0; i < ids.length; i += LOTE_INFORME) lotes.push(ids.slice(i, i + LOTE_INFORME));
+      const resumen = [];
+      for (let i = 0; i < lotes.length; i += 4) {
+        const partes = await Promise.all(lotes.slice(i, i + 4).map(async lote => {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/informe_conversaciones`, {
+            method: 'POST', headers: sbHeaders(), body: JSON.stringify({ p_ids: lote }),
+          });
+          if (!r.ok) throw new Error(`informe_conversaciones ${r.status}: ${(await r.text()).slice(0, 200)}`);
+          return r.json();
+        }));
+        for (const p of partes) resumen.push(...p);
+      }
+      // El navegador mide con pares entrada→respuesta; se le mandan solo esos dos
+      // mensajes por conversación, y el total aparte.
+      const msgs = [];
+      let totalMensajes = 0;
+      for (const x of resumen) {
+        totalMensajes += x.mensajes || 0;
+        if (x.primera_entrada) msgs.push({ conversation_id: x.conversation_id, role: 'user', created_at: x.primera_entrada });
+        if (x.primera_respuesta) msgs.push({ conversation_id: x.conversation_id, role: 'assistant', created_at: x.primera_respuesta });
+      }
+
+      const rc = await fetch(
+        `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${userId}&select=channel,channel_name,is_active`,
+        { headers: sbHeaders() }
+      );
+      if (!rc.ok) throw new Error(`channel_connections ${rc.status}`);
+      const chans = await rc.json();
+
+      return jsonResp({ conversations: convs, messages: msgs, total_mensajes: totalMensajes, channels: chans || [], truncado });
+    } catch (e) {
+      console.error('[chat-conversations] informe:', e.message);
+      return jsonResp({ error: 'No se pudo armar el informe de conversaciones. Intenta de nuevo en un momento.' }, 502);
     }
-    const chans = await fetch(
-      `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${userId}&select=channel,channel_name,is_active`,
-      { headers: sbHeaders() }
-    ).then(r => r.ok ? r.json() : []).catch(() => []);
-
-    return jsonResp({ conversations: convs || [], messages: msgs || [], channels: chans || [] });
   }
 
   // GET — list conversations

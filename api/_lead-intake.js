@@ -262,8 +262,17 @@ export async function intakeLead(userId, clientId, data) {
   if (!lead && data.phone) {
     const digits = String(data.phone).replace(/\D/g, '');
     if (digits.length >= 7) {
-      const found = await sb(`/leads?user_id=eq.${encodeURIComponent(userId)}${scope}&deleted_at=is.null&phone=not.is.null&select=*&order=created_at.desc&limit=500`);
-      lead = (found || []).find(l => String(l.phone).replace(/\D/g, '').endsWith(digits.slice(-10))) || null;
+      // La base filtra por los dos últimos dígitos y aquí se compara el número
+      // entero. Antes se miraban solo los 500 leads más recientes: en una
+      // cuenta grande, quien volvía a escribir meses después entraba duplicado.
+      const cola = digits.slice(-2);
+      const found = [];
+      for (let offset = 0; offset < 20000; offset += 1000) {
+        const pagina = await sb(`/leads?user_id=eq.${encodeURIComponent(userId)}${scope}&deleted_at=is.null&phone=like.*${cola}&select=*&order=created_at.desc,id.asc&limit=1000&offset=${offset}`);
+        found.push(...(pagina || []));
+        if (!pagina || pagina.length < 1000) break;
+      }
+      lead = found.find(l => String(l.phone).replace(/\D/g, '').endsWith(digits.slice(-10))) || null;
     }
   }
 

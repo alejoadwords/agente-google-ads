@@ -28,6 +28,7 @@ import { abrirConexion, cifrar } from './_cifrado.js';
 import { dondePreguntar } from './_google-login.js';
 import { resolverClics, consultaDelDia, filasAClics, pendientes as clicsPendientes } from './_gclid.js';
 import { diagnosticar } from './_diagnostico-pauta.js';
+import { traerTodo } from './_paginado.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -265,10 +266,14 @@ async function leadsDelPeriodo(userId, clientId, desde, hasta, soloDe) {
   let ruta = `/leads?user_id=eq.${encodeURIComponent(userId)}&deleted_at=is.null` +
     `&created_at=gte.${desde}T00:00:00&created_at=lte.${hasta}T23:59:59` +
     `&select=id,name,stage,value,closed_at,close_reason,created_at,updated_at,assigned_name,custom_fields,pipeline_id,source` +
-    `&order=created_at.desc&limit=2000`;
+    `&order=created_at.desc`;
   if (clientId) ruta += `&client_id=eq.${encodeURIComponent(clientId)}`;
   if (soloDe) ruta += `&assigned_to=eq.${encodeURIComponent(soloDe)}`;
-  return sb(ruta);
+  // Todos los del periodo: con el tope de mil filas, un mes con más leads
+  // cruzaba contra la pauta solo una parte y el costo por lead salía inflado.
+  const { filas, truncado } = await traerTodo(`${SUPABASE_URL}/rest/v1${ruta}`, sbHeaders(), { techo: 50000 });
+  if (truncado) console.warn('[pauta] periodo con más de 50.000 leads, recortado:', userId);
+  return filas;
 }
 
 function resumenCrm(leads) {

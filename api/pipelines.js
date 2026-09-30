@@ -197,21 +197,19 @@ async function manejar(req) {
     const clavesDestino = await sb(`/pipeline_stages?pipeline_id=eq.${destino.id}&select=key`);
     const validas = new Set((clavesDestino.data || []).map(s => s.key));
 
-    const leads = await sb(`/leads?pipeline_id=eq.${id}&user_id=eq.${userId}&select=id,stage`);
-    const aMover = leads.data || [];
+    // Se mueven con dos PATCH filtrados en la base, sin leerlos antes: leerlos
+    // topaba en mil filas, y de un pipeline con más se movían mil y el resto
+    // quedaba colgando de un pipeline borrado, invisible en todas partes.
     // Si el destino no tiene esa etapa, el lead cae en 'nuevo' para que nunca
     // quede en una etapa fantasma que no se pinta en ninguna columna.
-    const porEtapa = {};
-    aMover.forEach(l => {
-      const destinoEtapa = validas.has(l.stage) ? l.stage : 'nuevo';
-      (porEtapa[destinoEtapa] = porEtapa[destinoEtapa] || []).push(l.id);
-    });
-    for (const [etapa, ids] of Object.entries(porEtapa)) {
-      for (let i = 0; i < ids.length; i += 100) {
-        await sb(`/leads?id=in.(${ids.slice(i, i + 100).join(',')})`, 'PATCH',
-          { pipeline_id: destino.id, stage: etapa, updated_at: new Date().toISOString() }, 'return=minimal');
-      }
-    }
+    const ahora = new Date().toISOString();
+    const base = `/leads?pipeline_id=eq.${id}&user_id=eq.${userId}`;
+    const lista = [...validas].map(k => `"${String(k).replace(/"/g, '')}"`).join(',');
+    const conEtapa = validas.size
+      ? await sb(`${base}&stage=in.(${encodeURIComponent(lista)})&select=id`, 'PATCH', { pipeline_id: destino.id, updated_at: ahora }, 'return=representation')
+      : { data: [] };
+    const resto = await sb(`${base}&select=id`, 'PATCH', { pipeline_id: destino.id, stage: 'nuevo', updated_at: ahora }, 'return=representation');
+    const aMover = [...(conEtapa.data || []), ...(resto.data || [])];
 
     await sb(`/pipeline_stages?pipeline_id=eq.${id}`, 'DELETE', null, 'return=minimal');
     await sb(`/pipelines?id=eq.${id}&user_id=eq.${userId}`, 'DELETE', null, 'return=minimal');

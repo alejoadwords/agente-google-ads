@@ -1,6 +1,7 @@
 export const config = { runtime: 'edge' };
 
 import { soloSusLeads, esDelEquipo } from './_perfiles.js';
+import { traerTodo } from './_paginado.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -131,11 +132,17 @@ export default async function handler(req) {
     // Sin lead_id: histórico del usuario por rango, para el informe de productividad
     if (!leadId) {
       const from = url.searchParams.get('from');
-      let q = `${SUPABASE_URL}/rest/v1/lead_activities?user_id=eq.${userId}&select=id,lead_id,type,created_at,metadata&order=created_at.desc&limit=2000`;
+      // Paginado: el servidor corta en mil filas pidas lo que pidas, y un equipo
+      // activo pasa de mil actividades al mes. El informe contaba solo las
+      // más recientes y las presentaba como el total.
+      let q = `${SUPABASE_URL}/rest/v1/lead_activities?user_id=eq.${userId}&select=id,lead_id,type,created_at,metadata&order=created_at.desc`;
       if (from) q += `&created_at=gte.${encodeURIComponent(from)}`;
-      const r = await fetch(q, { headers: sbHeaders() });
-      if (!r.ok) return jsonResp({ error: await r.text() }, 500);
-      return jsonResp({ activities: (await r.json()) || [] });
+      try {
+        const { filas, truncado } = await traerTodo(q, sbHeaders(), { techo: 50000 });
+        return jsonResp({ activities: filas, truncado });
+      } catch (e) {
+        return jsonResp({ error: 'No se pudo leer la actividad: ' + e.message }, 500);
+      }
     }
     // Verify the lead belongs to this user
     const checkRes = await fetch(

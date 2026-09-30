@@ -10,6 +10,7 @@ export const config = { runtime: 'edge' };
 import { ensureCatalog, enqueueAutomations } from './_lead-intake.js';
 import { leerNps, normalizarNps, pieSegunNota, NPS_KEY, TIPOS_PREGUNTA } from './_nps.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+import { traerTodo } from './_paginado.js';
 
 // Los textos los escribe el cliente y se meten dentro del HTML de una página
 // pública: sin escapar, un `<script>` en el título de la encuesta se ejecuta
@@ -184,7 +185,15 @@ export default async function handler(req) {
     }
 
     const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
-    const rows = await fetch(`${SUPABASE_URL}/rest/v1/nps_responses?user_id=eq.${encodeURIComponent(userId)}${scope}&select=score,comment,responded_at,sent_at,lead_id,answers,preguntas&order=sent_at.desc&limit=1000`, { headers: sbHeaders() }).then(r => r.json()).then(r => r || []);
+    // Todas las respuestas, no las mil más recientes: el NPS se calcula sobre
+    // el total, y si la base falla se dice en vez de pintar «sin respuestas».
+    let rows;
+    try {
+      rows = (await traerTodo(`${SUPABASE_URL}/rest/v1/nps_responses?user_id=eq.${encodeURIComponent(userId)}${scope}&select=score,comment,responded_at,sent_at,lead_id,answers,preguntas&order=sent_at.desc`, sbHeaders(), { techo: 50000 })).filas;
+    } catch (e) {
+      console.error('[nps] no se pudieron leer las respuestas:', e.message);
+      return jsonResp({ error: 'No se pudieron leer las respuestas de la encuesta.' }, 502);
+    }
     const answered = rows.filter(r => r.score !== null && r.score !== undefined);
     const promoters = answered.filter(r => r.score >= 9).length;
     const passives = answered.filter(r => r.score >= 7 && r.score <= 8).length;

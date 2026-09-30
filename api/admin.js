@@ -12,6 +12,7 @@ import { enviarResend } from './_correo.js';
 // La sesión se verifica con el módulo común, que lee las cabeceras de las
 // dos formas: `Headers` en edge y objeto plano en Node.
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+import { traerTodo } from './_paginado.js';
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -31,6 +32,10 @@ function authCheck(req) {
   if (!ADMIN_SECRET) return false;
   return req.headers['x-admin-secret'] === ADMIN_SECRET;
 }
+
+const SB_LECTURA = () => ({ apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` });
+// Una colección entera, no las primeras mil filas (el tope de PostgREST).
+const todasLas = (path) => traerTodo(`${SUPABASE_URL}/rest/v1${path}`, SB_LECTURA(), { techo: 100000 }).then(r => r.filas);
 
 async function supabaseReq(path, method = 'GET', body = null) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
@@ -102,8 +107,8 @@ async function handleMetrics(req, res) {
   // Ahora el MRR sale de quien PAGA: plan de pago vigente y origen 'hotmart' o
   // 'externo'. La cortesía vale $0 a propósito.
   const [allUsers, billingAll, logsRecent] = await Promise.all([
-    supabaseReq('/users?select=id,email,plan,status,created_at,trial_ends_at,plan_ends_at,plan_origen'),
-    supabaseReq('/billing?select=amount,plan,status,created_at,period_end,hotmart_transaction'),
+    todasLas('/users?select=id,email,plan,status,created_at,trial_ends_at,plan_ends_at,plan_origen'),
+    todasLas('/billing?select=amount,plan,status,created_at,period_end,hotmart_transaction'),
     supabaseReq('/activity_logs?select=action,created_at&order=created_at.desc&limit=200'),
   ]);
 
@@ -209,16 +214,24 @@ async function handleUsers(req, res) {
     if (plan   && plan   !== 'all') query += `&plan=eq.${plan}`;
     if (status && status !== 'all') query += `&status=eq.${status}`;
 
-    let countQuery = `/users?select=id`;
+    // El total lo cuenta la base (count=exact): contar las filas devueltas se
+    // quedaba en mil y el paginador escondía a todos los demás usuarios.
+    let countQuery = `/users?select=id&limit=1`;
     if (plan   && plan   !== 'all') countQuery += `&plan=eq.${plan}`;
     if (status && status !== 'all') countQuery += `&status=eq.${status}`;
 
-    const [users, countRes] = await Promise.all([supabaseReq(query), supabaseReq(countQuery)]);
+    const [users, total] = await Promise.all([
+      supabaseReq(query),
+      fetch(`${SUPABASE_URL}/rest/v1${countQuery}`, { headers: { ...SB_LECTURA(), Prefer: 'count=exact' } }).then(async r => {
+        if (!r.ok) throw new Error('No se pudo contar los usuarios: ' + r.status);
+        return parseInt(String(r.headers.get('content-range') || '').split('/')[1], 10) || 0;
+      }),
+    ]);
     return res.json({
       users: users || [],
-      total: countRes?.length || 0,
+      total,
       page: parseInt(page),
-      pages: Math.ceil((countRes?.length || 0) / limit),
+      pages: Math.ceil(total / limit),
     });
   }
 
@@ -1264,11 +1277,18 @@ async function handleUsoIA(req, res) {
 
   // Se piden las filas y se agregan aquí. PostgREST sabe agrupar, pero con una
   // sola llamada y este volumen sale igual de rápido y se lee mucho mejor.
-  const filas = await fetch(
-    `${SUPABASE_URL}/rest/v1/ai_usage?created_at=gte.${encodeURIComponent(desde)}` +
-    `&select=user_id,origen,agente,modelo,costo,tokens_in,tokens_out,cache_write,cache_read&limit=50000`,
-    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
-  ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+  // Paginado: el `limit=50000` no servía, el servidor devuelve mil como mucho
+  // y el consumo salía recortado. Y un fallo ya no se disfraza de «$0 gastado».
+  let filas, truncado;
+  try {
+    ({ filas, truncado } = await traerTodo(
+      `${SUPABASE_URL}/rest/v1/ai_usage?created_at=gte.${encodeURIComponent(desde)}` +
+      `&select=user_id,origen,agente,modelo,costo,tokens_in,tokens_out,cache_write,cache_read`,
+      SB_LECTURA(), { techo: 100000 }
+    ));
+  } catch (e) {
+    return res.status(502).json({ error: 'No se pudo leer el consumo de IA: ' + e.message });
+  }
 
   const cuentas = new Map();
   const origenes = {};
@@ -1305,6 +1325,7 @@ async function handleUsoIA(req, res) {
     desde, dias,
     total: Number(total.toFixed(4)),
     llamadas: filas.length,
+    truncado,
     por_origen: Object.fromEntries(Object.entries(origenes).map(([k, v]) => [k, Number(v.toFixed(4))])),
     por_agente: Object.fromEntries(Object.entries(agentes).map(([k, v]) => [k, Number(v.toFixed(4))])),
     por_cuenta: por_cuenta.map(a => ({ ...a, costo: Number(a.costo.toFixed(4)) })),

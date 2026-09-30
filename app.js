@@ -25432,7 +25432,12 @@ async function crmRenderNps(targetId) {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
     const d = await fetchAuth('/api/nps' + qs).then(r => r.json());
-    if (!d || d.error || !d.sent) { box.innerHTML = ''; return; }
+    if (d && d.error) {
+      box.innerHTML = '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Satisfacción (NPS)</div>' +
+        '<div style="font-size:12.5px;color:var(--muted)">' + esc(String(d.error)) + '</div></div>';
+      return;
+    }
+    if (!d || !d.sent) { box.innerHTML = ''; return; }
     const npsColor = d.nps === null ? 'var(--muted)' : d.nps >= 50 ? '#10B981' : d.nps >= 0 ? '#F59E0B' : '#EF4444';
     const seg = (n, c, l) => d.answered
       ? '<div style="flex:' + Math.max(n, 0.001) + ';background:' + c + ';height:100%" title="' + l + ': ' + n + '"></div>' : '';
@@ -32970,8 +32975,10 @@ async function cvLoad() {
   const from = new Date(rangoIni(_cvRange, 3650)).toISOString();
   try {
     const r = await fetchAuth('/api/chat-conversations?report=1&from=' + encodeURIComponent(from));
-    _cvData = r.ok ? await r.json() : { conversations: [], messages: [], channels: [] };
-  } catch (e) { _cvData = { conversations: [], messages: [], channels: [] }; }
+    const d = await r.json().catch(() => ({}));
+    // Un fallo no puede pintarse como «aún no hay conversaciones»: se dice.
+    _cvData = r.ok ? d : { error: d.error || 'No se pudo cargar el informe.' };
+  } catch (e) { _cvData = { error: 'Sin conexión: no se pudo cargar el informe.' }; }
   return _cvData;
 }
 
@@ -32982,13 +32989,23 @@ async function cvRender() {
     box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando conversaciones…</div>';
     await cvLoad();
   }
-  const { conversations: convs, messages: msgs, channels } = _cvData;
-  const now = Date.now();
-
   let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
     '<div><div style="font-size:var(--fs-lg);font-weight:800">Rendimiento del inbox</div>' +
     '<div style="font-size:12px;color:var(--muted)">Volumen, canales y velocidad de respuesta</div></div>' +
     rangoBotones(_cvRange, 'cvSetRange') + '</div>';
+  if (_cvData.error) {
+    const err = _cvData.error;
+    _cvData = null; // el siguiente intento vuelve a pedirlo
+    box.innerHTML = html + '<div style="padding:30px;text-align:center;color:var(--muted)">' + esc(err) +
+      '<div style="margin-top:12px"><button class="btn-ghost sm" onclick="cvRender()">Reintentar</button></div></div>';
+    return;
+  }
+  const { conversations: convs, messages: msgs, channels } = _cvData;
+  const now = Date.now();
+  if (_cvData.truncado) {
+    html += '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Este periodo tiene más de ' +
+      convs.length.toLocaleString('es-CO') + ' conversaciones: las cifras cubren las más recientes. Elige un periodo más corto para verlo completo.</div>';
+  }
 
   // Sin canales conectados: estado vacío honesto en vez de un tablero de ceros
   const activos = (channels || []).filter(c => c.is_active);
@@ -33024,7 +33041,7 @@ async function cvRender() {
   tiempos.sort((a, b) => a - b);
   const mediana = tiempos.length ? tiempos[Math.floor(tiempos.length / 2)] : NaN;
   const p90 = tiempos.length ? tiempos[Math.floor(tiempos.length * 0.9)] : NaN;
-  const totalMsgs = (msgs || []).length;
+  const totalMsgs = _cvData.total_mensajes ?? (msgs || []).length;
 
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
     salesCard('Conversaciones', convs.length, nuevas.length + ' nuevas en el periodo') +
@@ -33226,9 +33243,9 @@ async function prodLoad() {
     fetchAuth('/api/agenda?from=' + encodeURIComponent(fromIso) + '&to=' + encodeURIComponent(toIso) + cli)
       .then(r => r.ok ? r.json() : { activities: [] }).catch(() => ({ activities: [] })),
     fetchAuth('/api/lead-activities?from=' + encodeURIComponent(fromIso))
-      .then(r => r.ok ? r.json() : { activities: [] }).catch(() => ({ activities: [] })),
+      .then(r => r.ok ? r.json() : { activities: [], falla: true }).catch(() => ({ activities: [], falla: true })),
   ]);
-  _prodData = { acts: acts.activities || [], inter: inter.activities || [] };
+  _prodData = { acts: acts.activities || [], inter: inter.activities || [], falla: !!inter.falla };
   return _prodData;
 }
 
@@ -33276,6 +33293,9 @@ async function prodRender() {
     '<div><div style="font-size:var(--fs-lg);font-weight:800">Productividad comercial</div>' +
     '<div style="font-size:12px;color:var(--muted)">Qué se agenda, qué se cumple y qué leads se están enfriando</div></div>' +
     rangoBotones(_prodRange, 'prodSetRange') + '</div>';
+  // Si la actividad no se pudo leer, los contadores de abajo salen en cero:
+  // se avisa para que nadie lo lea como «el equipo no hizo nada».
+  if (_prodData.falla) html += '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">No se pudo leer la actividad del equipo: las cifras de llamadas y contactos están incompletas. <button class="btn-ghost sm" onclick="_prodData = null; prodRender()">Reintentar</button></div>';
 
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
     salesCard('Actividades', periodo.length, 'agendadas en el periodo') +
@@ -34969,11 +34989,11 @@ async function eqLoad() {
     ? '&client_id=' + encodeURIComponent(agencyActiveClientId) : '';
   const [inter, equipo] = await Promise.all([
     fetchAuth('/api/lead-activities?from=' + encodeURIComponent(desde))
-      .then(r => r.ok ? r.json() : { activities: [] }).catch(() => ({ activities: [] })),
+      .then(r => r.ok ? r.json() : { activities: [], falla: true }).catch(() => ({ activities: [], falla: true })),
     fetchAuth('/api/assign-rules').then(r => r.ok ? r.json() : { equipo: [] }).catch(() => ({ equipo: [] })),
   ]);
   if (typeof crmLeads === 'undefined' || !crmLeads.length) { try { await crmLoadLeads(); } catch {} }
-  _eqData = { inter: inter.activities || [], equipo: equipo.equipo || [], cli };
+  _eqData = { inter: inter.activities || [], equipo: equipo.equipo || [], cli, falla: !!inter.falla };
   return _eqData;
 }
 
@@ -35019,6 +35039,9 @@ async function eqRender() {
     '<div><div style="font-size:var(--fs-lg);font-weight:800">Por comercial</div>' +
     '<div style="font-size:12px;color:var(--muted)">Qué recibe cada uno, qué tan rápido responde y qué cierra</div></div>' +
     rangoBotones(_eqRange, 'eqSetRange') + '</div>';
+  // Si la actividad no se pudo leer, los contadores de abajo salen en cero:
+  // se avisa para que nadie lo lea como «el equipo no hizo nada».
+  if (_eqData.falla) html += '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">No se pudo leer la actividad del equipo: las cifras de llamadas y contactos están incompletas. <button class="btn-ghost sm" onclick="_eqData = null; eqRender()">Reintentar</button></div>';
 
   // Primera interacción humana de cada lead
   const primera = {};

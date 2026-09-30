@@ -15,6 +15,7 @@ import { getGcalToken, gcalEventBody, gcalRequest, tokenDeRecurso, ocupadoDeCale
 import { emailHtml, bloque, RESPONDER_A, esc } from './_email-layout.js';
 import { registrarError } from './_registro-errores.js';
 import { enviarResend } from './_correo.js';
+import { traerTodo } from './_paginado.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -145,11 +146,11 @@ async function ocupadoGoogle(neg, ids, desdeISO, hastaISO) {
   // Las citas que ya escribimos en Google no se cuentan dos veces, y sobre
   // todo no tapan a otra persona si cayeron en un calendario compartido. Las
   // nuevas llevan una marca; esto cubre las que se escribieron antes de ella.
-  const nuestras = () => sb(
-    `/activities?user_id=eq.${encodeURIComponent(neg.user_id)}&resource_id=not.is.null&gcal_event_id=not.is.null` +
+  const nuestras = () => traerTodo(
+    `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${encodeURIComponent(neg.user_id)}&resource_id=not.is.null&gcal_event_id=not.is.null` +
     `&due_at=gte.${encodeURIComponent(new Date(new Date(desdeISO).getTime() - 86400000).toISOString())}` +
-    `&due_at=lt.${encodeURIComponent(hastaISO)}&select=gcal_event_id&limit=2000`
-  ).then(f => new Set((f || []).map(x => x.gcal_event_id))).catch(() => new Set());
+    `&due_at=lt.${encodeURIComponent(hastaISO)}&select=gcal_event_id`, sbHeaders(), { techo: 20000 }
+  ).then(r => new Set(r.filas.map(x => x.gcal_event_id))).catch(() => new Set());
 
   let lecturas;
   try {

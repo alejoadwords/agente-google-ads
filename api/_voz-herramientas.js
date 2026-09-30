@@ -12,6 +12,8 @@
 //
 // Solo para funciones EDGE. Ver la nota de CLAUDE.md sobre api/_*.js.
 
+import { traerTodo } from './_paginado.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const TZ = 'America/Bogota';
@@ -312,10 +314,12 @@ async function actividadEquipo(a, ctx) {
   if (!ctx.veElEquipo) return { permitido: false, mensaje: 'Su perfil solo ve su propia gestión.' };
   const desde = a.desde || diaMas(hoyLocal(), -7);
   const hasta = a.hasta || hoyLocal();
-  const act = await sb(`/lead_activities?user_id=eq.${encodeURIComponent(ctx.userId)}` +
+  // Paginado: con el tope de mil filas, la semana de un equipo grande se
+  // contaba a medias y el modelo lo decía como cifra exacta.
+  const { filas: act } = await traerTodo(`${SUPABASE_URL}/rest/v1/lead_activities?user_id=eq.${encodeURIComponent(ctx.userId)}` +
     `&type=in.(llamada,email,reunion,nota)` +
     `&created_at=gte.${desde}T00:00:00Z&created_at=lte.${hasta}T23:59:59Z` +
-    `&select=lead_id,metadata&limit=3000`);
+    `&select=lead_id,metadata`, sbHeaders(), { techo: 50000 });
   // El autor está en metadata.actor_id; `actor` es el NOMBRE.
   const porNombre = {}; ctx.equipo.forEach(m => { porNombre[m.nombre] = m.id; });
   const cuenta = {};

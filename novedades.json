@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-30-informes-completos",
+      "fecha": "2026-09-30",
+      "tipo": "arreglo",
+      "titulo": "Informes completos en cuentas con mucho movimiento",
+      "texto": "Los informes de Conversaciones, Productividad, Por comercial y NPS ahora cuentan todo el periodo: en cuentas con muchos datos se quedaban en los primeros mil registros. El tiempo de primera respuesta se mide sobre todas las conversaciones. Al borrar un proceso de venta, todos sus leads pasan al principal, sin importar cuántos sean. Y si un informe no se puede cargar, ahora te lo decimos y puedes reintentar, en vez de verlo vacío."
+    },
+    {
       "id": "2026-09-30-contrasena",
       "fecha": "2026-09-30",
       "tipo": "mejora",
