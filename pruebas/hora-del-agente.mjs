@@ -23,10 +23,27 @@ const casos = [
   ['2026-09-30T21:59:00Z', /DENTRO.*hasta las 5:00 p\. m\./, '4:59 p. m. → dentro'],
   ['2026-09-30T22:00:00Z', /FUERA.*mañana a las 8:00 a\. m\./, '5:00 p. m. en punto → fuera, mañana'],
   ['2026-09-30T12:30:00Z', /FUERA.*hoy a las 8:00 a\. m\./, '7:30 a. m. → fuera, hoy a las 8'],
-  ['2026-10-02T23:00:00Z', /FUERA.*el lunes a las 8:00 a\. m\./, 'viernes 6:00 p. m. → el lunes'],
-  ['2026-10-03T15:00:00Z', /FUERA.*el lunes a las 8:00 a\. m\./, 'sábado → el lunes'],
+  ['2026-10-02T23:00:00Z', /FUERA.*el lunes 5 de octubre a las 8:00 a\. m\./, 'viernes 6:00 p. m. → el lunes, con fecha'],
+  ['2026-10-03T15:00:00Z', /FUERA.*el lunes 5 de octubre a las 8:00 a\. m\./, 'sábado → el lunes, con fecha'],
 ];
 for (const [t, re, txt] of casos) { const b = linea(t); ok(re.test(b), txt, b.split('\n')[3]); }
+
+console.log('Festivos de Colombia');
+const f26 = [...m.festivosColombia(2026).keys()];
+ok(f26.length === 18, '18 festivos al año');
+ok(['2026-01-12', '2026-03-23', '2026-04-02', '2026-04-03', '2026-05-18', '2026-06-08', '2026-06-15', '2026-06-29',
+    '2026-08-17', '2026-10-12', '2026-11-02', '2026-11-16'].every(d => f26.includes(d)),
+   '2026 coincide con el calendario oficial (Ley Emiliani y Semana Santa)');
+ok(m.festivoDeColombia('2027-03-25') === 'Jueves Santo' && m.festivoDeColombia('2027-07-05') === 'San Pedro y San Pablo',
+   'y se calcula para cualquier año: 2027 sin tocar nada');
+for (const [t, re, txt] of [
+  ['2026-10-12T15:00:00Z', /HOY ES FESTIVO EN COLOMBIA \(Día de la Raza\)[\s\S]*FUERA.*mañana a las 8:00/, 'lunes festivo a las 10 a. m. → fuera; mañana a las 8'],
+  ['2026-10-09T23:00:00Z', /el martes 13 de octubre a las 8:00/, 'viernes antes del puente → el martes 13, no el lunes'],
+  ['2026-10-11T15:00:00Z', /MAÑANA ES FESTIVO EN COLOMBIA \(Día de la Raza\)/, 'la víspera avisa de que mañana no hay llamadas'],
+  ['2026-04-01T23:00:00Z', /el lunes 6 de abril a las 8:00/, 'Semana Santa → el lunes 6 de abril'],
+  ['2026-12-31T23:00:00Z', /el lunes 4 de enero a las 8:00/, 'cambio de año: el 1 de enero también es festivo'],
+]) { const b = linea(t); ok(re.test(b), txt, b.split('\n').slice(3, 5).join(' | ').slice(0, 160)); }
+ok(!/FESTIVO/.test(linea('2026-10-12T16:00:00Z', CERTAIN, 'America/Mexico_City')), 'otro país no hereda los festivos de Colombia');
 
 console.log('Otros horarios escritos a mano');
 const h = t => JSON.stringify((m.horarioDelTexto(t) || []).map(f => [[...f.dias], f.desde / 60, f.hasta / 60]));

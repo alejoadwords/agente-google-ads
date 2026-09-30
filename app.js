@@ -22773,7 +22773,9 @@ function agPrbRadiografia(r) {
     ? '<p><strong>' + cat.ofrecidas + '</strong> opciones a la vista<br>' +
       (pistas.length
         ? '<span style="color:var(--muted2)">Filtrado por ' + pistas.map(([k, v]) =>
-            esc(k) + ': ' + esc(k === 'presupuesto' ? '$' + Number(v).toLocaleString('es-CO') : String(v))).join(', ') + '</span>'
+            esc(k) + ': ' + esc(k === 'presupuesto' ? '$' + Number(v).toLocaleString('es-CO')
+              : k === 'metraje' ? (v.min && v.max ? v.min + '–' + v.max + ' m²' : v.min ? 'desde ' + v.min + ' m²' : 'hasta ' + v.max + ' m²')
+              : String(v))).join(', ') + '</span>'
         : '<span class="ag-prb-mal">Sin filtrar: le está viendo las más baratas de todo el inventario</span>') + '</p>'
     : nada('No se le pasó ninguna opción')));
 

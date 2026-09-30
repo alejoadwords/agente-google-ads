@@ -52,4 +52,27 @@ for (const [t, e] of [
   ['Antes de agendar la visita, revise que el horario le sirva. ¿Le queda bien el martes?', false],
 ]) ok(m.condicionaAlDato(t) === e, (e ? 'se detecta: ' : 'pasa: ') + t.slice(0, 60));
 ok((eng.match(/if \(condicionaAlDato\(/g) || []).length === 2, 'el guardián está en producción y en el probador');
+console.log('No se pide un número que ya tenemos');
+for (const [t, e] of [
+  ['¿Me comparte un número para que un asesor le confirme disponibilidad?', true],
+  ['Para que lo llamen ya, ¿me comparte su número de celular?', true],
+  ['¿Le llamamos a este mismo número?', false],
+  ['¿Me dice su nombre para dejarlo anotado?', false],
+]) ok(m.pideNumero(t) === e, (e ? 'se detecta: ' : 'pasa: ') + t);
+ok((eng.match(/pideNumero\(/g) || []).length >= 4, 'el guardián está en producción y en el probador');
+ok(m.tutea('Déjame mostrarle las opciones') && !m.tutea('Déjeme mostrarle las opciones'), '«déjame» es tuteo; «déjeme», no');
+console.log('Metraje');
+const A = t => JSON.stringify(m.areaDelTexto(t));
+ok(A('busco un local de unos 100 metros') === '{"min":80,"max":150}', '«unos 100 metros» es aproximado: de 80 a 150 m²');
+ok(A('mínimo 80 m²') === '{"min":80,"max":null}' && A('máximo 60 metros cuadrados') === '{"min":null,"max":60}', 'mínimo y máximo');
+ok(A('entre 80 y 120 metros') === '{"min":80,"max":120}', 'un rango');
+ok(A('a 100 metros de la playa') === 'null', 'una distancia no es un tamaño');
+ok(A('hasta 6.000.000') === 'null' && m.presupuestoDelTexto('máximo 60 metros cuadrados') === null, 'ni la plata es metraje ni el metraje es plata');
+ok(/area=not\.is\.null/.test(eng) && /otroTamano/.test(eng), 'solo filtra si el catálogo tiene metraje, y si no hay de ese tamaño lo dice');
+console.log('Arriendo o compra, desde el primer mensaje');
+ok(m.operacionDelTexto('Busco apartamento en arriendo en Riomar') === 'arriendo', '«en arriendo» filtra arriendos');
+ok(m.operacionDelTexto('quiero comprar una casa') === 'venta', '«comprar» filtra ventas');
+ok(m.operacionDelTexto('quiero arrendar mi apartamento') === null, 'quien ofrece lo suyo no es una búsqueda');
+ok(m.operacionDelTexto('me interesa en venta o arriendo') === null, 'si dice las dos, no se filtra');
+ok(/operacion: respuestas\?\._ruta \|\| delContacto\.operacion/.test(eng), 'la calificación manda; si aún no hay, lo que dijo la persona');
 process.exit(mal ? 1 : 0);

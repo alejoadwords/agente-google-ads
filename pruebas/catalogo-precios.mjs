@@ -264,7 +264,7 @@ ok(/'\(e\?s\)\?'/.test(eng) || /\(e\?s\)\?/.test(eng),
    'y «apartamentos» en plural reconoce el tipo «Apartamento» del catálogo');
 
 console.log('\nY si en ese barrio no hay nada, se amplía a la ciudad');
-const amp = eng.slice(eng.indexOf('let ampliado = false;'), eng.indexOf('const lineas = (filas || []).map'));
+const amp = eng.slice(eng.indexOf('let ampliado = false'), eng.indexOf('const lineas = (filas || []).map'));
 ok(/if \(!filas\.length && pistas\.barrio\)/.test(amp),
    'solo cuando el barrio no dio nada, no siempre');
 // Se quita `filtroBarrio`, que es el del barrio o el de la zona («el norte»).

@@ -13,7 +13,7 @@
 //   prompt sin querer cambia el agente de un cliente sin que nadie lo pida.
 
 import { readFileSync } from 'node:fs';
-import { buildSystemPrompt, partesDelPrompt } from '../api/_inbox-engine.js';
+import { buildSystemPrompt, partesDelPrompt, minimoCacheCaracteres } from '../api/_inbox-engine.js';
 
 const eng = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
 
@@ -58,11 +58,21 @@ ok(a.estable.includes('preguntas frecuentes') || a.estable.includes('PREGUNTAS F
 ok(!a.estable.includes('LO QUE HAY DISPONIBLE'), 'y NO incluye el inventario, que cambia');
 ok(a.variable.includes('DATOS CAPTURADOS'), 'los datos capturados van en la parte variable');
 
-console.log('\nUn agente sin entrenar no paga caché que no sirve');
-ok(/const MINIMO_CACHE = \d+/.test(eng), 'hay un mínimo de tamaño');
+console.log('\nSolo se marca lo que el modelo puede cachear');
+// El mínimo es de Anthropic y depende del modelo (Haiku 4.5: 4.096 tokens;
+// Sonnet 4.6: 1.024). Antes esta prueba fijaba 4.500 caracteres —1.024 tokens
+// para todos—, y falló sola cuando las reglas fijas del prompt crecieron: el
+// agente pequeño pasó a 5.211 caracteres (~1.710 tokens medidos), que para
+// Haiku sigue estando lejos del mínimo.
+ok(/const MINIMO_CACHE = minimoCacheCaracteres\(MODELO_WA\)/.test(eng), 'el mínimo sale del modelo que se usa');
+ok(minimoCacheCaracteres('claude-haiku-4-5-20251001') === 4096 * 3, 'Haiku 4.5: 4.096 tokens');
+ok(minimoCacheCaracteres('claude-sonnet-4-6') === 1024 * 3, 'Sonnet 4.6: 1.024 tokens');
 const chico = partesDelPrompt(CHICO, {}, null, null, 'whatsapp', null);
-ok(chico.estable.length < 4500,
-   'el prompt de un agente de cuatro líneas se queda por debajo', String(chico.estable.length));
+ok(chico.estable.length < minimoCacheCaracteres('claude-haiku-4-5-20251001'),
+   'con Haiku, el prompt de un agente de cuatro líneas no se marca', String(chico.estable.length));
+const grande = partesDelPrompt(GRANDE, {}, null, null, 'whatsapp', null);
+ok(grande.estable.length >= minimoCacheCaracteres('claude-haiku-4-5-20251001'),
+   'y el de un agente entrenado sí', String(grande.estable.length));
 const fn = eng.slice(eng.indexOf('function systemParaLaApi'), eng.indexOf('async function callClaude'));
 ok(/if \(estable\.length < MINIMO_CACHE\) return estable \+ variable;/.test(fn),
    'y por debajo del mínimo se manda como siempre, sin marcar nada');

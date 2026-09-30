@@ -265,6 +265,20 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
   // `gte` y no `eq`: nunca se ofrece menos de lo que pidió, y si algo más
   // grande le cabe en el presupuesto, que lo vea.
   if (pistas.habitaciones) q += `&habitaciones=gte.${pistas.habitaciones}`;
+  // Por tamaño, solo si el catálogo lo tiene (el de Domus sí; el de una web o
+  // un archivo, no). Filtrar un catálogo sin metraje lo dejaría vacío y el
+  // agente diría «no tengo nada» teniendo de todo.
+  let filtroArea = '';
+  if (pistas.metraje && (pistas.metraje.min || pistas.metraje.max)) {
+    const conArea = await fetch(`${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
+      (clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null') + '&area=not.is.null&select=id&limit=1',
+      { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    if (conArea.length) {
+      if (pistas.metraje.min) filtroArea += `&area=gte.${pistas.metraje.min}`;
+      if (pistas.metraje.max) filtroArea += `&area=lte.${pistas.metraje.max}`;
+      q += filtroArea;
+    }
+  }
   // Y por tipo. Alguien que pide una casa no quiere que le ofrezcan un local:
   // pasó, y el agente lo presentó como «lo más cercano que tengo».
   if (pistas.tipo) q += `&tipo=eq.${encodeURIComponent(pistas.tipo)}`;
@@ -291,11 +305,23 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
     // se quedaba sin nada que enseñar justo cuando tenía la respuesta buena, y
     // acababa ofreciendo lo primero que pillaba. Se avisa de que son otras
     // zonas para que lo diga, no para que lo disimule.
-    let ampliado = false;
+    let ampliado = false, otroTamano = false;
+    const traer = (u) => fetch(u, { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    const sinArea = (u) => (filtroArea ? u.replace(filtroArea, '') : u);
+    // Primero se suelta el tamaño y se mantiene la zona: quien pide un local de
+    // 100 m² en el norte prefiere uno de 70 en el norte que uno de 100 en
+    // Soledad. Si ni así, se suelta la zona.
+    if (!filas.length && filtroArea) {
+      filas = await traer(sinArea(q));
+      if (filas.length) otroTamano = true;
+    }
     if (!filas.length && pistas.barrio) {
       ampliado = true;
-      filas = await fetch(q.replace(filtroBarrio, ''),
-        { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      filas = await traer(q.replace(filtroBarrio, ''));
+      if (!filas.length && filtroArea) {
+        filas = await traer(sinArea(q.replace(filtroBarrio, '')));
+        if (filas.length) otroTamano = true;
+      }
     }
 
     const lineas = (filas || []).map(f => {
@@ -320,7 +346,11 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
         f.fotos?.length ? 'con fotos' : null,
       ].filter(Boolean).join(' · ');
     });
-    return { lineas, total: lineas.length, ampliado, barrioPedido: pistas.barrio || null, zona: zona?.zona || null };
+    const tamanoPedido = filtroArea ? (pistas.metraje.min && pistas.metraje.max
+      ? `entre ${pistas.metraje.min} y ${pistas.metraje.max} m²`
+      : pistas.metraje.min ? `de ${pistas.metraje.min} m² o más` : `de hasta ${pistas.metraje.max} m²`) : null;
+    return { lineas, total: lineas.length, ampliado, barrioPedido: pistas.barrio || null, zona: zona?.zona || null,
+      otroTamano, tamanoPedido };
   } catch { return { lineas: [], total: 0 }; }
 }
 
@@ -406,6 +436,45 @@ function nombreEnTexto(texto, mapa) {
   return mejor?.original || null;
 }
 
+// Qué tamaño pidió: «de unos 100 metros», «100 m2», «mínimo 80 m²», «máximo
+// 60 metros», «entre 80 y 120 metros». Devuelve {min, max} en m² o null.
+//
+// Un número suelto se lee como aproximado: quien pide «un local de 100 metros»
+// acepta uno de 96 y probablemente uno de 140, pero no uno de 40 ni uno de
+// 400. De ahí el margen (80 % a 150 %). «A 100 metros de la playa» es una
+// distancia, no un tamaño, y no cuenta.
+const M2 = '(?:m2|m²|mts2?|mt2?|metros?(?: cuadrados)?|mtrs)';
+export function areaDelTexto(texto) {
+  const t = sinTildes(texto).replace(/(\d)\.(\d{3})\b/g, '$1$2');
+  const sinDistancias = t.replace(new RegExp('\\ba\\s+(?:unos\\s+)?\\d+\\s*' + M2 + '\\s+de\\b', 'g'), ' ');
+  const n = (v) => { const x = parseInt(v, 10); return x >= 10 && x <= 100000 ? x : null; };
+  let m = sinDistancias.match(new RegExp('entre\\s+(\\d+)\\s*(?:' + M2 + ')?\\s+y\\s+(\\d+)\\s*' + M2));
+  if (m && n(m[1]) && n(m[2])) return { min: Math.min(n(m[1]), n(m[2])), max: Math.max(n(m[1]), n(m[2])) };
+  m = sinDistancias.match(new RegExp('(minimo|al menos|mas de|desde|mayor a|superior a|no menos de)\\s+(?:de\\s+)?(\\d+)\\s*' + M2));
+  if (m && n(m[2])) return { min: n(m[2]), max: null };
+  m = sinDistancias.match(new RegExp('(maximo|hasta|menos de|no mas de|no mayor a)\\s+(?:de\\s+)?(\\d+)\\s*' + M2));
+  if (m && n(m[2])) return { min: null, max: n(m[2]) };
+  const todas = [...sinDistancias.matchAll(new RegExp('(\\d+)\\s*' + M2 + '(?![a-z])', 'g'))];
+  if (!todas.length) return null;
+  const x = n(todas[todas.length - 1][1]);
+  return x ? { min: Math.round(x * 0.8), max: Math.round(x * 1.5) } : null;
+}
+
+// ¿Busca arrendar o comprar? «Busco apartamento en arriendo» en el primer
+// mensaje no filtraba nada: la operación solo salía de la calificación, que
+// llega después, y el agente le ofreció a quien quería arrendar una casa en
+// venta de 460 millones (30-09-2026). Quien quiere VENDER o ARRENDAR lo suyo es
+// captación, no una búsqueda: eso no se toca aquí.
+export function operacionDelTexto(texto) {
+  const t = sinTildes(texto);
+  if (/\b(vender|arrendar|alquilar|administr\w*)\s+(mi|mis|nuestro|nuestra)\b/.test(t)) return null;
+  const arriendo = /\b(arriendo|arrendar|arrienda|alquiler|alquilar|renta|rentar|en arriendo|para arrendar)\b/.test(t);
+  const compra = /\b(comprar|compra|compro|en venta|para comprar|adquirir)\b/.test(t);
+  if (arriendo && !compra) return 'arriendo';
+  if (compra && !arriendo) return 'venta';
+  return null;
+}
+
 // Cuántas habitaciones pidió: «3 habitaciones», «de 3 alcobas», «3 hab».
 export function habitacionesDelTexto(texto) {
   const t = sinTildes(texto);
@@ -481,6 +550,8 @@ export async function pistasDelContacto(userId, clientId, mensajes = []) {
     // «cualquier rango de precio» no es un presupuesto: es quitarlo.
     presupuesto: plata === 'libre' ? null : plata,
     habitaciones: buscar(habitacionesDelTexto),
+    metraje: buscar(areaDelTexto),
+    operacion: buscar(operacionDelTexto),
   };
 }
 
@@ -528,6 +599,9 @@ const TUTEA = new RegExp('(^|[^a-záéíóúñ])(' + [
   // serían «mire» y «elija»: no hay forma de confundirlos.
   'hayas', 'hagas', 'digas', 'puedas', 'quieras', 'tengas', 'necesites', 'estés',
   'seas', 'sepas', 'vengas', 'vayas', 'mira', 'elige', 'dame',
+  // «Déjame mostrarle…» (30-09-2026, agente de Certain en usted): en usted es
+  // «déjeme», así que tampoco hay confusión posible.
+  'déjame', 'dejame', 'mírame', 'mirame', 'escúchame', 'escuchame', 'espérame', 'esperame',
 ].join('|') + ')([^a-záéíóúñ]|$)', 'i');
 
 export function tutea(texto) {
@@ -637,12 +711,14 @@ export function pistasDeBusqueda(capturado = {}, respuestas = {}, delContacto = 
   // no una interpretación. Y el modelo llegó a poner como zona la del inmueble
   // que él mismo estaba ofreciendo.
   return {
-    operacion: respuestas?._ruta || null,
+    // La ruta de la calificación manda; si aún no hay, lo que dijo la persona.
+    operacion: respuestas?._ruta || delContacto.operacion || null,
     ciudad: delContacto.ciudad || capturado.ciudad || deCriterio('ciudad') || null,
     tipo: delContacto.tipo || null,
     barrio: delContacto.barrio || capturado.zona || capturado.barrio || deCriterio('zona', 'barrio', 'sector') || null,
     presupuesto: delContacto.presupuesto || aPlata(capturado.presupuesto) || aPlata(deCriterio('presupuesto', 'canon', 'precio')),
     habitaciones: delContacto.habitaciones || cuantas(capturado.habitaciones) || cuantas(deCriterio('habitacion', 'alcoba', 'cuarto', 'dormitorio')),
+    metraje: delContacto.metraje || areaDelTexto(String(deCriterio('metr', 'tamano', 'tamaño', 'area', 'área') || '').replace(/^(\d+)$/, '$1 m2')) || null,
   };
 }
 
@@ -779,23 +855,76 @@ function horaBonita(min) {
   return (h % 12 || 12) + ':' + m + (h < 12 ? ' a. m.' : ' p. m.');
 }
 // ¿Dentro o fuera, y cuándo es la próxima franja? `dia` 0=domingo, `min` desde medianoche.
-export function veredictoHorario(franjas, dia, min) {
-  const hoy = franjas.filter(f => f.dias.has(dia)).sort((a, b) => a.desde - b.desde);
+// `festivo(k)` dice si el día que está a k días de hoy es festivo (0 = hoy).
+// Un festivo no tiene franjas: ni se está dentro ni se ofrece ese día. Se mira
+// hasta dos semanas: un lunes festivo después de un fin de semana largo, o
+// Semana Santa, empujan la próxima franja varios días.
+export function veredictoHorario(franjas, dia, min, festivo = () => false) {
+  const franjasDe = (k) => (festivo(k) ? [] : franjas.filter(f => f.dias.has((dia + k) % 7)).sort((a, b) => a.desde - b.desde));
+  const hoy = franjasDe(0);
   const dentro = hoy.find(f => min >= f.desde && min < f.hasta);
   if (dentro) return { dentro: true, hasta: dentro.hasta };
   const luegoHoy = hoy.find(f => f.desde > min);
   if (luegoHoy) return { dentro: false, proxima: { enDias: 0, dia, desde: luegoHoy.desde } };
-  for (let k = 1; k <= 7; k++) {
-    const d = (dia + k) % 7;
-    const f = franjas.filter(x => x.dias.has(d)).sort((a, b) => a.desde - b.desde)[0];
-    if (f) return { dentro: false, proxima: { enDias: k, dia: d, desde: f.desde } };
+  for (let k = 1; k <= 14; k++) {
+    const f = franjasDe(k)[0];
+    if (f) return { dentro: false, proxima: { enDias: k, dia: (dia + k) % 7, desde: f.desde } };
   }
   return null;
 }
 
+// ── Festivos de Colombia ─────────────────────────────────────────────────────
+// Calculados, no copiados de una lista que habría que actualizar cada año:
+// los fijos; los que la Ley Emiliani (Ley 51 de 1983) pasa al lunes siguiente;
+// y los que cuelgan de la Pascua. El 12-10-2026 (Día de la Raza, lunes) el
+// agente habría dicho «estamos atendiendo» con la oficina cerrada.
+function pascua(y) {
+  // Algoritmo de Meeus/Jones/Butcher (calendario gregoriano).
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31), diaMes = ((h + l - 7 * m + 114) % 31) + 1;
+  return Date.UTC(y, mes - 1, diaMes);
+}
+const DIA_MS = 86400000;
+const aLunes = (t) => { const w = new Date(t).getUTCDay(); return w === 1 ? t : t + ((8 - w) % 7) * DIA_MS; };
+const clave = (t) => new Date(t).toISOString().slice(0, 10);
+const _festivos = new Map();
+export function festivosColombia(y) {
+  if (_festivos.has(y)) return _festivos.get(y);
+  const P = pascua(y);
+  const f = new Map();
+  const pon = (t, nombre) => f.set(clave(t), nombre);
+  pon(Date.UTC(y, 0, 1), 'Año Nuevo');
+  pon(aLunes(Date.UTC(y, 0, 6)), 'Reyes Magos');
+  pon(aLunes(Date.UTC(y, 2, 19)), 'San José');
+  pon(P - 3 * DIA_MS, 'Jueves Santo');
+  pon(P - 2 * DIA_MS, 'Viernes Santo');
+  pon(Date.UTC(y, 4, 1), 'Día del Trabajo');
+  pon(aLunes(P + 39 * DIA_MS), 'Ascensión del Señor');
+  pon(aLunes(P + 60 * DIA_MS), 'Corpus Christi');
+  pon(aLunes(P + 68 * DIA_MS), 'Sagrado Corazón');
+  pon(aLunes(Date.UTC(y, 5, 29)), 'San Pedro y San Pablo');
+  pon(Date.UTC(y, 6, 20), 'Día de la Independencia');
+  pon(Date.UTC(y, 7, 7), 'Batalla de Boyacá');
+  pon(aLunes(Date.UTC(y, 7, 15)), 'Asunción de la Virgen');
+  pon(aLunes(Date.UTC(y, 9, 12)), 'Día de la Raza');
+  pon(aLunes(Date.UTC(y, 10, 1)), 'Todos los Santos');
+  pon(aLunes(Date.UTC(y, 10, 11)), 'Independencia de Cartagena');
+  pon(Date.UTC(y, 11, 8), 'Inmaculada Concepción');
+  pon(Date.UTC(y, 11, 25), 'Navidad');
+  _festivos.set(y, f);
+  return f;
+}
+// El nombre del festivo de una fecha 'aaaa-mm-dd', o null.
+export function festivoDeColombia(ymd) {
+  return festivosColombia(+ymd.slice(0, 4)).get(ymd) || null;
+}
+
 export function bloqueDeAhora(zona, ahora = new Date(), contexto = '') {
   const tz = zona || 'America/Bogota';
-  let cuando, manana, dia, min;
+  let cuando, manana, dia, min, hoyYmd;
   try {
     const f = (d, o) => new Intl.DateTimeFormat('es-CO', { timeZone: tz, ...o }).format(d);
     cuando = f(ahora, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -805,21 +934,36 @@ export function bloqueDeAhora(zona, ahora = new Date(), contexto = '') {
     const v = t => partes.find(p => p.type === t)?.value;
     dia = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(v('weekday'));
     min = (+v('hour') % 24) * 60 + +v('minute');
+    // La fecha de HOY en la zona del negocio (a las 8 p. m. de Bogotá ya es
+    // mañana en UTC): de ahí se cuentan los festivos.
+    hoyYmd = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ahora);
   } catch (e) {
     return '';   // una zona inválida no puede tumbar la respuesta: sin reloj, como antes
   }
   const donde = PAIS_DE_ZONA[tz] ? 'hora de ' + PAIS_DE_ZONA[tz] : 'hora local del negocio';
+  // Festivos: solo se conocen los de Colombia. Otro país, sin festivos (como
+  // antes) hasta que alguien los necesite.
+  const colombia = tz === 'America/Bogota';
+  const ymdEn = (k) => clave(Date.parse(hoyYmd + 'T00:00:00Z') + k * DIA_MS);
+  const festivo = (k) => (colombia ? !!festivoDeColombia(ymdEn(k)) : false);
+  const festivoHoy = colombia ? festivoDeColombia(hoyYmd) : null;
+  const festivoManana = colombia ? festivoDeColombia(ymdEn(1)) : null;
   const franjas = horarioDelTexto(contexto);
-  const ver = franjas ? veredictoHorario(franjas, dia, min) : null;
+  const ver = franjas ? veredictoHorario(franjas, dia, min, festivo) : null;
   let estado = '';
+  if (festivoHoy) estado += `HOY ES FESTIVO EN COLOMBIA (${festivoHoy}).\n`;
+  else if (festivoManana) estado += `MAÑANA ES FESTIVO EN COLOMBIA (${festivoManana}): no ofrezcas llamadas ni visitas para mañana.\n`;
   if (ver && ver.dentro) {
-    estado = `AHORA MISMO SE ESTA DENTRO DEL HORARIO DE ATENCION (hasta las ${horaBonita(ver.hasta)}). Si piden que les llamen ya, di que un asesor le contacta en cuanto pueda, sin prometer minutos exactos. No digas que no hay nadie.\n`;
+    estado += `AHORA MISMO SE ESTA DENTRO DEL HORARIO DE ATENCION (hasta las ${horaBonita(ver.hasta)}). Si piden que les llamen ya, di que un asesor le contacta en cuanto pueda, sin prometer minutos exactos. No digas que no hay nadie.\n`;
   } else if (ver) {
     const p = ver.proxima;
     const cuandoAbre = p.enDias === 0 ? 'hoy a las ' + horaBonita(p.desde)
       : p.enDias === 1 ? 'mañana a las ' + horaBonita(p.desde)
-      : 'el ' + DIAS[p.dia].replace('miercoles', 'miércoles').replace('sabado', 'sábado') + ' a las ' + horaBonita(p.desde);
-    estado = `AHORA MISMO SE ESTA FUERA DEL HORARIO DE ATENCION: nadie puede llamar ahora. La proxima franja en la que un asesor puede contactar es ${cuandoAbre}; si piden que les llamen ya, dilo con naturalidad y ofrece esa franja. Por chat sigues atendiendo, pero una llamada no es ahora.\n`;
+      // A dos o más días, con fecha: tras Semana Santa o un puente, «el lunes»
+      // a secas puede leerse como el lunes equivocado.
+      : 'el ' + new Intl.DateTimeFormat('es-CO', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })
+          .format(new Date(ymdEn(p.enDias) + 'T12:00:00Z')).replace(',', '') + ' a las ' + horaBonita(p.desde);
+    estado += `AHORA MISMO SE ESTA FUERA DEL HORARIO DE ATENCION: nadie puede llamar ahora. La proxima franja en la que un asesor puede contactar es ${cuandoAbre}; si piden que les llamen ya, dilo con naturalidad y ofrece esa franja. Por chat sigues atendiendo, pero una llamada no es ahora.\n`;
   }
   return `QUE DIA Y HORA ES AHORA MISMO (${donde}):
 ${cuando}
@@ -930,7 +1074,8 @@ LO QUE NO PUEDES INVENTAR — ESTO ES INNEGOCIABLE:
 ${propiedades && propiedades.lineas.length ? `LO QUE HAY DISPONIBLE AHORA MISMO (${propiedades.total} opciones que encajan con lo que te dijeron):
 ${propiedades.lineas.join('\n')}
 
-Sobre esta lista:${propiedades.ampliado ? `
+Sobre esta lista:${propiedades.otroTamano ? `
+- OJO: del tamaño que pidió (${propiedades.tamanoPedido}) no hay NADA. Estas son de otros tamaños: fíjate en los m² de cada una. Dilo antes de enseñarlas —"de ese tamaño no tengo ahora mismo, pero tengo estas"— y no las presentes como si fueran del tamaño pedido` : ''}${propiedades.ampliado ? `
 - OJO: en ${propiedades.zona ? 'la zona ' + propiedades.zona : propiedades.barrioPedido} no hay NADA que encaje. Estas son de OTRAS zonas de la misma ciudad. Dilo antes de enseñarlas —"en ${propiedades.barrioPedido} no tengo nada ahora mismo, pero sí en otras zonas"— y no las presentes como si fueran de ahí` : ''}
 - Es lo unico que puedes ofrecer. Si te preguntan por algo que no esta aqui, no lo inventes: dilo y ofrece pasar la conversacion a un asesor
 - Menciona como mucho tres opciones por mensaje y pregunta cual le interesa
@@ -994,15 +1139,27 @@ const ESCRIBIENDO_MIN_MS = 3000;
 
 // Devuelve el texto y, aparte, lo que consumió. El uso se registra donde se
 // sabe de quién es la conversación; aquí solo se recoge.
-// Cuánto texto estable hace falta para que cachear valga la pena.
+// Cuánto texto estable hace falta para marcarlo como cacheable.
 //
-// Anthropic no cachea por debajo de 1.024 tokens. En español son unos 3.500
-// caracteres; se pide 4.500 para no quedarse justo en el filo y pagar una
-// escritura que luego no sirve.
+// El mínimo lo pone Anthropic y DEPENDE DEL MODELO: Haiku 4.5 —el del agente—
+// no cachea por debajo de 4.096 tokens; Sonnet 4.6 (la alternativa de
+// AGENTE_WA_MODELO), desde 1.024. Aquí decía «1.024» para todos, y con Haiku
+// eso era falso: un prompt de 1.700 tokens se marcaba y no se cacheaba nunca.
+// Por debajo del mínimo marcar no da error ni cuesta más —simplemente no
+// cachea—, así que el umbral no protege de un gasto: evita marcar en balde y
+// deja claro qué agentes se benefician.
 //
-// Esta guarda es la que hace que un agente recién creado —cuatro líneas de
-// contexto— siga funcionando igual y sin coste extra.
-const MINIMO_CACHE = 4500;
+// Medido el 30-09-2026 con count_tokens: estos prompts en español salen a ~3,1
+// caracteres por token (5.211 → 1.710; 19.770 → 6.352). Se usa 3 para quedarse
+// del lado seguro: marcar uno que se queda corto no cuesta nada; no marcar uno
+// que sí cabía, sí.
+const MINIMO_TOKENS_CACHE = { haiku: 4096, 'sonnet-4-6': 1024, 'sonnet-4-5': 1024 };
+export function minimoCacheCaracteres(modelo = MODELO_WA) {
+  const m = String(modelo || '');
+  const clave = Object.keys(MINIMO_TOKENS_CACHE).find(k => m.includes(k));
+  return (clave ? MINIMO_TOKENS_CACHE[clave] : 4096) * 3;
+}
+const MINIMO_CACHE = minimoCacheCaracteres(MODELO_WA);
 
 // El `system` que se le manda a la API.
 //
@@ -1225,6 +1382,13 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
       invento.slice(0, 4).join(', ') + '). Escríbelo otra vez usando SOLO lo que tienes delante. ' +
       'Si te falta un dato, di que lo confirma un asesor. El contacto no vio nada: no te disculpes ni lo menciones.');
     if (corregido && !inventos(cleanForUser(corregido), citable).length) { bruto = corregido; texto = cleanForUser(corregido).trim(); }
+  }
+
+  if (capturado.celular && pideNumero(texto)) {
+    const sinPedir = await reintento('Tu mensaje anterior NO se envió: le pedías su número, y YA lo tienes (' + capturado.celular + '). ' +
+      'Escríbelo otra vez sin pedirle el número. Si hace falta que le llamen, a lo sumo confirma «¿le llamamos a este mismo número?». ' +
+      'El contacto no vio nada: no te disculpes ni lo menciones.');
+    if (sinPedir && !pideNumero(cleanForUser(sinPedir))) { bruto = sinPedir; texto = cleanForUser(sinPedir).trim(); }
   }
 
   if (condicionaAlDato(texto)) {
@@ -1653,6 +1817,17 @@ export function condicionaAlDato(texto) {
   ));
 }
 
+// ¿Pide un número que ya tenemos? Con el número en el prompt («YA TIENES SU
+// NUMERO») Haiku lo seguía pidiendo en WhatsApp —«¿me comparte un número para
+// que un asesor le confirme?»— a quien escribía desde ese mismo número. Confirmar
+// «¿le llamamos a este mismo número?» SÍ vale: eso no es pedirlo.
+export function pideNumero(texto) {
+  const t = sinTildes(texto);
+  if (/(este|ese|mismo|este mismo) (numero|celular|whatsapp)/.test(t)) return false;
+  return /\b(me (comparte|da|regala|indica|pasa|deja|facilita|confirma)|comparta(me)?|compartame|regaleme|indiqueme|digame|me podria (dar|compartir|pasar)|puede (darme|compartirme|pasarme)|cual es)\b[^.?!]{0,40}\b(numero|celular|telefono|whatsapp)\b/.test(t)
+    || /\b(su|tu) (numero|celular|telefono)( de contacto| celular)?\s*\?/.test(t);
+}
+
 // ¿Le estamos diciendo que no?
 export function descartaAlContacto(texto) {
   const t = String(texto || '').toLowerCase();
@@ -1980,6 +2155,17 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   //
   // Quien viene a ofrecernos algo es una oportunidad, y quien decide si encaja
   // es un asesor con el caso delante.
+  const numeroSabido = capturedData.celular || conocido.celular || null;
+  if (numeroSabido && pideNumero(cleanForUser(reply))) {
+    const sinPedir = await responderViendo(system, hist, [
+      { role: 'assistant', content: reply },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió: le pedías su número, y YA lo tienes (' + numeroSabido + '). ' +
+        'Escríbelo otra vez sin pedirle el número. Si hace falta que le llamen, a lo sumo confirma «¿le llamamos a este mismo número?». ' +
+        'El contacto no vio nada y no te ha corregido: no te disculpes ni lo menciones.' },
+    ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
+    if (sinPedir && !pideNumero(cleanForUser(sinPedir))) reply = sinPedir;
+  }
+
   if (condicionaAlDato(cleanForUser(reply))) {
     const sinCobrar = await responderViendo(system, hist, [
       { role: 'assistant', content: reply },
