@@ -205,5 +205,38 @@ for (const c of ['btn-pri', 'btn-ghost', 'auto-input', 'crm-inbox-bubble', 'crm-
 ok(/showToast\(/.test(enviar) && !/(?<![A-Za-z])toast\(/.test(enviar),
    'los avisos usan showToast, que es el que existe');
 
+
+// ── Los mismos guardianes que en una conversación real ──────────────────────
+//
+// El probador no los aplicaba, y mentía en las dos direcciones: enseñaba
+// defectos que en producción se corrigen —se vio un agente formal tuteando
+// durante toda una prueba, cuando el guardián lo habría reescrito— y podía dar
+// por bueno un mensaje que allí sale distinto. Quien prueba aquí está
+// decidiendo si enciende el agente.
+console.log('\nEl ensayo pasa por los mismos guardianes');
+{
+  const i = cuerpo.indexOf('const reintento = async (aviso)');
+  ok(i > 0, 'el ensayo sabe reintentar, como la conversación real');
+
+  ok(/if \(agent\.tone === 'formal' && tutea\(texto\)\)/.test(cuerpo), 'el del tuteo');
+  ok(/const invento = inventos\(texto, citable\);/.test(cuerpo), 'el de los inventos');
+  ok(/if \(quiereOfrecerInmueble\(limpios\) && descartaAlContacto\(texto\)\)/.test(cuerpo),
+     'y el de no descartar a quien ofrece un inmueble');
+
+  // El reintento solo se acepta si de verdad arregló lo que falló; si no, se
+  // enseña el original, que es lo que pasaría en producción.
+  ok(/if \(deUsted && !tutea\(cleanForUser\(deUsted\)\)\)/.test(cuerpo), 'y solo se acepta si corrigió el tuteo');
+  ok(/if \(corregido && !inventos\(cleanForUser\(corregido\), citable\)\.length\)/.test(cuerpo), 'o el invento');
+  ok(/if \(sinDescarte && !descartaAlContacto\(cleanForUser\(sinDescarte\)\)\)/.test(cuerpo), 'o el descarte');
+
+  // El ensayo no escala ni registra: no hay conversación que pasarle a nadie.
+  const bloque = cuerpo.slice(i, i + 2600);
+  ok(!/registrarError/.test(bloque), 'y no registra errores de una conversación que no existe');
+  ok(!/\[ESCALAR\]/.test(bloque), 'ni escala a una persona');
+
+  // Y el texto que se devuelve es el corregido, no el original.
+  ok(/texto = cleanForUser\(deUsted\)\.trim\(\)/.test(cuerpo), 'lo que se enseña es el mensaje ya corregido');
+}
+
 console.log('');
 process.exit(mal ? 1 : 0);

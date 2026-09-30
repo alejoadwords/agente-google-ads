@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-30-probador-fiel",
+      "fecha": "2026-09-30",
+      "tipo": "mejora",
+      "titulo": "El probador ahora enseña exactamente lo que recibiría tu cliente",
+      "texto": "Cuando pruebas tu agente, las respuestas pasan por las mismas comprobaciones que en una conversación real: si se inventa un precio, si tutea a un cliente al que tratas de usted, o si descarta a alguien que viene a ofrecerte su inmueble, el mensaje se corrige antes de mostrártelo — igual que se corregiría antes de llegar al contacto. Antes el probador enseñaba fallos que en producción no salían, y también podía dar por bueno algo que allí sale distinto.",
+      "accion": {
+        "texto": "Probar mi agente",
+        "ir": "conversaciones"
+      }
+    },
+    {
       "id": "2026-09-29-captacion-sin-descarte",
       "fecha": "2026-09-29",
       "tipo": "mejora",

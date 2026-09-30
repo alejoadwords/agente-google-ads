@@ -650,9 +650,11 @@ NINGUN MENSAJE TUYO TERMINA SIN UNA PREGUNTA:
 - Tambien despues de mandar fotos, despues de responder una duda y despues de dar un precio. Un mensaje que termina sin pregunta deja a la persona sin saber que sigue, y ahi es donde se enfrian las conversaciones
 - La unica excepcion es cuando te despides porque la persona se despidio
 
-EL TELEFONO, EN TU SEGUNDO MENSAJE COMO MUY TARDE:
-- No esperes a tenerlo todo. En cuanto la persona diga QUE busca, pideselo, y da la razon: "para que un asesor le confirme disponibilidad, ¿me comparte un numero?"
-- Puedes pedirlo y seguir conversando en el mismo mensaje. No hace falta que te lo de para continuar
+EL TELEFONO, PRONTO — PERO NUNCA A CAMBIO DE NADA:
+- PRIMERO haces lo que te piden. Si piden fotos, las mandas; si piden un precio, lo das; si preguntan algo, lo respondes. Y en el MISMO mensaje, detras, pides el numero
+- Asi: "Claro, le mando las fotos del de Riomar. Y para que un asesor le confirme disponibilidad, ¿me comparte un numero?"
+- NUNCA "primero necesito su numero", ni "antes de enviarle las fotos necesito", ni nada parecido. Negarle algo a alguien para sacarle el telefono no consigue el telefono: pierde al cliente
+- Pidelo pronto, en cuanto sepas QUE busca. Si no te lo da, sigues atendiendole igual y lo intentas mas adelante — nunca dos mensajes seguidos pidiendo lo mismo
 - Una conversacion que avanza mucho y se corta sin telefono es un cliente al que ya no se puede llamar: eso es lo que hay que evitar
 
 EL HORARIO DE ATENCION SE RESPETA — Y SE DICE:
@@ -926,6 +928,46 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   }
   let texto = cleanForUser(bruto).trim();
   if (!texto) return { ok: false, error: 'El agente no devolvió texto. Suele ser el presupuesto de tokens: reintenta.' };
+
+  // Los mismos guardianes que en una conversación real.
+  //
+  // Sin esto el probador mentía en las dos direcciones: enseñaba defectos que
+  // en producción se corrigen —un tuteo que el guardián reescribe— y podía
+  // enseñar como bueno un mensaje que allí sale distinto. Quien prueba aquí
+  // está decidiendo si enciende el agente: tiene que ver lo que de verdad
+  // recibiría su cliente.
+  //
+  // Se reintenta como en producción, pero sin escalar ni registrar nada: esto
+  // es un ensayo y no hay conversación que pasar a nadie.
+  const reintento = async (aviso) => responderViendo(system, limpios, [
+    { role: 'assistant', content: bruto },
+    { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) ' + aviso },
+  ], { userId, origen }).catch(() => '');
+
+  if (agent.tone === 'formal' && tutea(texto)) {
+    const deUsted = await reintento('Tu mensaje anterior NO se envió: tuteaste, y este cliente pidió trato de usted. ' +
+      'Escríbelo otra vez tratándole de USTED: «le ayudo», «cuénteme», «su presupuesto». Nada de «tú», «te», «tu» ni «ti». ' +
+      'El contacto no vio nada y no te ha corregido: no te disculpes ni lo menciones.');
+    if (deUsted && !tutea(cleanForUser(deUsted))) { bruto = deUsted; texto = cleanForUser(deUsted).trim(); }
+  }
+
+  // El de los inventos, que es el que de verdad protege al cliente: un precio
+  // que no existe lo tiene que desmentir después una persona.
+  const citable = loQuePuedeCitar(agent, inventario, limpios);
+  const invento = inventos(texto, citable);
+  if (invento.length) {
+    const corregido = await reintento('Tu mensaje anterior NO se envió: citaste datos que no están en tu contexto ni en el inventario (' +
+      invento.slice(0, 4).join(', ') + '). Escríbelo otra vez usando SOLO lo que tienes delante. ' +
+      'Si te falta un dato, di que lo confirma un asesor. El contacto no vio nada: no te disculpes ni lo menciones.');
+    if (corregido && !inventos(cleanForUser(corregido), citable).length) { bruto = corregido; texto = cleanForUser(corregido).trim(); }
+  }
+
+  if (quiereOfrecerInmueble(limpios) && descartaAlContacto(texto)) {
+    const sinDescarte = await reintento('Tu mensaje anterior NO se envió. Esta persona viene a ofrecernos su inmueble, y le has dicho que no encaja: ' +
+      'eso no lo decides tú, lo decide el asesor con el caso delante. Escríbelo otra vez SIN ninguna mención a estratos, portafolio, ' +
+      'zonas que no se manejan ni a que quizá no podamos ayudarle. El contacto no vio nada: no te disculpes ni lo menciones.');
+    if (sinDescarte && !descartaAlContacto(cleanForUser(sinDescarte))) { bruto = sinDescarte; texto = cleanForUser(sinDescarte).trim(); }
+  }
 
   // Si el agente agendó, se enseña lo que habría pasado: la confirmación que
   // saldría, o el mensaje que sustituiría al suyo si la hora no está libre.

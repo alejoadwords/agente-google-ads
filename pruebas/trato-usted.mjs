@@ -90,7 +90,15 @@ for (const t of ['Me alegra que nos hayas contactado', '¿Alguna de estas te int
 }
 
 const eng = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
-const g = eng.slice(eng.indexOf("if (agent.tone === 'formal' && tutea("), eng.indexOf('const citable = loQuePuedeCitar'));
+// Dentro de processIncoming: el probador tiene ahora su propia copia de los
+// mismos guardianes, y aparece ANTES en el fichero. Anclando a la primera
+// aparición se comprobaba el del ensayo, que ni escala ni registra porque no
+// hay conversación que pasar a nadie.
+const iReal = eng.indexOf('export async function processIncoming(');
+const g = eng.slice(
+  eng.indexOf("if (agent.tone === 'formal' && tutea(", iReal),
+  eng.indexOf('const citable = loQuePuedeCitar', iReal) + 400,
+);
 ok(g.length > 200, 'el guardián del trato existe en la conversación real');
 ok(/agent\.tone === 'formal'/.test(g), 'solo cuando el cliente pidió usted');
 ok(/if \(deUsted && !tutea\(cleanForUser\(deUsted\)\)\) reply = deUsted;/.test(g),
