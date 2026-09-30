@@ -56,19 +56,16 @@ export async function latir(cron, resultado, fallo) {
 // suena siempre es un aviso que se deja de leer. Al enchufar otro cron, se
 // añade aquí; hasta entonces no se vigila.
 export const CADA = {
-  'cron-alerts': 15 * 60,        // 0 9,14,18 * * 1-5 — el hueco largo es 18:00→9:00
   'cron-automations': 10,
   'cron-campaigns': 10,
   'cron-conectores': 24 * 60,    // 0 14 * * 1-5
   'cron-errores': 60,
   'cron-integridad': 24 * 60,    // 0 11 * * *
   'cron-knowledge': 31 * 24 * 60,        // 0 12 1 * * — 31 días: el mes más largo
-  'cron-monthly-reports': 31 * 24 * 60,  // 0 8 1 * *
   'cron-catalogo': 30,           // 25,55 * * * *
   'cron-notas': 24 * 60,         // 0 13,20 * * 1-5
   'cron-recordatorios': 10,
   'cron-programados': 5,
-  'cron-reports': 7 * 24 * 60,   // 0 8 * * 1
   'cron-retention': 24 * 60,     // 0 6 * * *
   'cron-tasks': 24 * 60,         // 0 12 * * 1-5
   'cron-trials': 24 * 60,        // 0 13 * * *
@@ -78,7 +75,7 @@ export const CADA = {
 
 // Los que solo corren de lunes a viernes. Su silencio se mide en minutos
 // HÁBILES, no de reloj: ver `calladoEn`.
-export const SOLO_ENTRE_SEMANA = ['cron-alerts', 'cron-conectores', 'cron-notas', 'cron-tasks'];
+export const SOLO_ENTRE_SEMANA = ['cron-conectores', 'cron-notas', 'cron-tasks'];
 
 /**
  * Cuánto silencio se le perdona a cada uno antes de avisar.
@@ -109,13 +106,10 @@ export const DESDE = '2026-09-23T16:00:00Z';
 // código nuevo. Un aviso que sale el día de estrenar por estrenar es el que
 // enseña a ignorar los avisos.
 export const DESDE_POR_CRON = {
-  'cron-alerts': '2026-09-27T17:00:00Z',
   'cron-catalogo': '2026-09-28T22:00:00Z',
   'cron-conectores': '2026-09-27T17:00:00Z',
   'cron-integridad': '2026-09-27T17:00:00Z',
   'cron-knowledge': '2026-09-27T17:00:00Z',
-  'cron-monthly-reports': '2026-09-27T17:00:00Z',
-  'cron-reports': '2026-09-27T17:00:00Z',
   'cron-retention': '2026-09-27T17:00:00Z',
 };
 

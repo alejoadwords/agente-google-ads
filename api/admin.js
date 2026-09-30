@@ -1069,7 +1069,8 @@ async function handleUpdatePreferences(req, res) {
 
 // ── SAVE PLATFORM ACCOUNT ID ──────────────────────────────
 // Llamado cuando el usuario selecciona una cuenta publicitaria (ej: Meta ad account)
-// Guarda el account_id en Supabase para que los crons de alertas/reportes lo usen
+// Guarda el account_id en Supabase (lo leía el reporte semanal de pauta, apagado
+// el 30-09-2026; lo sigue leyendo Plataformas de pauta)
 
 async function handleSavePlatformAccount(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -1112,8 +1113,8 @@ export default async function handler(req, res) {
   // Se comprueba AQUÍ y no en cada manejador —son dieciséis— porque así el
   // que se escriba mañana nace protegido en vez de nacer abierto.
   //
-  // Se acepta también el secreto de admin: con él llaman el panel y el cron
-  // de alertas, que sí pueden actuar en nombre de otra persona.
+  // Se acepta también el secreto de admin: con él llama el panel, que sí
+  // puede actuar en nombre de otra persona.
   if (RUTAS_DE_USUARIO.has(action)) {
     const conSecreto = authCheck(req);
     const sesion = conSecreto ? null : await verificarSesion(req);

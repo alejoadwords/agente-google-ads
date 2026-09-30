@@ -106,7 +106,8 @@ una respuesta que traiga tabla.
 
 ## Crons
 
-14, en `vercel.json`. Los dos que más aparecen en soporte: `cron-automations` y
+15, en `vercel.json`. Los reportes semanal y mensual de pauta y las alertas de
+campañas se apagaron el 30-09-2026 (no producían nada). Los dos que más aparecen en soporte: `cron-automations` y
 `cron-campaigns`, ambos **cada 10 minutos** — nada de esto es instantáneo.
 
 ## Soporte a clientes

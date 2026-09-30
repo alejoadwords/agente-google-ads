@@ -32,16 +32,13 @@ Dos reglas del despliegue que explican fallos raros:
 | `api/close-reasons.js` | edge | Catálogo de motivos de cierre (ganada / perdida), editable por cada usuario. | close_reasons, team_members |
 | `api/conversations.js` | node | Historial de conversaciones por agente | — |
 | `api/create-sheet.js` | edge | Firma JWT para Google OAuth2 (service account) | — |
-| `api/cron-alerts.js` | node | Ejecuta a las 9am, 2pm y 6pm UTC (lunes a viernes) — ver vercel.json | — |
 | `api/cron-automations.js` | node | Motor de automatizaciones del CRM. Corre cada 10 min (vercel.json): | — |
 | `api/cron-campaigns.js` | node | Motor de envío de campañas masivas (email + WhatsApp) por lotes. | — |
 | `api/cron-conectores.js` | edge | Avisa cuando un conector deja de recoger leads. | lead_forms |
 | `api/cron-errores.js` | edge | Avisa de los errores NUEVOS. Cada hora. | error_log |
 | `api/cron-integridad.js` | edge | Vigilante diario de coherencia de datos. | — |
 | `api/cron-knowledge.js` | node | Auto-actualización mensual de los knowledge packs de los agentes. | ai_usage |
-| `api/cron-monthly-reports.js` | node | Genera y envía reportes mensuales el día 1 de cada mes a las 8am UTC | ai_usage |
 | `api/cron-programados.js` | edge | Manda los mensajes que alguien dejó programados. Corre cada 5 minutos | channel_connections, chat_conversations, chat_messages, scheduled_messages |
-| `api/cron-reports.js` | node | Genera y envía reportes semanales automáticos todos los lunes a las 8am UTC | ai_usage |
 | `api/cron-retention.js` | node | — mantenimiento diario de la base de contactos. | leads, user_profiles |
 | `api/cron-tasks.js` | node | — resumen diario de tareas. | activities, leads, team_members |
 | `api/cron-trials.js` | node | Ciclo de vida de la prueba Pro de 14 días (corre 1 vez al día, vercel.json): | — |
