@@ -14,7 +14,7 @@ export const config = { runtime: 'edge' };
 
 import { latir } from './_latido.js';
 import { extraerCalificacion } from './_qualify.js';
-import { extractCapturedData, telefonoDelCanal } from './_inbox-engine.js';
+import { extractCapturedData, telefonoDelCanal, conocidoDelContacto } from './_inbox-engine.js';
 import { estadoDeCupo, sumarUno } from './_cupo-agente.js';
 import { abrirConexion } from './_cifrado.js';
 
@@ -185,8 +185,22 @@ export default async function handler(req) {
       if (!agente) continue;
 
       const deAsistente = ultimos.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
+      // Lo ya sabido de la persona, no solo lo de los últimos 12 mensajes: el
+      // número de su WhatsApp, el del lead y lo que escribió antes. Sin esto el
+      // seguimiento abría con «¿me confirma un número de contacto?» a alguien
+      // que lo había dado —o que escribía desde ese mismo número—.
+      const [lead, suyos] = await Promise.all([
+        conv.lead_id ? fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${conv.lead_id}&select=name,phone,email&limit=1`, { headers: sb() })
+          .then(r => (r.ok ? r.json() : [])).then(r => r?.[0] || null).catch(() => null) : null,
+        fetch(`${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=eq.${conv.id}&role=eq.user&select=content&order=created_at.desc&limit=80`, { headers: sb() })
+          .then(r => (r.ok ? r.json() : [])).catch(() => []),
+      ]);
+      const conocido = conocidoDelContacto({
+        canal: conv.channel, contactId: conv.contact_id, lead,
+        textosDelUsuario: (suyos || []).map(m => m.content || ''),
+      });
       const texto = textoDeSeguimiento(
-        extractCapturedData(deAsistente),
+        { ...conocido, ...extractCapturedData(deAsistente) },
         extraerCalificacion(deAsistente),
         agente.tone
       );
