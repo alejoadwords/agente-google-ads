@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crea tu cuenta — Acuarius</title>
+<meta name="description" content="Prueba Acuarius 14 días con todo incluido, sin tarjeta de crédito.">
+<meta name="theme-color" content="#0B1030">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script
+  async
+  crossorigin="anonymous"
+  data-clerk-publishable-key="pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA"
+  src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5.125.10/dist/clerk.browser.js"
+  type="text/javascript"
+></script>
+<!--
+  Alta guiada de Acuarius — /registro y /registro/<enlace>
+
+  Crear la cuenta es el primer paso, no el último: lo que decide si alguien se
+  queda es lo que pasa en los diez minutos siguientes. Por eso aquí se sigue
+  de largo — empresa, moneda, calendario, contactos, equipo, teléfono y qué
+  quiere lograr — y al entrar a la app le espera un mensaje del equipo que
+  responde a eso último (api/onboarding.js).
+
+  Cada paso se guarda al avanzar: quien cierra la pestaña a la mitad vuelve al
+  mismo punto la próxima vez que entra (la app lo trae aquí mientras no acabe).
+-->
+<style>
+:root{
+  --blue:#1E2BCC;--blue-h:#1825B8;--blue-lt:#EEF0FD;--blue-md:#C7CBFB;
+  --navy:#0B1030;--navy-2:#141B45;--navy-line:rgba(255,255,255,.12);
+  --text:#0A0A0A;--text-2:#374151;--muted:#6B7280;--muted2:#9CA3AF;
+  --border:#E5E7EB;--border2:#D1D5DB;
+  --bg:#FFFFFF;--bg2:#F8F9FA;
+  --ok:#047857;--ok-bg:#ECFDF5;--err:#B91C1C;--err-bg:#FEF2F2;--warn:#B45309;
+  --font:'Outfit',sans-serif;--r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100svh;display:grid;grid-template-columns:380px 1fr}
+
+/* ── Panel izquierdo: los pasos ── */
+.lado{background:var(--navy);color:#fff;padding:36px 32px;display:flex;flex-direction:column;gap:28px;position:sticky;top:0;height:100svh;overflow-y:auto}
+.lado-logo img{height:26px;display:block}
+.lado-invita{font-size:13px;color:rgba(255,255,255,.75);line-height:1.45;display:none}
+.lado-invita strong{color:#fff}
+.lado-hero h2{font-size:28px;font-weight:800;line-height:1.15;letter-spacing:-.02em}
+.lado-hero p{margin-top:12px;font-size:15px;line-height:1.5;color:rgba(255,255,255,.8)}
+.pasos{list-style:none;display:none;flex-direction:column;gap:14px}
+.pasos li{display:flex;align-items:center;gap:12px;font-size:15px;color:rgba(255,255,255,.55)}
+.pasos li .pt{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.35);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.pasos li.hecho{color:rgba(255,255,255,.45)}
+.pasos li.hecho .pt{background:var(--blue);border-color:var(--blue)}
+.pasos li.act{color:#fff;font-weight:700}
+.pasos li.act .pt{border-color:#fff;border-style:dashed}
+.tip{margin-top:auto;border:1px solid var(--navy-line);background:var(--navy-2);border-radius:12px;padding:16px;font-size:13.5px;line-height:1.5;color:rgba(255,255,255,.82)}
+.tip b{display:flex;align-items:center;gap:8px;color:#9DB2FF;font-size:14px;margin-bottom:6px}
+.pie{border-top:1px solid var(--navy-line);padding-top:16px;font-size:12.5px;color:rgba(255,255,255,.6);display:flex;gap:8px;align-items:flex-start;line-height:1.45}
+
+/* ── Contenido ── */
+main{display:flex;justify-content:center;align-items:flex-start;padding:56px 24px 48px;min-height:100svh}
+.caja{width:100%;max-width:560px}
+.etq{font-size:13px;font-weight:700;color:var(--blue)}
+.barra{height:4px;border-radius:4px;background:var(--blue-md);margin:10px 0 34px;overflow:hidden}
+.barra i{display:block;height:100%;background:var(--blue);border-radius:4px;transition:width .35s ease;width:8%}
+.ico-grande{width:60px;height:60px;border-radius:16px;background:var(--blue-lt);color:var(--blue);display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+h1{font-size:34px;font-weight:800;line-height:1.12;letter-spacing:-.025em;text-align:center}
+.sub{text-align:center;color:var(--muted);font-size:15.5px;line-height:1.5;margin:10px auto 28px;max-width:470px}
+.fila{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.campo{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.campo label{font-size:13.5px;font-weight:600;color:var(--text-2)}
+.campo input,.campo textarea{border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;font-family:var(--font);font-size:15px;color:var(--text);background:var(--bg);outline:none;transition:border-color .15s}
+.campo input:focus,.campo textarea:focus{border-color:var(--blue)}
+.campo textarea{min-height:120px;resize:vertical;line-height:1.5}
+.nota-ia{font-size:12px;color:var(--muted2)}
+.pref{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:10px;overflow:hidden}
+.pref:focus-within{border-color:var(--blue)}
+.pref span{padding:12px 10px 12px 14px;color:var(--muted);border-right:1px solid var(--border);font-size:15px}
+.pref input{border:0;flex:1;min-width:0;padding:12px 14px;font-family:var(--font);font-size:15px;outline:none;background:transparent}
+.chk{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--text-2);margin:6px 0 18px;line-height:1.45;cursor:pointer}
+.chk input{width:18px;height:18px;margin-top:1px;accent-color:var(--blue);flex-shrink:0}
+.chk a{color:var(--blue);text-decoration:none}
+.btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid transparent;border-radius:11px;padding:15px 18px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;transition:all .15s;text-decoration:none}
+.btn-pri{background:var(--blue);color:#fff}
+.btn-pri:hover{background:var(--blue-h)}
+.btn-pri:disabled{background:var(--border);color:var(--muted2);cursor:default}
+.btn-sec{background:var(--bg);color:var(--text);border-color:var(--border2);margin-top:10px}
+.btn-sec:hover{background:var(--bg2)}
+.btn-google{background:var(--bg);color:var(--text);border-color:var(--border2);margin-bottom:18px}
+.dos-btn{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dos-btn .btn-sec{margin-top:0}
+.sep{display:flex;align-items:center;gap:12px;color:var(--muted2);font-size:13px;margin:0 0 18px}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--border)}
+.bajo{text-align:center;color:var(--muted);font-size:14.5px;margin-top:20px}
+.bajo a{color:var(--blue);font-weight:600;text-decoration:none;cursor:pointer}
+.chica{text-align:center;color:var(--muted2);font-size:13px;margin-top:12px}
+.err{display:none;background:var(--err-bg);color:var(--err);border-radius:10px;padding:10px 14px;font-size:14px;margin-bottom:14px;line-height:1.4}
+.ok{display:none;background:var(--ok-bg);color:var(--ok);border-radius:10px;padding:10px 14px;font-size:14px;margin-bottom:14px}
+.info{display:flex;gap:10px;align-items:flex-start;background:var(--blue-lt);border:1px solid var(--blue-md);color:#1A237E;border-radius:12px;padding:14px 16px;font-size:14.5px;line-height:1.5;margin:6px 0 20px}
+.lista-ok{background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:12px;padding:16px 20px;margin-bottom:22px;display:flex;flex-direction:column;gap:12px}
+.lista-ok div{display:flex;gap:10px;align-items:center;font-size:15px;color:var(--text-2)}
+.lista-ok svg{color:var(--blue);flex-shrink:0}
+.codigo{display:flex;gap:10px;justify-content:center;margin:6px 0 10px}
+.codigo input{width:54px;height:64px;text-align:center;font-size:26px;font-weight:700;font-family:var(--font);border:1.5px solid var(--border2);border-radius:10px;outline:none}
+.codigo input:focus{border-color:var(--blue)}
+.pildoras{display:flex;flex-wrap:wrap;gap:8px}
+.pildoras button{border:1.5px solid var(--border);background:var(--bg);border-radius:20px;padding:8px 14px;font-family:var(--font);font-size:14px;color:var(--text-2);cursor:pointer}
+.pildoras button.sel{border-color:var(--blue);background:var(--blue-lt);color:var(--blue);font-weight:700}
+.web-hallada{display:flex;align-items:center;gap:12px;border:1px solid var(--blue-md);background:var(--blue-lt);border-radius:12px;padding:12px 16px;margin-bottom:18px}
+.web-hallada b{display:block;font-size:15px}
+.web-hallada span{font-size:13px;color:var(--muted)}
+.web-hallada a{margin-left:auto;color:var(--blue);font-weight:700;cursor:pointer;font-size:14px}
+.monedas{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:18px;max-height:340px;overflow-y:auto}
+.moneda{display:flex;align-items:center;gap:14px;padding:13px 16px;border-bottom:1px solid var(--border);cursor:pointer;font-size:15px}
+.moneda:last-child{border-bottom:0}
+.moneda:hover{background:var(--bg2)}
+.moneda.sel{background:var(--blue-lt)}
+.moneda .cod{width:38px;height:30px;border:1px solid var(--border2);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text-2);background:var(--bg)}
+.moneda .der{margin-left:auto;color:var(--muted);font-size:14px}
+.grupo-t{font-size:13px;font-weight:700;color:var(--text-2);margin:4px 0 8px}
+.invitado{border:1px solid var(--border);border-radius:12px;padding:14px 16px 2px;margin-bottom:12px}
+.invitado-t{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px}
+.invitado-t a{color:var(--muted2);cursor:pointer;font-weight:500}
+.perfiles{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;font-size:13.5px;line-height:1.5;color:var(--text-2);margin-bottom:18px}
+.perfiles b{color:var(--text)}
+.tel{display:flex;gap:10px}
+.pais{position:relative}
+.pais > button{height:100%;border:1.5px solid var(--border);border-radius:10px;background:var(--bg);padding:0 14px;font-family:var(--font);font-size:15px;cursor:pointer;white-space:nowrap}
+.pais-lista{position:absolute;top:calc(100% + 6px);left:0;z-index:5;background:var(--bg);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(10,12,40,.14);max-height:280px;overflow-y:auto;min-width:220px;display:none}
+.pais-lista.abierta{display:block}
+.pais-lista div{padding:10px 14px;cursor:pointer;font-size:14.5px;display:flex;justify-content:space-between;gap:14px}
+.pais-lista div:hover{background:var(--bg2)}
+.tel input{flex:1}
+.contador{font-size:13px;color:var(--muted2);margin-top:-6px;margin-bottom:16px}
+.sp{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:gira .7s linear infinite;display:inline-block}
+.btn-sec .sp{border-color:var(--border2);border-top-color:var(--blue)}
+@keyframes gira{to{transform:rotate(360deg)}}
+.oculto{display:none!important}
+
+@media (max-width:900px){
+  body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .lado{position:static;height:auto;padding:20px 20px 18px;gap:12px}
+  .lado-hero,.pasos,.tip,.pie{display:none!important}
+  main{padding:28px 16px 40px;min-height:auto}
+  h1{font-size:27px}
+  .fila,.dos-btn{grid-template-columns:1fr}
+  .codigo input{width:44px;height:56px;font-size:22px}
+  .codigo{gap:7px}
+}
+</style>
+</head>
+<body>
+
+<aside class="lado">
+  <div class="lado-logo"><img src="/logo-white.png" alt="Acuarius"></div>
+  <div class="lado-invita" id="invita"></div>
+  <div class="lado-hero" id="hero">
+    <h2>El CRM con agentes de IA que atienden por ti</h2>
+    <p>Centraliza tus conversaciones, tus oportunidades y tus campañas en un solo lugar, pensado para LatAm.</p>
+  </div>
+  <ol class="pasos" id="pasos"></ol>
+  <div class="tip" id="tip"></div>
+  <div class="pie">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+    <span id="pie-txt">Conexión cifrada. 14 días con todo incluido y sin tarjeta de crédito.</span>
+  </div>
+</aside>
+
+<main>
+  <div class="caja">
+    <div class="etq" id="etq">Crea tu cuenta</div>
+    <div class="barra"><i id="barra"></i></div>
+    <div class="err" id="err"></div>
+    <div id="vista"><div class="chica">Cargando…</div></div>
+  </div>
+</main>
+
+<script>
+// ── Datos fijos ─────────────────────────────────────────────────────────────
+const PASOS = [
+  { id: 'cuenta',     t: 'Cuenta creada' },
+  { id: 'verificar',  t: 'Verifica tu correo' },
+  { id: 'empresa',    t: 'Tu empresa' },
+  { id: 'moneda',     t: 'Elige tu moneda' },
+  { id: 'calendario', t: 'Conecta tu calendario' },
+  { id: 'contactos',  t: 'Importa tus contactos' },
+  { id: 'equipo',     t: 'Invita a tu equipo' },
+  { id: 'telefono',   t: 'Tu teléfono' },
+  { id: 'objetivo',   t: 'Una última cosa' },
+];
+const TIPS = {
+  cuenta:     ['Sin tarjeta', 'Tienes 14 días con todo incluido. Al terminar decides si sigues; no te cobramos nada por probar.'],
+  verificar:  ['Revisa tu bandeja', 'El código llega en unos segundos. Si no lo ves, mira en promociones o en correo no deseado.'],
+  empresa:    ['Ahorra tiempo', 'Con tu web, la IA completa el nombre, la descripción y el sector de tu empresa. Lo revisas antes de seguir.'],
+  moneda:     ['Para tus cifras', 'Es la moneda con la que verás tus oportunidades y tus reportes de ventas.'],
+  calendario: ['Cada cita cuenta', 'Las reuniones que agendes desde Acuarius aparecen en tu Google Calendar, y lo ocupado no se ofrece a tus clientes.'],
+  contactos:  ['Tu base, desde el día uno', 'Sube un Excel o un CSV y tus contactos entran al CRM con sus etiquetas. Son unos dos minutos.'],
+  equipo:     ['Mejor en equipo', 'Cada persona entra con su propio usuario y ve lo que le corresponde según su perfil.'],
+  telefono:   ['Una persona, no un robot', 'Lo usamos solo para ayudarte a arrancar. No lo compartimos con nadie.'],
+  objetivo:   ['Lo leemos', 'Tu respuesta llega a nuestro equipo y con ella te decimos por dónde empezar.'],
+};
+const MONEDAS = [
+  ['COP', 'Peso colombiano', 'CO'], ['USD', 'Dólar estadounidense', 'US'], ['MXN', 'Peso mexicano', 'MX'],
+  ['PEN', 'Sol peruano', 'PE'], ['CLP', 'Peso chileno', 'CL'], ['ARS', 'Peso argentino', 'AR'],
+  ['EUR', 'Euro', 'EU'], ['GTQ', 'Quetzal guatemalteco', 'GT'], ['CRC', 'Colón costarricense', 'CR'],
+  ['DOP', 'Peso dominicano', 'DO'], ['BOB', 'Boliviano', 'BO'], ['PYG', 'Guaraní paraguayo', 'PY'],
+  ['UYU', 'Peso uruguayo', 'UY'], ['BRL', 'Real brasileño', 'BR'], ['PAB', 'Balboa panameño', 'PA'],
+  ['HNL', 'Lempira hondureño', 'HN'], ['NIO', 'Córdoba nicaragüense', 'NI'],
+];
+const PAISES = [
+  ['CO', '+57', 'Colombia'], ['MX', '+52', 'México'], ['PE', '+51', 'Perú'], ['CL', '+56', 'Chile'],
+  ['AR', '+54', 'Argentina'], ['EC', '+593', 'Ecuador'], ['US', '+1', 'Estados Unidos'], ['ES', '+34', 'España'],
+  ['GT', '+502', 'Guatemala'], ['CR', '+506', 'Costa Rica'], ['PA', '+507', 'Panamá'], ['DO', '+1', 'Rep. Dominicana'],
+  ['BO', '+591', 'Bolivia'], ['PY', '+595', 'Paraguay'], ['UY', '+598', 'Uruguay'], ['VE', '+58', 'Venezuela'],
+  ['HN', '+504', 'Honduras'], ['SV', '+503', 'El Salvador'], ['NI', '+505', 'Nicaragua'], ['BR', '+55', 'Brasil'],
+];
+// La zona horaria del navegador es mejor pista que el idioma: un colombiano
+// con el navegador en inglés sigue operando en pesos.
+const ZONA_PAIS = { Bogota: 'CO', Mexico_City: 'MX', Monterrey: 'MX', Cancun: 'MX', Tijuana: 'MX', Lima: 'PE', Santiago: 'CL',
+  Buenos_Aires: 'AR', Guayaquil: 'EC', Guatemala: 'GT', Costa_Rica: 'CR', Panama: 'PA', Santo_Domingo: 'DO',
+  La_Paz: 'BO', Asuncion: 'PY', Montevideo: 'UY', Caracas: 'VE', Tegucigalpa: 'HN', El_Salvador: 'SV', Managua: 'NI',
+  Sao_Paulo: 'BR', Madrid: 'ES', New_York: 'US', Chicago: 'US', Los_Angeles: 'US', Denver: 'US' };
+const PAIS_MONEDA = { CO: 'COP', MX: 'MXN', PE: 'PEN', CL: 'CLP', AR: 'ARS', EC: 'USD', US: 'USD', ES: 'EUR', GT: 'GTQ',
+  CR: 'CRC', PA: 'USD', DO: 'DOP', BO: 'BOB', PY: 'PYG', UY: 'UYU', VE: 'USD', HN: 'HNL', SV: 'USD', NI: 'NIO', BR: 'BRL' };
+const SECTORES = ['Inmobiliaria', 'Salud / Bienestar', 'Educación / Cursos', 'Servicios profesionales', 'E-commerce / Retail',
+  'Tecnología / SaaS', 'Restaurantes / Food', 'Agencia de marketing', 'Industria y manufactura', 'Otro sector'];
+const EMPLEADOS = ['Solo yo', '2-9', '10-49', '50-199', '200+'];
+
+const I = {
+  check: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  chk:   '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  mail:  '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>',
+  spark: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9z"/></svg>',
+  cal:   '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  users: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>',
+  file:  '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>',
+  phone: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>',
+  flag:  '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
+  bulb:  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/></svg>',
+  google:'<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>',
+};
+
+// ── Estado ──────────────────────────────────────────────────────────────────
+let clerk = null;
+let paso = 'cuenta';
+let estado = {};          // lo guardado en api/onboarding
+let empresa = { nombre: '', web: '', descripcion: '', sector: '', empleados: '' };
+let webAnalizada = false;
+let moneda = null;
+let pais = PAISES[0];
+let invitados = [{ nombre: '', email: '', perfil: 'ventas' }];
+let reenviarEn = 0, _relojReenvio = null;
+
+const $ = id => document.getElementById(id);
+const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// El enlace por el que llegó: /registro/<slug>. Se guarda en el navegador
+// porque el alta con Google sale del sitio y vuelve sin la ruta.
+const SLUG = (() => {
+  const m = location.pathname.match(/^\/registro\/([a-z0-9-]{3,40})\/?$/i);
+  const s = m ? m[1].toLowerCase() : null;
+  try {
+    if (s) localStorage.setItem('acuarius_enlace', s);
+    return s || localStorage.getItem('acuarius_enlace');
+  } catch { return s; }
+})();
+
+function paisDetectado() {
+  try {
+    const zona = (Intl.DateTimeFormat().resolvedOptions().timeZone || '').split('/').pop();
+    const cod = ZONA_PAIS[zona];
+    return PAISES.find(p => p[0] === cod) || null;
+  } catch { return null; }
+}
+
+function mostrarError(msg) { const e = $('err'); e.textContent = msg; e.style.display = msg ? 'block' : 'none'; }
+
+async function token() {
+  try { return await clerk.session.getToken(); } catch { return null; }
+}
+async function api(ruta, opts = {}) {
+  const t = await token();
+  const r = await fetch(ruta, { ...opts, headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}), ...(opts.headers || {}) } });
+  const txt = await r.text();
+  let d; try { d = JSON.parse(txt); } catch { d = { error: txt.slice(0, 200) }; }
+  if (!r.ok) throw new Error(d.error || ('Error ' + r.status));
+  return d;
+}
+async function guardarPaso(datos) {
+  const d = await api('/api/onboarding', { method: 'POST', body: JSON.stringify(datos) });
+  estado = d.onboarding || estado;
+  return d;
+}
+
+// ── Pintado del marco ───────────────────────────────────────────────────────
+function marco() {
+  const i = PASOS.findIndex(p => p.id === paso);
+  $('etq').textContent = PASOS[i]?.t || '';
+  $('barra').style.width = Math.max(6, Math.round(((i + 1) / PASOS.length) * 100)) + '%';
+  const conPasos = i >= 1;
+  $('hero').classList.toggle('oculto', conPasos);
+  $('pasos').style.display = conPasos ? 'flex' : 'none';
+  $('pasos').innerHTML = PASOS.map((p, k) => '<li class="' + (k < i ? 'hecho' : k === i ? 'act' : '') + '"><span class="pt">' + (k < i ? I.chk : '') + '</span>' + esc(p.t) + '</li>').join('');
+  const tip = TIPS[paso];
+  $('tip').innerHTML = tip ? '<b>' + I.bulb + esc(tip[0]) + '</b>' + esc(tip[1]) : '';
+  mostrarError('');
+  window.scrollTo({ top: 0 });
+}
+function ir(p) { paso = p; marco(); (VISTAS[p] || VISTAS.cuenta)(); }
+function siguiente() {
+  const i = PASOS.findIndex(p => p.id === paso);
+  ir(PASOS[Math.min(i + 1, PASOS.length - 1)].id);
+}
+function cargando(btn, txt) { btn.disabled = true; btn.dataset.txt = btn.innerHTML; btn.innerHTML = '<span class="sp"></span>' + esc(txt); }
+function listo(btn) { btn.disabled = false; if (btn.dataset.txt) btn.innerHTML = btn.dataset.txt; }
+
+// ── Vistas ──────────────────────────────────────────────────────────────────
+const VISTAS = {
+  cuenta() {
+    $('vista').innerHTML =
+      '<h1>Crea tu cuenta gratis</h1>' +
+      '<p class="sub">14 días de prueba con todo incluido, sin tarjeta de crédito.</p>' +
+      '<button class="btn btn-google" onclick="conGoogle()">' + I.google + ' Continuar con Google</button>' +
+      '<div class="sep">o con tu correo</div>' +
+      '<div class="fila">' +
+        '<div class="campo"><label for="r-nombre">Nombre</label><input id="r-nombre" autocomplete="given-name" placeholder="Ana"></div>' +
+        '<div class="campo"><label for="r-apellido">Apellido</label><input id="r-apellido" autocomplete="family-name" placeholder="Pérez"></div>' +
+      '</div>' +
+      '<div class="campo"><label for="r-email">Correo de trabajo</label><input id="r-email" type="email" autocomplete="email" placeholder="ana@empresa.com"></div>' +
+      '<div class="campo"><label for="r-clave">Contraseña</label><input id="r-clave" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div>' +
+      '<label class="chk"><input type="checkbox" id="r-terminos"> <span>Acepto los <a href="/terms.html" target="_blank" rel="noopener">términos y condiciones</a> y la <a href="/privacy.html" target="_blank" rel="noopener">política de privacidad</a></span></label>' +
+      '<button class="btn btn-pri" id="r-crear" onclick="crearCuenta(this)">Crear mi cuenta</button>' +
+      '<div class="bajo">¿Ya tienes una cuenta? <a href="/login.html">Inicia sesión</a></div>';
+    $('r-clave').addEventListener('keydown', e => { if (e.key === 'Enter') crearCuenta($('r-crear')); });
+  },
+
+  verificar() {
+    const correo = clerk?.client?.signUp?.emailAddress || '';
+    $('vista').innerHTML =
+      '<div class="ico-grande">' + I.mail + '</div>' +
+      '<h1>Revisa tu correo</h1>' +
+      '<p class="sub">Te enviamos un código de 6 dígitos a<br><strong>' + esc(correo) + '</strong></p>' +
+      '<div class="codigo" id="codigo">' + Array.from({ length: 6 }, (_, k) => '<input inputmode="numeric" maxlength="1" data-k="' + k + '" aria-label="Dígito ' + (k + 1) + '">').join('') + '</div>' +
+      '<div class="chica" id="reenviar"></div>' +
+      '<div style="height:18px"></div>' +
+      '<button class="btn btn-pri" id="v-btn" disabled onclick="verificar(this)">Verificar código</button>';
+    const cajas = [...document.querySelectorAll('#codigo input')];
+    cajas.forEach((c, k) => {
+      c.addEventListener('input', () => {
+        c.value = c.value.replace(/\D/g, '').slice(-1);
+        if (c.value && cajas[k + 1]) cajas[k + 1].focus();
+        const cod = cajas.map(x => x.value).join('');
+        $('v-btn').disabled = cod.length !== 6;
+        if (cod.length === 6) verificar($('v-btn'));
+      });
+      c.addEventListener('keydown', e => { if (e.key === 'Backspace' && !c.value && cajas[k - 1]) cajas[k - 1].focus(); });
+      // Pegar el código entero en la primera caja es lo que hace casi todo el mundo.
+      c.addEventListener('paste', e => {
+        const t = (e.clipboardData?.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+        if (t.length < 2) return;
+        e.preventDefault();
+        cajas.forEach((x, j) => { x.value = t[j] || ''; });
+        $('v-btn').disabled = t.length !== 6;
+        if (t.length === 6) verificar($('v-btn'));
+      });
+    });
+    cajas[0].focus();
+    arrancarReenvio();
+  },
+
+  empresa() {
+    if (!webAnalizada) {
+      $('vista').innerHTML =
+        '<div class="ico-grande">' + I.spark + '</div>' +
+        '<h1>Cuéntanos sobre tu empresa</h1>' +
+        '<p class="sub">Escribe tu web y la IA completará los datos de tu empresa.</p>' +
+        '<div class="campo"><div class="pref"><span>https://</span><input id="e-web" placeholder="tuempresa.com" value="' + esc(empresa.web.replace(/^https?:\/\//, '')) + '"></div></div>' +
+        '<button class="btn btn-pri" id="e-analizar" onclick="analizarWeb(this)">Analizar mi web</button>' +
+        '<div class="info" style="margin-top:18px">' + I.bulb + '<span>El análisis tarda unos segundos. Detectamos el nombre, la descripción, el sector y el tamaño aproximado.</span></div>' +
+        '<div class="bajo"><a onclick="sinWeb()">No tengo web: lo escribo yo</a></div>';
+      $('e-web').addEventListener('keydown', e => { if (e.key === 'Enter') analizarWeb($('e-analizar')); });
+      $('e-web').focus();
+      return;
+    }
+    $('vista').innerHTML =
+      '<h1>' + (empresa.web ? 'Esto encontramos' : 'Tu empresa') + '</h1>' +
+      '<p class="sub">' + (empresa.web ? 'Revisa y cambia lo que haga falta.' : 'Con esto el equipo y los agentes sabrán a qué te dedicas.') + '</p>' +
+      (empresa.web ? '<div class="web-hallada"><div><b>' + esc(empresa.web.replace(/^https?:\/\//, '')) + '</b><span>Sitio web analizado</span></div><a onclick="webAnalizada=false;VISTAS.empresa()">Cambiar</a></div>' : '') +
+      '<div class="campo"><label for="e-nombre">Nombre de la empresa</label><input id="e-nombre" value="' + esc(empresa.nombre) + '" placeholder="Mi empresa">' + (empresa.web && empresa.nombre ? '<span class="nota-ia">Resultado de la IA</span>' : '') + '</div>' +
+      '<div class="campo"><label for="e-desc">¿A qué se dedica?</label><textarea id="e-desc" style="min-height:84px" placeholder="Vendemos y arrendamos inmuebles en Barranquilla…">' + esc(empresa.descripcion) + '</textarea></div>' +
+      '<div class="campo"><label>Sector</label><div class="pildoras" id="e-sector">' + SECTORES.map(s => '<button type="button" class="' + (s === empresa.sector ? 'sel' : '') + '" onclick="elegir(\'sector\',this)">' + esc(s) + '</button>').join('') + '</div></div>' +
+      '<div class="campo"><label>Número de personas</label><div class="pildoras" id="e-empleados">' + EMPLEADOS.map(s => '<button type="button" class="' + (s === empresa.empleados ? 'sel' : '') + '" onclick="elegir(\'empleados\',this)">' + esc(s) + '</button>').join('') + '</div></div>' +
+      '<div style="height:6px"></div>' +
+      '<button class="btn btn-pri" onclick="guardarEmpresa(this)">Continuar</button>' +
+      '<div class="chica">Podrás cambiar estos datos más adelante.</div>';
+  },
+
+  moneda() {
+    const sugerida = PAIS_MONEDA[(paisDetectado() || PAISES[0])[0]] || 'USD';
+    if (!moneda) moneda = estado.moneda || sugerida;
+    const fila = m => '<div class="moneda' + (m[0] === moneda ? ' sel' : '') + '" onclick="moneda=\'' + m[0] + '\';VISTAS.moneda()"><span class="cod">' + m[2] + '</span><span>' + esc(m[1]) + '</span><span class="der">' + m[0] + '</span></div>';
+    const sug = MONEDAS.find(m => m[0] === sugerida);
+    $('vista').innerHTML =
+      '<h1>¿En qué moneda vendes?</h1>' +
+      '<p class="sub">La usaremos por defecto en tus oportunidades y en tus reportes de ventas.</p>' +
+      (sug ? '<div class="grupo-t">Sugerida</div><div class="monedas" style="max-height:none">' + fila(sug) + '</div>' : '') +
+      '<div class="grupo-t">Todas</div>' +
+      '<div class="monedas">' + MONEDAS.filter(m => m !== sug).map(fila).join('') + '</div>' +
+      '<button class="btn btn-pri" onclick="guardarMoneda(this)">Continuar</button>' +
+      '<button class="btn btn-sec" onclick="ir(\'empresa\')">Ir atrás</button>';
+    document.querySelector('.moneda.sel')?.scrollIntoView({ block: 'nearest' });
+  },
+
+  calendario() {
+    $('vista').innerHTML =
+      '<div class="ico-grande">' + I.cal + '</div>' +
+      '<h1>Conecta tu calendario</h1>' +
+      '<p class="sub">Que tus citas y tu disponibilidad vivan también dentro de Acuarius.</p>' +
+      '<div class="lista-ok">' +
+        '<div>' + I.check + 'Las citas que agendes aparecen en tu Google Calendar</div>' +
+        '<div>' + I.check + 'Tu agente solo ofrece horarios en los que estás libre</div>' +
+        '<div>' + I.check + 'Enlaces de reserva para que tus clientes elijan hora</div>' +
+      '</div>' +
+      '<div class="ok" id="cal-ok"></div>' +
+      '<button class="btn btn-pri" id="cal-btn" onclick="conectarCalendario(this)">Conectar Google Calendar</button>' +
+      '<button class="btn btn-sec" onclick="siguientePaso(\'contactos\')">Omitir por ahora</button>' +
+      '<div class="chica">Podrás conectarlo más adelante desde la Agenda.</div>';
+  },
+
+  contactos() {
+    const quiere = (() => { try { return localStorage.getItem('acuarius_tras_alta') === 'importar'; } catch { return false; } })();
+    $('vista').innerHTML =
+      '<div class="ico-grande">' + I.file + '</div>' +
+      '<h1>Importa tus contactos</h1>' +
+      '<p class="sub">Arranca con tu base de clientes ya dentro del CRM.</p>' +
+      '<div class="lista-ok">' +
+        '<div>' + I.check + 'Desde un Excel o un CSV, con las columnas que ya tienes</div>' +
+        '<div>' + I.check + 'Cada contacto entra con su etiqueta y su etapa</div>' +
+        '<div>' + I.check + 'Detectamos los duplicados para que no se repitan</div>' +
+      '</div>' +
+      (quiere ? '<div class="ok" style="display:block">Listo: al entrar se abre el importador.</div>' : '') +
+      '<button class="btn btn-pri" onclick="importarAlEntrar()">Importar al entrar</button>' +
+      '<button class="btn btn-sec" onclick="siguientePaso(\'equipo\')">Omitir por ahora</button>' +
+      '<div class="chica">También puedes hacerlo cuando quieras desde el CRM.</div>';
+  },
+
+  equipo() {
+    $('vista').innerHTML =
+      '<div class="ico-grande">' + I.users + '</div>' +
+      '<h1>Invita a tu equipo</h1>' +
+      '<p class="sub">Tu prueba incluye 3 usuarios: tú y dos personas más. Les llega una invitación por correo.</p>' +
+      '<div id="invitados"></div>' +
+      (invitados.length < 2 ? '<div class="bajo" style="margin:0 0 16px;text-align:left"><a onclick="invitados.push({nombre:\'\',email:\'\',perfil:\'ventas\'});leerInvitados(true)">+ Añadir otra persona</a></div>' : '') +
+      '<div class="perfiles"><b>Administrador</b>: acceso total, incluido el equipo y la configuración. <br><b>Ventas</b>: el CRM, la agenda y las conversaciones. <br><b>Mercadeo</b>: todo menos la gestión del equipo.</div>' +
+      '<div class="dos-btn"><button class="btn btn-sec" onclick="siguientePaso(\'telefono\')">Omitir por ahora</button>' +
+      '<button class="btn btn-pri" id="eq-btn" onclick="invitar(this)">Enviar invitaciones</button></div>';
+    pintarInvitados();
+  },
+
+  telefono() {
+    if (!estado.telefono) pais = paisDetectado() || pais;
+    $('vista').innerHTML =
+      '<div class="ico-grande">' + I.phone + '</div>' +
+      '<h1>¿Cuál es tu teléfono?</h1>' +
+      '<p class="sub">Solo lo usaremos para ayudarte a arrancar.</p>' +
+      '<div class="campo"><label for="t-num">Teléfono</label><div class="tel">' +
+        '<div class="pais"><button type="button" id="t-pais" onclick="$(\'t-lista\').classList.toggle(\'abierta\')">' + pais[0] + ' ' + pais[1] + ' ▾</button>' +
+        '<div class="pais-lista" id="t-lista">' + PAISES.map((p, k) => '<div onclick="elegirPais(' + k + ')"><span>' + esc(p[2]) + '</span><span style="color:var(--muted)">' + p[1] + '</span></div>').join('') + '</div></div>' +
+        '<input id="t-num" inputmode="tel" autocomplete="tel-national" placeholder="300 123 4567" value="' + esc(String(estado.telefono || '').replace(pais[1], '')) + '">' +
+      '</div></div>' +
+      '<button class="btn btn-pri" id="t-btn" onclick="guardarTelefono(this)">Continuar</button>';
+    $('t-num').focus();
+    $('t-num').addEventListener('keydown', e => { if (e.key === 'Enter') guardarTelefono($('t-btn')); });
+  },
+
+  objetivo() {
+    $('vista').innerHTML =
+      '<div class="ico-grande">' + I.flag + '</div>' +
+      '<h1>Antes de soltarte por Acuarius…</h1>' +
+      '<p class="sub">Cuéntanos qué quieres conseguir. No hay respuestas correctas, solo la tuya.</p>' +
+      '<div class="campo"><label for="o-txt">¿Qué quieres resolver con Acuarius?</label>' +
+        '<textarea id="o-txt" maxlength="1500" placeholder="Por ejemplo: que ningún mensaje de WhatsApp se quede sin respuesta de noche, y saber qué asesor tiene cada cliente.">' + esc(estado.objetivo || '') + '</textarea></div>' +
+      '<div class="contador" id="o-cont"></div>' +
+      '<div class="info">' + I.spark + '<span>Con tu respuesta, nuestro equipo te dice por dónde empezar. Te escribimos dentro de la app en cuanto entres.</span></div>' +
+      '<button class="btn btn-pri" id="o-btn" disabled onclick="completar(this)">Entrar a Acuarius</button>';
+    const t = $('o-txt');
+    const pintar = () => {
+      const n = t.value.trim().length;
+      $('o-cont').textContent = n >= 50 ? 'Perfecto.' : 'Mínimo 50 caracteres (llevas ' + n + ').';
+      $('o-btn').disabled = n < 50;
+    };
+    t.addEventListener('input', pintar);
+    pintar();
+    t.focus();
+  },
+};
+
+// ── Acciones ────────────────────────────────────────────────────────────────
+async function conGoogle() {
+  if (!clerk) return mostrarError('Cargando, intenta en unos segundos…');
+  try {
+    await clerk.client.signUp.authenticateWithRedirect({
+      strategy: 'oauth_google',
+      redirectUrl: '/sso-callback',
+      redirectUrlComplete: '/registro?continuar=1',
+    });
+  } catch (e) { mostrarError(e.errors?.[0]?.long_message || e.errors?.[0]?.message || 'No se pudo continuar con Google.'); }
+}
+
+async function crearCuenta(btn) {
+  if (!clerk) return mostrarError('Cargando, intenta en unos segundos…');
+  const nombre = $('r-nombre').value.trim(), apellido = $('r-apellido').value.trim();
+  const email = $('r-email').value.trim(), clave = $('r-clave').value;
+  if (!nombre || !email || !clave) return mostrarError('Completa tu nombre, tu correo y una contraseña.');
+  if (clave.length < 8) return mostrarError('La contraseña debe tener al menos 8 caracteres.');
+  if (!$('r-terminos').checked) return mostrarError('Para crear la cuenta tienes que aceptar los términos y la política de privacidad.');
+  mostrarError('');
+  cargando(btn, 'Creando tu cuenta…');
+  try {
+    const r = await clerk.client.signUp.create({ firstName: nombre, lastName: apellido, emailAddress: email, password: clave });
+    if (r.status === 'complete') { await clerk.setActive({ session: r.createdSessionId }); return trasEntrar(); }
+    await clerk.client.signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+    ir('verificar');
+  } catch (e) {
+    listo(btn);
+    const c = e.errors?.[0]?.code;
+    mostrarError(c === 'form_identifier_exists'
+      ? 'Ese correo ya tiene una cuenta. Inicia sesión con él.'
+      : (e.errors?.[0]?.long_message || e.errors?.[0]?.message || 'No se pudo crear la cuenta.'));
+  }
+}
+
+function arrancarReenvio() {
+  reenviarEn = 60;
+  clearInterval(_relojReenvio);
+  const pintar = () => {
+    const el = $('reenviar');
+    if (!el) return clearInterval(_relojReenvio);
+    el.innerHTML = reenviarEn > 0 ? '¿No lo ves? Reenviar en ' + reenviarEn + ' s' : '¿No lo ves? <a onclick="reenviar()">Reenviar el código</a>';
+    if (reenviarEn-- <= 0) clearInterval(_relojReenvio);
+  };
+  pintar();
+  _relojReenvio = setInterval(pintar, 1000);
+}
+async function reenviar() {
+  try { await clerk.client.signUp.prepareEmailAddressVerification({ strategy: 'email_code' }); arrancarReenvio(); }
+  catch (e) { mostrarError(e.errors?.[0]?.message || 'No se pudo reenviar el código.'); }
+}
+
+let _verificando = false;
+async function verificar(btn) {
+  const cod = [...document.querySelectorAll('#codigo input')].map(x => x.value).join('');
+  // Pegar el código dispara la verificación por dos caminos a la vez (input y
+  // paste): sin este cerrojo, el segundo intento llega con el código ya gastado.
+  if (cod.length !== 6 || _verificando) return;
+  _verificando = true;
+  cargando(btn, 'Verificando…');
+  try {
+    const r = await clerk.client.signUp.attemptEmailAddressVerification({ code: cod });
+    if (r.status !== 'complete') throw new Error('Falta algún dato para terminar el registro (' + r.status + ').');
+    await clerk.setActive({ session: r.createdSessionId });
+    await trasEntrar();
+  } catch (e) {
+    _verificando = false;
+    listo(btn);
+    document.querySelectorAll('#codigo input').forEach(x => { x.value = ''; });
+    document.querySelector('#codigo input')?.focus();
+    btn.disabled = true;
+    mostrarError(e.errors?.[0]?.code === 'form_code_incorrect' ? 'Ese código no es correcto. Revísalo e inténtalo de nuevo.' : (e.errors?.[0]?.long_message || e.message || 'No se pudo verificar.'));
+  }
+}
+
+// Recién creada la sesión: arranca la prueba (sin ella no se puede invitar al
+// equipo) y se anota por qué enlace llegó. Ninguna de las dos detiene el alta.
+async function trasEntrar() {
+  await Promise.all([
+    api('/api/trial', { method: 'POST' }).catch(() => null),
+    SLUG ? api('/api/cuentas', { method: 'POST', body: JSON.stringify({ accion: 'atribuir', slug: SLUG }) }).catch(() => null) : null,
+  ]);
+  try {
+    if (!localStorage.getItem('acuarius_signup_tracked')) {
+      localStorage.setItem('acuarius_signup_tracked', '1');
+      (window.dataLayer = window.dataLayer || []).push({ event: 'sign_up', method: 'registro' });
+    }
+  } catch {}
+  await reanudar();
+}
+
+async function reanudar() {
+  let d;
+  try { d = await api('/api/onboarding'); }
+  catch (e) {
+    // Si no se puede leer el alta, se entra a la app: quedarse aquí bloqueado
+    // por un fallo nuestro sería peor que saltarse la bienvenida.
+    mostrarError('No pudimos cargar tu configuración (' + e.message + '). Te llevamos a tu cuenta…');
+    setTimeout(() => { location.href = '/'; }, 2500);
+    return;
+  }
+  if (!d.debe) { location.href = '/'; return; }
+  estado = d.onboarding || {};
+  if (estado.empresa) { empresa = { ...empresa, ...estado.empresa }; webAnalizada = !!(empresa.nombre || empresa.web); }
+  if (estado.moneda) moneda = estado.moneda;
+  const orden = PASOS.map(p => p.id);
+  const guardado = orden.includes(estado.paso) ? estado.paso : 'empresa';
+  ir(orden.indexOf(guardado) < 2 ? 'empresa' : guardado);
+}
+
+async function analizarWeb(btn) {
+  let web = $('e-web').value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+  if (!/^[^\s/]+\.[a-z]{2,}/i.test(web)) return mostrarError('Escribe tu web completa, por ejemplo tuempresa.com');
+  mostrarError('');
+  cargando(btn, 'Analizando tu web…');
+  empresa.web = 'https://' + web;
+  try {
+    const d = await api('/api/extract-brand', { method: 'POST', body: JSON.stringify({ url: empresa.web }) });
+    if (d.error) throw new Error(d.error);
+    empresa.nombre = d.name || empresa.nombre;
+    empresa.descripcion = d.descripcion || empresa.descripcion;
+    const s = String(d.industria || '');
+    empresa.sector = SECTORES.find(x => x.toLowerCase() === s.toLowerCase()) || (s ? 'Otro sector' : empresa.sector);
+  } catch (e) {
+    // La web no se pudo leer, pero el paso no se pierde: se rellena a mano.
+    empresa.nombre = empresa.nombre || '';
+    setTimeout(() => mostrarError('No pudimos leer tu web (' + e.message + '). Complétalo tú, es un momento.'), 30);
+  }
+  webAnalizada = true;
+  VISTAS.empresa();
+}
+function sinWeb() { empresa.web = ''; webAnalizada = true; VISTAS.empresa(); }
+function elegir(campo, btn) {
+  btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  empresa[campo] = btn.textContent;
+}
+async function guardarEmpresa(btn) {
+  empresa.nombre = $('e-nombre').value.trim();
+  empresa.descripcion = $('e-desc').value.trim();
+  if (!empresa.nombre) return mostrarError('Escribe el nombre de tu empresa.');
+  cargando(btn, 'Guardando…');
+  try { await guardarPaso({ paso: 'moneda', empresa }); siguiente(); }
+  catch (e) { listo(btn); mostrarError(e.message); }
+}
+async function guardarMoneda(btn) {
+  cargando(btn, 'Guardando…');
+  try {
+    await guardarPaso({ paso: 'calendario', moneda });
+    try { localStorage.setItem('crm_last_currency', moneda); } catch {}
+    siguiente();
+  } catch (e) { listo(btn); mostrarError(e.message); }
+}
+async function siguientePaso(proximo) {
+  try { await guardarPaso({ paso: proximo }); } catch {}
+  ir(proximo);
+}
+
+// El OAuth de Google vuelve a la app (/?gcal_connected=…), no aquí. Se abre en
+// una ventana aparte y se vigila: cuando esa ventana llega de vuelta a nuestro
+// dominio, se lee el resultado y se cierra. El alta sigue donde estaba.
+async function conectarCalendario(btn) {
+  cargando(btn, 'Abriendo Google…');
+  let url;
+  try { url = (await api('/api/gcal-enlace', { method: 'POST' })).url; }
+  catch (e) { listo(btn); return mostrarError('No se pudo empezar la conexión: ' + e.message); }
+  const w = window.open(url, 'acuarius_gcal', 'width=520,height=680');
+  if (!w) { listo(btn); return mostrarError('Tu navegador bloqueó la ventana de Google. Permite las ventanas emergentes para este sitio e inténtalo de nuevo.'); }
+  const vigia = setInterval(() => {
+    let q = null;
+    try { q = w.location.origin === location.origin ? w.location.search : null; } catch { /* aún en Google */ }
+    if (w.closed && q === null) { clearInterval(vigia); listo(btn); return; }
+    if (q === null) return;
+    const p = new URLSearchParams(q);
+    if (!p.get('gcal_connected') && !p.get('gcal_error')) return;
+    clearInterval(vigia);
+    w.close();
+    if (p.get('gcal_connected')) {
+      const ok = $('cal-ok');
+      ok.textContent = 'Google Calendar conectado' + (p.get('gcal_email') ? ' (' + p.get('gcal_email') + ')' : '') + '.';
+      ok.style.display = 'block';
+      btn.disabled = false; btn.innerHTML = 'Continuar'; btn.onclick = () => siguientePaso('contactos');
+    } else {
+      listo(btn);
+      mostrarError('Google no terminó la conexión. Puedes intentarlo otra vez u omitir este paso.');
+    }
+  }, 400);
+}
+
+function importarAlEntrar() {
+  try { localStorage.setItem('acuarius_tras_alta', 'importar'); } catch {}
+  siguientePaso('equipo');
+}
+
+function pintarInvitados() {
+  $('invitados').innerHTML = invitados.map((v, k) =>
+    '<div class="invitado"><div class="invitado-t"><span>Persona ' + (k + 1) + '</span>' + (invitados.length > 1 ? '<a onclick="invitados.splice(' + k + ',1);leerInvitados(true)">Quitar</a>' : '') + '</div>' +
+      '<div class="fila"><div class="campo"><label>Nombre</label><input data-k="' + k + '" data-c="nombre" value="' + esc(v.nombre) + '" placeholder="Nombre"></div>' +
+      '<div class="campo"><label>Correo</label><input data-k="' + k + '" data-c="email" type="email" value="' + esc(v.email) + '" placeholder="correo@empresa.com"></div></div>' +
+      '<div class="campo"><label>Perfil</label><div class="pildoras">' + [['admin', 'Administrador'], ['ventas', 'Ventas'], ['mercadeo', 'Mercadeo']].map(([id, t]) =>
+        '<button type="button" class="' + (v.perfil === id ? 'sel' : '') + '" onclick="leerInvitados();invitados[' + k + '].perfil=\'' + id + '\';pintarInvitados()">' + t + '</button>').join('') + '</div></div>' +
+    '</div>').join('');
+}
+function leerInvitados(repintar) {
+  document.querySelectorAll('#invitados input').forEach(i => { invitados[+i.dataset.k][i.dataset.c] = i.value.trim(); });
+  if (repintar) VISTAS.equipo();
+}
+async function invitar(btn) {
+  leerInvitados();
+  const validos = invitados.filter(v => v.email);
+  if (!validos.length) return mostrarError('Escribe al menos un correo, u omite este paso.');
+  if (validos.some(v => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email))) return mostrarError('Revisa los correos: alguno no es válido.');
+  cargando(btn, 'Enviando…');
+  const fallos = [];
+  for (const v of validos) {
+    try { await api('/api/team', { method: 'POST', body: JSON.stringify({ email: v.email, name: v.nombre, perfil: v.perfil, owner_name: empresa.nombre || '' }) }); }
+    catch (e) { fallos.push(v.email + ': ' + e.message); }
+  }
+  listo(btn);
+  if (fallos.length) return mostrarError('No se pudo invitar a ' + fallos.join(' · '));
+  siguientePaso('telefono');
+}
+
+function elegirPais(k) {
+  pais = PAISES[k];
+  $('t-pais').textContent = pais[0] + ' ' + pais[1] + ' ▾';
+  $('t-lista').classList.remove('abierta');
+  $('t-num').focus();
+}
+async function guardarTelefono(btn) {
+  const num = $('t-num').value.replace(/\D/g, '');
+  if (num.length < 7) return mostrarError('Escribe tu número completo.');
+  cargando(btn, 'Guardando…');
+  try { await guardarPaso({ paso: 'objetivo', telefono: pais[1] + num }); siguiente(); }
+  catch (e) { listo(btn); mostrarError(e.message); }
+}
+
+async function completar(btn) {
+  const objetivo = $('o-txt').value.trim();
+  cargando(btn, 'Preparando tu cuenta…');
+  try {
+    await api('/api/onboarding', { method: 'POST', body: JSON.stringify({ accion: 'completar', objetivo }) });
+    try { localStorage.removeItem('acuarius_enlace'); } catch {}
+    location.href = '/?bienvenida=1';
+  } catch (e) { listo(btn); mostrarError(e.message); }
+}
+
+document.addEventListener('click', e => {
+  const l = $('t-lista');
+  if (l && l.classList.contains('abierta') && !e.target.closest('.pais')) l.classList.remove('abierta');
+});
+
+// ── Arranque ────────────────────────────────────────────────────────────────
+(async function arrancar() {
+  // El enlace personalizado: quién invita. Si falla, la página sigue igual.
+  if (SLUG) {
+    fetch('/api/cuentas?registro=' + encodeURIComponent(SLUG)).then(r => r.json()).then(d => {
+      if (!d.ok || !d.titulo) return;
+      const el = $('invita');
+      el.innerHTML = esc(d.titulo);
+      el.style.display = 'block';
+    }).catch(() => {});
+  }
+  marco();
+  try {
+    await new Promise((ok, mal) => {
+      const t0 = Date.now();
+      const iv = setInterval(() => {
+        if (window.Clerk) { clearInterval(iv); ok(); }
+        else if (Date.now() - t0 > 12000) { clearInterval(iv); mal(new Error('timeout')); }
+      }, 60);
+    });
+    await window.Clerk.load();
+    clerk = window.Clerk;
+  } catch (e) {
+    $('vista').innerHTML = '<p class="sub">No se pudo cargar el registro. Revisa tu conexión y recarga la página.</p><button class="btn btn-pri" onclick="location.reload()">Recargar</button>';
+    return;
+  }
+  // Una sesión de soporte (un admin dentro de la cuenta de un cliente) no
+  // completa el alta por él: se va a la app.
+  if (clerk.session?.actor) { location.href = '/'; return; }
+  if (clerk.user) { await trasEntrar(); return; }
+  // Un alta a medias en esta pestaña (cerró en el código): se retoma.
+  if (clerk.client?.signUp?.status === 'missing_requirements' && clerk.client.signUp.emailAddress
+      && (clerk.client.signUp.unverifiedFields || []).includes('email_address')) { ir('verificar'); return; }
+  ir('cuenta');
+})();
+</script>
+</body>
+</html>

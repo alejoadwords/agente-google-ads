@@ -23,6 +23,10 @@ export default async function handler(req) {
   const sesion = await verificarSesion(req);
   const userId = sesion.id;
   if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'trial'), 401);
+  // Una sesión de soporte (un admin dentro de la cuenta, ver api/cuentas.js)
+  // no arranca la prueba: se gastaría la única que tiene el cliente sin que él
+  // haya entrado nunca.
+  if (sesion.datos?.act?.sub) return jsonResp({ ok: false, reason: 'sesion_de_soporte' });
 
   const CK = process.env.CLERK_SECRET_KEY;
   const u = await fetch('https://api.clerk.com/v1/users/' + userId, { headers: { Authorization: 'Bearer ' + CK } }).then(r => r.json()).catch(() => null);

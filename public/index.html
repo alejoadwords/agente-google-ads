@@ -3489,6 +3489,66 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .tk-asunto{font-size:14px;font-weight:800;letter-spacing:-.01em}
 .tk-pre{font-size:10.5px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;margin-top:6px;white-space:pre-wrap}
 
+/* ── Sesión de soporte (api/cuentas.js) ── el banner no se cierra: mientras
+   esté abierta la cuenta de un cliente, tiene que verse siempre. */
+#soporte-banner{position:fixed;top:0;left:0;right:0;z-index:9800;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 16px;background:var(--warning);color:#fff;font-family:var(--font);font-size:var(--fs-sm);box-shadow:var(--shadow-md)}
+#soporte-banner strong{font-weight:800}
+.sb-soporte-ico{display:flex}
+.sb-soporte-txt{flex:1;min-width:200px;line-height:1.35}
+.sb-soporte-mail{opacity:.85;font-weight:500}
+.sb-soporte-min{font-size:var(--fs-xs);font-weight:700;opacity:.9;white-space:nowrap}
+.sb-soporte-btn{background:#fff;color:var(--text);border:0;border-radius:8px;padding:6px 12px;font-family:var(--font);font-weight:700;font-size:var(--fs-xs);cursor:pointer;white-space:nowrap}
+.sb-soporte-btn:disabled{opacity:.6;cursor:default}
+body.con-soporte{padding-top:40px}
+@media(max-width:640px){body.con-soporte{padding-top:64px}}
+
+/* ── Cuentas de clientes (solo equipo) ── */
+#cu-full{position:fixed;inset:0;z-index:9700;background:var(--bg);display:none;flex-direction:column}
+#cu-full.abierto{display:flex}
+.cu-tabs{display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--border);background:var(--bg-card);flex-shrink:0;overflow-x:auto}
+.cu-tab{background:none;border:0;border-bottom:2px solid transparent;padding:11px 12px;font-family:var(--font);font-size:var(--fs-sm);font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.cu-tab.act{color:var(--blue);border-bottom-color:var(--blue)}
+.cu-wrap{max-width:1180px;margin:0 auto}
+.cu-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+.cu-kpi{border:1px solid var(--border);border-radius:var(--r);background:var(--bg-card);padding:12px 14px}
+.cu-kpi b{display:block;font-size:var(--fs-xl);font-weight:800;letter-spacing:-.02em}
+.cu-kpi span{font-size:var(--fs-xs);color:var(--muted)}
+.cu-barra{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.cu-barra input{flex:1;min-width:200px;border:1px solid var(--border);border-radius:9px;padding:9px 12px;font-family:var(--font);font-size:var(--fs-sm);background:var(--bg);color:var(--text)}
+.cu-tabla{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+.cu-tabla th{text-align:left;font-size:var(--fs-xs);color:var(--muted);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.cu-tabla td{padding:11px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.cu-tabla tr:hover td{background:var(--bg-subtle)}
+.cu-nombre{font-weight:700}
+.cu-mini{font-size:var(--fs-xs);color:var(--muted)}
+.cu-chip{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.cu-chip.activa{background:var(--success-bg);color:var(--success)}
+.cu-chip.prueba{background:var(--blue-lt);color:var(--blue)}
+.cu-chip.gratis,.cu-chip.prueba-vencida{background:var(--bg-muted);color:var(--muted)}
+.cu-chip.suspendida{background:var(--danger-bg);color:var(--danger)}
+.cu-caja{border:1px solid var(--border);border-radius:var(--rlg);background:var(--bg-card);padding:18px 20px;margin-bottom:14px}
+.cu-caja h3{margin:0 0 4px;font-size:var(--fs-md);font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.cu-caja p.cu-mini{margin:0 0 14px}
+.cu-url{display:flex;gap:8px;flex-wrap:wrap}
+.cu-url input{flex:1;min-width:220px}
+.cu-campo{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.cu-campo label{font-size:var(--fs-xs);font-weight:700;color:var(--text-2)}
+.cu-campo input,.cu-campo textarea,.cu-url input{border:1px solid var(--border);border-radius:9px;padding:9px 12px;font-family:var(--font);font-size:var(--fs-sm);background:var(--bg);color:var(--text)}
+.cu-campo textarea{min-height:170px;resize:vertical;line-height:1.5}
+.cu-pref{display:flex;align-items:center;border:1px solid var(--border);border-radius:9px;background:var(--bg-subtle);overflow:hidden}
+.cu-pref span{padding:9px 0 9px 12px;font-size:var(--fs-sm);color:var(--muted);white-space:nowrap}
+.cu-pref input{border:0;background:transparent;flex:1;min-width:80px;padding:9px 12px 9px 2px;font-family:var(--font);font-size:var(--fs-sm);color:var(--text)}
+.cu-dos{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:720px){.cu-dos{grid-template-columns:1fr}.cu-tabla .cu-opc{display:none}.tk-body{padding:14px 12px}}
+.cu-scroll{overflow-x:auto}
+
+/* ── Bienvenida: el chat de soporte a tamaño de carta ── */
+#sop-panel.bienvenida{top:50%;left:50%;right:auto;bottom:auto;transform:translate(-50%,-50%);width:min(720px,calc(100vw - 32px));height:min(640px,calc(100vh - 48px));max-height:none}
+#sop-velo{position:fixed;inset:0;background:rgba(10,12,30,.45);z-index:9598;display:none}
+#sop-velo.abierto{display:block}
+.sop-video{position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;margin-top:10px;background:var(--bg-muted)}
+.sop-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+
 /* ── Lista de leads del Pulso ── */
 .pul-fila{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:var(--bg);transition:border-color var(--dur-fast) var(--ease)}
 .pul-fila:hover{border-color:var(--blue-md)}
@@ -3837,6 +3897,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <button class="hdr-academia-btn" onclick="openAcademia()" style="position:relative;background:none;border:none;cursor:pointer;padding:5px 7px;border-radius:8px;color:var(--muted2);display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;font-family:var(--font);transition:all .18s" onmouseover="this.style.background='var(--blue-lt)';this.style.color='var(--blue)'" onmouseout="this.style.background='none';this.style.color='var(--muted2)'" title="Academia Acuarius">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
       <span class="academia-hdr-label">Academia</span>
+    </button>
+    <!-- Cuentas de clientes: solo para el equipo de Acuarius. Se muestra desde tkBotonHeader(). -->
+    <button id="cu-btn" onclick="cuAbrir()" style="display:none;position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:7px;color:var(--muted2)" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'" title="Cuentas de clientes" aria-label="Cuentas de clientes">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
     </button>
     <!-- Tickets: solo para el equipo de Acuarius. Se muestra desde tkBotonHeader(). -->
     <button id="tk-btn" onclick="tkAbrir()" style="display:none;position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:7px;color:var(--muted2)" onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'" title="Tickets de soporte">
@@ -5837,6 +5901,24 @@ if (window.AGENTES_ACTIVOS) {
     <button class="btn-ghost sm" onclick="tkCerrar()">Cerrar</button>
   </div>
   <div class="tk-body"><div id="tk-lista"></div></div>
+</div>
+
+<!-- Cuentas de clientes: solo para el equipo de Acuarius (cuAbrir). Entrar a
+     una cuenta abre una sesión real del cliente con Clerk; ver api/cuentas.js. -->
+<div id="cu-full">
+  <div class="tk-head">
+    <div>
+      <div class="tk-titulo">Cuentas de clientes</div>
+      <div class="tk-sub">Entra a cualquier cuenta para asesorar, revisar o dar soporte</div>
+    </div>
+    <button class="btn-ghost sm" onclick="cuCerrar()">Cerrar</button>
+  </div>
+  <div class="cu-tabs">
+    <button class="cu-tab act" data-cu="cuentas" onclick="cuTab('cuentas')">Cuentas</button>
+    <button class="cu-tab" data-cu="enlace" onclick="cuTab('enlace')">Enlace de registro</button>
+    <button class="cu-tab" data-cu="accesos" onclick="cuTab('accesos')">Registro de accesos</button>
+  </div>
+  <div class="tk-body"><div class="cu-wrap" id="cu-cuerpo"></div></div>
 </div>
 
 <!-- Soporte: burbuja flotante. Fuera de cualquier vista para que siga ahí

@@ -40,7 +40,9 @@
         // Manejar el callback de SSO
         const result = await window.Clerk.handleRedirectCallback({
           afterSignInUrl: '/',
-          afterSignUpUrl: '/',
+          // Una cuenta nueva con Google pasa por el alta guiada, igual que la
+          // creada con correo (public/registro.html).
+          afterSignUpUrl: '/registro?continuar=1',
         });
         // Si Clerk no redirige automáticamente
         window.location.href = '/';
