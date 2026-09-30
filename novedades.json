@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-29-un-solo-negocio",
+      "fecha": "2026-09-29",
+      "tipo": "mejora",
+      "titulo": "Tu cuenta es tu negocio: sin selector de clientes",
+      "texto": "Si tu plan no es de agencia, ya no verás el selector «Cliente» en la parte de arriba. Tu cuenta trabaja siempre sobre tu negocio: tus leads, tus procesos de venta y tus etapas están en un solo lugar, sin un segundo espacio donde algo pudiera quedar escondido. Las cuentas de agencia siguen eligiendo cliente como siempre."
+    },
+    {
       "id": "2026-09-29-consumo-agente",
       "fecha": "2026-09-29",
       "tipo": "nuevo",

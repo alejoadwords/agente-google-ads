@@ -86,5 +86,36 @@ console.log('\nEl servidor entiende con_sueltos\n');
      'y no choca con otro or= en el alcance (que no lo tiene)');
 }
 
+console.log('\nEl selector de cliente, solo para agencias\n');
+{
+  // Decisión del 29-09-2026: una cuenta Pro es UN negocio. Su perfil vive como
+  // un único «cliente» (pro_main) y trabaja siempre dentro de él; el selector
+  // y la salida a «Mi cuenta» son solo de las agencias.
+  const hdr = (plan, admin, clientes, activo) => {
+    const dom = { 'hdr-client-switch': el(), 'hdr-client-name': el() };
+    new Function('document', 'userPlan', 'isAdminUser', 'agencyClients', 'agencyActiveClientId',
+      cuerpo('function esCuentaAgencia() {') + '\n' + cuerpo('function hdrClientRender() {') + '; return hdrClientRender;')(
+      { getElementById: id => dom[id] }, plan, () => admin, clientes, activo)();
+    return dom['hdr-client-switch'].style.display;
+  };
+  ok(hdr('pro', false, [{ id: 'pro_main' }], 'pro_main') === 'none', 'una Pro con su perfil de negocio ya no ve el selector');
+  ok(hdr('trial', false, [{ id: 'pro_main' }], 'pro_main') === 'none', 'ni una cuenta de prueba');
+  ok(hdr('agency', false, [{ id: 'c1' }], null) === '', 'una agencia con clientes sí');
+  ok(hdr('agencia', false, [{ id: 'c1' }], null) === '', 'escrita «agencia» también');
+  ok(hdr('pro', true, [{ id: 'c1' }], null) === '', 'y el administrador');
+
+  let cambio = null;
+  const pick = new Function('userPlan', 'isAdminUser', 'agencyOpenClient', 'hdrClientRender', 'showView', 'document',
+    'let agencyActiveClientId = "pro_main", activeClientContext = {};' +
+    cuerpo('function esCuentaAgencia() {') + '\n' + cuerpo('function hdrClientPick(id) {') + '; return (id) => { hdrClientPick(id); return agencyActiveClientId; };');
+  const quedo = pick('pro', () => false, (id) => { cambio = id; }, () => {}, () => {}, { getElementById: () => null })(null);
+  ok(quedo === 'pro_main' && cambio === null, 'una Pro no puede salir a «Mi cuenta» aunque la llamen por otro lado');
+
+  const init = cuerpo('async function agencyInit() {');
+  ok(/if \(isAgency\) try \{\s*\n\s*const guardado = localStorage\.getItem\('acuarius_cliente_activo'\)/.test(init),
+     'al arrancar, restaurar «el último cliente» es solo de agencias');
+  ok(/const isPro\s+= !isAgency;/.test(init), 'y Pro es todo lo que no es agencia');
+}
+
 console.log(mal ? `\n  ${mal} fallo(s)\n` : '\n  Todo en verde\n');
 process.exit(mal ? 1 : 0);

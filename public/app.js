@@ -971,9 +971,19 @@ let agencySelectedHealth = 'gris';
 let agencyActiveClientId = null; // cliente en contexto de chat actual
 
 // ── Inicialización ──────────────────────────────────────────────────────────
+// ¿Esta cuenta maneja una cartera de clientes? Solo las de agencia (y el
+// administrador). Una cuenta Pro o de prueba es UN negocio: su perfil de
+// negocio vive como un único «cliente» (normalmente `pro_main`) y trabaja
+// siempre dentro de él, sin selector ni salida a «Mi cuenta». Antes el selector
+// salía a cualquiera con un cliente, y «Mi cuenta» era otro espacio con otros
+// procesos: el cliente creaba un proceso en uno y lo buscaba en el otro.
+function esCuentaAgencia() {
+  return /^agenc/.test(String(userPlan || '')) || isAdminUser();
+}
+
 async function agencyInit() {
-  const isAgency = userPlan === 'agency' || isAdminUser();
-  const isPro    = !isAdminUser() && userPlan !== 'agency';
+  const isAgency = esCuentaAgencia();
+  const isPro    = !isAgency;   // Pro, prueba o gratis: un solo negocio
 
   const agencyBtn  = document.getElementById('sb-agency-btn');
   const proBtn     = document.getElementById('sb-pro-btn');
@@ -985,8 +995,9 @@ async function agencyInit() {
   if (!isAgency && !isPro) return;
   await agencyLoadClients();
 
-  // Restaurar el cliente en el que se estaba trabajando
-  try {
+  // Restaurar el cliente en el que se estaba trabajando. Solo en una agencia:
+  // una cuenta Pro siempre trabaja en su negocio (ver más abajo).
+  if (isAgency) try {
     const guardado = localStorage.getItem('acuarius_cliente_activo');
     const c = guardado && agencyClients.find(x => x.id === guardado);
     if (c) {
@@ -33659,7 +33670,10 @@ function navRenderAgentChips(agentKey) {
 function hdrClientRender() {
   const wrap = document.getElementById('hdr-client-switch');
   if (!wrap) return;
-  const isAgency = (typeof agencyClients !== 'undefined' && Array.isArray(agencyClients) && agencyClients.length > 0);
+  // Solo las agencias eligen cliente. Una cuenta Pro con su perfil de negocio
+  // también tiene un «cliente», y por eso le salía el selector (ver esCuentaAgencia).
+  const isAgency = esCuentaAgencia() &&
+    (typeof agencyClients !== 'undefined' && Array.isArray(agencyClients) && agencyClients.length > 0);
   wrap.style.display = isAgency ? '' : 'none';
   if (!isAgency) return;
   const nameEl = document.getElementById('hdr-client-name');
@@ -33689,6 +33703,8 @@ function hdrClientToggle(e) {
 }
 
 function hdrClientPick(id) {
+  // Una cuenta que no es agencia no cambia de cliente, venga de donde venga.
+  if (!esCuentaAgencia()) return;
   if (!id) {
     agencyActiveClientId = null;
     if (typeof activeClientContext !== 'undefined') activeClientContext = null;
