@@ -73,6 +73,7 @@ export const CADA = {
   'cron-tasks': 24 * 60,         // 0 12 * * 1-5
   'cron-trials': 24 * 60,        // 0 13 * * *
   'cron-ventana': 60,
+  'cron-seguimiento': 10,       // */10; fuera de horario también late (fueraDeHora)
 };
 
 // Los que solo corren de lunes a viernes. Su silencio se mide en minutos

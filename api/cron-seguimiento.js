@@ -24,7 +24,17 @@ const CRON_SECRET = process.env.CRON_SECRET;
 
 const ESPERA_MIN = 10;          // minutos de silencio antes de retomar
 const VENTANA_HORAS = 24;       // fuera de la ventana de WhatsApp no se puede escribir
-const LOTE = 60;
+// Páginas de candidatas y un tope de tiempo: la función edge tiene 25 s.
+//
+// Antes se tomaban las 60 calladas MÁS ANTIGUAS y se saltaban sin marcar las
+// que ya tenían su seguimiento, las que terminan en un mensaje de la persona,
+// las sin agente o sin canal y las de cuentas sin cupo. Esas se quedaban
+// ocupando los 60 puestos durante 24 h: con más de 60, las conversaciones
+// nuevas no se miraban nunca (30-09-2026). Ahora van primero las que se
+// callaron hace MENOS —las que más vale retomar— y se recorren páginas hasta
+// el tope de tiempo.
+export const PAGINA = 200;
+export const TOPE_MS = 18 * 1000;
 // Horario en el que se puede retomar, hora de Colombia. A nadie le gusta que le
 // escriban a las tres de la mañana, y un mensaje así no lo contesta nadie: es
 // gastar un mensaje del cupo para molestar.
@@ -93,6 +103,10 @@ export default async function handler(req) {
     return new Response('no', { status: 401 });
   }
 
+  // La entrada, aparte de la salida: un latido que solo se escribe al terminar
+  // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
+  await latir('cron-seguimiento', { empezo: new Date().toISOString() });
+
   const resumen = { miradas: 0, enviados: 0, sinCupo: 0, fueraDeHora: 0 };
   try {
     if (!enHorario()) {
@@ -105,20 +119,33 @@ export default async function handler(req) {
     const calladasDesde = new Date(ahora - ESPERA_MIN * 60000).toISOString();
     const dentroDeVentana = new Date(ahora - VENTANA_HORAS * 3600000).toISOString();
 
-    // Solo las que atiende el agente. Si ya está en manos de una persona, el
-    // seguimiento le toca a ella: un mensaje nuestro por encima sería peor.
-    const convs = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_conversations?status=eq.bot` +
-      `&last_message_at=lt.${encodeURIComponent(calladasDesde)}` +
-      `&last_inbound_at=gt.${encodeURIComponent(dentroDeVentana)}` +
-      `&select=id,user_id,agent_id,connection_id,channel,contact_id,lead_id,last_inbound_at,last_message_at,seguimiento_at` +
-      `&order=last_message_at.asc&limit=${LOTE}`,
-      { headers: sb() }
-    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    const hasta = ahora + (Number(process.env.SEGUIMIENTO_TOPE_MS) || TOPE_MS);   // la variable solo existe en la prueba
+    // El canal y el agente se leen una vez por corrida, no una por conversación.
+    const conexiones = new Map(), agentes = new Map();
+    resumen.sinTiempo = false;
+
+    for (let desde = 0; ; desde += PAGINA) {
+      if (Date.now() >= hasta) { resumen.sinTiempo = true; break; }
+      // Solo las que atiende el agente. Si ya está en manos de una persona, el
+      // seguimiento le toca a ella: un mensaje nuestro por encima sería peor.
+      const r0 = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_conversations?status=eq.bot` +
+        `&last_message_at=lt.${encodeURIComponent(calladasDesde)}` +
+        `&last_inbound_at=gt.${encodeURIComponent(dentroDeVentana)}` +
+        `&select=id,user_id,agent_id,connection_id,channel,contact_id,lead_id,last_inbound_at,last_message_at,seguimiento_at` +
+        `&order=last_message_at.desc,id.asc&limit=${PAGINA}&offset=${desde}`,
+        { headers: sb() }
+      );
+      // Un fallo se dice: con una lista vacía el latido diría «0 miradas, todo
+      // bien» y nadie sabría que no se retomó ninguna conversación.
+      if (!r0.ok) throw new Error('no se pudieron leer las conversaciones (Supabase ' + r0.status + ')');
+      const convs = await r0.json();
 
     for (const conv of convs || []) {
+      if (Date.now() >= hasta) { resumen.sinTiempo = true; break; }
       // Uno por cada mensaje de la persona: si ya se le retomó y sigue callada,
-      // no se insiste. Insistir dos veces es acoso, no seguimiento.
+      // no se insiste. Insistir dos veces es acoso, no seguimiento. Se descarta
+      // aquí, sin ninguna consulta.
       if (conv.seguimiento_at && conv.seguimiento_at >= conv.last_inbound_at) continue;
       resumen.miradas++;
 
@@ -138,16 +165,22 @@ export default async function handler(req) {
       const cupo = await estadoDeCupo(conv.user_id, { cacheado: true }).catch(() => ({ error: true }));
       if (cupo && !cupo.error && cupo.agotado) { resumen.sinCupo++; continue; }
 
-      const conexion = await fetch(
-        `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${conv.connection_id}&is_active=eq.true&select=*`,
-        { headers: sb() }
-      ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).then(abrirConexion).catch(() => null);
+      if (!conexiones.has(conv.connection_id)) {
+        conexiones.set(conv.connection_id, fetch(
+          `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${conv.connection_id}&is_active=eq.true&select=*`,
+          { headers: sb() }
+        ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).then(abrirConexion).catch(() => null));
+      }
+      const conexion = await conexiones.get(conv.connection_id);
       if (!conexion) continue;
 
-      const agente = conv.agent_id ? await fetch(
-        `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${conv.agent_id}&is_active=eq.true&select=tone`,
-        { headers: sb() }
-      ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null) : null;
+      if (conv.agent_id && !agentes.has(conv.agent_id)) {
+        agentes.set(conv.agent_id, fetch(
+          `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${conv.agent_id}&is_active=eq.true&select=tone`,
+          { headers: sb() }
+        ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null));
+      }
+      const agente = conv.agent_id ? await agentes.get(conv.agent_id) : null;
       // Sin agente activo, el canal se atiende a mano: no le corresponde a este cron.
       if (!agente) continue;
 
@@ -181,6 +214,8 @@ export default async function handler(req) {
       }).catch(() => {});
       sumarUno(conv.user_id);
       resumen.enviados++;
+    }
+      if (resumen.sinTiempo || (convs || []).length < PAGINA) break;
     }
 
     await latir('cron-seguimiento', resumen);
