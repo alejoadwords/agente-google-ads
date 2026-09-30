@@ -7,8 +7,8 @@
 // vacío se convierte en un correo que nadie abre.
 
 import { emailHtml, RESPONDER_A } from './_email-layout.js';
-import { enviarResend } from './_correo.js';
-import { yaSeHizo, periodoDe } from './_una-vez.js';
+import { enviarResendLote } from './_correo.js';
+import { periodoDe } from './_una-vez.js';
 import { latir } from './_latido.js';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -103,11 +103,10 @@ async function anotar(mensaje, detalle, usuario) {
   } catch {}
 }
 
-// Devuelve el motivo en vez de un booleano: «no salió» sin decir por qué es lo
-// que dejó a un equipo entero sin su resumen sin que nadie pudiera verlo.
-async function enviar(to, vencidas, hoy) {
-  if (!RESEND_API_KEY) return { ok: false, motivo: 'RESEND_API_KEY no configurada' };
-  if (!to) return { ok: false, motivo: 'esa persona no tiene correo en el equipo' };
+// Arma el correo de una persona; no lo envía. Se envían de cien en cien por
+// el endpoint de lotes de Resend: uno a uno, a ~2 por segundo que acepta
+// Resend, 600 personas eran 300 s y el cron tiene 60 (30-09-2026).
+export async function armarCorreo(to, vencidas, hoy) {
   const total = vencidas.length + hoy.length;
   const asunto = vencidas.length
     ? `${vencidas.length} tarea${vencidas.length > 1 ? 's' : ''} vencida${vencidas.length > 1 ? 's' : ''} y ${hoy.length} para hoy`
@@ -118,26 +117,90 @@ async function enviar(to, vencidas, hoy) {
     <table style="width:100%;border-collapse:collapse">${await filas(items)}</table>` : '';
   const cuerpo = (await bloque('Vencidas', vencidas, '#B91C1C')) + (await bloque('Para hoy', hoy, '#1E2BCC'));
 
-  const res = await enviarResend('cron-tasks', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
-      to,
-      subject: `${asunto} — Acuarius`,
-      html: emailHtml({
-        titulo: 'Tu día en el CRM',
-        intro: `Tienes ${total} pendiente${total > 1 ? 's' : ''}.`,
-        preheader: asunto,
-        cuerpo,
-        cta: { texto: 'Abrir mis tareas', url: 'https://app.acuarius.app/crm/tareas' },
-      }),
+  return {
+    from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
+    to,
+    subject: `${asunto} — Acuarius`,
+    html: emailHtml({
+      titulo: 'Tu día en el CRM',
+      intro: `Tienes ${total} pendiente${total > 1 ? 's' : ''}.`,
+      preheader: asunto,
+      cuerpo,
+      cta: { texto: 'Abrir mis tareas', url: 'https://app.acuarius.app/crm/tareas' },
     }),
-  });
-  if (res.ok) return { ok: true };
-  const cuerpoErr = await res.text().catch(() => '');
-  return { ok: false, motivo: `Resend ${res.status}`, detalle: cuerpoErr.slice(0, 500) };
+  };
 }
+
+// Todas las filas, de mil en mil: PostgREST no devuelve más de mil aunque se
+// pida limit=5000. Con las vencidas acumulándose, las primeras mil (las más
+// viejas) tapaban a las cuentas con tareas recientes, que se quedaban sin
+// resumen sin ningún aviso. Un fallo se lanza: nunca es «no hay nada».
+export async function leerTodas(ruta, techo = 100000) {
+  const filas = [];
+  for (let desde = 0; desde < techo; desde += 1000) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${ruta}&limit=1000&offset=${desde}`, { headers: sb() });
+    if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const lote = await r.json();
+    if (!Array.isArray(lote)) throw new Error('respuesta que no es una lista');
+    filas.push(...lote);
+    if (lote.length < 1000) return filas;
+  }
+  throw new Error('más de ' + techo + ' filas en ' + ruta.split('?')[0]);
+}
+
+// De `n` en `n` a la vez: las cuentas se arman en paralelo, sin lanzar
+// doscientas peticiones de golpe.
+async function enParalelo(items, n, fn) {
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (i < items.length) { const k = i++; await fn(items[k]); }
+  }));
+}
+
+// La bandeja de cada persona de una cuenta, con su correo. Lanza si no puede
+// leer lo que necesita: un resumen al que le faltan las tareas con lead es
+// peor que ninguno, porque parece completo.
+async function bandejasDeCuenta(userId, tareas) {
+  const ids = Array.from(new Set(tareas.map(t => t.lead_id).filter(Boolean)));
+  const porId = {};
+  for (let i = 0; i < ids.length; i += 150) {   // la URL con cientos de ids falla
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.slice(i, i + 150).join(',')})&select=id,name,phone,assigned_to,deleted_at,stage,closed_at`, { headers: sb() });
+    if (!r.ok) throw new Error(`no se pudieron leer los leads (Supabase ${r.status})`);
+    for (const l of await r.json()) porId[l.id] = l;
+  }
+
+  // A quién le toca cada tarea: al dueño del lead, o al dueño de la cuenta
+  const bandejas = {};
+  for (const t of tareas) {
+    const lead = t.lead_id ? porId[t.lead_id] : null;
+    if (t.lead_id && (!lead || lead.deleted_at)) continue;
+    if (lead && leadCerrado(lead)) continue;
+    const destinatario = lead?.assigned_to || userId;
+    (bandejas[destinatario] = bandejas[destinatario] || []).push({ ...t, lead });
+  }
+
+  // Correo de cada uno: los miembros por su email del equipo, el dueño por Clerk
+  const rm = await fetch(
+    `${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=member_user_id,member_email`,
+    { headers: sb() }
+  );
+  if (!rm.ok) throw new Error(`no se pudo leer el equipo (Supabase ${rm.status})`);
+  const emailDe = {};
+  for (const m of await rm.json()) if (m.member_user_id) emailDe[m.member_user_id] = m.member_email;
+  if (bandejas[userId] && !emailDe[userId]) {
+    emailDe[userId] = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
+      headers: { Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}` },
+    }).then(r => (r.ok ? r.json() : null))
+      .then(u => u?.email_addresses?.[0]?.email_address || null)
+      .catch(() => null);
+  }
+  return { bandejas, emailDe };
+}
+
+// Tiempo para armar bandejas antes de ponerse a enviar. El cron corre a las
+// 12:00, 12:10 y 12:20 (vercel.json): lo que no alcance una corrida lo manda
+// la siguiente, y nadie lo recibe dos veces (cron_envios).
+export const TOPE_ARMADO_MS = 35 * 1000;
 
 export default async function handler(req, res) {
   const auth = req.headers?.authorization || '';
@@ -162,105 +225,115 @@ export default async function handler(req, res) {
     return res.status(estado).json(cuerpo);
   };
 
-  const resumen = { cuentas: 0, correos: 0, fallidos: [], errores: [] };
+  const resumen = { cuentas: 0, correos: 0, fallidos: [], errores: [], ya_enviados: 0, sin_tiempo: 0 };
   const ahora = Date.now();
+  // CRON_TAREAS_TOPE_MS solo existe para la prueba: en producción no está.
+  const hasta = ahora + (Number(process.env.CRON_TAREAS_TOPE_MS) || TOPE_ARMADO_MS);
   const finDeHoy = new Date(); finDeHoy.setHours(23, 59, 59, 999);
 
   // Solo las cuentas que tienen algo pendiente hasta el final del día.
   //
-  // «No contestó la base» y «hoy nadie tiene nada» NO son lo mismo, y hasta
-  // ahora el cron los confundía: cualquier fallo se convertía en una lista
-  // vacía, la función devolvía 200 «todo bien» y el resumen del día no salía
-  // para nadie. Sin error, sin reintento y sin rastro — el 23-09-2026 los
-  // cinco asesores de Certain se quedaron sin su aviso y solo se supo porque
-  // uno lo reportó. La base ya ha dado 504 alguna vez (cron-recordatorios,
-  // 22-09), o sea que no es hipotético.
-  //
-  // Ahora un fallo se queda como fallo: se anota y se devuelve 500, que es lo
-  // que hace que Vercel reintente y que el aviso de errores lo enseñe.
+  // «No contestó la base» y «hoy nadie tiene nada» NO son lo mismo: el
+  // 23-09-2026 un fallo convertido en lista vacía dejó a los cinco asesores de
+  // Certain sin su aviso con un 200 «todo bien». Un fallo se queda como fallo:
+  // se anota y se devuelve 500, que Vercel reintenta y el aviso de errores
+  // enseña.
   let pendientes;
   try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/activities?done=is.false&cancelled_at=is.null&due_at=lte.${encodeURIComponent(finDeHoy.toISOString())}&select=*&order=due_at.asc&limit=5000`,
-      { headers: sb() }
+    pendientes = await leerTodas(
+      `activities?done=is.false&cancelled_at=is.null&due_at=lte.${encodeURIComponent(finDeHoy.toISOString())}` +
+      `&select=id,user_id,lead_id,title,type,due_at&order=due_at.asc,id.asc`
     );
-    if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
-    pendientes = await r.json();
   } catch (e) {
     await anotar('el resumen diario de tareas no se pudo armar: la base no contestó',
       e?.message || String(e), null);
     return responder(500, { error: 'No se pudo leer las tareas pendientes.', detalle: e?.message }, e?.message || 'la base no contestó');
-  }
-  if (!Array.isArray(pendientes)) {
-    await anotar('el resumen diario de tareas recibió algo que no es una lista',
-      JSON.stringify(pendientes).slice(0, 300), null);
-    return responder(500, { error: 'Respuesta inesperada al leer las tareas.' }, 'respuesta que no es una lista');
   }
   if (!pendientes.length) return responder(200, { ...resumen, sin_pendientes: true });
 
   const porCuenta = {};
   pendientes.forEach(t => { (porCuenta[t.user_id] = porCuenta[t.user_id] || []).push(t); });
 
-  for (const userId of Object.keys(porCuenta)) {
+  // 1. Las bandejas, ocho cuentas a la vez y con reloj.
+  const sobres = [];   // { quien, userId, to, vencidas, hoy }
+  await enParalelo(Object.keys(porCuenta), 8, async (userId) => {
+    if (Date.now() >= hasta) { resumen.sin_tiempo++; return; }
     try {
-      const tareas = porCuenta[userId];
-      const ids = Array.from(new Set(tareas.map(t => t.lead_id).filter(Boolean)));
-      const leads = ids.length ? await fetch(
-        `${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&select=id,name,phone,assigned_to,deleted_at,stage,closed_at`,
-        { headers: sb() }
-      ).then(r => (r.ok ? r.json() : [])).catch(() => []) : [];
-      const porId = {};
-      (leads || []).forEach(l => { porId[l.id] = l; });
-
-      // A quién le toca cada tarea: al dueño del lead, o al dueño de la cuenta
-      const bandejas = {};
-      for (const t of tareas) {
-        const lead = t.lead_id ? porId[t.lead_id] : null;
-        if (t.lead_id && (!lead || lead.deleted_at)) continue;
-        if (lead && leadCerrado(lead)) continue;
-        const destinatario = lead?.assigned_to || userId;
-        (bandejas[destinatario] = bandejas[destinatario] || []).push({ ...t, lead });
-      }
-
-      // Correo de cada uno: los miembros por su email del equipo, el dueño por Clerk
-      const miembros = await fetch(
-        `${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=member_user_id,member_email`,
-        { headers: sb() }
-      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-      const emailDe = {};
-      (miembros || []).forEach(m => { if (m.member_user_id) emailDe[m.member_user_id] = m.member_email; });
-      if (!emailDe[userId]) {
-        emailDe[userId] = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
-          headers: { Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}` },
-        }).then(r => (r.ok ? r.json() : null))
-          .then(u => u?.email_addresses?.[0]?.email_address || null)
-          .catch(() => null);
-      }
-
+      const { bandejas, emailDe } = await bandejasDeCuenta(userId, porCuenta[userId]);
       for (const quien of Object.keys(bandejas)) {
         const suyas = bandejas[quien];
         const vencidas = suyas.filter(t => t.due_at && new Date(t.due_at).getTime() < ahora);
         const hoy = suyas.filter(t => !t.due_at || new Date(t.due_at).getTime() >= ahora);
         if (!vencidas.length && !hoy.length) continue;
-        // Una vez al día por persona: ver api/_una-vez.js
-        if (await yaSeHizo(SUPABASE_URL, SUPABASE_KEY, 'tareas:' + quien, periodoDe('dia'))) {
-          resumen.repetidos = (resumen.repetidos || 0) + 1; continue;
-        }
-        const r = await enviar(emailDe[quien], vencidas, hoy);
-        if (r.ok) { resumen.correos++; continue; }
-        resumen.fallidos.push({ quien, motivo: r.motivo });
-        await anotar(
-          'el resumen diario de tareas no salió: ' + r.motivo,
-          `destinatario ${quien} · ${vencidas.length} vencidas · ${hoy.length} para hoy · ${r.detalle || ''}`,
-          userId
-        );
+        sobres.push({ quien, userId, to: emailDe[quien], vencidas, hoy });
       }
       resumen.cuentas++;
     } catch (e) {
       resumen.errores.push(`${userId}: ${e.message}`);
       await anotar('la cuenta falló al armar su resumen de tareas', e?.stack || e?.message, userId);
     }
+  });
+
+  // 2. Quién lo recibió ya hoy (una vez al día por persona; ver _una-vez.js).
+  const clave = (quien) => `tareas:${quien}:${periodoDe('dia')}`;
+  const hechos = new Set();
+  try {
+    const claves = sobres.map(x => clave(x.quien));
+    for (let i = 0; i < claves.length; i += 150) {
+      const lote = claves.slice(i, i + 150).map(c => '"' + c + '"').join(',');
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/cron_envios?clave=in.(${encodeURIComponent(lote)})&select=clave`, { headers: sb() });
+      if (!r.ok) throw new Error(`Supabase ${r.status}`);
+      for (const f of await r.json()) hechos.add(f.clave);
+    }
+  } catch (e) {
+    // Sin saber quién lo recibió ya, enviar podría duplicar el correo de media
+    // plataforma: se corta y lo retoma la siguiente corrida.
+    await anotar('el resumen diario no pudo comprobar quién lo recibió ya', e?.message, null);
+    return responder(500, { ...resumen, error: 'No se pudo leer cron_envios.' }, e?.message);
+  }
+  const porEnviar = [];
+  for (const x of sobres) {
+    if (hechos.has(clave(x.quien))) { resumen.ya_enviados++; continue; }
+    if (!x.to) {
+      resumen.fallidos.push({ quien: x.quien, motivo: 'esa persona no tiene correo en el equipo' });
+      await anotar('el resumen diario de tareas no salió: esa persona no tiene correo en el equipo', `destinatario ${x.quien}`, x.userId);
+      continue;
+    }
+    porEnviar.push(x);
   }
 
-  return responder(200, resumen, resumen.errores?.length ? resumen.errores.join(' · ').slice(0, 200) : null);
+  // 3. De cien en cien. Se marca SOLO lo que Resend aceptó: un lote que falla
+  // se reintenta en la corrida siguiente en vez de perderse.
+  if (porEnviar.length && !RESEND_API_KEY) {
+    return responder(500, { ...resumen, error: 'RESEND_API_KEY no configurada' }, 'RESEND_API_KEY no configurada');
+  }
+  for (let i = 0; i < porEnviar.length; i += 100) {
+    const lote = porEnviar.slice(i, i + 100);
+    const cuerpos = await Promise.all(lote.map(x => armarCorreo(x.to, x.vencidas, x.hoy)));
+    const r = await enviarResendLote('cron-tasks', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpos),
+    });
+    if (!r.ok) {
+      const det = await r.text().catch(() => '');
+      for (const x of lote) resumen.fallidos.push({ quien: x.quien, motivo: `Resend ${r.status}` });
+      await anotar('el resumen diario de tareas no salió: Resend ' + r.status, `${lote.length} personas · ${det.slice(0, 400)}`, null);
+      continue;
+    }
+    resumen.correos += lote.length;
+    await fetch(`${SUPABASE_URL}/rest/v1/cron_envios?on_conflict=clave`, {
+      method: 'POST',
+      headers: { ...sb(), Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify(lote.map(x => ({ clave: clave(x.quien), dia: new Date().toISOString().slice(0, 10) }))),
+    }).catch(e => anotar('no se pudo marcar el resumen como enviado', e?.message, null));
+  }
+
+  if (resumen.sin_tiempo) {
+    await anotar('el resumen diario no alcanzó a todas las cuentas en esta corrida',
+      `${resumen.sin_tiempo} cuentas quedan para la siguiente (12:10 o 12:20 UTC)`, null);
+  }
+
+  const problemas = [...resumen.errores, ...resumen.fallidos.map(f => `${f.quien}: ${f.motivo}`)];
+  return responder(200, resumen, problemas.length ? problemas.join(' · ').slice(0, 200) : null);
 }
