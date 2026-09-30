@@ -13,6 +13,7 @@ import { campaignHtml } from './_campaign-email.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { enviarResendLote, huecoParaCampana } from './_correo.js';
 import { latir } from './_latido.js';
+import { enviarSms, enHorarioPermitido } from './_sms.js';
 
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
@@ -115,6 +116,16 @@ async function sb(path, method = 'GET', body = null, prefer) {
   if (!res.ok) throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
   return text ? JSON.parse(text) : null;
 }
+
+// Del resultado de _sms.js a un estado de la cola de la campaña.
+export function traducirSms(r) {
+  if (r.estado === 'enviado' || r.estado === 'simulado') return { status: 'sent', detail: r.estado === 'simulado' ? 'simulado (sin proveedor)' : null };
+  if (r.estado === 'omitido') return { status: 'skipped', detail: r.detalle };
+  if (r.estado === 'fallido') return { status: 'failed', detail: r.detalle };
+  if (r.estado === 'sin_saldo') return { status: 'sin_saldo' };
+  return { status: 'reintentar' }; // fuera de horario: sigue pendiente
+}
+const LOTE_SMS = 10;
 
 function renderVars(text, lead) {
   const vars = {
@@ -410,6 +421,11 @@ export default async function handler(req, res) {
         console.warn('[campaigns] campaña', c.id, 'detenida: la cuenta tiene el envío bloqueado');
         continue;
       }
+      // Un SMS comercial solo sale en el horario de la Ley 2300. Fuera de él la
+      // campaña ni se toca: sigue en cola y arranca sola cuando se abra el
+      // horario. Sin `continue` antes de marcarla, quedaría «enviando» toda la
+      // noche sin enviar nada.
+      if (c.channel === 'sms' && !enHorarioPermitido()) continue;
       if (c.status === 'queued') {
         await sb(`/campaigns?id=eq.${c.id}`, 'PATCH', { status: 'sending' }, 'return=minimal');
       }
@@ -435,8 +451,44 @@ export default async function handler(req, res) {
       const ahora = new Date().toISOString();
       const resueltos = new Map();  // id de la fila → resultado
       const eventos = [];           // email_events a insertar de una vez
+      let motivoPausa = null;
 
-      if (c.channel === 'whatsapp') {
+      if (c.channel === 'sms') {
+        // De diez en diez: cada SMS es una reserva en la base y una llamada al
+        // proveedor. _sms.js decide todo lo demás (móvil válido, baja, horario,
+        // saldo); aquí solo se traduce su respuesta a la cola.
+        let sinSaldo = false;
+        for (let i = 0; i < pending.length && !sinSaldo; i += LOTE_SMS) {
+          if (Date.now() - T0 > LIMITE_MS) break;
+          const tanda = pending.slice(i, i + LOTE_SMS);
+          const res = await Promise.all(tanda.map(async rcpt => {
+            const lead = byId[rcpt.lead_id];
+            if (!lead || lead.deleted_at) return { status: 'skipped', detail: 'lead eliminado' };
+            try {
+              const r = await enviarSms({ userId: c.user_id, lead, texto: renderVars(c.body || '', lead), campaignId: c.id });
+              return traducirSms(r);
+            } catch (e) {
+              // La base no respondió: no se sabe si se cobró. Queda pendiente.
+              console.error('[cron-campaigns] sms sin confirmar:', e.message);
+              return null;
+            }
+          }));
+          tanda.forEach((rcpt, j) => {
+            const r = res[j];
+            if (!r || r.status === 'reintentar') return;
+            if (r.status === 'sin_saldo') { sinSaldo = true; return; }
+            resueltos.set(rcpt.id, r);
+          });
+        }
+        if (sinSaldo) {
+          // Pausada con el motivo a la vista: al comprar un paquete se reanuda
+          // desde la pantalla y sigue con los que faltan. El motivo va en las
+          // stats, que se escriben más abajo.
+          motivoPausa = 'Sin créditos de SMS. Compra un paquete y reanúdala.';
+          await sb(`/campaigns?id=eq.${c.id}`, 'PATCH', { status: 'paused' }, 'return=minimal');
+          console.warn('[cron-campaigns] campaña de SMS', c.id, 'pausada: sin créditos');
+        }
+      } else if (c.channel === 'whatsapp') {
         // WhatsApp sigue siendo uno a uno: cada mensaje es una llamada a Meta y
         // no hay endpoint de lote. Lo que se ahorró aquí son las consultas
         // repetidas del índice, que antes iban dentro del bucle.
@@ -574,6 +626,7 @@ export default async function handler(req, res) {
       const stats = c.stats || {};
       await sb(`/campaigns?id=eq.${c.id}`, 'PATCH', {
         stats: {
+          ...(motivoPausa ? { motivo_pausa: motivoPausa } : {}),
           total: stats.total || 0,
           sent: (stats.sent || 0) + counts.sent,
           skipped: (stats.skipped || 0) + counts.skipped,

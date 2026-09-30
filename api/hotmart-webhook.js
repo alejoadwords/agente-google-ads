@@ -1,6 +1,7 @@
 // api/hotmart-webhook.js
 // Sin dependencias externas — usa fetch nativo igual que referral.js
 import { enviarResend } from './_correo.js';
+import { acreditarSms, PAQUETES as PAQUETES_SMS } from './_sms.js';
 
 const SUPABASE_URL  = process.env.SUPABASE_URL;
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY;
@@ -122,6 +123,15 @@ const OFERTAS = {
   // Contactos adicionales (producto 8216932) — paquetes de 1.000
   // Pendiente: añadir aqui los codigos ?off= de cada oferta
 };
+
+// 'SMS 3.000', '3000 créditos', '20k sms' → cantidad; solo si es un paquete
+// que existe, para que un nombre raro no acredite un número inventado.
+export function cantidadSmsDelNombre(n) {
+  const k = n.match(/(\d+)\s*k\b/);
+  const m = k ? null : n.match(/(\d{1,3}(?:[.,]\d{3})+|\d{3,6})/);
+  const cantidad = k ? parseInt(k[1], 10) * 1000 : m ? parseInt(m[1].replace(/[.,]/g, ''), 10) : 0;
+  return PAQUETES_SMS.some(p => p.creditos === cantidad) ? cantidad : 0;
+}
 
 function monedaEsUSD(data) {
   const c = (data?.purchase?.price?.currency_value || data?.purchase?.full_price?.currency_value || '').toUpperCase();
@@ -410,6 +420,49 @@ export default async function handler(req, res) {
   // real del plan pasa por Clerk más abajo y no depende de esta tabla)
   const { data: users } = await sb(`/users?email=eq.${encodeURIComponent(email)}&select=id,video_credits_extra&limit=1`);
   const usuario = (users && users.length) ? users[0] : null;
+
+  // ── Paquetes de SMS ──────────────────────────────────────────────────────
+  // Producto con 'sms' en el nombre. Compra suelta: los créditos se SUMAN al
+  // saldo (sms_movimientos) y no vencen; la transacción es la referencia, así
+  // que un aviso repetido no acredita dos veces. La cantidad sale del código de
+  // oferta, del nombre ('SMS 3.000', '3000 créditos') o del precio exacto en
+  // USD; si nada de eso es fiable NO se acredita a ojo: se avisa para hacerlo
+  // a mano. Un reembolso o contracargo resta lo acreditado (el saldo puede
+  // quedar negativo si ya se gastó, y entonces no sale ningún SMS más).
+  if (/\bsms\b/.test(productName)) {
+    try {
+      const clerkUser = await clerkFindUserByEmail(email);
+      if (!clerkUser) {
+        await avisarFalloActivacion({ email, productName, motivo: 'No hay cuenta en Clerk con ese email (paquete de SMS sin acreditar)' });
+        return res.status(200).json({ received: true, action: 'user_not_found', email });
+      }
+      if (!transactionId) {
+        await avisarFalloActivacion({ email, productName, motivo: 'Compra de SMS sin número de transacción: acreditar a mano' });
+        return res.status(200).json({ received: true, action: 'sms_sin_transaccion' });
+      }
+      const rs = resolverCantidad(data, {
+        tipo: 'sms',
+        patronNombre: cantidadSmsDelNombre,
+        porPrecio: (p) => (PAQUETES_SMS.find(x => x.usd === Number(p)) || {}).creditos || 0,
+        maximo: 20000,
+      });
+      if (rs.fuente === 'indeterminada') {
+        await avisarFalloActivacion({ email, productName, motivo: 'No se pudo saber cuántos SMS compró: acreditar a mano (transacción ' + transactionId + ')' });
+        return res.status(200).json({ received: true, action: 'sms_cantidad_indeterminada' });
+      }
+      if (eventosCancelacion.includes(eventType)) {
+        const r = await acreditarSms(clerkUser.id, -rs.cantidad, transactionId, { evento: eventType }, 'cancelacion');
+        return res.status(200).json({ received: true, action: 'sms_cancelados', creditos: -rs.cantidad, nuevo: r.nuevo });
+      }
+      const r = await acreditarSms(clerkUser.id, rs.cantidad, transactionId, { producto: data?.product?.name || null, fuente: rs.fuente });
+      return res.status(200).json({ received: true, action: r.nuevo ? 'sms_acreditados' : 'sms_ya_acreditados', creditos: rs.cantidad });
+    } catch (e) {
+      // 500 a propósito: Hotmart reintenta, y la referencia impide duplicar.
+      console.error('[hotmart-webhook] sms error:', e.message);
+      await avisarFalloActivacion({ email, productName, motivo: 'Error al acreditar SMS: ' + e.message }).catch(() => {});
+      return res.status(500).json({ error: 'sms_error' });
+    }
+  }
 
   // ── Compra de créditos de video ──────────────────────────────────────────
   if (productName.includes('video')) {

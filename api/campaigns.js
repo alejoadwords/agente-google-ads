@@ -13,6 +13,7 @@ import { campaignHtml } from './_campaign-email.js';
 // PostgREST corta en 1.000 filas aunque se le pida más. Aquí eso significaba
 // que una audiencia de 4.000 salía a mil personas sin decirlo. Ver _paginado.js.
 import { traerTodo } from './_paginado.js';
+import { smsActivo, saldoSms, normalizarTelefono, prepararTexto, contarSegmentos, creditosEstimados, MAX_SEGMENTOS, ETIQUETA_BAJA as BAJA_SMS } from './_sms.js';
 
 // La conexión de WhatsApp del cliente: de ahí salen el waba_id y el token con
 // los que se le pregunta a Meta por el estado de una plantilla.
@@ -118,6 +119,9 @@ function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
+// El canal que manda el navegador, reducido a uno de los tres que existen.
+const canalDe = (v) => (v === 'whatsapp' || v === 'sms' ? v : 'email');
+
 // Audiencia: etiquetas (ANY de las seleccionadas), etapa y fuente opcionales.
 // Excluye siempre leads dados de baja (etiqueta no-email) en canal email.
 function audienceQuery(userId, clientId, audience, channel) {
@@ -131,6 +135,7 @@ function audienceQuery(userId, clientId, audience, channel) {
   if (a.source) q += `&source=eq.${encodeURIComponent(a.source)}`;
   if (channel === 'email') q += `&email=not.is.null&tags=not.cs.{"no-email"}`;
   if (channel === 'whatsapp') q += `&phone=not.is.null`;
+  if (channel === 'sms') q += `&phone=not.is.null&tags=not.cs.{"${BAJA_SMS}"}`;
   return q;
 }
 
@@ -153,6 +158,7 @@ async function leadsByIds(userId, clientId, ids, channel, select) {
   let ch = '';
   if (channel === 'email') ch = `&email=not.is.null&tags=not.cs.{"no-email"}`;
   if (channel === 'whatsapp') ch = `&phone=not.is.null`;
+  if (channel === 'sms') ch = `&phone=not.is.null&tags=not.cs.{"${BAJA_SMS}"}`;
   const out = [];
   for (let i = 0; i < ids.length; i += 150) {
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}${scope}&deleted_at=is.null&id=in.(${ids.slice(i, i + 150).join(',')})${ch}&select=${select}`, { headers: sbHeaders() }).then(r => r.json());
@@ -239,7 +245,11 @@ async function resolveAudience(userId, clientId, audience, channel) {
   // por qué, que es justo lo que hay que enseñar antes de enviar.
   const fuera = await idsExcluidos(userId, clientId, audience);
   const quemados = channel === 'email' ? await correosQuemados() : new Set();
-  const leads = base.filter(l => !fuera.has(l.id) && !(channel === 'email' && quemados.has(String(l.email || '').toLowerCase())));
+  // En SMS solo cuentan los móviles colombianos válidos: un fijo o un número
+  // mal escrito no recibe nada y no debe inflar la audiencia ni el costo.
+  const leads = base.filter(l => !fuera.has(l.id)
+    && !(channel === 'email' && quemados.has(String(l.email || '').toLowerCase()))
+    && !(channel === 'sms' && !normalizarTelefono(l.phone)));
   return { leads, truncado };
 }
 
@@ -395,7 +405,7 @@ export async function historialDelLead(userId, leadId, quien) {
       return {
         campaign_id: f.campaign_id,
         nombre: c.name || 'Campaña',
-        canal: c.channel === 'whatsapp' ? 'WhatsApp' : 'Correo',
+        canal: c.channel === 'whatsapp' ? 'WhatsApp' : c.channel === 'sms' ? 'SMS' : 'Correo',
         asunto: c.subject || '',
         estado: ESTADO_ENVIO[f.status] || f.status,
         // «No se le envió» a secas no sirve: el motivo —dado de baja, sin
@@ -504,7 +514,7 @@ export default async function handler(req) {
   if (req.method === 'GET' && url.searchParams.get('preview')) {
     let audience = {};
     try { audience = JSON.parse(url.searchParams.get('audience') || '{}'); } catch {}
-    const channel = url.searchParams.get('channel') === 'whatsapp' ? 'whatsapp' : 'email';
+    const channel = canalDe(url.searchParams.get('channel'));
     const a = await normalizeAudience(userId, audience);
     const hasIds = Array.isArray(a.lead_ids) && a.lead_ids.length;
     const [resuelta, all] = await Promise.all([
@@ -524,6 +534,9 @@ export default async function handler(req) {
         if ((l.tags || []).includes('no-email')) breakdown.unsubscribed++;
         else if (!l.email) breakdown.missing++;
         else if (quemados.has(String(l.email).toLowerCase())) breakdown.rebotados++;
+      } else if (channel === 'sms') {
+        if ((l.tags || []).includes(BAJA_SMS)) breakdown.unsubscribed++;
+        else if (!normalizarTelefono(l.phone)) breakdown.missing++;
       } else if (!l.phone) breakdown.missing++;
     }
     // `truncado` viaja hasta la pantalla: el wizard tiene que poder avisar
@@ -566,13 +579,15 @@ export default async function handler(req) {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     if (!body.objective) return jsonResp({ error: 'Cuéntame el objetivo de la campaña' }, 400);
-    const channel = body.channel === 'whatsapp' ? 'whatsapp' : 'email';
+    const channel = canalDe(body.channel);
     const sys = 'Eres un copywriter experto en email marketing y mensajes directos para LatAm. Escribes en español neutro, directo y humano — cero tono corporativo vacío. ' +
       'Personalizas con las variables {{nombre}} y {{empresa}} cuando suman. Respetas las buenas prácticas anti-spam: sin MAYÚSCULAS sostenidas, sin exceso de signos, promesas creíbles. ' +
       'Respondes SOLO con un objeto JSON válido, sin markdown ni texto extra, con estas claves: ' +
       (channel === 'email'
         ? '"subject" (max 60 chars, gancho concreto), "preheader" (max 100 chars, complementa el asunto sin repetirlo), "body" (el email en texto plano, 80-160 palabras, párrafos cortos separados por \\n\\n, saludo con {{nombre}}), "cta_text" (max 4 palabras, verbo de acción).'
-        : '"body" (mensaje de WhatsApp de 40-80 palabras, cercano, saludo con {{nombre}}, un solo mensaje).');
+        : channel === 'sms'
+          ? '"body" (SMS de máximo 150 caracteres en total contando espacios, sin emojis, saludo con {{nombre}}, una sola idea y un llamado a la acción; sin enlaces salvo que el objetivo lo pida).'
+          : '"body" (mensaje de WhatsApp de 40-80 palabras, cercano, saludo con {{nombre}}, un solo mensaje).');
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
@@ -698,6 +713,11 @@ export default async function handler(req) {
       const problema = await revisarPlantilla(userId, clientId, c.wa_template);
       if (problema) return jsonResp(problema, 400);
     }
+    if (c.channel === 'sms') {
+      if (!smsActivo(userId)) return jsonResp({ error: 'Los SMS todavía no están disponibles en esta cuenta.' }, 403);
+      const seg = contarSegmentos(prepararTexto(c.body)).segmentos;
+      if (seg > MAX_SEGMENTOS) return jsonResp({ error: `El mensaje ocupa ${seg} SMS por persona; el máximo es ${MAX_SEGMENTOS}. Acórtalo.` }, 400);
+    }
 
     const { leads, truncado } = await resolveAudience(userId, clientId, c.audience, c.channel);
     if (!leads.length) return jsonResp({ error: 'La audiencia quedó vacía con esos filtros' }, 400);
@@ -746,6 +766,18 @@ export default async function handler(req) {
       const used = await monthlySent(userId);
       if (used + leads.length > quota) {
         return jsonResp({ error: `Cupo mensual insuficiente: tienes ${quota.toLocaleString()} emails/mes (plan${emailsExtra ? ' + ' + emailsExtra + ' paquete(s)' : ''}), llevas ${used.toLocaleString()} y esta campaña necesita ${leads.length.toLocaleString()}. Amplía tu cupo con paquetes de 2.000 emails.`, quota_exceeded: true }, 403);
+      }
+    }
+
+    // SMS: el saldo tiene que alcanzar para toda la audiencia. Encolar media
+    // campaña y pausarla a mitad deja a unos con el mensaje y a otros sin él.
+    if (c.channel === 'sms') {
+      const [necesarios, saldo] = [creditosEstimados(c.body, leads), await saldoSms(userId)];
+      if (necesarios > saldo) {
+        return jsonResp({
+          error: `Esta campaña necesita unos ${necesarios.toLocaleString('es-CO')} créditos de SMS y tienes ${saldo.toLocaleString('es-CO')}. Compra un paquete o reduce la audiencia.`,
+          sin_saldo: true, necesarios, saldo,
+        }, 402);
       }
     }
 
@@ -803,13 +835,34 @@ export default async function handler(req) {
     return out;
   }
 
+  // POST ?action=resume — reanudar una campaña de SMS pausada por falta de
+  // créditos, después de comprar un paquete.
+  if (req.method === 'POST' && url.searchParams.get('action') === 'resume') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/campaigns?id=eq.${encodeURIComponent(body.id)}&user_id=eq.${encodeURIComponent(userId)}&select=id,status,channel,body,stats`, { headers: sbHeaders() }).then(r => r.json());
+    const c = rows?.[0];
+    if (!c) return jsonResp({ error: 'Campaña no encontrada' }, 404);
+    if (c.status !== 'paused' || c.channel !== 'sms') return jsonResp({ error: 'Solo se reanudan campañas de SMS pausadas' }, 400);
+    if (!smsActivo(userId)) return jsonResp({ error: 'Los SMS todavía no están disponibles en esta cuenta.' }, 403);
+    const saldo = await saldoSms(userId);
+    const seg = contarSegmentos(prepararTexto(c.body)).segmentos;
+    if (saldo < seg) return jsonResp({ error: 'Todavía no tienes créditos de SMS. Compra un paquete para reanudarla.', sin_saldo: true, saldo }, 402);
+    const { motivo_pausa, ...stats } = c.stats || {};
+    await fetch(`${SUPABASE_URL}/rest/v1/campaigns?id=eq.${c.id}`, {
+      method: 'PATCH', headers: { ...sbHeaders(), Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'sending', stats }),
+    });
+    return jsonResp({ ok: true, saldo });
+  }
+
   // POST — crear borrador
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     if (!body.name || !body.body) return jsonResp({ error: 'La campaña requiere nombre y mensaje' }, 400);
-    const channel = body.channel === 'whatsapp' ? 'whatsapp' : 'email';
+    const channel = canalDe(body.channel);
     if (channel === 'email' && !body.subject) return jsonResp({ error: 'El email requiere asunto' }, 400);
+    if (channel === 'sms' && !smsActivo(userId)) return jsonResp({ error: 'Los SMS todavía no están disponibles en esta cuenta.' }, 403);
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/campaigns`, {
       method: 'POST', headers: sbHeaders(),
       body: JSON.stringify({

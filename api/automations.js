@@ -8,6 +8,7 @@ export const config = { runtime: 'edge' };
 
 import { quienPregunta, puedeVer, exigeModulo, alcanceDeCliente } from './_perfiles.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+import { contarSegmentos, prepararTexto, MAX_SEGMENTOS } from './_sms.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -75,7 +76,7 @@ const VALID_TRIGGERS = ['lead_created', 'stage_changed', 'lead_inactive', 'webho
 // ejecutar el motor. `pedir_resena` faltaba: se podía armar en la pantalla,
 // el motor sabía ejecutarlo, y al guardar respondía «Paso inválido».
 // pruebas/automatizaciones-pasos.mjs compara las tres listas.
-const VALID_STEPS = ['send_email', 'send_whatsapp', 'wait', 'condition', 'change_stage', 'add_note', 'create_activity', 'notify_owner', 'branch', 'add_tag', 'remove_tag', 'send_nps', 'pedir_resena'];
+const VALID_STEPS = ['send_email', 'send_whatsapp', 'wait', 'condition', 'change_stage', 'add_note', 'create_activity', 'notify_owner', 'branch', 'add_tag', 'remove_tag', 'send_nps', 'pedir_resena', 'send_sms'];
 
 // Valida el árbol de pasos (las ramas yes/no anidan sub-pasos, un solo nivel).
 // Devuelve {error, count} — count suma todos los pasos incluidos los anidados.
@@ -86,6 +87,11 @@ function validateSteps(steps, depth) {
     if (!VALID_STEPS.includes(s.type)) return { error: 'Paso inválido: ' + s.type, count };
     if (s.type === 'send_email' && (!s.subject || !s.body)) return { error: 'El paso de email requiere asunto y cuerpo', count };
     if (s.type === 'send_whatsapp' && !s.body) return { error: 'El paso de WhatsApp requiere el mensaje', count };
+    if (s.type === 'send_sms') {
+      if (!String(s.body || '').trim()) return { error: 'El paso de SMS requiere el mensaje', count };
+      const seg = contarSegmentos(prepararTexto(s.body)).segmentos;
+      if (seg > MAX_SEGMENTOS) return { error: `El SMS ocupa ${seg} mensajes; el máximo es ${MAX_SEGMENTOS}. Acórtalo.`, count };
+    }
     if (s.type === 'wait' && !(parseFloat(s.hours) > 0)) return { error: 'El paso de espera requiere horas > 0', count };
     if (s.type === 'condition' && (!s.field || !s.op)) return { error: 'La condición requiere campo y operador', count };
     if (s.type === 'change_stage' && !s.stage) return { error: 'El cambio de etapa requiere la etapa destino', count };
@@ -163,6 +169,7 @@ function describirPaso(paso) {
   switch (paso.type) {
     case 'send_email': return 'Enviar correo: ' + (corto(paso.subject, 48) || 'sin asunto');
     case 'send_whatsapp': return 'Enviar WhatsApp: ' + (corto(paso.body, 48) || 'sin mensaje');
+    case 'send_sms': return 'Enviar SMS: ' + (corto(paso.body, 48) || 'sin mensaje');
     case 'pedir_resena': return 'Pedir reseña ' + (paso.canal === 'whatsapp' ? 'por WhatsApp' : 'por correo');
     case 'send_nps': return 'Enviar la encuesta de satisfacción';
     case 'wait': return 'Esperar ' + (parseFloat(paso.hours) || 0) + ' h';
@@ -183,7 +190,7 @@ function describirPaso(paso) {
 
 /** Lo mismo para la bitácora: qué se hizo y cómo salió. */
 const ACCION_TEXTO = {
-  send_email: 'Correo', send_whatsapp: 'WhatsApp', pedir_resena: 'Petición de reseña',
+  send_email: 'Correo', send_whatsapp: 'WhatsApp', send_sms: 'SMS', pedir_resena: 'Petición de reseña',
   send_nps: 'Encuesta de satisfacción', wait: 'Espera', condition: 'Condición',
   change_stage: 'Cambio de etapa', add_note: 'Nota', create_activity: 'Tarea',
   notify_owner: 'Aviso al dueño', add_tag: 'Etiqueta puesta', remove_tag: 'Etiqueta quitada',

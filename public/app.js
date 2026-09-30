@@ -27545,6 +27545,7 @@ let _autoEditingId = null;
 const AUTO_STEP_META = {
   send_email:    { label: 'Enviar email',        icon: 'file' },
   send_whatsapp: { label: 'Enviar WhatsApp',     icon: 'chat' },
+  send_sms:      { label: 'Enviar SMS',          icon: 'chat' },
   wait:          { label: 'Esperar',             icon: 'refresh' },
   condition:     { label: 'Condición',           icon: 'check' },
   change_stage:  { label: 'Cambiar etapa',       icon: 'trend' },
@@ -27765,6 +27766,7 @@ const FLOW_TYPE_STYLE = {
   trigger:       { bg: 'var(--agua-grad)', fg: '#fff', icon: 'sparkles' },
   send_email:    { bg: 'var(--blue-lt)', fg: 'var(--blue)', icon: 'file' },
   send_whatsapp: { bg: 'var(--success-bg)', fg: 'var(--success)', icon: 'chat' },
+  send_sms:      { bg: 'var(--violet-lt)', fg: 'var(--violet)', icon: 'chat' },
   wait:          { bg: 'var(--warning-bg)', fg: 'var(--warning)', icon: 'refresh' },
   condition:     { bg: 'var(--violet-lt)', fg: 'var(--violet)', icon: 'check' },
   change_stage:  { bg: 'var(--aqua-lt)', fg: 'var(--aqua)', icon: 'trend' },
@@ -27820,6 +27822,8 @@ function autoBuilderOpen(id, templateIdx) {
     _autoSelNode = 'trigger';
   }
   autoBuilderRender();
+  // El bloque de SMS solo aparece en la paleta si la cuenta tiene el módulo.
+  if (!_smsEstado) smsCargarEstado().then(e => { if (_autoDraft && e && e.activo) autoBuilderRender(); });
 }
 
 function autoBuilderClose() {
@@ -27838,6 +27842,11 @@ function autoStepFields(s, path) {
     return '<div class="auto-field"><label class="auto-label">Asunto</label><input class="auto-input" value="' + esc(s.subject || '') + '" oninput="' + U + '\'subject\',this.value)"></div>' +
       '<div class="auto-field"><label class="auto-label">Mensaje</label><textarea class="auto-input" rows="7" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
       '<div class="auto-vars-hint">Variables: {{nombre}} {{empresa}} {{email}} {{etapa}} {{valor}} {{asesor}}</div></div>';
+  }
+  if (s.type === 'send_sms') {
+    return '<div class="auto-field"><label class="auto-label">Mensaje SMS</label><textarea class="auto-input" rows="4" oninput="' + U + '\'body\',this.value);document.getElementById(\'auto-sms-cuenta\').innerHTML=smsCuentaHtml(this.value)">' + esc(s.body || '') + '</textarea>' +
+      '<div id="auto-sms-cuenta">' + smsCuentaHtml(s.body) + '</div>' +
+      '<div class="auto-vars-hint">Llega al móvil del lead y gasta créditos de SMS · solo sale lun–vie 7:00–19:00 y sáb 8:00–15:00, sin festivos · Variables: {{nombre}} {{empresa}} {{asesor}}</div></div>';
   }
   if (s.type === 'send_whatsapp') {
     return '<div class="auto-field"><label class="auto-label">Mensaje de WhatsApp</label><textarea class="auto-input" rows="6" oninput="' + U + '\'body\',this.value)">' + esc(s.body || '') + '</textarea>' +
@@ -27926,7 +27935,7 @@ function autoStepFields(s, path) {
 // Resumen visible en cada nodo del canvas
 function autoNodeSummary(s) {
   if (s.type === 'send_email') return s.subject || 'Sin asunto todavía';
-  if (s.type === 'send_whatsapp') return s.body ? s.body.slice(0, 60) : 'Sin mensaje todavía';
+  if (s.type === 'send_whatsapp' || s.type === 'send_sms') return s.body ? s.body.slice(0, 60) : 'Sin mensaje todavía';
   if (s.type === 'wait') return (parseFloat(s.hours) >= 24 ? (s.hours / 24) + (s.hours >= 48 ? ' días' : ' día') : s.hours + 'h') + ' de espera';
   if (s.type === 'condition') {
     const f = { stage: 'Etapa', source: 'Fuente', value: 'Valor', has_email: 'Tiene email', has_phone: 'Tiene teléfono', email_opened: 'Abrió el email', has_tag: 'Etiqueta' }[s.field] || s.field;
@@ -28026,10 +28035,14 @@ function autoBuilderRender() {
 
   // Paleta de bloques
   const paletteBlock = (type) => {
+    // SMS solo se ofrece a las cuentas con el módulo; los flujos que ya lo
+    // tienen se siguen pintando y editando igual.
+    if (type === 'send_sms' && !(_smsEstado && _smsEstado.activo)) return '';
     const m = AUTO_STEP_META[type];
     const st = FLOW_TYPE_STYLE[type];
     const desc = {
       send_email: 'Email al lead con variables', send_whatsapp: 'Mensaje por el Inbox del lead',
+      send_sms: 'Mensaje de texto al móvil · gasta créditos',
       wait: 'Pausa el flujo horas o días', condition: 'Continúa solo si se cumple',
       change_stage: 'Mueve el lead en el pipeline', add_note: 'Deja registro en el lead',
       create_activity: 'Tarea en la Agenda vinculada al lead', notify_owner: 'Email a tu correo, no al lead',
@@ -28045,7 +28058,7 @@ function autoBuilderRender() {
   };
   const palette =
     '<div class="flow-palette-title" style="margin-top:0">Acciones</div>' +
-    ['send_email', 'send_whatsapp', 'pedir_resena', 'send_nps', 'create_activity', 'notify_owner', 'change_stage', 'add_tag', 'remove_tag', 'add_note'].map(paletteBlock).join('') +
+    ['send_email', 'send_whatsapp', 'send_sms', 'pedir_resena', 'send_nps', 'create_activity', 'notify_owner', 'change_stage', 'add_tag', 'remove_tag', 'add_note'].map(paletteBlock).join('') +
     '<div class="flow-palette-title">Control del flujo</div>' +
     ['branch', 'wait', 'condition'].map(paletteBlock).join('') +
     '<div style="font-size:10px;color:var(--muted2);margin-top:12px;line-height:1.5">Haz clic en un bloque para añadirlo al final del flujo. Clic en un nodo del canvas para configurarlo.</div>';
@@ -28177,6 +28190,7 @@ function autoStepAdd(type) {
   const defaults = {
     send_email: { type, subject: '', body: '' },
     send_whatsapp: { type, body: '' },
+    send_sms: { type, body: '' },
     wait: { type, hours: 24 },
     condition: { type, field: 'has_email', op: 'eq', value: 'true' },
     change_stage: { type, stage: 'contactado' },
@@ -29074,6 +29088,7 @@ const CMP_STATUS = {
   queued:  { label: 'En cola',   color: '#F59E0B' },
   sending: { label: 'Enviando…', color: '#3B82F6' },
   sent:    { label: 'Enviada ✓', color: '#10B981' },
+  paused:  { label: 'Pausada',   color: '#B45309' },
 };
 
 async function cmpLoad() {
@@ -29091,7 +29106,7 @@ async function cmpRender() {
   if (!view) return;
   view.innerHTML = '<div class="pulso-skel" style="max-width:640px"></div>';
   if (typeof crmTags !== 'undefined' && !crmTags.length) { try { await crmLoadTags(); } catch {} }
-  await cmpLoad();
+  await Promise.all([cmpLoad(), smsCargarEstado()]);
 
   const quotaHtml = cmpQuota && cmpQuota.unlimited
     ? '<div style="font-size:var(--fs-sm);color:var(--muted)">📧 ' + (cmpQuota.used || 0).toLocaleString('es-CO') + ' enviados este mes · <strong style="color:var(--text)">envíos ilimitados</strong></div>'
@@ -29111,7 +29126,7 @@ async function cmpRender() {
     '</div>';
 
   if (!cmpList.length) {
-    view.innerHTML = header + emptyAgua('chat', 'Tu primera campaña masiva',
+    view.innerHTML = header + smsPanelHtml() + emptyAgua('chat', 'Tu primera campaña masiva',
       'Escribe una vez, llega a todo un segmento: los leads con la etiqueta que elijas reciben tu email o WhatsApp personalizado con su nombre.',
       '<button class="btn-sec sm" onclick="cmpBuilderOpen()">Crear campaña</button>');
     return;
@@ -29121,28 +29136,148 @@ async function cmpRender() {
     const isScheduled = c.status === 'queued' && c.scheduled_at && new Date(c.scheduled_at) > new Date();
     const st = isScheduled ? { label: 'Programada 🕑', color: '#8B5CF6' } : (CMP_STATUS[c.status] || CMP_STATUS.draft);
     const s = c.stats || {};
-    const chan = c.channel === 'whatsapp' ? '💬 WhatsApp' : '📧 Email';
+    const chan = c.channel === 'whatsapp' ? '💬 WhatsApp' : c.channel === 'sms' ? '📱 SMS' : '📧 Email';
     const statsTxt = c.status === 'draft' ? 'Sin enviar'
       : isScheduled ? 'Sale el ' + new Date(c.scheduled_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + (s.total || 0) + ' destinatarios'
       : (s.sent || 0) + ' enviados' + (s.skipped ? ' · ' + s.skipped + ' omitidos' : '') + (s.failed ? ' · ' + s.failed + ' fallidos' : '') + ' de ' + (s.total || 0);
     return '<div class="auto-card" style="max-width:820px">' +
-      '<div class="auto-ico">' + (c.channel === 'whatsapp' ? '💬' : '📧') + '</div>' +
+      '<div class="auto-ico">' + (c.channel === 'whatsapp' ? '💬' : c.channel === 'sms' ? '📱' : '📧') + '</div>' +
       '<div style="flex:1;min-width:0">' +
         '<div class="auto-name">' + esc(c.name) + '</div>' +
         '<div class="auto-trigger">' + chan + (c.subject ? ' · "' + esc(c.subject) + '"' : '') + '</div>' +
         '<div style="font-size:11.5px;color:var(--muted);margin-top:3px" id="cmp-stats-' + c.id + '">' + statsTxt + '</div>' +
+        (c.status === 'paused' && s.motivo_pausa ? '<div style="font-size:11.5px;color:var(--warning);margin-top:3px;font-weight:700">' + esc(s.motivo_pausa) + '</div>' : '') +
       '</div>' +
       '<span style="font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;background:' + st.color + '1A;color:' + st.color + ';white-space:nowrap">' + st.label + '</span>' +
       '<div class="auto-actions">' +
         (c.status === 'draft' ? '<button class="btn-sec sm" title="Editar" onclick="cmpBuilderOpen(\'' + c.id + '\')">✎ Editar</button>' : '') +
         (c.status === 'draft' ? '<button class="btn-pri sm" onclick="cmpQueue(\'' + c.id + '\')">Enviar</button>' : '') +
+        (c.status === 'paused' && c.channel === 'sms' ? '<button class="btn-pri sm" onclick="cmpReanudar(\'' + c.id + '\')">Reanudar</button>' : '') +
         (c.status === 'sent' && c.channel === 'email' ? '<button class="btn-ghost sm" title="Ver aperturas" onclick="cmpShowOpens(\'' + c.id + '\')">👀</button>' : '') +
         '<button class="btn-ghost sm" title="Eliminar" onclick="cmpDelete(\'' + c.id + '\')">✕</button>' +
       '</div>' +
     '</div>';
   }).join('');
 
-  view.innerHTML = header + '<div>' + cards + '</div>';
+  view.innerHTML = header + smsPanelHtml() + '<div>' + cards + '</div>';
+}
+
+// ── SMS ─────────────────────────────────────────────────────────────────────
+// El saldo, los paquetes y el contador de créditos. La regla de cuánto cuesta un
+// texto es la MISMA que en api/_sms.js (prepararTexto / contarSegmentos): si se
+// separan, la pantalla promete un costo y el servidor cobra otro. La prueba
+// pruebas/sms-front-igual.mjs compara las dos con los mismos textos.
+let _smsEstado = null; // null = sin preguntar · {activo:false} · el estado · {error}
+
+async function smsCargarEstado(forzar) {
+  if (_smsEstado && !forzar && !_smsEstado.error) return _smsEstado;
+  try {
+    const r = await fetchAuth('/api/sms');
+    const d = await r.json().catch(() => ({}));
+    _smsEstado = r.ok ? d : { error: d.error || 'No se pudo leer el saldo de SMS.' };
+  } catch { _smsEstado = { error: 'Sin conexión: no se pudo leer el saldo de SMS.' }; }
+  return _smsEstado;
+}
+
+const SMS_GSM = '@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà';
+const SMS_GSM_EXT = '^{}\\[~]|€\f';
+const SMS_EQUIV = {
+  'á': 'a', 'í': 'i', 'ó': 'o', 'ú': 'u', 'Á': 'A', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+  'â': 'a', 'ê': 'e', 'î': 'i', 'ô': 'o', 'û': 'u', 'ë': 'e', 'ï': 'i', 'ç': 'c',
+  'È': 'E', 'Ì': 'I', 'Ò': 'O', 'Ù': 'U', 'À': 'A', 'ã': 'a', 'õ': 'o',
+  '“': '"', '”': '"', '„': '"', '‘': "'", '’': "'", '´': "'", '`': "'",
+  '–': '-', '—': '-', '…': '...', '•': '-', ' ': ' ', '\t': ' ',
+};
+const SMS_MAX_SEGMENTOS = 6;
+function smsPreparar(texto) {
+  return Array.from(String(texto || '')).map(c => SMS_EQUIV[c] ?? c).join('').trim();
+}
+function smsSegmentos(texto) {
+  const t = String(texto || '');
+  let gsm = true, largo = 0;
+  for (const c of t) {
+    if (SMS_GSM.includes(c)) largo += 1;
+    else if (SMS_GSM_EXT.includes(c)) largo += 2;
+    else { gsm = false; break; }
+  }
+  if (!gsm) {
+    const u = t.length;
+    return { codificacion: 'unicode', caracteres: u, segmentos: u <= 70 ? 1 : Math.ceil(u / 67), porSegmento: u <= 70 ? 70 : 67 };
+  }
+  return { codificacion: 'gsm', caracteres: largo, segmentos: largo <= 160 ? 1 : Math.ceil(largo / 153), porSegmento: largo <= 160 ? 160 : 153 };
+}
+
+// Debajo del mensaje: cuánto ocupa y por qué. Se calcula con un nombre de
+// ejemplo en {{nombre}}: con el real puede subir un poco.
+function smsCuentaHtml(texto) {
+  const ejemplo = smsPreparar(String(texto || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, v) => v === 'nombre' ? 'Ana' : 'x'.repeat(15)));
+  const c = smsSegmentos(ejemplo);
+  const pasa = c.segmentos > SMS_MAX_SEGMENTOS;
+  return '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11.5px;margin-top:6px;color:' + (pasa ? 'var(--danger)' : 'var(--muted)') + '">' +
+      '<span>' + c.caracteres + ' caracteres · <b>' + c.segmentos + ' SMS</b> por persona</span>' +
+      '<span>' + (c.codificacion === 'unicode'
+        ? 'Tiene emojis o símbolos especiales: cada SMS admite 70 caracteres'
+        : 'Hasta ' + c.porSegmento + ' caracteres por SMS') + '</span>' +
+    '</div>' +
+    (pasa ? '<div style="font-size:11.5px;color:var(--danger);margin-top:3px">El máximo es ' + SMS_MAX_SEGMENTOS + ' SMS por persona: acórtalo.</div>' : '') +
+    '<div style="font-size:11px;color:var(--muted2);margin-top:3px">Las tildes de á, í, ó y ú se envían sin tilde para que el mensaje no cueste el doble. La ñ se conserva.</div>';
+}
+
+// La tarjeta de saldo de la pantalla de Campañas.
+function smsPanelHtml() {
+  const e = _smsEstado;
+  if (!e || e.activo === false) return '';
+  if (e.error) {
+    return '<div class="auto-card" style="max-width:820px;margin-bottom:14px"><div style="flex:1;font-size:12.5px;color:var(--muted)">' + esc(e.error) + '</div>' +
+      '<button class="btn-ghost sm" onclick="smsCargarEstado(true).then(cmpRender)">Reintentar</button></div>';
+  }
+  const m = e.mes || {};
+  return '<div class="auto-card" style="max-width:820px;margin-bottom:14px">' +
+    '<div class="auto-ico">📱</div>' +
+    '<div style="flex:1;min-width:0">' +
+      '<div class="auto-name">Créditos de SMS: ' + Number(e.saldo || 0).toLocaleString('es-CO') + '</div>' +
+      '<div class="auto-trigger">Este mes: ' + Number(m.creditos || 0).toLocaleString('es-CO') + ' créditos usados · ' +
+        Number(m.enviados || 0).toLocaleString('es-CO') + ' enviados' + (m.fallidos ? ' · ' + m.fallidos + ' no aceptados' : '') +
+        (e.proveedor === 'simulado' ? ' · <b>modo de prueba: no sale ningún SMS real</b>' : '') + '</div>' +
+    '</div>' +
+    '<div class="auto-actions"><button class="btn-pri sm" onclick="smsAbrirCompra()">Comprar créditos</button></div>' +
+  '</div>';
+}
+
+function smsAbrirCompra() {
+  const e = _smsEstado || {};
+  const filas = (e.paquetes || []).map(p =>
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">' +
+      '<div><b>' + p.creditos.toLocaleString('es-CO') + ' SMS</b></div>' +
+      (p.pago
+        ? '<a class="btn-pri sm" style="text-decoration:none" href="' + esc(p.pago) + '" target="_blank" rel="noopener">' + p.usd + ' USD</a>'
+        : '<span style="font-size:11.5px;color:var(--muted2)">' + p.usd + ' USD · escríbenos para comprarlo</span>') +
+    '</div>').join('');
+  const movs = (e.movimientos || []).slice(0, 8).map(x =>
+    '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>' +
+      ({ compra: 'Compra', reembolso: 'Devolución de un envío', cancelacion: 'Compra reembolsada', ajuste: 'Ajuste' }[x.motivo] || x.motivo) +
+      ' · ' + new Date(x.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) + '</span><b>' +
+      (x.cantidad > 0 ? '+' : '') + x.cantidad.toLocaleString('es-CO') + '</b></div>').join('');
+  confirmarAgua({
+    titulo: 'Créditos de SMS',
+    texto: 'Tienes <b>' + Number(e.saldo || 0).toLocaleString('es-CO') + '</b> créditos. Un crédito es un SMS de hasta 160 caracteres. ' +
+      'Los paquetes se suman y no vencen: si necesitas 4.000, compra 3.000 + 1.000.' +
+      '<div style="margin-top:12px">' + filas + '</div>' +
+      '<div style="margin-top:10px;font-size:11.5px">Los créditos llegan solos a tu cuenta unos minutos después del pago. Compra con el mismo correo con el que entras a Acuarius.</div>' +
+      (movs ? '<div style="margin-top:14px;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Movimientos</div>' + movs : ''),
+    confirmar: 'Actualizar saldo',
+    onOk: async () => { await smsCargarEstado(true); cmpRender(); },
+  });
+}
+
+async function cmpReanudar(id) {
+  try {
+    const r = await fetchAuth('/api/campaigns?action=resume', { method: 'POST', body: JSON.stringify({ id }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { showToast(d.error || 'No se pudo reanudar', 'error'); return; }
+    showToast('Campaña reanudada: sigue con los que faltaban', 'success');
+    cmpRender();
+  } catch { showToast('Sin conexión: no se pudo reanudar', 'error'); }
 }
 
 // ── Wizard de campaña: 4 pasos a pantalla completa (estilo Clientify) ───────
@@ -29191,6 +29326,9 @@ function cmpBuilderOpen(id) {
     '<div id="cmpw-footer" style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:12px 26px;border-top:1px solid var(--border);background:var(--bg)"></div>';
   document.body.appendChild(ov);
   cmpWRender();
+  // El botón de SMS solo existe si la cuenta tiene el módulo: se pregunta al
+  // abrir y se repinta el paso 1 si llega después.
+  if (!_smsEstado) smsCargarEstado().then(() => { if (_cmpW && _cmpW.step === 1) cmpWRender(); });
 }
 
 function cmpWClose() {
@@ -29250,9 +29388,12 @@ function cmpWStep1() {
       '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:16px">Define los datos principales y observa la vista previa</div>' +
       '<div class="flow-estado" style="margin-bottom:14px">' +
         '<button class="' + (isEmail ? 'on pub' : '') + '" onclick="cmpWSetChannel(\'email\')">📧 Email</button>' +
-        '<button class="' + (!isEmail ? 'on pub' : '') + '" onclick="cmpWSetChannel(\'whatsapp\')">💬 WhatsApp</button>' +
+        '<button class="' + (w.channel === 'whatsapp' ? 'on pub' : '') + '" onclick="cmpWSetChannel(\'whatsapp\')">💬 WhatsApp</button>' +
+        (_smsEstado && _smsEstado.activo || w.channel === 'sms'
+          ? '<button class="' + (w.channel === 'sms' ? 'on pub' : '') + '" onclick="cmpWSetChannel(\'sms\')">📱 SMS</button>' : '') +
       '</div>' +
-      (!isEmail ? '<div style="font-size:11.5px;color:#B45309;background:#FEF3C7;border-radius:10px;padding:8px 12px;margin-bottom:12px">WhatsApp solo llega a leads con conversación abierta en tu Inbox (limitación de Meta hasta habilitar plantillas). Los demás quedan como omitidos.</div>' : '') +
+      (w.channel === 'sms' ? '<div style="font-size:11.5px;color:var(--muted);background:var(--bg-subtle);border-radius:10px;padding:8px 12px;margin-bottom:12px">Llega a los móviles colombianos de tus leads. Por ley solo sale de lunes a viernes de 7:00 a 19:00 y sábados de 8:00 a 15:00, nunca domingos ni festivos: fuera de ese horario la campaña espera sola.</div>' : '') +
+      (w.channel === 'whatsapp' ? '<div style="font-size:11.5px;color:#B45309;background:#FEF3C7;border-radius:10px;padding:8px 12px;margin-bottom:12px">WhatsApp solo llega a leads con conversación abierta en tu Inbox (limitación de Meta hasta habilitar plantillas). Los demás quedan como omitidos.</div>' : '') +
       field('cmpw-name', 'Nombre de la campaña *', w.name, 'Ej: Reactivación julio') +
       (isEmail ?
         field('cmpw-subject', 'Asunto *', w.subject, 'Usa {{nombre}} para personalizar') +
@@ -29880,7 +30021,7 @@ function cmpWStep2() {
           : 'Parte de una plantilla, escríbelo tú, o deja que la IA lo redacte con el contexto de tu negocio') +
       '</div>' +
 
-      (!isEmail ? cmpWTarjetaPlantillaWA() : '') +
+      (w.channel === 'whatsapp' ? cmpWTarjetaPlantillaWA() : '') +
 
       (conDiseno ? cmpWTarjetaDiseno(w) :
       // ── Correo sencillo (se conserva entero) ──────────────────────────────
@@ -29902,6 +30043,7 @@ function cmpWStep2() {
       '</div>' +
       '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Mensaje *</div>' +
       '<textarea class="auto-input" id="cmpw-msg" rows="9" placeholder="Escribe el mensaje…" style="width:100%;font-family:var(--font);font-size:12.5px" oninput="cmpWSyncEmail()">' + esc(w.body || '') + '</textarea>' +
+      (w.channel === 'sms' ? '<div id="cmpw-sms-cuenta">' + smsCuentaHtml(w.body) + '</div>' : '') +
       '<div style="margin-bottom:14px">' + varsBoton('cmpw-msg') + '</div>' +
       (isEmail ?
       '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Imagen de cabecera (opcional)</div>' +
@@ -29934,7 +30076,7 @@ function cmpWStep2() {
       '</div>') +
     '</div>' +
     '<div style="position:sticky;top:0">' +
-      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;text-align:right">Así llega el ' + (isEmail ? 'email' : 'WhatsApp') + '</div>' +
+      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;text-align:right">Así llega el ' + (isEmail ? 'email' : w.channel === 'sms' ? 'SMS' : 'WhatsApp') + '</div>' +
       '<div id="cmpw-mailprev" style="border:1px solid var(--border);border-radius:14px;background:#ffffff;color:#1a1a2e;padding:22px 22px 16px;box-shadow:var(--shadow-sm);max-height:62vh;overflow-y:auto"></div>' +
     '</div>' +
   '</div>';
@@ -29977,6 +30119,13 @@ function cmpWSyncEmail() {
   const sample = { nombre: 'Ana', empresa: 'Empresa Demo', etapa: 'contactado', valor: '$1.200.000', email: 'ana@demo.com', telefono: '+57 300 000 0000', fuente: 'importación', asesor: 'Carlos Asesor' };
   const render = t => String(t || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => sample[k.toLowerCase()] !== undefined ? sample[k.toLowerCase()] : m);
   const bodyTxt = render(val('cmpw-msg', 'body'));
+  if (_cmpW.channel === 'sms') {
+    // Se enseña el texto tal como sale: sin las tildes que se cambian.
+    box.innerHTML = '<div style="background:#E9E9EB;border-radius:14px 14px 14px 4px;padding:10px 13px;font-size:13px;line-height:1.5;max-width:85%;white-space:pre-wrap">' + (esc(smsPreparar(bodyTxt)) || '<span style="opacity:.5">Tu mensaje…</span>') + '</div>';
+    const cuenta = document.getElementById('cmpw-sms-cuenta');
+    if (cuenta) cuenta.innerHTML = smsCuentaHtml(val('cmpw-msg', 'body'));
+    return;
+  }
   if (_cmpW.channel !== 'email') {
     box.innerHTML = '<div style="background:#DCF8C6;border-radius:12px 12px 4px 12px;padding:10px 13px;font-size:13px;line-height:1.5;max-width:85%;margin-left:auto;white-space:pre-wrap">' + (esc(bodyTxt) || '<span style="opacity:.5">Tu mensaje…</span>') + '</div>';
     return;
@@ -30317,7 +30466,7 @@ function cmpWStep4() {
 
       '<div style="border:1px solid var(--border);border-radius:14px;padding:6px 18px;background:var(--panel);margin-bottom:16px">' +
         row('Nombre', esc(w.name || '—'), 1) +
-        row('Canal', isEmail ? '📧 Email' : '💬 WhatsApp', 1) +
+        row('Canal', isEmail ? '📧 Email' : w.channel === 'sms' ? '📱 SMS' : '💬 WhatsApp', 1) +
         (isEmail ? row('Asunto', esc(w.subject || '<span style=\'color:#B91C1C\'>Falta el asunto</span>'), 1) +
           row('Preencabezado', esc(w.preheader || '—'), 1) +
           row('Remitente', esc(w.from_name || 'Acuarius') + ' <span style="color:var(--muted2)">&lt;notificaciones@app.acuarius.app&gt;</span>', 1) +
@@ -30365,6 +30514,7 @@ function cmpWComprobar() {
   const graves = [];
 
   if (isEmail && !w.subject) graves.push('Falta el asunto.');
+  if (w.channel === 'sms' && smsSegmentos(smsPreparar(w.body)).segmentos > SMS_MAX_SEGMENTOS) graves.push('El SMS ocupa más de ' + SMS_MAX_SEGMENTOS + ' mensajes por persona: acórtalo.');
   if (isEmail && !w.reply_to) avisos.push('Sin «Responder a»: si alguien contesta, esa respuesta no le llega a nadie.');
 
   const texto = (w.html || '') + ' ' + (w.body || '') + ' ' + (w.subject || '');
@@ -30438,7 +30588,7 @@ async function cmpWPintarDestinatarios() {
       '<div style="font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Destinatarios</div>' +
       '<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:15px;font-weight:800">' +
         '<span>Le llega a</span><span>' + Number(d.count || 0).toLocaleString('es-CO') + '</span></div>' +
-      (b.missing ? linea('No le llega', b.missing, w.channel === 'email' ? '· sin correo' : '· sin teléfono') : '') +
+      (b.missing ? linea('No le llega', b.missing, w.channel === 'email' ? '· sin correo' : w.channel === 'sms' ? '· sin móvil colombiano válido' : '· sin teléfono') : '') +
       (b.unsubscribed ? linea('No le llega', b.unsubscribed, '· se dio de baja') : '') +
       (b.excluidos ? linea('No le llega', b.excluidos, '· en tus listas de exclusión') : '') +
       // Los rebotados no los eligió nadie: se apartan solos y hay que decirlo, o
@@ -30450,10 +30600,26 @@ async function cmpWPintarDestinatarios() {
             ? 'Te pasas del cupo: quedan ' + restante.toLocaleString('es-CO') + ' correos este mes y esta campaña necesita ' + Number(d.count).toLocaleString('es-CO') + '.'
             : 'Cupo restante del mes: ' + restante.toLocaleString('es-CO')) + '</div>'
         : '') +
-      (d.count === 0 ? '<div style="margin-top:8px;font-size:12px;color:#B91C1C;font-weight:700">Con estos filtros no le llega a nadie.</div>' : '');
+      (d.count === 0 ? '<div style="margin-top:8px;font-size:12px;color:#B91C1C;font-weight:700">Con estos filtros no le llega a nadie.</div>' : '') +
+      (w.channel === 'sms' ? cmpWCostoSms(d.count) : '');
   } catch {
     cont.innerHTML = '<div style="font-size:12.5px;color:#B91C1C">No se pudo calcular la audiencia. Vuelve al paso 3 y reintenta.</div>';
   }
+}
+
+// Lo que costará la campaña de SMS contra el saldo. El servidor vuelve a
+// comprobarlo al encolar: esto es para enterarse antes de darle a Enviar.
+function cmpWCostoSms(personas) {
+  const porPersona = smsSegmentos(smsPreparar(String(_cmpW.body || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, v) => v === 'nombre' ? 'Ana' : 'x'.repeat(15)))).segmentos;
+  const total = (personas || 0) * porPersona;
+  const saldo = _smsEstado && !_smsEstado.error ? Number(_smsEstado.saldo || 0) : null;
+  const falta = saldo !== null && total > saldo;
+  return '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;' + (falta ? 'color:var(--danger);font-weight:700' : 'color:var(--muted2)') + '">' +
+    'Costo estimado: ' + total.toLocaleString('es-CO') + ' créditos (' + porPersona + ' por persona)' +
+    (saldo === null ? ' · no se pudo leer tu saldo'
+      : falta ? ' · tienes ' + saldo.toLocaleString('es-CO') + ': <a href="#" style="color:inherit" onclick="smsAbrirCompra();return false">compra un paquete</a> antes de enviar'
+      : ' · tienes ' + saldo.toLocaleString('es-CO')) +
+  '</div>';
 }
 
 function cmpWSchedToggle() {
@@ -36982,7 +37148,7 @@ let _cmpwPlns = [];
 async function cmpWCargarPlantillas() {
   const sel = document.getElementById('cmpw-pln-sel');
   if (!sel) return;
-  const esWa = _cmpW && _cmpW.channel === 'whatsapp';
+  const esWa = _cmpW && _cmpW.channel !== 'email'; // WhatsApp y SMS: respuestas guardadas
   try {
     _cmpwPlns = esWa
       ? (await qrCargar()).map(r => ({ id: r.id, nombre: r.titulo, categoria: null, _wa: true, texto: r.texto }))
@@ -37069,7 +37235,7 @@ function cmpWGuardarComoPlantilla() {
   }
   // WhatsApp no tiene asunto ni botón: se guarda como respuesta reutilizable,
   // la misma que usa el comercial en el inbox.
-  if (w.channel === 'whatsapp') {
+  if (w.channel !== 'email') {
     confirmarAgua({
       titulo: 'Guardar como respuesta',
       texto: 'Quedará disponible al responder en el inbox y en futuras campañas de WhatsApp.' +

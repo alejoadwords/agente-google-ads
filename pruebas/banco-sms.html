@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · SMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  Las piezas nuevas del módulo de SMS con el CSS y las funciones REALES de
+  public/: la tarjeta de saldo (con saldo, en modo de prueba y con error), el
+  contador de créditos debajo del mensaje, el costo estimado de la campaña y
+  la ventana de compra.
+
+  Arrancar con:  node pruebas/servidor-boceto.mjs
+  Abrir:         http://localhost:4173/pruebas/banco-sms.html
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg,#fff);color:var(--text);padding:24px 24px 70px}
+  h3{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:26px 0 8px}
+  .caja{max-width:460px;border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--panel)}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:#0D0F1C;color:#fff;padding:9px 14px;
+    display:flex;gap:10px;align-items:center;justify-content:center;font-size:12px;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:7px;padding:5px 10px;
+    font-family:inherit;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<h3>Tarjeta de saldo en Campañas</h3>
+<div id="panel"></div>
+
+<h3>Contador debajo del mensaje</h3>
+<div class="caja">
+  <textarea class="auto-input" id="msg" rows="4" style="width:100%" oninput="document.getElementById('cuenta').innerHTML=smsCuentaHtml(this.value)">Hola {{nombre}}, ¿cómo estás? Esta semana tenemos 20% de descuento en apartamentos del norte. Responde a este mensaje o llámanos.</textarea>
+  <div id="cuenta"></div>
+</div>
+
+<h3>Costo estimado (paso de revisión)</h3>
+<div class="caja" id="costo"></div>
+
+<div class="banco">
+  <span style="opacity:.6">BANCO ·</span>
+  <button onclick="estado('real')">con saldo</button>
+  <button onclick="estado('prueba')">modo de prueba</button>
+  <button onclick="estado('poco')">saldo corto</button>
+  <button onclick="estado('error')">error</button>
+  <button onclick="texto('largo')">texto de 7 SMS</button>
+  <button onclick="texto('emoji')">con emoji</button>
+  <button onclick="smsAbrirCompra()">ventana de compra</button>
+</div>
+
+<script>
+const ESTADOS = {
+  real: { activo: true, proveedor: 'labsmobile', saldo: 4250, mes: { enviados: 812, entregados: 790, fallidos: 3, simulados: 0, creditos: 830 },
+    paquetes: [1000, 3000, 5000, 7000, 10000, 15000, 20000].map((c, i) => ({ creditos: c, usd: [8, 22, 35, 47, 65, 90, 110][i], pago: i < 3 ? 'https://pay.hotmart.com/X?off=abc' : null })),
+    movimientos: [{ cantidad: 3000, motivo: 'compra', created_at: '2026-09-28T15:00:00Z' }, { cantidad: 2, motivo: 'reembolso', created_at: '2026-09-29T15:00:00Z' }, { cantidad: 1000, motivo: 'compra', created_at: '2026-09-02T15:00:00Z' }] },
+  error: { error: 'No se pudo leer el saldo de SMS. Intenta de nuevo en un momento.' },
+};
+ESTADOS.prueba = { ...ESTADOS.real, proveedor: 'simulado', saldo: 1000, mes: { enviados: 0, simulados: 12, creditos: 12 } };
+ESTADOS.poco = { ...ESTADOS.real, saldo: 120 };
+
+function estado(k) {
+  _smsEstado = ESTADOS[k];
+  document.getElementById('panel').innerHTML = smsPanelHtml() || '<i>(sin módulo: no se pinta nada)</i>';
+  _cmpW = { body: document.getElementById('msg').value };
+  document.getElementById('costo').innerHTML = cmpWCostoSms(640);
+}
+function texto(k) {
+  const el = document.getElementById('msg');
+  el.value = k === 'largo' ? 'Hola {{nombre}}. ' + 'Tenemos una promoción especial para ti este mes. '.repeat(20) : 'Hola {{nombre}} 😀 te esperamos mañana';
+  el.dispatchEvent(new Event('input'));
+  estado('real');
+}
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+  document.getElementById('estilos-reales').textContent = (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+  const trozo = (desde, hasta) => {
+    const a = js.indexOf(desde);
+    if (a < 0) throw new Error('No encontré en app.js: ' + desde);
+    const b = js.indexOf(hasta, a);
+    return js.slice(a, b > a ? b : js.length);
+  };
+  const codigo = [
+    (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
+    trozo('// ── SMS ──', '// ── Wizard de campaña'),
+    trozo('// Lo que costará la campaña de SMS', 'function cmpWSchedToggle'),
+    trozo('function confirmarAgua(', '\n}\n') + '\n}\n',
+    'var _cmpW = null;',
+    'var fetchAuth = async function(){ return new Response(JSON.stringify(_smsEstado)); };',
+    'var cmpRender = function(){ estado("real"); };',
+    'var showToast = function(m){ console.log(m); };',
+  ].join('\n');
+  const s = document.createElement('script');
+  s.textContent = codigo;
+  document.body.appendChild(s);
+  document.getElementById('msg').dispatchEvent(new Event('input'));
+  estado('real');
+})().catch(e => {
+  document.body.insertAdjacentHTML('beforeend', '<pre style="color:#B91C1C;white-space:pre-wrap">' + e.message + '</pre>');
+});
+</script>
+</body>
+</html>
