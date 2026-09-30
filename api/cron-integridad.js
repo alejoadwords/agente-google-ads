@@ -24,15 +24,43 @@ const sb = (ruta) => fetch(`${SUPABASE_URL}/rest/v1/${ruta}`, { headers: cab })
   .then(r => (r.ok ? r.json() : []))
   .catch(() => []);
 
+// TODAS las filas, de mil en mil. PostgREST devuelve como mucho mil aunque se
+// pida `limit=5000`: con 1.041 tareas, la revisión de fantasmas veía mil, y
+// las 41 que quedaban fuera salían en el correo como «tareas que no aparecen
+// en ninguna parte» (30-09-2026, 24 falsas). Y un fallo NO se convierte en
+// lista vacía: con las tareas vacías, todo el historial parecería fantasma.
+// Se lanza, y quien llama dice que no pudo revisar.
+export async function sbTodas(ruta, { pagina = 1000, techo = 50000 } = {}) {
+  const orden = /[?&]order=/.test(ruta) ? '' : '&order=id.asc';
+  const filas = [];
+  for (let desde = 0; desde < techo; desde += pagina) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${ruta}${orden}&limit=${pagina}&offset=${desde}`, { headers: cab });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' leyendo ' + ruta.split('?')[0]);
+    const lote = (await r.json()) || [];
+    filas.push(...lote);
+    if (lote.length < pagina) return filas;
+  }
+  throw new Error('más de ' + techo + ' filas en ' + ruta.split('?')[0] + ': la revisión no se fía de un recorte');
+}
+
+// Una revisión que no pudo leer sus datos lo dice, en vez de callar o de
+// inventarse hallazgos.
+function noSePudo(nombre, e) {
+  return { titulo: 'No se pudo hacer la revisión: ' + nombre, detalle: [String(e?.message || e)] };
+}
+
 // ── Revisión 1: tareas que el usuario cree tener y no existen ────────────────
 // Una fila de lead_activities type 'tarea' con fecha, sin su gemela en
 // activities, es una tarea invisible: no sale en Tareas, ni en la tarjeta, ni
 // en el resumen. Solo cuentan las futuras: una vencida ya no se puede rescatar.
-async function tareasFantasma() {
-  const [historial, reales] = await Promise.all([
-    sb('lead_activities?type=eq.tarea&select=lead_id,content,metadata&limit=5000'),
-    sb('activities?type=eq.task&select=lead_id,due_at&limit=5000'),
-  ]);
+export async function tareasFantasma() {
+  let historial, reales;
+  try {
+    [historial, reales] = await Promise.all([
+      sbTodas('lead_activities?type=eq.tarea&select=id,lead_id,content,metadata'),
+      sbTodas('activities?type=eq.task&select=id,lead_id,due_at'),
+    ]);
+  } catch (e) { return noSePudo('tareas fantasma', e); }
   const hay = new Set((reales || []).map(t => t.lead_id + '|' + new Date(t.due_at).toISOString()));
   const ahora = Date.now();
   const malas = [];
@@ -50,7 +78,7 @@ async function tareasFantasma() {
 }
 
 // ── Revisión 2: tareas que nunca podrán verse en una tarjeta ────────────────
-async function tareasSinLead() {
+export async function tareasSinLead() {
   const filas = await sb('activities?type=eq.task&done=is.false&cancelled_at=is.null&lead_id=is.null&select=id,title&limit=200');
   return filas?.length
     ? { titulo: 'Tareas pendientes sin lead (no salen en ninguna ficha)', detalle: filas.map(f => `«${f.title}»`) }
@@ -59,11 +87,14 @@ async function tareasSinLead() {
 
 // ── Revisión 3: la tarea y su lead en clientes distintos ────────────────────
 // Con un cliente activo, el filtro las esconde: existen pero no se ven.
-async function clienteDesajustado() {
-  const [tareas, leads] = await Promise.all([
-    sb('activities?type=eq.task&done=is.false&cancelled_at=is.null&select=id,title,lead_id,client_id&limit=2000'),
-    sb('leads?select=id,client_id&limit=5000'),
-  ]);
+export async function clienteDesajustado() {
+  let tareas, leads;
+  try {
+    [tareas, leads] = await Promise.all([
+      sbTodas('activities?type=eq.task&done=is.false&cancelled_at=is.null&select=id,title,lead_id,client_id'),
+      sbTodas('leads?select=id,client_id'),
+    ]);
+  } catch (e) { return noSePudo('cliente de tareas y leads', e); }
   const deLead = new Map((leads || []).map(l => [l.id, l.client_id || null]));
   const malas = (tareas || [])
     .filter(t => t.lead_id && deLead.has(t.lead_id) && (t.client_id || null) !== deLead.get(t.lead_id))
