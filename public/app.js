@@ -15022,6 +15022,8 @@ function switchSettingsTab(tab) {
   if (wrap) wrap.scrollTop = 0;
   // Load referral data when opening that tab
   if (tab === 'referral') loadReferralData();
+  // «Cambiar» o «crear» contraseña según tenga una (quien entró con Google no).
+  if (tab === 'seguridad') cfgClaveTextos();
   if (tab === 'equipo') teamRenderSettings();
 }
 
@@ -36050,6 +36052,82 @@ async function tkContar() {
 function tkAbrir() {
   document.getElementById('tk-full')?.classList.add('abierto');
   tkCargar();
+}
+
+// ── CAMBIAR LA CONTRASEÑA ───────────────────────────────────────────────────
+// Antes el botón abría el perfil genérico de Clerk, en inglés, con la
+// contraseña escondida en un menú: en la práctica nadie encontraba cómo
+// cambiarla. Quien entró con Google no tiene contraseña y aquí puede crearla.
+function cfgClaveTextos() {
+  const tiene = !!clerkInstance?.user?.passwordEnabled;
+  const sub = document.getElementById('cfg-clave-sub');
+  const btn = document.getElementById('cfg-clave-btn');
+  if (sub) sub.textContent = tiene ? 'Actualiza tu contraseña de acceso' : 'Entras con Google. Si quieres, crea una contraseña para entrar también con tu correo';
+  if (btn) btn.textContent = tiene ? 'Cambiar contraseña' : 'Crear contraseña';
+}
+
+function cfgCambiarClave() {
+  if (enSoporte()) { showToast('La contraseña la cambia el propio cliente', 'info'); return; }
+  const tiene = !!clerkInstance?.user?.passwordEnabled;
+  document.getElementById('clave-modal')?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'clave-modal';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  const campo = (id, label, auto) => '<div class="cu-campo"><label for="' + id + '">' + label + '</label>' +
+    '<input id="' + id + '" type="password" autocomplete="' + auto + '"></div>';
+  ov.innerHTML = '<div class="auto-modal" style="max-width:440px;padding:22px 24px">' +
+    '<div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px">' + (tiene ? 'Cambiar contraseña' : 'Crear contraseña') + '</div>' +
+    '<div class="cu-mini" style="margin-bottom:14px">' + (tiene ? 'Escribe la actual y la nueva.' : 'Seguirás pudiendo entrar con Google.') + '</div>' +
+    (tiene ? campo('clave-actual', 'Contraseña actual', 'current-password') : '') +
+    campo('clave-nueva', 'Contraseña nueva', 'new-password') +
+    campo('clave-repite', 'Repite la contraseña nueva', 'new-password') +
+    '<label style="display:flex;gap:8px;align-items:center;font-size:var(--fs-xs);color:var(--text-2);margin:2px 0 12px;cursor:pointer">' +
+      '<input type="checkbox" id="clave-cerrar" checked> Cerrar la sesión en mis otros dispositivos</label>' +
+    '<div id="clave-err" style="display:none;color:var(--danger);font-size:var(--fs-xs);margin-bottom:10px"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+      '<button class="btn-ghost sm" onclick="document.getElementById(\'clave-modal\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="clave-btn" onclick="cfgGuardarClave()">Guardar</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById(tiene ? 'clave-actual' : 'clave-nueva')?.focus(), 50);
+}
+
+async function cfgGuardarClave() {
+  const err = document.getElementById('clave-err');
+  const btn = document.getElementById('clave-btn');
+  const mal = t => { err.textContent = t; err.style.display = 'block'; };
+  const actual = document.getElementById('clave-actual')?.value;
+  const nueva = document.getElementById('clave-nueva').value;
+  if (nueva.length < 8) return mal('La contraseña nueva debe tener al menos 8 caracteres.');
+  if (nueva !== document.getElementById('clave-repite').value) return mal('Las dos contraseñas nuevas no coinciden.');
+  if (document.getElementById('clave-actual') && !actual) return mal('Escribe tu contraseña actual.');
+  err.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    await clerkInstance.user.updatePassword({
+      ...(actual ? { currentPassword: actual } : {}),
+      newPassword: nueva,
+      signOutOfOtherSessions: document.getElementById('clave-cerrar').checked,
+    });
+    document.getElementById('clave-modal')?.remove();
+    cfgClaveTextos();
+    showToast('Contraseña guardada', 'success');
+  } catch (e) {
+    const c = e?.errors?.[0]?.code || '';
+    const t = {
+      form_password_incorrect: 'La contraseña actual no es correcta.',
+      form_password_pwned: 'Esa contraseña apareció en filtraciones de datos públicas. Elige otra.',
+      form_password_length_too_short: 'La contraseña debe tener al menos 8 caracteres.',
+      form_password_not_strong_enough: 'Esa contraseña es muy fácil de adivinar. Usa una más larga.',
+      form_password_validation_failed: 'La contraseña actual no es correcta.',
+      too_many_requests: 'Demasiados intentos. Espera un minuto.',
+    }[c] || (/reverification/i.test(c + (e?.message || ''))
+      ? 'Por seguridad hay que confirmar que eres tú: cierra sesión, vuelve a entrar e inténtalo otra vez.'
+      : (e?.errors?.[0]?.long_message || e?.message || 'No se pudo guardar la contraseña.'));
+    mal(t);
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
 }
 
 // ── CUENTAS DE CLIENTES (solo equipo) ───────────────────────────────────────

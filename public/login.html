@@ -412,7 +412,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     <div class="fh">
       <div class="ft" id="ftitle">bienvenido</div>
-      <div class="fs" id="fsub">accede a tu cuenta o <strong>crea una nueva</strong></div>
+      <div class="fs" id="fsub">accede a tu cuenta o <a href="/registro" onclick="return irARegistro()" style="color:var(--blue);font-weight:700;text-decoration:none">crea una nueva</a></div>
     </div>
 
     <div id="mform">
@@ -427,7 +427,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <!-- Tabs login / registro -->
       <div class="tabs">
         <button class="tab active" onclick="setTab('login',this)">iniciar sesión</button>
-        <button class="tab" onclick="setTab('register',this)">crear cuenta</button>
+        <button class="tab" onclick="irARegistro()">crear cuenta</button>
       </div>
 
       <!-- Google OAuth -->
@@ -453,26 +453,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div class="field">
           <label>contraseña</label>
           <input type="password" id="lp" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitLogin()">
+          <a href="#" onclick="mostrarRecuperar();return false" style="display:inline-block;margin-top:7px;font-size:12.5px;color:var(--blue);text-decoration:none">¿olvidaste tu contraseña?</a>
         </div>
         <button class="sbtn" id="lbtn" onclick="submitLogin()">iniciar sesión</button>
       </div>
 
-      <!-- Registro -->
-      <div id="fr" style="display:none">
-        <div class="field">
-          <label>nombre completo</label>
-          <input type="text" id="rn" placeholder="Tu nombre" autocomplete="name">
-        </div>
-        <div class="field">
-          <label>email</label>
-          <input type="email" id="re" placeholder="tu@email.com" autocomplete="email" inputmode="email">
-        </div>
-        <div class="field">
-          <label>contraseña</label>
-          <input type="password" id="rp" placeholder="mínimo 8 caracteres" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitRegister()">
-        </div>
-        <button class="sbtn" id="rbtn" onclick="submitRegister()">crear cuenta gratis</button>
-      </div>
     </div>
 
     <div class="ff">
@@ -571,16 +556,110 @@ async function initClerk() {
 initClerk();
 
 function setTab(t, btn) {
+  if (t === 'register') return irARegistro();
   tab = t;
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('fl').style.display = t === 'login' ? 'block' : 'none';
-  document.getElementById('fr').style.display = t === 'register' ? 'block' : 'none';
-  document.getElementById('ftitle').textContent = t === 'login' ? 'bienvenido' : 'crear cuenta';
-  document.getElementById('fsub').innerHTML = t === 'login'
-    ? 'accede a tu cuenta de acuarius'
-    : '14 días gratis, <strong>sin tarjeta de crédito</strong>';
   hideErr();
+}
+
+// Crear cuenta es el alta guiada (/registro): empresa, moneda, equipo, qué
+// quiere lograr y la bienvenida del equipo. Un segundo formulario aquí creaba
+// cuentas que se saltaban todo eso. Se conserva lo que traiga la URL (?ref=…).
+function irARegistro() {
+  window.location.href = '/registro' + window.location.search;
+  return false;
+}
+
+// ── ¿Olvidaste tu contraseña? ───────────────────────────────────────────────
+// Clerk manda un código al correo; con el código y la contraseña nueva queda
+// cambiada y la sesión abierta. Los errores se traducen: el mensaje de Clerk
+// llega en inglés y «form_code_incorrect» no le dice nada a nadie.
+function errorClave(e) {
+  const c = e?.errors?.[0]?.code || '';
+  const m = {
+    form_identifier_not_found: 'No hay ninguna cuenta con ese correo.',
+    form_code_incorrect: 'Ese código no es correcto. Revísalo en tu correo.',
+    verification_expired: 'El código venció. Pide uno nuevo.',
+    form_password_pwned: 'Esa contraseña apareció en filtraciones de datos públicas. Elige otra.',
+    form_password_length_too_short: 'La contraseña debe tener al menos 8 caracteres.',
+    form_password_not_strong_enough: 'Esa contraseña es muy fácil de adivinar. Usa una más larga o combina palabras y números.',
+    strategy_for_user_invalid: 'Esa cuenta entra con Google, no tiene contraseña: usa «continuar con Google».',
+    too_many_requests: 'Demasiados intentos seguidos. Espera un minuto y vuelve a probar.',
+  };
+  return m[c] || e?.errors?.[0]?.long_message || e?.errors?.[0]?.message || e?.message || 'No se pudo completar.';
+}
+
+function mostrarRecuperar() {
+  const correo = document.getElementById('le')?.value || '';
+  document.getElementById('ftitle').textContent = 'recupera tu contraseña';
+  document.getElementById('fsub').textContent = 'te enviamos un código a tu correo para crear una nueva';
+  document.getElementById('mform').innerHTML = `
+    <div class="err" id="err"></div>
+    <div id="rec-paso1">
+      <div class="field">
+        <label>email de tu cuenta</label>
+        <input type="email" id="rec-email" placeholder="tu@email.com" autocomplete="email" inputmode="email"
+               onkeydown="if(event.key==='Enter')enviarCodigoClave()">
+      </div>
+      <button class="sbtn" id="rec-btn1" onclick="enviarCodigoClave()">enviar código</button>
+    </div>
+    <div id="rec-paso2" style="display:none">
+      <div class="v-sub" id="rec-aviso"></div>
+      <div class="field">
+        <label>código de 6 dígitos</label>
+        <input type="text" id="rec-codigo" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code">
+      </div>
+      <div class="field">
+        <label>contraseña nueva</label>
+        <input type="password" id="rec-clave" placeholder="mínimo 8 caracteres" autocomplete="new-password"
+               onkeydown="if(event.key==='Enter')cambiarClaveConCodigo()">
+      </div>
+      <button class="sbtn" id="rec-btn2" onclick="cambiarClaveConCodigo()">guardar y entrar</button>
+      <a href="#" onclick="enviarCodigoClave();return false" style="display:block;text-align:center;margin-top:12px;font-size:13px;color:var(--blue);text-decoration:none">reenviar el código</a>
+    </div>
+    <a href="/login.html" style="display:block;text-align:center;margin-top:16px;font-size:13px;color:var(--muted);text-decoration:none">← volver a iniciar sesión</a>`;
+  const i = document.getElementById('rec-email');
+  i.value = correo; i.focus();
+}
+
+async function enviarCodigoClave() {
+  if (!clerk) { showErr('Cargando, intenta en unos segundos…'); return; }
+  const email = document.getElementById('rec-email').value.trim();
+  if (!email) { showErr('Escribe el correo de tu cuenta.'); return; }
+  hideErr();
+  setL('rec-btn1', true, 'enviando…');
+  try {
+    await clerk.client.signIn.create({ strategy: 'reset_password_email_code', identifier: email });
+    document.getElementById('rec-paso1').style.display = 'none';
+    document.getElementById('rec-paso2').style.display = 'block';
+    document.getElementById('rec-aviso').textContent = 'Revisa ' + email + ': te llegó un código. Si no lo ves, mira en promociones o spam.';
+    document.getElementById('rec-codigo').focus();
+  } catch (e) { showErr(errorClave(e)); }
+  setL('rec-btn1', false, 'enviar código');
+}
+
+async function cambiarClaveConCodigo() {
+  const code = document.getElementById('rec-codigo').value.trim();
+  const password = document.getElementById('rec-clave').value;
+  if (code.length !== 6) { showErr('Escribe el código de 6 dígitos que te llegó.'); return; }
+  if (password.length < 8) { showErr('La contraseña debe tener al menos 8 caracteres.'); return; }
+  hideErr();
+  setL('rec-btn2', true, 'guardando…');
+  try {
+    const r = await clerk.client.signIn.attemptFirstFactor({ strategy: 'reset_password_email_code', code, password });
+    if (r.status === 'complete') {
+      await clerk.setActive({ session: r.createdSessionId });
+      window.location.href = '/';
+      return;
+    }
+    // Con verificación en dos pasos, la contraseña ya quedó cambiada pero
+    // falta el segundo factor: se dice, en vez de dejarle en un botón muerto.
+    showErr(r.status === 'needs_second_factor'
+      ? 'Contraseña cambiada. Tu cuenta tiene verificación en dos pasos: vuelve a iniciar sesión con la contraseña nueva.'
+      : 'Contraseña cambiada. Vuelve a iniciar sesión con la nueva.');
+  } catch (e) { showErr(errorClave(e)); }
+  setL('rec-btn2', false, 'guardar y entrar');
 }
 
 async function loginGoogle() {
@@ -608,68 +687,6 @@ async function submitLogin() {
     }
   } catch(e) { showErr(e.errors?.[0]?.message || 'Email o contraseña incorrectos.'); }
   setL('lbtn', false, 'iniciar sesión');
-}
-
-async function submitRegister() {
-  if(!clerk) { showErr('Cargando autenticación, intenta en unos segundos...'); initClerk(); return; }
-  const n = document.getElementById('rn').value.trim();
-  const e = document.getElementById('re').value.trim();
-  const p = document.getElementById('rp').value;
-  if(!n || !e || !p) { showErr('Completa todos los campos.'); return; }
-  if(p.length < 8) { showErr('La contraseña debe tener al menos 8 caracteres.'); return; }
-  setL('rbtn', true, 'creando cuenta...');
-  try {
-    const r = await clerk.client.signUp.create({
-      firstName: n.split(' ')[0],
-      lastName: n.split(' ').slice(1).join(' '),
-      emailAddress: e,
-      password: p
-    });
-    if(r.status === 'complete') {
-      await clerk.setActive({ session: r.createdSessionId });
-      window.location.href = '/registro?continuar=1';
-    } else if(r.status === 'missing_requirements') {
-      await clerk.client.signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
-      showVerify();
-    }
-  } catch(e) { showErr(e.errors?.[0]?.message || 'Error al crear cuenta.'); }
-  setL('rbtn', false, 'crear cuenta gratis');
-}
-
-function showVerify() {
-  document.getElementById('mform').innerHTML = `
-    <div class="verify">
-      <div class="v-circle">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-          <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                stroke="#1E2BCC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="v-title">revisa tu email</div>
-      <div class="v-sub">Te enviamos un código de 6 dígitos. Ingrésalo para activar tu cuenta.</div>
-      <input type="text" inputmode="numeric" class="code-input" id="vc"
-             placeholder="000000" maxlength="6"
-             oninput="if(this.value.length===6) verifyCode()">
-      <button class="sbtn" onclick="verifyCode()">verificar cuenta</button>
-    </div>`;
-}
-
-async function verifyCode() {
-  const c = document.getElementById('vc')?.value?.trim();
-  if(!c || c.length < 6) return;
-  try {
-    const r = await clerk.client.signUp.attemptEmailAddressVerification({ code: c });
-    if(r.status === 'complete') {
-      await clerk.setActive({ session: r.createdSessionId });
-      window.location.href = '/registro?continuar=1';
-    }
-  } catch(e) {
-    const i = document.getElementById('vc');
-    if(i) {
-      i.style.borderColor = '#DC2626';
-      setTimeout(() => i.style.borderColor = '', 1500);
-    }
-  }
 }
 
 function showErr(m) {

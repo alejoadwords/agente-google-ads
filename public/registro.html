@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<!-- Google Tag Manager: sin él, el evento sign_up de esta página se quedaba en
+     un dataLayer que nadie leía y el registro no llegaba a GA4 ni a Ads. -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-PX26PNPJ');</script>
+<!-- End Google Tag Manager -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Crea tu cuenta — Acuarius</title>
@@ -154,6 +162,7 @@ h1{font-size:34px;font-weight:800;line-height:1.12;letter-spacing:-.025em;text-a
 </style>
 </head>
 <body>
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PX26PNPJ" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <aside class="lado">
   <div class="lado-logo"><img src="/logo-white.png" alt="Acuarius"></div>
@@ -582,7 +591,11 @@ async function trasEntrar() {
     SLUG ? api('/api/cuentas', { method: 'POST', body: JSON.stringify({ accion: 'atribuir', slug: SLUG }) }).catch(() => null) : null,
   ]);
   try {
-    if (!localStorage.getItem('acuarius_signup_tracked')) {
+    // Mismo criterio que la app: solo cuenta como registro una cuenta creada
+    // hace menos de 10 minutos. Quien ya tenía cuenta y abre /registro con la
+    // sesión puesta no es una conversión.
+    const creada = clerk.user?.createdAt ? new Date(clerk.user.createdAt).getTime() : 0;
+    if (creada && Date.now() - creada < 600000 && !localStorage.getItem('acuarius_signup_tracked')) {
       localStorage.setItem('acuarius_signup_tracked', '1');
       (window.dataLayer = window.dataLayer || []).push({ event: 'sign_up', method: 'registro' });
     }
