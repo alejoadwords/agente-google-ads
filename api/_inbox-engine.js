@@ -84,6 +84,58 @@ export function datosDelTexto(texto) {
   return out;
 }
 
+// Lo que YA sabemos de esta persona, aunque no esté en los últimos mensajes.
+//
+// Al modelo solo le llegan los 12 últimos mensajes, y los datos capturados se
+// leían de esos mismos 12. Un teléfono dado al principio de una conversación
+// larga desaparecía, y el agente lo volvía a pedir: «ya te lo di arriba». Es de
+// lo que más delata a un bot. Y en WhatsApp es peor: el número ES el chat, y
+// aun así se lo podía pedir.
+//
+// Fuentes, de la más firme a la menos: el número del propio WhatsApp, el lead
+// guardado y lo que la persona escribió en TODA la conversación. Para el
+// teléfono escrito se exige que parezca un teléfono (10 o más dígitos, o con
+// «+»): un presupuesto como «6000000» no puede acabar siendo un celular.
+export function conocidoDelContacto({ canal, contactId, contactPhone, lead, textosDelUsuario = [] } = {}) {
+  const out = {};
+  const escritos = {};
+  for (const t of textosDelUsuario) {
+    const d = datosDelTexto(t);
+    const dig = String(d.phone || '').replace(/\D/g, '');
+    if (d.phone && (dig.length >= 10 || /^\+/.test(d.phone))) escritos.celular = d.phone;
+    if (d.email) escritos.email = d.email;
+    if (d.name) escritos.nombre = d.name;
+  }
+  const delCanal = telefonoDelCanal(canal, contactId);
+  out.celular = delCanal || lead?.phone || contactPhone || escritos.celular || null;
+  out.email = lead?.email || escritos.email || null;
+  out.nombre = lead?.name || escritos.nombre || null;
+  for (const k of Object.keys(out)) if (!out[k]) delete out[k];
+  return out;
+}
+
+// La versión con base de datos: el lead guardado y TODO lo que escribió la
+// persona en esta conversación, no solo los 12 mensajes que ve el modelo.
+// Los mensajes de la persona en TODA la conversación (hasta 80), no solo los
+// 12 que ve el modelo. Con la ventana corta se olvidaba también QUÉ buscaba:
+// «el norte» dicho al principio desaparecía y se le ofrecían locales en Soledad.
+async function suyosDeLaConversacion(conv) {
+  const filas = await fetch(`${SUPABASE_URL}/rest/v1/chat_messages?conversation_id=eq.${conv.id}&role=eq.user&select=content&order=created_at.desc&limit=80`, { headers: sb() })
+    .then(r => (r.ok ? r.json() : [])).catch(() => []);
+  return (filas || []).reverse().map(m => ({ role: 'user', content: m.content || '' }));
+}
+
+async function conocidoDeLaConversacion(conv, suyos) {
+  const lead = conv?.lead_id
+    ? await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${conv.lead_id}&select=name,phone,email&limit=1`, { headers: sb() })
+      .then(r => (r.ok ? r.json() : [])).then(r => r?.[0] || null).catch(() => null)
+    : null;
+  return conocidoDelContacto({
+    canal: conv.channel, contactId: conv.contact_id, contactPhone: conv.contact_phone, lead,
+    textosDelUsuario: (suyos || []).map(m => m.content),
+  });
+}
+
 export function extractCapturedData(text) {
   // TODOS los bloques, no el primero. A esta función se le pasa tanto UN
   // mensaje como el historial entero concatenado, y quedarse con el primero
@@ -108,6 +160,64 @@ export function extractCapturedData(text) {
 // buena. Es un filtro, no una busqueda semantica: deterministico y auditable.
 const TOPE_PROPIEDADES = 25;
 
+// «El norte» no es un barrio: es una zona. El filtro buscaba un barrio llamado
+// «norte de Barranquilla», no encontraba ninguno, ampliaba a toda la ciudad y
+// le decía al agente «en el norte no hay NADA». Certain tenía 22 locales solo
+// en Alto Prado. Aquí cada zona se traduce a sus barrios, y de esos se usan los
+// que existen en el catálogo del cliente (con su nombre tal cual).
+//
+// La lista es la del uso inmobiliario común, no la división administrativa: en
+// Barranquilla «el norte» incluye Riomar y el corredor de Villa Campestre. Se
+// compara sin tildes y por contenido, así «Altos Del Prado (Norte)» entra.
+// Los municipios que cuentan como la misma ciudad para una zona: Villa
+// Campestre es Puerto Colombia pero se vende como «el norte de Barranquilla».
+// Y sin esto se colaban homónimos: hay una «Altamira» en Santo Tomás.
+const CIUDADES_DE_ZONA = { barranquilla: ['barranquilla', 'puerto colombia'], cartagena: ['cartagena'] };
+const ZONAS = {
+  barranquilla: {
+    norte: ['alto prado', 'altos del prado', 'el prado', 'altamira', 'villa country', 'el golf', 'villa santos',
+      'riomar', 'altos de riomar', 'villa campestre', 'andalucia', 'la castellana', 'los nogales', 'paraiso',
+      'ciudad jardin', 'boston', 'el recreo', 'las delicias', 'granadillo', 'villa carolina', 'buenavista',
+      'la concepcion', 'miramar', 'pradomar', 'montecristo', 'nuevo horizonte', 'los alpes', 'la floresta',
+      'santa monica', 'el poblado', 'altos del limon', 'adelita de char', 'villa del este', 'alameda del rio',
+      'avenida del rio', 'altos de los rosales', 'villa del mar', 'corredor universitario', 'la cumbre', 'bellavista'],
+    riomar: ['riomar', 'altos de riomar', 'villa santos', 'villa campestre', 'altamira', 'buenavista', 'villa carolina',
+      'adelita de char', 'villa del este', 'el poblado', 'altos del limon', 'alameda del rio', 'avenida del rio', 'miramar'],
+    centro: ['centro', 'barrio abajo', 'abajo', 'san roque', 'barranquillita', 'el rosario', 'rosario', 'barrio chino',
+      'san jose', 'chiquinquira', 'el boliche', 'montes', 'las nieves', 'terminal de transporte'],
+    sur: ['el bosque', 'la esperanza', 'carrizal', 'rebolo', 'simon bolivar', 'la chinita', 'las nieves', 'la luz',
+      'el porvenir', 'santo domingo', 'la magdalena', 'ciudadela 20 de julio', 'los andes', 'las malvinas', 'caribe verde'],
+  },
+  cartagena: {
+    norte: ['crespo', 'marbella', 'cabrero', 'manzanillo', 'la boquilla', 'serena del mar', 'barcelona de indias', 'morros'],
+    centro: ['centro', 'la matuna', 'getsemani', 'san diego', 'manga', 'pie de la popa'],
+  },
+};
+// ¿Lo que pidió es una ZONA? Devuelve los barrios del catálogo que caen en
+// ella, o null si no nombra ninguna zona conocida (y entonces se busca como barrio).
+export function barriosDeLaZona(pedido, ciudad, barriosDelCatalogo) {
+  const t = sinTildes(pedido);
+  const m = t.match(/\b(norte|riomar|centro|sur)\b/);
+  if (!m) return null;
+  const c = sinTildes(ciudad || '') || Object.keys(ZONAS).find(k => t.includes(k)) || 'barranquilla';
+  const ciudadZona = Object.keys(ZONAS).find(k => c.includes(k));
+  const lista = ZONAS[ciudadZona]?.[m[1]];
+  if (!lista) return null;
+  const hay = [];
+  for (const [norm, original] of barriosDelCatalogo || []) {
+    if (lista.some(z => norm === z || norm.includes(z))) hay.push(original);
+  }
+  return { zona: m[1], barrios: hay, ciudades: CIUDADES_DE_ZONA[ciudadZona] || [ciudadZona] };
+}
+
+// «En el norte», «zona norte», «del sur»: la zona dicha en palabras de la
+// persona. Sin esto solo se entendía cuando el agente ya la había calificado,
+// y el primer mensaje salía con inventario de toda la ciudad.
+export function zonaEnTexto(texto) {
+  const m = sinTildes(texto).match(/\b(?:el|en el|al|del|zona|la zona|sector)\s+(norte|sur|centro)\b/);
+  return m ? m[1] : null;
+}
+
 export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
   if (!userId) return { lineas: [], total: 0 };
   let q = `${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
@@ -129,7 +239,22 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
   else if (esVenta) q += '&operacion=in.(Venta,"Arriendo/Venta")';
 
   if (pistas.ciudad) q += `&ciudad=ilike.*${encodeURIComponent(pistas.ciudad)}*`;
-  if (pistas.barrio) q += `&barrio=ilike.*${encodeURIComponent(pistas.barrio)}*`;
+  // Una zona («el norte») se busca por sus barrios; un barrio, por su nombre.
+  let zona = null, filtroBarrio = '';
+  if (pistas.barrio) {
+    const { barrios } = await zonasDelCliente(userId, clientId);
+    zona = barriosDeLaZona(pistas.barrio, pistas.ciudad, barrios);
+    if (zona && zona.barrios.length) {
+      filtroBarrio = `&barrio=in.(${zona.barrios.map(b => encodeURIComponent('"' + b.replace(/"/g, '') + '"')).join(',')})`;
+      // Con zona, la ciudad es la de la zona (Barranquilla + Puerto Colombia),
+      // aunque la persona dijera solo «Barranquilla».
+      if (pistas.ciudad) q = q.replace(`&ciudad=ilike.*${encodeURIComponent(pistas.ciudad)}*`, '');
+      filtroBarrio += `&ciudad=in.(${zona.ciudades.flatMap(c => [c, c.replace(/\b\w/g, x => x.toUpperCase())]).map(c => encodeURIComponent('"' + c + '"')).join(',')})`;
+    } else {
+      filtroBarrio = `&barrio=ilike.*${encodeURIComponent(pistas.barrio)}*`;
+    }
+    q += filtroBarrio;
+  }
   // Quien pide tres habitaciones no quiere ver de dos.
   //
   // Esto no se filtraba, y el efecto era peor que no ofrecer nada: alguien
@@ -169,7 +294,7 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
     let ampliado = false;
     if (!filas.length && pistas.barrio) {
       ampliado = true;
-      filas = await fetch(q.replace(`&barrio=ilike.*${encodeURIComponent(pistas.barrio)}*`, ''),
+      filas = await fetch(q.replace(filtroBarrio, ''),
         { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []);
     }
 
@@ -192,7 +317,7 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
         f.fotos?.length ? 'con fotos' : null,
       ].filter(Boolean).join(' · ');
     });
-    return { lineas, total: lineas.length, ampliado, barrioPedido: pistas.barrio || null };
+    return { lineas, total: lineas.length, ampliado, barrioPedido: pistas.barrio || null, zona: zona?.zona || null };
   } catch { return { lineas: [], total: 0 }; }
 }
 
@@ -348,7 +473,7 @@ export async function pistasDelContacto(userId, clientId, mensajes = []) {
   const plata = buscar(presupuestoDelTexto);
   return {
     ciudad: buscar(t => nombreEnTexto(t, ciudades)),
-    barrio: buscar(t => nombreEnTexto(t, barrios)),
+    barrio: buscar(t => nombreEnTexto(t, barrios) || zonaEnTexto(t)),
     tipo: buscar(t => nombreEnTexto(t, tipos)),
     // «cualquier rango de precio» no es un presupuesto: es quitarlo.
     presupuesto: plata === 'libre' ? null : plata,
@@ -803,7 +928,7 @@ ${propiedades && propiedades.lineas.length ? `LO QUE HAY DISPONIBLE AHORA MISMO 
 ${propiedades.lineas.join('\n')}
 
 Sobre esta lista:${propiedades.ampliado ? `
-- OJO: en ${propiedades.barrioPedido} no hay NADA que encaje. Estas son de OTRAS zonas de la misma ciudad. Dilo antes de enseñarlas —"en ${propiedades.barrioPedido} no tengo nada ahora mismo, pero sí en otras zonas"— y no las presentes como si fueran de ahí` : ''}
+- OJO: en ${propiedades.zona ? 'la zona ' + propiedades.zona : propiedades.barrioPedido} no hay NADA que encaje. Estas son de OTRAS zonas de la misma ciudad. Dilo antes de enseñarlas —"en ${propiedades.barrioPedido} no tengo nada ahora mismo, pero sí en otras zonas"— y no las presentes como si fueran de ahí` : ''}
 - Es lo unico que puedes ofrecer. Si te preguntan por algo que no esta aqui, no lo inventes: dilo y ofrece pasar la conversacion a un asesor
 - Menciona como mucho tres opciones por mensaje y pregunta cual le interesa
 - Cada opcion va en SU PROPIA LINEA, no seguidas dentro de un parrafo. Una linea de presentacion, las opciones debajo separadas por salto de linea, y la pregunta al final. Asi se lee de un vistazo en el movil
@@ -833,7 +958,11 @@ SI TE MANDAN UNA FOTO:
 - Que se parezca a algo del listado NO significa que sea eso. No afirmes que es una propiedad concreta salvo que te lo diga la persona; si crees reconocerla, preguntale
 - Si la foto no se entiende o no tiene que ver, dilo con amabilidad y pide lo que necesitas
 
-${bloqueDeAhora(reservas?.zona, new Date(), [agent.business_ctx, faqs].filter(Boolean).join('\n'))}${bloqueDeAnuncio(referral)}${bloqueReservas(reservas, canal)}${bloqueCitas(suyas)}DATOS CAPTURADOS HASTA AHORA:
+${bloqueDeAhora(reservas?.zona, new Date(), [agent.business_ctx, faqs].filter(Boolean).join('\n'))}${bloqueDeAnuncio(referral)}${bloqueReservas(reservas, canal)}${bloqueCitas(suyas)}${capturedData?.celular ? `YA TIENES SU NUMERO: ${capturedData.celular}${canal === 'whatsapp' ? ' (es el de este mismo WhatsApp)' : ''}.
+- NO se lo vuelvas a pedir, ni aunque haya pasado mucho rato. Pedir un dato que ya dio es lo que mas delata a un bot
+- Si van a llamarle, a lo sumo confirma: «¿le llamamos a este mismo numero?». La regla de pedir el telefono pronto ya esta cumplida
+
+` : ''}DATOS CAPTURADOS HASTA AHORA:
 ${captured}
 
 Cuando detectes un dato nuevo en la conversación, incluye al final de tu respuesta (invisible para el usuario):
@@ -959,15 +1088,17 @@ export async function sugerirRespuesta(userId, conversationId) {
   const capturedData = extractCapturedData(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
   const previas = extraerCalificacion(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
   const clienteDelCanal = connection?.client_id || agent.client_id || null;
-  const delContacto = await pistasDelContacto(userId, clienteDelCanal, hist).catch(() => ({}));
+  const suyos = await suyosDeLaConversacion(conv);
+  const delContacto = await pistasDelContacto(userId, clienteDelCanal, suyos.length ? suyos : hist).catch(() => ({}));
   const inventario = await propiedadesParaPrompt(userId, clienteDelCanal,
     pistasDeBusqueda(capturedData, previas, delContacto)).catch(() => ({ lineas: [], total: 0 }));
 
   // Sin la regla de calificación: los bloques ocultos solo tienen sentido cuando
   // el mensaje se guarda, y este no se guarda.
+  const conocido = await conocidoDeLaConversacion(conv, suyos).catch(() => ({}));
   const system = partesDelPrompt(
     agent,
-    { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) },
+    { ...conocido, ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) },
     null,
     inventario,
     conv.channel,
@@ -998,10 +1129,18 @@ export async function sugerirRespuesta(userId, conversationId) {
 // eso sería una demo; con eso es la herramienta para ajustar el entrenamiento.
 export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensajes = [], origen = 'ensayo' }) {
   if (!userId || !agentId) return { ok: false, error: 'Falta el agente.' };
-  const limpios = (Array.isArray(mensajes) ? mensajes : [])
+  const todos = (Array.isArray(mensajes) ? mensajes : [])
     .filter(m => m && (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim())
-    .map(m => ({ role: m.role, content: String(m.content).slice(0, 4000) }))
-    .slice(-12);
+    .map(m => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
+  const limpios = todos.slice(-12);
+  // Lo ya sabido, de TODA la conversación del ensayo y no solo de lo que ve el
+  // modelo, igual que en producción. En WhatsApp el número es el propio chat:
+  // aquí no hay chat de verdad, así que se pone uno de prueba para que el
+  // agente se comporte como con un contacto real —sin pedirle su número—.
+  const conocido = conocidoDelContacto({
+    canal, textosDelUsuario: todos.filter(m => m.role === 'user').map(m => m.content),
+  });
+  if (canal === 'whatsapp' && !conocido.celular) conocido.celular = '+57 300 000 0000 (número de prueba del ensayo)';
   if (!limpios.length || limpios[limpios.length - 1].role !== 'user') {
     return { ok: false, error: 'El ensayo necesita un mensaje tuyo al final.' };
   }
@@ -1019,7 +1158,7 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   // antes de devolverlos, el ensayo se quedaría amnésico y en 'pendiente' para
   // siempre, que es justo el fallo que este ensayo debe poder destapar.
   const deAsistente = limpios.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
-  const capturado = extractCapturedData(deAsistente);
+  const capturado = { ...conocido, ...extractCapturedData(deAsistente) };
   const previas = extraerCalificacion(deAsistente);
 
   const regla = await getRegla(userId, agentId).catch(() => null);
@@ -1030,7 +1169,7 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   // El ensayo lee las pistas igual que la conversación real: de lo que escribió
   // la persona. Si aquí se leyeran de otro sitio, el probador daría luz verde a
   // un agente que luego se comporta distinto.
-  const delContacto = await pistasDelContacto(userId, agent.client_id || null, limpios).catch(() => ({}));
+  const delContacto = await pistasDelContacto(userId, agent.client_id || null, todos).catch(() => ({}));
   const pistas = pistasDeBusqueda(capturado, previas, delContacto);
   const inventario = await propiedadesParaPrompt(userId, agent.client_id || null, pistas)
     .catch(() => ({ lineas: [], total: 0 }));
@@ -1735,7 +1874,8 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // Pistas: lo que el agente ya dedujo. La operacion sale del enrutado; el resto,
   // de lo que haya capturado. Sin pistas se le pasan las primeras del inventario.
   const previas = extraerCalificacion(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
-  const delContacto = await pistasDelContacto(connection.user_id, clienteDelCanal, hist).catch(() => ({}));
+  const suyos = await suyosDeLaConversacion(conv);
+  const delContacto = await pistasDelContacto(connection.user_id, clienteDelCanal, suyos.length ? suyos : hist).catch(() => ({}));
   const inventario = await propiedadesParaPrompt(connection.user_id, clienteDelCanal,
     pistasDeBusqueda(capturedData, previas, delContacto)).catch(() => ({ lineas: [], total: 0 }));
 
@@ -1756,7 +1896,10 @@ export async function processIncoming({ channel, externalId, contactId, contactN
       })
     : null;
 
-  const system = partesDelPrompt(agent, { ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas);
+  // Lo ya sabido va DEBAJO de lo capturado: si en la conversación dio otro
+  // número para que le llamen, manda ese.
+  const conocido = await conocidoDeLaConversacion(conv, suyos).catch(() => ({}));
+  const system = partesDelPrompt(agent, { ...conocido, ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas);
   // «Escribiendo…» antes de pensar.
   //
   // El modelo contesta en medio segundo y eso delata al bot más que cualquier

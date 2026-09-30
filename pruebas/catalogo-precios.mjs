@@ -265,7 +265,8 @@ console.log('\nY si en ese barrio no hay nada, se amplía a la ciudad');
 const amp = eng.slice(eng.indexOf('let ampliado = false;'), eng.indexOf('const lineas = (filas || []).map'));
 ok(/if \(!filas\.length && pistas\.barrio\)/.test(amp),
    'solo cuando el barrio no dio nada, no siempre');
-ok(/q\.replace\(`&barrio=ilike/.test(amp),
+// Se quita `filtroBarrio`, que es el del barrio o el de la zona («el norte»).
+ok(/q\.replace\((`&barrio=ilike|filtroBarrio)/.test(amp),
    'se quita el barrio y se dejan los demás filtros: presupuesto y habitaciones siguen');
 ok(/no hay NADA que encaje/.test(eng) && /no las presentes como si fueran de ahí/.test(eng),
    'y se le dice al agente que lo diga, no que lo disimule');
