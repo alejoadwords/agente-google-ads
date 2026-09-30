@@ -15,4 +15,7 @@ export const MUTACIONES = [
   { nombre: 'el principal esconde los leads sin proceso', archivo: 'app', romper: cambiar(".is_default) params.push('con_sueltos=1');", ".is_default) params.push('x=1');") },
   { nombre: 'una Pro vuelve a ver el selector de cliente', archivo: 'app', romper: cambiar("  const isAgency = esCuentaAgencia() &&\n", "  const isAgency = true &&\n") },
   { nombre: 'una Pro puede salir a Mi cuenta', archivo: 'app', romper: cambiar("  if (!esCuentaAgencia()) return;\n  if (!id) {", "  if (!id) {") },
+  { nombre: 'una Pro sin perfil abre el formulario', archivo: 'app', romper: cambiar("  if (!proClient && !esCuentaAgencia()) return;\n", '') },
+  { nombre: 'vuelve el botón mi negocio', archivo: 'app', romper: cambiar("  if (proBtn)    proBtn.style.display    = 'none';", "  if (proBtn)    proBtn.style.display    = isPro ? 'block' : 'none';") },
+  { nombre: 'guardar un perfil nuevo en Pro pasa', archivo: 'app', romper: cambiar("  if (isPro && !agencyEditingId) {", "  if (false) {") },
 ];

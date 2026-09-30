@@ -134,5 +134,28 @@ console.log('\nEl selector de cliente, solo para agencias\n');
   ok(/const isPro\s+= !isAgency;/.test(init), 'y Pro es todo lo que no es agencia');
 }
 
+console.log('\nNadie crea un perfil de negocio que esconda el CRM\n');
+{
+  // Crear el perfil («mi negocio») metía la cuenta en un cliente nuevo,
+  // pro_main, y todo lo creado sin él dejaba de verse: el proceso de Karvio
+  // habría desaparecido con un clic. Tres puertas, las tres cerradas.
+  let abierto = 'no';
+  const abrir = new Function('agencyClients', 'agencyOpenModal', 'userPlan', 'isAdminUser',
+    cuerpo('function esCuentaAgencia() {') + '\n' + cuerpo('function proOpenSetupModal() {') + '; return proOpenSetupModal;');
+  abrir([], (id) => { abierto = id; }, 'pro', () => false)();
+  ok(abierto === 'no', 'una cuenta Pro sin perfil no abre el formulario que lo crearía');
+  abrir([{ id: 'pro_main' }], (id) => { abierto = id; }, 'pro', () => false)();
+  ok(abierto === 'pro_main', 'la que ya tiene perfil sí puede editarlo');
+  abierto = 'no';
+  abrir([], (id) => { abierto = id; }, 'agency', () => false)();
+  ok(abierto === null, 'y una agencia crea clientes como siempre');
+
+  const init = cuerpo('async function agencyInit() {');
+  ok(/if \(proBtn\)\s+proBtn\.style\.display\s+= 'none';/.test(init), 'el botón «mi negocio» del menú no se muestra');
+  ok(!/renderProHomeBanner\(\)/.test(init), 'ni el aviso del Inicio que invitaba a crearlo');
+  ok(!/renderProSetupCard\(/.test(cuerpo('function launchOnboarding(agentKey) {')), 'ni la tarjeta al abrir un agente');
+  ok(/if \(isPro && !agencyEditingId\) \{/.test(cuerpo('async function agencySaveClient() {')), 'y guardar un perfil NUEVO se corta aunque alguien llegue al formulario');
+}
+
 console.log(mal ? `\n  ${mal} fallo(s)\n` : '\n  Todo en verde\n');
 process.exit(mal ? 1 : 0);
