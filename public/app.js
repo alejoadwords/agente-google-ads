@@ -989,7 +989,10 @@ async function agencyInit() {
   const proBtn     = document.getElementById('sb-pro-btn');
   const dashBtn    = document.getElementById('agency-dash-btn');
   if (agencyBtn) agencyBtn.style.display = isAgency ? 'block' : 'none';
-  if (proBtn)    proBtn.style.display    = isPro    ? 'block' : 'none';
+  // «mi negocio» ya no se ofrece (29-09-2026): crear el perfil de negocio
+  // metía la cuenta en un «cliente» nuevo (pro_main), y todo lo que la cuenta
+  // había creado sin él —procesos, etapas, leads— dejaba de verse.
+  if (proBtn)    proBtn.style.display    = 'none';
   if (dashBtn)   dashBtn.style.display   = isAgency ? 'flex'  : 'none';
 
   if (!isAgency && !isPro) return;
@@ -1038,10 +1041,8 @@ async function agencyInit() {
     }
   }
 
-  // Pro sin perfil → mostrar banner en home para usuarios existentes
-  if (isPro && agencyClients.length === 0) {
-    if (document.getElementById('home-consultor-hero')) renderProHomeBanner();
-  }
+  // El aviso del Inicio que invitaba a crear el perfil de negocio ya no sale:
+  // era otra puerta a la misma trampa (ver arriba, «mi negocio»).
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────────────────
@@ -1827,7 +1828,15 @@ async function agencySaveClient() {
     return;
   }
 
-  const isPro = !isAdminUser() && userPlan !== 'agency';
+  const isPro = !esCuentaAgencia();
+  // Última barrera: una cuenta que no es agencia no crea perfiles nuevos,
+  // venga de donde venga la llamada. Editar el que ya tiene, sí.
+  if (isPro && !agencyEditingId) {
+    if (btn) { btn.disabled = false; btn.textContent = 'guardar cliente'; }
+    agencyCloseModal();
+    showToast('Tu cuenta ya es tu negocio: no hace falta crear un perfil aparte.', 'error');
+    return;
+  }
 
   if (agencyEditingId) {
     const idx = agencyClients.findIndex(c => c.id === agencyEditingId);
@@ -3597,12 +3606,9 @@ function briefSummaryForAgent(client, agentKey) {
 function launchOnboarding(agentKey) {
   const isPro = !isAdminUser() && userPlan !== 'agency';
 
-  // Pro sin perfil de negocio → mostrar card de configuración
-  if (isPro && agencyClients.length === 0 && !agencyActiveClientId) {
-    pendingAgentAfterSetup = agentKey;
-    renderProSetupCard(agentKey);
-    return;
-  }
+  // Una cuenta sin perfil de negocio ya no se manda a crearlo al abrir un
+  // agente: crearlo la metía en un «cliente» nuevo y escondía su CRM. El agente
+  // arranca sin ese contexto, como en una agencia sin cliente elegido.
 
   // Pro con perfil → auto-activar y usar como contexto (igual que agencia)
   if (isPro && agencyClients.length > 0 && !agencyActiveClientId) {
@@ -3735,6 +3741,9 @@ function renderProSetupCard(agentKey) {
 function proOpenSetupModal() {
   // Abrir el modal de brief en modo "Mi negocio" para usuarios Pro
   const proClient = agencyClients.find(c => c.id === 'pro_main');
+  // Sin perfil no se crea uno: la cuenta ya es su negocio. Crear pro_main la
+  // mudaría a otro espacio y escondería lo que tiene (29-09-2026).
+  if (!proClient && !esCuentaAgencia()) return;
   agencyOpenModal(proClient ? 'pro_main' : null);
 }
 
@@ -22268,7 +22277,17 @@ async function agCupoPintar() {
   if (!caja) return;
   let d;
   try {
-    const r = await fetchAuth('/api/uso-agente');
+    let r;
+    try {
+      r = await fetchAuth('/api/uso-agente');
+    } catch (e) {
+      // «Failed to fetch» es la conexión, no el servidor: un corte de un
+      // segundo. Se reintenta una vez antes de dar el contador por perdido y
+      // de mandar un aviso de error por algo que se arregla solo (el 29-09 dos
+      // cuentas lo reportaron en el mismo minuto de cortes de red).
+      await new Promise(ok => setTimeout(ok, 2000));
+      r = await fetchAuth('/api/uso-agente');
+    }
     // Un contador que dice «0 de 500» porque la consulta falló miente con
     // mucha seguridad: quien lo mire creerá que no ha gastado nada. Se dice
     // que no se pudo mirar, que es la verdad.

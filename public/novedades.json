@@ -9,6 +9,13 @@
       "texto": "Si alguien escribe para que le vendas, arriendes o administres su propiedad, el agente ya no le comenta que su zona o su estrato no encajan, aunque tu contexto lo diga: toma los datos del inmueble, pide el contacto y se lo pasa a un asesor, que es quien puede valorar el caso. Decirle que no a alguien que viene a ofrecernos algo cierra una puerta que quizá estaba abierta. Y si el agente se despista, el mensaje no sale: se reescribe antes de llegar al contacto."
     },
     {
+      "id": "2026-09-29-sin-mi-negocio",
+      "fecha": "2026-09-29",
+      "tipo": "mejora",
+      "titulo": "Menú más limpio: fuera el botón «mi negocio»",
+      "texto": "Si tu cuenta no es de agencia, ya no verás el botón «mi negocio» en el menú lateral ni el aviso para configurar tu negocio en el Inicio. Tu cuenta ya es tu negocio: tus procesos, etapas y leads están siempre en el mismo lugar."
+    },
+    {
       "id": "2026-09-29-agente-preguntas",
       "fecha": "2026-09-29",
       "tipo": "mejora",
