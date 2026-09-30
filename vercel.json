@@ -116,6 +116,14 @@
       "destination": "/probar.html"
     },
     {
+      "source": "/registro",
+      "destination": "/registro.html"
+    },
+    {
+      "source": "/registro/:slug",
+      "destination": "/registro.html"
+    },
+    {
       "source": "/((?!api/|_vercel/).*)",
       "destination": "/index.html"
     }

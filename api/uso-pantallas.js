@@ -48,6 +48,9 @@ export default async function handler(req) {
   // Sin sesión no se mide. Un endpoint de analítica abierto es una invitación
   // a que le escriban cualquier cosa.
   if (!userId) return json(await cuerpoSinSesion(sesion, 'uso-pantallas'), 401);
+  // Lo que mira el equipo dentro de una cuenta (api/cuentas.js) no es uso del
+  // cliente: contarlo inflaría justo la pantalla que se revisa.
+  if (sesion.datos?.act?.sub) return json({ ok: true, guardadas: 0, soporte: true });
 
   let body;
   try { body = await req.json(); } catch { return json({ error: 'Body inválido' }, 400); }

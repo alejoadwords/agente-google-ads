@@ -428,7 +428,9 @@ export default async function handler(req, contexto) {
     // Todavía no es miembro de nadie: puede que tenga una invitación esperando
     // a su correo y se haya registrado por su cuenta, sin tocar el enlace. Es
     // el caso normal, no el raro: la gente va a la web y se registra.
-    const atada = await vincularPorCorreo(userId);
+    // Una sesión de soporte (api/cuentas.js) no ata invitaciones: meter al
+    // cliente en un equipo es decisión suya, no de quien entró a revisar.
+    const atada = sesion.datos?.act?.sub ? null : await vincularPorCorreo(userId);
     return jsonResp({
       membership: atada, vinculado_ahora: !!atada,
       ...(atada ? await planDelDueno(atada.owner_user_id) : {}),
@@ -437,6 +439,7 @@ export default async function handler(req, contexto) {
 
   // POST ?action=redeem — canjear invitación (cualquier usuario autenticado)
   if (req.method === 'POST' && url.searchParams.get('action') === 'redeem') {
+    if (sesion.datos?.act?.sub) return jsonResp({ error: 'Una sesión de soporte no canjea invitaciones' }, 403);
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     const token = String(body.token || '');

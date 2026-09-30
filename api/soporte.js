@@ -168,6 +168,10 @@ ${contexto?.cliente ? 'Con el cliente activo: ' + contexto.cliente : 'Sin client
   sé, te paso con el equipo".
 - No prometas plazos, precios distintos a los que sabes, ni funciones futuras.
 - Nunca pidas contraseñas ni datos de tarjeta.
+- Si en la cuenta aparecen "mensajes_que_le_escribio_el_equipo" y lo que te
+  dice responde a ellos (acepta la sesión de 15 minutos, propone un horario,
+  cuenta su objetivo), eso es para una persona del equipo, no para ti: dile que
+  se lo pasas y abre el caso con [TICKET: ...] incluyendo lo que propone.
 
 ═══ CUANDO NO PUEDAS RESOLVERLO ═══
 Si es un fallo del producto, algo que requiere que alguien mire por dentro, o
@@ -223,6 +227,12 @@ export default async function handler(req) {
     const sesion = await verificarSesion(req);
     const payload = sesion.id ? { sub: sesion.id } : null;
     if (!payload?.sub) return jsonResp(await cuerpoSinSesion(sesion, 'soporte'), 401);
+    // Un admin dentro de la cuenta del cliente (api/cuentas.js) puede LEER el
+    // hilo —para saber qué le dijimos—, pero no escribir en él: quedaría como
+    // si el cliente hubiera preguntado, y le abriría casos que no pidió.
+    if (req.method === 'POST' && sesion.datos?.act?.sub) {
+      return jsonResp({ error: 'Estás dentro de la cuenta de un cliente: el chat de soporte es suyo. Vuelve a tu cuenta para escribir.' }, 403);
+    }
 
     // ── Mis casos ─────────────────────────────────────────────────────────
     // Abrir un ticket y no volver a saber nada es lo que hace que la gente
@@ -274,6 +284,14 @@ export default async function handler(req) {
     const radio = await radiografia(userId, body.plan);
     if (esMiembro) radio.nota = 'Quien escribe es un MIEMBRO del equipo, no el dueño de la cuenta.';
 
+    // Lo que el equipo le escribió —la bienvenida sobre todo— no viaja como
+    // turno de la conversación (el modelo creería haberlo dicho él), pero sin
+    // saberlo no entiende un «sí, agendemos» que responde a esa bienvenida.
+    const convPrevia = await conversacionDe(actorId);
+    const delEquipo = (convPrevia?.mensajes || []).filter(m => m.role === 'equipo').slice(-2)
+      .map(m => String(m.content || '').slice(0, 1500));
+    if (delEquipo.length) radio.mensajes_que_le_escribio_el_equipo = delEquipo;
+
     const mensajes = [
       ...historial
         .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.content)
@@ -294,7 +312,7 @@ export default async function handler(req) {
     // El hilo se guarda para que la respuesta del equipo aparezca aquí después,
     // y para que el ticket llegue con la conversación completa.
     const ahora = new Date().toISOString();
-    const conv = await guardarHilo(actorId, email, body.plan || null, await conversacionDe(actorId), [
+    const conv = await guardarHilo(actorId, email, body.plan || null, convPrevia, [
       { role: 'user', content: texto, at: ahora },
       { role: 'assistant', content: limpio, at: ahora },
     ]);

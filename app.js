@@ -26,6 +26,100 @@ function isAdminUser() {
   return ADMIN_EMAILS.includes(clerkInstance.user.primaryEmailAddress.emailAddress.toLowerCase());
 }
 
+// Desde cuándo las cuentas nuevas pasan por el alta guiada (/registro). Mismo
+// valor que DESDE en api/onboarding.js, que es quien decide de verdad.
+const ONBOARDING_DESDE = Date.parse('2026-09-30T00:00:00Z');
+// Se sabe al leer el archivo, antes de que el tour decida si mostrarse: el
+// mismo día del alta no se le echan encima el tour y el modal de conexión.
+window._bienvenidaAhora = new URLSearchParams(location.search).get('bienvenida') === '1';
+
+// ── Sesión de soporte ───────────────────────────────────────────────────────
+// Cuando el equipo entra a la cuenta de un cliente (api/cuentas.js), la sesión
+// ES la del cliente —su plan, su nombre, sus límites— y Clerk marca quién está
+// detrás en `session.actor`. Por eso isAdminUser() da false ahí dentro, y está
+// bien: se ve lo que ve el cliente. Lo que NO debe pasar es que la app haga en
+// su nombre lo que haría él al entrar: arrancar su prueba, canjear
+// invitaciones, suscribir avisos a ESTE navegador, contar uso o marcarle
+// novedades y tours como vistos.
+function enSoporte() {
+  return !!(clerkInstance && clerkInstance.session && clerkInstance.session.actor);
+}
+
+// Datos de una cuenta que se guardan en el navegador SIN el id del usuario.
+// Al cambiar de identidad en la misma pestaña —entrar a un cliente, volver, o
+// simplemente otra persona en el mismo equipo— se quedarían los del anterior:
+// la cuenta de Google Ads del admin «restaurada» en la del cliente, su cliente
+// activo, su pipeline. Se borran solo cuando cambia quién está dentro.
+const CLAVES_DE_CUENTA = [
+  /^ads_/, /^meta_/, /^linkedin_/, /^gads_/, /^acuarius_cliente_activo$/, /^acuarius_pipeline_/,
+  /^acuarius_image_usage$/, /^acuarius_msg_usage$/, /^agn_asesor/, /^crm_last_currency$/,
+  /^acuarius_soporte_vistos$/, /^acuarius_pending_brief$/,
+];
+function limpiarSiCambioLaCuenta(uid) {
+  try {
+    const antes = localStorage.getItem('acuarius_uid');
+    if (antes && antes !== uid) {
+      [localStorage, sessionStorage].forEach(st => {
+        Object.keys(st).forEach(k => { if (CLAVES_DE_CUENTA.some(re => re.test(k))) st.removeItem(k); });
+      });
+    }
+    localStorage.setItem('acuarius_uid', uid);
+  } catch (e) { /* sin almacenamiento no hay nada que se pueda arrastrar */ }
+}
+
+// Cambiar de sesión pasa siempre por login.html, que canjea el ticket. Va por
+// sessionStorage y no por la URL: un ticket en la barra acaba en el historial.
+function cambiarDeCuentaConTicket(ticket) {
+  sessionStorage.setItem('acuarius_cambio_ticket', ticket);
+  sessionStorage.removeItem('acuarius_cambio_ticket_n');
+  window.location.href = '/login.html?cambio=1';
+}
+
+async function soporteVolver(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Volviendo…'; }
+  try {
+    const r = await fetchAuth('/api/cuentas', { method: 'POST', body: JSON.stringify({ accion: 'volver' }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ticket) throw new Error(d.error || ('HTTP ' + r.status));
+    cambiarDeCuentaConTicket(d.ticket);
+  } catch (e) {
+    // Si el regreso falla, cerrar sesión SIEMPRE funciona: se vuelve a entrar
+    // con la cuenta propia. Nadie se queda atrapado en la cuenta de un cliente.
+    if (btn) { btn.disabled = false; btn.textContent = 'Volver a mi cuenta'; }
+    if (confirm('No se pudo volver directamente (' + (e.message || e) + '). ¿Cerrar esta sesión y entrar de nuevo con tu cuenta?')) logout();
+  }
+}
+
+// El banner no se puede cerrar: mientras esté la sesión del cliente abierta,
+// tiene que ser imposible olvidar en qué cuenta se está escribiendo.
+function soporteBanner() {
+  if (!enSoporte() || document.getElementById('soporte-banner')) return;
+  const u = clerkInstance.user;
+  const quien = [u.firstName, u.lastName].filter(Boolean).join(' ') || '';
+  const correo = u.primaryEmailAddress?.emailAddress || '';
+  const expira = clerkInstance.session.expireAt ? new Date(clerkInstance.session.expireAt).getTime() : 0;
+  const b = document.createElement('div');
+  b.id = 'soporte-banner';
+  b.setAttribute('role', 'status');
+  b.innerHTML = '<span class="sb-soporte-ico">' + icn('eye', 15) + '</span>'
+    + '<span class="sb-soporte-txt">Estás dentro de la cuenta de <strong>' + esc(quien || correo) + '</strong>'
+    + (quien && correo ? ' <span class="sb-soporte-mail">' + esc(correo) + '</span>' : '')
+    + ' · lo que hagas queda hecho en su cuenta</span>'
+    + '<span class="sb-soporte-min" id="soporte-min"></span>'
+    + '<button class="sb-soporte-btn" onclick="soporteVolver(this)">Volver a mi cuenta</button>';
+  document.body.appendChild(b);
+  document.body.classList.add('con-soporte');
+  document.title = 'Soporte · ' + (quien || correo) + ' — Acuarius';
+  const pintar = () => {
+    const el = document.getElementById('soporte-min');
+    if (!el || !expira) return;
+    const min = Math.max(0, Math.round((expira - Date.now()) / 60000));
+    el.textContent = min > 0 ? 'quedan ' + min + ' min' : 'sesión vencida';
+  };
+  pintar();
+  setInterval(pintar, 30000);
+}
+
 // Funciones de límites
 //
 // El cupo de imágenes lo lleva el SERVIDOR (api/generate-image). Aquí solo se
@@ -286,6 +380,7 @@ async function initAuth(){
       window.location.href='/login.html';
       return false;
     }
+    limpiarSiCambioLaCuenta(clerkInstance.user.id);
     try { sessionToken = await clerkInstance.session.getToken(); } catch(e){}
     userPlan = clerkInstance.user.publicMetadata?.plan || 'free';
     // Prueba Pro de 14 días: 'trial' vigente se comporta como Pro; vencida como free
@@ -295,7 +390,7 @@ async function initAuth(){
       if (userPlan === 'trial') {
         if (_tm.trial_until && new Date(_tm.trial_until) > new Date()) { window._trialUntil = _tm.trial_until; userPlan = 'pro'; }
         else userPlan = 'free'; // vencida — api/cron-trials ajusta el metadata a diario
-      } else if (userPlan === 'free' && !_tm.trial_used && !isAdminUser() && !window._workspace) {
+      } else if (userPlan === 'free' && !_tm.trial_used && !isAdminUser() && !window._workspace && !enSoporte()) {
         // Primer ingreso de una cuenta free: activar la prueba automáticamente
         setTimeout(async () => {
           try {
@@ -312,6 +407,26 @@ async function initAuth(){
       }
     } catch {}
     updateUserUI(clerkInstance.user);
+    if (enSoporte()) {
+      soporteBanner();
+      // Lo de abajo es el primer ingreso del CLIENTE (conversión, referido,
+      // invitación del navegador). Nada de eso le corresponde a quien revisa.
+      setTimeout(() => { if (typeof teamInit === 'function') teamInit(); }, 800);
+      return true;
+    }
+    // Alta guiada: una cuenta nueva que no la terminó vuelve a ella. Solo se
+    // pregunta por cuentas creadas desde que existe (api/onboarding.js), para
+    // no sumar una petición al arranque de todas las demás.
+    try {
+      const creada = clerkInstance.user.createdAt ? new Date(clerkInstance.user.createdAt).getTime() : 0;
+      const params = new URLSearchParams(location.search);
+      if (creada >= ONBOARDING_DESDE && !isAdminUser() && !params.get('gcal_connected') && !params.get('bienvenida')) {
+        const r = await fetchAuth('/api/onboarding');
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.debe) { window.location.href = '/registro?continuar=1'; return false; }
+        if (d.onboarding?.moneda && !localStorage.getItem('crm_last_currency')) localStorage.setItem('crm_last_currency', d.onboarding.moneda);
+      }
+    } catch (e) { /* si no se puede saber, se entra: nunca bloquear la app por esto */ }
     // Conversión: registro completado (usuario creado hace <10 min, una sola vez)
     try {
       const createdAt = clerkInstance.user.createdAt ? new Date(clerkInstance.user.createdAt).getTime() : 0;
@@ -3382,6 +3497,7 @@ function tourEnd() {
 }
 
 function tourShouldShow() {
+  if (enSoporte() || window._bienvenidaAhora) return false;
   try {
     // Check both localStorage and sessionStorage
     if (localStorage.getItem('acuarius_tour_done')) return false;
@@ -4878,6 +4994,12 @@ window.onload = async () => {
     if(!ok) return;
   } catch(e) {
     console.warn('initAuth error:', e.message);
+  }
+
+  // Recién terminada el alta: la bienvenida del equipo, en el chat de soporte.
+  if (window._bienvenidaAhora) {
+    history.replaceState({}, '', location.pathname);
+    if (!enSoporte()) setTimeout(() => { sopAbrirBienvenida(); }, 1200);
   }
 
   // Inicializar límites de imágenes
@@ -10239,6 +10361,7 @@ async function novMarcarVisto(id) {
 
 // Decide qué mostrar y lo muestra. Se llama al arrancar.
 async function novInit() {
+  if (enSoporte()) return;   // marcaría como vistas las novedades del cliente
   try {
     if (document.getElementById('acuarius-conn-modal')) return;  // no pisar el modal de conexión
     if (typeof tourShouldShow === 'function' && tourShouldShow()) return; // el usuario nuevo ya tiene el tour
@@ -16019,6 +16142,7 @@ function shareReferralLinkedIn() {
 
 // Registrar referido al iniciar sesión (llamar desde initAuth o tras autenticación)
 async function registerPendingReferral() {
+  if (enSoporte()) return;
   const refCode = localStorage.getItem('pending_ref_code');
   if (!refCode) return;
 
@@ -18453,6 +18577,9 @@ function pushClaveABytes(b64) {
 }
 
 async function pushActivar(btn) {
+  // Los avisos van al NAVEGADOR: activarlos aquí mandaría los del cliente al
+  // equipo de quien está revisando.
+  if (enSoporte()) { showToast('Los avisos los activa el cliente desde su propio dispositivo', 'info'); return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Activando…'; }
   try {
     const permiso = await Notification.requestPermission();
@@ -18661,6 +18788,7 @@ async function pwaInstalarYAvisos(btn) {
  * permiso ya está dado y esa pantalla ni siquiera está abierta.
  */
 async function pushSuscribirSilencioso() {
+  if (enSoporte()) return false;
   try {
     const { clave } = await fetch('/api/push?clave=1').then(r => r.json());
     if (!clave) return false;
@@ -18682,6 +18810,7 @@ async function pushSuscribirSilencioso() {
  * usuario instalaba, entraba, y se quedaba sin avisos igual que antes.
  */
 async function pwaOfrecerAvisosAlAbrir() {
+  if (enSoporte()) return;
   if (!pwaInstalada()) return;                      // solo dentro de la app
   if (!pushSoportado()) return;
   if (typeof Notification !== 'undefined' && Notification.permission !== 'default') return;
@@ -19985,6 +20114,7 @@ function campanaAvisarNuevos() {
  * vuelve. Si dice que no en el navegador tampoco insiste.
  */
 async function avisosProponerPush() {
+  if (enSoporte()) return;
   if (!crmAvisos.length) return;
   if (!pushSoportado()) return;
   if (typeof Notification !== 'undefined' && Notification.permission !== 'default') return;
@@ -25526,7 +25656,9 @@ function cmdkCommands() {
     ...(isAdminUser() ? [{ group: 'Soporte', icon: '🩺', label: 'Diagnosticar una cuenta',
       kw: 'soporte diagnostico cliente cuenta revisar configuracion admin', run: () => dxAbrir() },
     { group: 'Soporte', icon: '🎫', label: 'Tickets de soporte',
-      kw: 'tickets soporte ayuda casos admin', run: () => tkAbrir() }] : []),
+      kw: 'tickets soporte ayuda casos admin', run: () => tkAbrir() },
+    { group: 'Soporte', icon: '👥', label: 'Cuentas de clientes',
+      kw: 'cuentas clientes subcuentas entrar iniciar sesion suplantar soporte enlace registro admin', run: () => cuAbrir() }] : []),
     // Ir a
     { group: 'Ir a', icon: '🏠', label: 'Inicio',                          kw: 'home casa principal',           run: () => showView('home') },
     { group: 'Ir a', icon: '👥', label: 'CRM · Pipeline',                  kw: 'crm leads pipeline kanban clientes', run: () => navGo('crm') },
@@ -25691,6 +25823,7 @@ window.addEventListener('keydown', e => {
 // auditoría automática. Se muestra una sola vez: al terminar el tour, o al
 // entrar si ya hizo el tour pero nunca conectó una plataforma.
 function welcomeConnectShouldShow() {
+  if (enSoporte() || window._bienvenidaAhora) return false;
   try {
     if (localStorage.getItem('acuarius_welcome_connect_shown')) return false;
     if (!clerkInstance?.user?.id) return false;
@@ -27328,6 +27461,12 @@ const ICN_PATHS = {
   // El mismo trazo que ya usaba el botón de enlace del panel, ahora con nombre
   // para que la ficha no tenga que repetir el SVG.
   link:     '<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>',
+  // Cuentas de clientes y sesión de soporte (api/cuentas.js)
+  eye:      '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  enter:    '<path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>',
+  copy:     '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>',
+  send:     '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  external: '<path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
 };
 
 
@@ -28648,6 +28787,8 @@ function agnScheduleForLead() {
 // crm_lead_created, automation_created, upgrade_flow_opened (+ purchase
 // en success.html). function declaration → hoisted, usable en todo el archivo.
 function track(event, params) {
+  // Lo que hace el equipo dentro de una cuenta no son conversiones del cliente.
+  if (enSoporte()) return;
   try {
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push(Object.assign({ event: event }, params || {}));
@@ -31473,7 +31614,7 @@ let _teamSeats = null;
 // Se llama tras la autenticación (init): canjea invitación pendiente y detecta membresía
 async function teamInit() {
   try {
-    const pending = localStorage.getItem('acuarius_join_token');
+    const pending = enSoporte() ? null : localStorage.getItem('acuarius_join_token');
     if (pending) {
       const d = await fetchAuth('/api/team?action=redeem', {
         method: 'POST', body: JSON.stringify({ token: pending }),
@@ -35616,14 +35757,62 @@ function sopPintarEquipo(m) {
   if (!hilo) return;
   const el = document.createElement('div');
   el.className = 'sop-msg equipo';
-  el.innerHTML = '<div class="sop-equipo-tag">Respuesta del equipo' +
-    (m.ticket ? ' · ' + esc(m.ticket) : '') + '</div>' + sopFormato(m.content);
+  // La bienvenida del alta (api/onboarding.js) trae su firma y un video; las
+  // respuestas a un caso llevan el asunto del caso.
+  const tag = m.firma ? esc(String(m.firma)) : 'Respuesta del equipo' + (m.ticket ? ' · ' + esc(String(m.ticket)) : '');
+  const video = sopVideoEmbed(m.video);
+  el.innerHTML = '<div class="sop-equipo-tag">' + tag + '</div>' + sopFormato(m.content) +
+    (video ? '<div class="sop-video"><iframe src="' + esc(video) + '" title="Video de bienvenida" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>' : '');
   hilo.appendChild(el);
-  hilo.scrollTop = hilo.scrollHeight;
+  hilo.scrollTop = m.bienvenida ? 0 : hilo.scrollHeight;
+}
+
+// Solo YouTube y Vimeo, y siempre por su dirección de inserción: el enlace lo
+// escribe una persona del equipo, pero un iframe a cualquier sitio desde el
+// panel de soporte no se abre nunca.
+function sopVideoEmbed(url) {
+  const u = String(url || '');
+  let m = u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{6,})/);
+  if (m) return 'https://www.youtube-nocookie.com/embed/' + m[1] + '?rel=0';
+  m = u.match(/vimeo\.com\/(?:video\/)?(\d{5,})/);
+  if (m) return 'https://player.vimeo.com/video/' + m[1];
+  return '';
+}
+
+// Al terminar el alta se entra con ?bienvenida=1: el chat de soporte se abre
+// grande, en el centro, con el mensaje del equipo arriba. Es lo primero que ve
+// una cuenta nueva, y tiene que parecer una persona que le escribe, no un aviso.
+async function sopAbrirBienvenida() {
+  const panel = document.getElementById('sop-panel');
+  if (!panel) return;
+  let velo = document.getElementById('sop-velo');
+  if (!velo) {
+    velo = document.createElement('div');
+    velo.id = 'sop-velo';
+    velo.addEventListener('click', sopCerrar);
+    document.body.appendChild(velo);
+  }
+  velo.classList.add('abierto');
+  panel.classList.add('bienvenida');
+  await sopAbrir();
+  const hilo = document.getElementById('sop-hilo');
+  if (hilo) hilo.scrollTop = 0;
 }
 
 function sopCerrar() {
-  document.getElementById('sop-panel')?.classList.remove('abierto');
+  const eraBienvenida = document.getElementById('sop-panel')?.classList.contains('bienvenida');
+  document.getElementById('sop-panel')?.classList.remove('abierto', 'bienvenida');
+  document.getElementById('sop-velo')?.classList.remove('abierto');
+  // En el alta pidió importar sus contactos al entrar (public/registro.html):
+  // se le abre el importador en cuanto cierra la bienvenida, no encima de ella.
+  if (eraBienvenida) {
+    try {
+      if (localStorage.getItem('acuarius_tras_alta') === 'importar') {
+        localStorage.removeItem('acuarius_tras_alta');
+        setTimeout(() => { if (typeof impOpen === 'function') impOpen(); }, 300);
+      }
+    } catch (e) {}
+  }
   // Se vuelve al chat: reabrir el soporte en la lista de casos desconcierta.
   if (_sopEnCasos) sopVerCasos();
   sopMostrarBurbuja();
@@ -35844,6 +36033,8 @@ function tkBotonHeader() {
   if (!b) return;
   const admin = typeof isAdminUser === 'function' && isAdminUser();
   b.style.display = admin ? 'flex' : 'none';
+  const cu = document.getElementById('cu-btn');
+  if (cu) cu.style.display = admin ? 'flex' : 'none';
   if (admin) tkContar();
 }
 
@@ -35866,6 +36057,322 @@ async function tkContar() {
 function tkAbrir() {
   document.getElementById('tk-full')?.classList.add('abierto');
   tkCargar();
+}
+
+// ── CUENTAS DE CLIENTES (solo equipo) ───────────────────────────────────────
+// Lo que Clientify llama «subcuentas»: todas las cuentas, su plan y su estado,
+// y un botón para entrar. Entrar abre una sesión REAL del cliente (actor token
+// de Clerk, ver api/cuentas.js), así que dentro se ve exactamente lo que él ve.
+let _cuTab = 'cuentas', _cuLista = null, _cuFiltro = '', _cuEstado = 'todas';
+
+function cuAbrir() {
+  document.getElementById('cu-full')?.classList.add('abierto');
+  cuTab(_cuTab);
+}
+function cuCerrar() { document.getElementById('cu-full')?.classList.remove('abierto'); }
+
+function cuTab(t) {
+  _cuTab = t;
+  document.querySelectorAll('.cu-tab').forEach(b => b.classList.toggle('act', b.dataset.cu === t));
+  if (t === 'cuentas') cuCargar();
+  else if (t === 'enlace') cuEnlace();
+  else cuAccesos();
+}
+
+function cuFecha(v, conHora) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+    + (conHora ? ' · ' + d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '');
+}
+function cuHace(v) {
+  if (!v) return 'nunca';
+  const dias = Math.floor((Date.now() - new Date(v).getTime()) / 86400000);
+  if (dias <= 0) return 'hoy';
+  if (dias === 1) return 'ayer';
+  if (dias < 30) return 'hace ' + dias + ' días';
+  return cuFecha(v);
+}
+
+async function cuCargar(forzar) {
+  const cont = document.getElementById('cu-cuerpo');
+  if (!cont) return;
+  if (!_cuLista || forzar) {
+    cont.innerHTML = '<div class="cu-mini" style="padding:24px 0">Cargando cuentas…</div>';
+    try {
+      const r = await fetchAuth('/api/cuentas?lista=1');
+      const d = await leerRespuesta(r);
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      _cuLista = d.cuentas || [];
+    } catch (e) {
+      // Una lista vacía diría «no hay cuentas». Aquí se dice lo que pasó.
+      cont.innerHTML = emptyAgua('alert', 'No se pudieron cargar las cuentas', esc(String(e.message || e)),
+        '<button class="btn-pri sm" onclick="cuCargar(true)">Reintentar</button>');
+      return;
+    }
+  }
+  cuPintar();
+}
+
+function cuPintar() {
+  const cont = document.getElementById('cu-cuerpo');
+  if (!cont || !_cuLista) return;
+  const propias = _cuLista.filter(c => !c.es_equipo && !c.miembro_de);
+  const n = k => propias.filter(c => c.estado === k).length;
+  const q = _cuFiltro.trim().toLowerCase();
+  const filas = _cuLista.filter(c => {
+    if (_cuEstado === 'miembros') { if (!c.miembro_de) return false; }
+    else if (c.miembro_de || c.es_equipo) return false;
+    if (_cuEstado !== 'todas' && _cuEstado !== 'miembros' && c.estado !== _cuEstado) return false;
+    if (!q) return true;
+    return [c.nombre, c.correo, c.empresa, c.enlace].some(v => String(v || '').toLowerCase().includes(q));
+  });
+  const opc = [['todas', 'Todas'], ['activa', 'Activas'], ['prueba', 'En prueba'], ['prueba vencida', 'Prueba vencida'], ['gratis', 'Gratis'], ['suspendida', 'Suspendidas'], ['miembros', 'Miembros de equipo']];
+  cont.innerHTML =
+    '<div class="cu-kpis">' +
+      '<div class="cu-kpi"><b>' + propias.length + '</b><span>Cuentas</span></div>' +
+      '<div class="cu-kpi"><b style="color:var(--success)">' + n('activa') + '</b><span>Activas (pago)</span></div>' +
+      '<div class="cu-kpi"><b style="color:var(--blue)">' + n('prueba') + '</b><span>En prueba</span></div>' +
+      '<div class="cu-kpi"><b>' + (n('gratis') + n('prueba vencida')) + '</b><span>Gratis o prueba vencida</span></div>' +
+      '<div class="cu-kpi"><b>' + propias.filter(c => c.enlace).length + '</b><span>Llegaron por enlace</span></div>' +
+    '</div>' +
+    '<div class="cu-barra">' +
+      '<input id="cu-q" placeholder="Buscar por nombre, empresa o correo…" value="' + esc(_cuFiltro) + '" oninput="_cuFiltro=this.value;cuPintarTabla()">' +
+      '<button class="dd-btn" id="cu-estado-btn" onclick="cuElegirEstado(this)">' + esc((opc.find(o => o[0] === _cuEstado) || opc[0])[1]) + ' ▾</button>' +
+      '<button class="btn-sec sm" onclick="cuCargar(true)">' + icn('refresh', 13) + ' Actualizar</button>' +
+    '</div>' +
+    '<div class="cu-scroll" id="cu-tabla-wrap"></div>';
+  window._cuOpcEstado = opc;
+  cuPintarTabla(filas);
+}
+
+function cuElegirEstado(btn) {
+  const opc = window._cuOpcEstado || [];
+  ddAbrir(btn, opc.map(([k, t]) => ({ id: k, name: t })), _cuEstado, v => { _cuEstado = v; cuPintar(); });
+}
+
+function cuPintarTabla(filasDadas) {
+  const wrap = document.getElementById('cu-tabla-wrap');
+  if (!wrap) return;
+  let filas = filasDadas;
+  if (!filas) {
+    const q = _cuFiltro.trim().toLowerCase();
+    filas = (_cuLista || []).filter(c => {
+      if (_cuEstado === 'miembros') { if (!c.miembro_de) return false; }
+      else if (c.miembro_de || c.es_equipo) return false;
+      if (_cuEstado !== 'todas' && _cuEstado !== 'miembros' && c.estado !== _cuEstado) return false;
+      return !q || [c.nombre, c.correo, c.empresa, c.enlace].some(v => String(v || '').toLowerCase().includes(q));
+    });
+  }
+  if (!filas.length) {
+    wrap.innerHTML = emptyAgua('users', 'Ninguna cuenta con ese filtro', 'Prueba con otro nombre o cambia el estado.');
+    return;
+  }
+  wrap.innerHTML = '<table class="cu-tabla"><thead><tr>' +
+      '<th>Cuenta</th><th>Estado</th><th class="cu-opc">Vence</th><th class="cu-opc">Origen</th><th class="cu-opc">Última actividad</th><th></th>' +
+    '</tr></thead><tbody>' +
+    filas.slice(0, 300).map(c => {
+      const planTxt = c.plan === 'agency' || c.plan === 'agencia' ? 'Agency' : c.plan === 'pro' || c.plan === 'individual' ? 'Pro' : c.plan === 'trial' ? 'Prueba Pro' : 'Gratis';
+      const vence = c.hasta ? cuFecha(c.hasta) : '—';
+      const vencida = c.hasta && new Date(c.hasta) < new Date();
+      return '<tr>' +
+        '<td><div class="cu-nombre">' + esc(c.empresa || c.nombre || c.correo) + '</div>' +
+          '<div class="cu-mini">' + esc(c.empresa ? (c.nombre ? c.nombre + ' · ' : '') + c.correo : (c.nombre ? c.correo : '')) + '</div>' +
+          (c.miembro_de ? '<div class="cu-mini">Miembro del equipo de ' + esc(c.miembro_de) + '</div>' : '') +
+          (c.onboarding === 'a medias' ? '<div class="cu-mini" style="color:var(--warning)">Alta sin terminar</div>' : '') +
+        '</td>' +
+        '<td><span class="cu-chip ' + esc(c.estado.replace(' ', '-')) + '">' + esc(c.estado.charAt(0).toUpperCase() + c.estado.slice(1)) + '</span>' +
+          '<div class="cu-mini" style="margin-top:3px">' + planTxt + (c.origen_plan === 'cortesia' ? ' · cortesía' : '') + '</div></td>' +
+        '<td class="cu-opc"><span' + (vencida ? ' style="color:var(--danger)"' : '') + '>' + vence + '</span></td>' +
+        '<td class="cu-opc">' + (c.enlace ? '<span class="cu-chip prueba">' + icn('link', 11) + ' ' + esc(c.enlace) + '</span>' : '<span class="cu-mini">Directo</span>') +
+          '<div class="cu-mini" style="margin-top:3px">Creada ' + cuFecha(c.creada) + '</div></td>' +
+        '<td class="cu-opc">' + cuHace(c.ultima_actividad || c.ultima_entrada) +
+          (c.ultimo_acceso ? '<div class="cu-mini">Soporte: ' + cuHace(c.ultimo_acceso.inicio) + '</div>' : '') + '</td>' +
+        '<td style="text-align:right;white-space:nowrap">' +
+          '<button class="btn-ghost sm" onclick="cuDiagnosticar(\'' + esc(c.id) + '\')" title="Radiografía de solo lectura">' + icn('search', 13) + '</button> ' +
+          (c.es_equipo ? '' : '<button class="btn-sec sm" onclick="cuEntrar(\'' + esc(c.id) + '\')">' + icn('enter', 13) + ' Iniciar sesión</button>') +
+        '</td></tr>';
+    }).join('') + '</tbody></table>' +
+    (filas.length > 300 ? '<div class="cu-mini" style="padding:10px">Se muestran 300 de ' + filas.length + '. Afina la búsqueda.</div>' : '');
+}
+
+function cuDiagnosticar(id) {
+  dxAbrir();
+  setTimeout(() => dxVer(id), 60);
+}
+
+// Entrar pide para qué: si el cliente pregunta quién entró y por qué, la
+// respuesta tiene que estar escrita (queda en acceso_cuentas).
+function cuEntrar(id) {
+  const c = (_cuLista || []).find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('cu-entrar')?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = 'cu-entrar';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:480px;padding:22px 24px">' +
+    '<div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px">Entrar a la cuenta de ' + esc(c.empresa || c.nombre || c.correo) + '</div>' +
+    '<div class="cu-mini" style="margin-bottom:14px">Verás y harás todo como si fueras el cliente, durante una hora como mucho. Tu sesión se cierra mientras tanto y vuelves con «Volver a mi cuenta».</div>' +
+    '<div class="cu-campo"><label for="cu-motivo">¿Para qué entras?</label>' +
+      '<input id="cu-motivo" placeholder="Asesoría, revisión de su pipeline, ticket de soporte…" maxlength="300"></div>' +
+    '<div id="cu-entrar-err" style="display:none;color:var(--danger);font-size:var(--fs-xs);margin-bottom:10px"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+      '<button class="btn-ghost sm" onclick="document.getElementById(\'cu-entrar\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="cu-entrar-btn" onclick="cuEntrarYa(\'' + esc(c.id) + '\')">' + icn('enter', 13) + ' Iniciar sesión</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('cu-motivo')?.focus(), 50);
+  document.getElementById('cu-motivo').addEventListener('keydown', e => { if (e.key === 'Enter') cuEntrarYa(c.id); });
+}
+
+async function cuEntrarYa(id) {
+  const btn = document.getElementById('cu-entrar-btn');
+  const err = document.getElementById('cu-entrar-err');
+  const motivo = String(document.getElementById('cu-motivo')?.value || '').trim();
+  if (motivo.length < 3) { err.textContent = 'Escribe para qué entras.'; err.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Abriendo…';
+  try {
+    const r = await fetchAuth('/api/cuentas', { method: 'POST', body: JSON.stringify({ accion: 'entrar', cuenta: id, motivo }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok || !d.ticket) throw new Error(d.error || ('HTTP ' + r.status));
+    cambiarDeCuentaConTicket(d.ticket);
+  } catch (e) {
+    err.textContent = String(e.message || e); err.style.display = 'block';
+    btn.disabled = false; btn.innerHTML = icn('enter', 13) + ' Iniciar sesión';
+  }
+}
+
+async function cuAccesos() {
+  const cont = document.getElementById('cu-cuerpo');
+  if (!cont) return;
+  cont.innerHTML = '<div class="cu-mini" style="padding:24px 0">Cargando…</div>';
+  try {
+    const r = await fetchAuth('/api/cuentas?accesos=1');
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    const filas = d.accesos || [];
+    if (!filas.length) { cont.innerHTML = emptyAgua('eye', 'Todavía nadie ha entrado a una cuenta', 'Cada entrada queda aquí con quién, cuándo y para qué.'); return; }
+    cont.innerHTML = '<div class="cu-mini" style="margin-bottom:10px">Cada vez que alguien del equipo entra a una cuenta queda anotado. Es lo que se le responde a un cliente que pregunta quién entró.</div>' +
+      '<div class="cu-scroll"><table class="cu-tabla"><thead><tr><th>Cuenta</th><th>Quién</th><th>Motivo</th><th>Entró</th><th class="cu-opc">Salió</th></tr></thead><tbody>' +
+      filas.map(a => '<tr><td>' + esc(a.cuenta_email || a.cuenta_id) + '</td><td>' + esc(a.admin_email || '') + '</td><td>' + esc(a.motivo || '—') + '</td>' +
+        '<td>' + cuFecha(a.inicio, true) + '</td><td class="cu-opc">' + (a.fin ? cuFecha(a.fin, true) : '<span class="cu-mini">sin «volver» (venció sola)</span>') + '</td></tr>').join('') +
+      '</tbody></table></div>';
+  } catch (e) {
+    cont.innerHTML = emptyAgua('alert', 'No se pudo leer el registro', esc(String(e.message || e)), '<button class="btn-pri sm" onclick="cuAccesos()">Reintentar</button>');
+  }
+}
+
+// ── Enlace de registro ──────────────────────────────────────────────────────
+const CU_BIENVENIDA_EJEMPLO = 'Hola {nombre},\n\nBienvenido a Acuarius. Es un gusto acompañarte en estos primeros días.\n\nNos contaste que quieres: «{objetivo}».\n\nCon eso te preparamos los 2 o 3 pasos exactos para empezar. Si prefieres verlo en vivo, agendamos 15 minutos juntos y lo dejamos funcionando en tu cuenta.\n\nRespóndenos por aquí y coordinamos.\n\nMientras tanto, te dejamos un video corto para que aproveches tu prueba.';
+
+async function cuEnlace() {
+  const cont = document.getElementById('cu-cuerpo');
+  if (!cont) return;
+  cont.innerHTML = '<div class="cu-mini" style="padding:24px 0">Cargando tu enlace…</div>';
+  let e;
+  try {
+    const r = await fetchAuth('/api/cuentas?enlace=1');
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    e = d.enlace;
+  } catch (err) {
+    cont.innerHTML = emptyAgua('alert', 'No se pudo cargar tu enlace', esc(String(err.message || err)), '<button class="btn-pri sm" onclick="cuEnlace()">Reintentar</button>');
+    return;
+  }
+  cont.innerHTML =
+    '<div class="cu-caja">' +
+      '<h3>' + icn('link', 16) + ' Registro personalizado · Prueba de 14 días</h3>' +
+      '<p class="cu-mini">Comparte este enlace para que tus clientes activen su prueba gratis. Cada cuenta que se registre por aquí queda marcada con tu enlace en la lista de cuentas.</p>' +
+      '<div class="cu-url"><input id="cu-url" readonly value="' + esc(e.url) + '">' +
+        '<button class="btn-pri sm" onclick="cuCopiar()">' + icn('copy', 13) + ' Copiar</button>' +
+        '<a class="btn-sec sm" href="' + esc(e.url) + '" target="_blank" rel="noopener" style="text-decoration:none">' + icn('external', 13) + ' Ver</a>' +
+      '</div>' +
+      '<div class="cu-mini" style="margin-top:8px">' + (e.registros || 0) + ' ' + ((e.registros || 0) === 1 ? 'cuenta registrada' : 'cuentas registradas') + ' con este enlace.</div>' +
+    '</div>' +
+
+    '<div class="cu-caja">' +
+      '<h3>' + icn('edit', 16) + ' Personalizar</h3>' +
+      '<p class="cu-mini">El título se ve en la página de registro. La bienvenida es el primer mensaje que la persona ve en el chat de soporte al terminar el alta; lo firma «Equipo de Soporte — Acuarius».</p>' +
+      '<div class="cu-dos">' +
+        '<div class="cu-campo"><label for="cu-slug">Dirección del enlace</label>' +
+          '<div class="cu-pref"><span>app.acuarius.app/registro/</span><input id="cu-slug" value="' + esc(e.slug) + '" maxlength="40"></div></div>' +
+        '<div class="cu-campo"><label for="cu-titulo">Título en la página (opcional)</label>' +
+          '<input id="cu-titulo" value="' + esc(e.titulo || '') + '" maxlength="120" placeholder="Ej.: Tu prueba de Acuarius con Seizo Group"></div>' +
+      '</div>' +
+      '<div class="cu-campo"><label for="cu-bienvenida">Mensaje de bienvenida</label>' +
+        '<textarea id="cu-bienvenida" maxlength="3000" placeholder="' + esc(CU_BIENVENIDA_EJEMPLO) + '">' + esc(e.bienvenida || '') + '</textarea>' +
+        '<div class="cu-mini">Vacío usa el mensaje de siempre. Puedes escribir {nombre}, {empresa} y {objetivo}: se cambian por lo que la persona contó en su alta.</div></div>' +
+      '<div class="cu-campo"><label for="cu-video">Video de bienvenida (YouTube o Vimeo, opcional)</label>' +
+        '<input id="cu-video" value="' + esc(e.video_url || '') + '" placeholder="Vacío usa el video de la prueba de 14 días de la Academia"></div>' +
+      '<div id="cu-enlace-err" style="display:none;color:var(--danger);font-size:var(--fs-xs);margin-bottom:10px"></div>' +
+      '<button class="btn-pri sm" id="cu-guardar" onclick="cuGuardarEnlace()">Guardar cambios</button>' +
+    '</div>' +
+
+    '<div class="cu-caja">' +
+      '<h3>' + icn('send', 16) + ' Enviar por correo</h3>' +
+      '<p class="cu-mini">Le llega un correo con tu enlace y tu nota. Si responde, la respuesta te llega a ti.</p>' +
+      '<div class="cu-dos">' +
+        '<div class="cu-campo"><label for="cu-env-nombre">Nombre</label><input id="cu-env-nombre" maxlength="80" placeholder="Ana"></div>' +
+        '<div class="cu-campo"><label for="cu-env-email">Correo</label><input id="cu-env-email" type="email" placeholder="ana@empresa.com"></div>' +
+      '</div>' +
+      '<div class="cu-campo"><label for="cu-env-nota">Nota personal (opcional)</label>' +
+        '<textarea id="cu-env-nota" style="min-height:90px" maxlength="1200" placeholder="Como hablamos, aquí tienes tu acceso para que pruebes el agente con tus leads."></textarea></div>' +
+      '<div id="cu-env-err" style="display:none;font-size:var(--fs-xs);margin-bottom:10px"></div>' +
+      '<button class="btn-pri sm" id="cu-env-btn" onclick="cuEnviarEnlace()">' + icn('send', 13) + ' Enviar invitación</button>' +
+    '</div>';
+}
+
+function cuCopiar() {
+  const v = document.getElementById('cu-url')?.value || '';
+  navigator.clipboard.writeText(v).then(() => showToast('Enlace copiado', 'success'))
+    .catch(() => { document.getElementById('cu-url')?.select(); showToast('Cópialo con Ctrl+C', 'info'); });
+}
+
+async function cuGuardarEnlace() {
+  const btn = document.getElementById('cu-guardar');
+  const err = document.getElementById('cu-enlace-err');
+  err.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    const r = await fetchAuth('/api/cuentas', { method: 'POST', body: JSON.stringify({
+      accion: 'enlace',
+      slug: document.getElementById('cu-slug').value,
+      titulo: document.getElementById('cu-titulo').value,
+      bienvenida: document.getElementById('cu-bienvenida').value,
+      video_url: document.getElementById('cu-video').value,
+    }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast('Enlace guardado', 'success');
+    cuEnlace();
+  } catch (e) {
+    err.textContent = String(e.message || e); err.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Guardar cambios';
+  }
+}
+
+async function cuEnviarEnlace() {
+  const btn = document.getElementById('cu-env-btn');
+  const out = document.getElementById('cu-env-err');
+  const email = String(document.getElementById('cu-env-email').value || '').trim();
+  if (!email) { out.style.color = 'var(--danger)'; out.textContent = 'Escribe el correo.'; out.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  try {
+    const r = await fetchAuth('/api/cuentas', { method: 'POST', body: JSON.stringify({
+      accion: 'enviar-enlace', email,
+      nombre: document.getElementById('cu-env-nombre').value,
+      nota: document.getElementById('cu-env-nota').value,
+    }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    out.style.color = 'var(--success)'; out.textContent = 'Enviado a ' + email + '.'; out.style.display = 'block';
+    ['cu-env-nombre', 'cu-env-email', 'cu-env-nota'].forEach(id => { document.getElementById(id).value = ''; });
+  } catch (e) {
+    out.style.color = 'var(--danger)'; out.textContent = String(e.message || e); out.style.display = 'block';
+  }
+  btn.disabled = false; btn.innerHTML = icn('send', 13) + ' Enviar invitación';
 }
 
 function tkCerrar() {

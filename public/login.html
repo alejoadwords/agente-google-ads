@@ -338,6 +338,13 @@ body{
 </style>
 </head>
 <body>
+<!-- Cambio de cuenta en curso (ver canjearCambioDeCuenta). Tapa el formulario
+     para que nadie escriba su contraseña mientras la sesión está cambiando. -->
+<div id="cambio-aviso" style="display:none;position:fixed;inset:0;z-index:50;background:var(--bg);align-items:center;justify-content:center;flex-direction:column;gap:14px;font-family:var(--font);padding:24px;text-align:center">
+  <span class="sp cambio-sp" style="border-color:var(--blue-md);border-top-color:var(--blue);width:26px;height:26px"></span>
+  <div class="cambio-txt" style="font-size:15px;color:var(--text);max-width:420px">Cambiando de cuenta…</div>
+  <a class="cambio-btn" href="/" style="display:none;color:var(--blue);font-weight:600;text-decoration:none">Volver a la app</a>
+</div>
 <!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PX26PNPJ"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
@@ -489,6 +496,54 @@ function waitForClerk(t=6000){
   });
 }
 
+// ── Cambio de cuenta (entrar a la de un cliente, o volver a la propia) ──────
+// La app deja aquí un ticket de Clerk en sessionStorage —nunca en la URL, que
+// acaba en el historial y en los registros— y manda a esta página. Canjearlo
+// exige que no haya otra sesión abierta, así que primero se cierra la actual:
+// signOut() navega por su cuenta, así que se le pide volver aquí mismo y el
+// ticket sigue esperando en la pestaña. Ver api/cuentas.js.
+const CAMBIO_KEY = 'acuarius_cambio_ticket';
+let _cambiando = false;
+async function canjearCambioDeCuenta(c) {
+  const ticket = sessionStorage.getItem(CAMBIO_KEY);
+  if (!ticket) return false;
+  _cambiando = true;
+  const aviso = document.getElementById('cambio-aviso');
+  if (aviso) aviso.style.display = 'flex';
+  // Tope de vueltas: si el cierre de sesión no surtiera efecto, esto no puede
+  // quedarse recargando la página para siempre.
+  const vueltas = Number(sessionStorage.getItem(CAMBIO_KEY + '_n') || 0);
+  if (vueltas > 2) {
+    sessionStorage.removeItem(CAMBIO_KEY); sessionStorage.removeItem(CAMBIO_KEY + '_n');
+    cambioFallo('No se pudo cerrar la sesión anterior. Vuelve a intentarlo desde la app.');
+    return true;
+  }
+  try {
+    if (c.session) {
+      sessionStorage.setItem(CAMBIO_KEY + '_n', String(vueltas + 1));
+      await c.signOut({ redirectUrl: '/login.html?cambio=1' });
+      return true;
+    }
+    const si = await c.client.signIn.create({ strategy: 'ticket', ticket });
+    sessionStorage.removeItem(CAMBIO_KEY); sessionStorage.removeItem(CAMBIO_KEY + '_n');
+    if (si.status !== 'complete') throw new Error('Clerk dejó el acceso en «' + si.status + '»');
+    await c.setActive({ session: si.createdSessionId });
+    window.location.href = '/';
+  } catch (e) {
+    sessionStorage.removeItem(CAMBIO_KEY); sessionStorage.removeItem(CAMBIO_KEY + '_n');
+    cambioFallo(e?.errors?.[0]?.long_message || e?.errors?.[0]?.message || e?.message || 'error desconocido');
+  }
+  return true;
+}
+function cambioFallo(motivo) {
+  const aviso = document.getElementById('cambio-aviso');
+  if (aviso) {
+    aviso.querySelector('.cambio-txt').textContent = 'No se pudo cambiar de cuenta: ' + motivo;
+    aviso.querySelector('.cambio-sp').style.display = 'none';
+    aviso.querySelector('.cambio-btn').style.display = 'inline-block';
+  }
+}
+
 async function initClerk() {
   // Con el script del Frontend API, Clerk se auto-inicializa
   // Solo hay que esperar el evento y luego llamar load()
@@ -497,6 +552,7 @@ async function initClerk() {
       await window.Clerk.load();
       clerk = window.Clerk;
       console.log('Clerk ready:', clerk.user?.primaryEmailAddress?.emailAddress || 'no user');
+      if (await canjearCambioDeCuenta(clerk)) return;
       if(clerk.user) window.location.href = '/';
     } catch(e) {
       console.error('Clerk load error:', e);
@@ -507,6 +563,7 @@ async function initClerk() {
     try {
       await window.Clerk.load();
       clerk = window.Clerk;
+      if (_cambiando || await canjearCambioDeCuenta(clerk)) return;
       if(clerk.user) window.location.href = '/';
     } catch(e) {}
   }
@@ -570,7 +627,7 @@ async function submitRegister() {
     });
     if(r.status === 'complete') {
       await clerk.setActive({ session: r.createdSessionId });
-      window.location.href = '/';
+      window.location.href = '/registro?continuar=1';
     } else if(r.status === 'missing_requirements') {
       await clerk.client.signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       showVerify();
@@ -604,7 +661,7 @@ async function verifyCode() {
     const r = await clerk.client.signUp.attemptEmailAddressVerification({ code: c });
     if(r.status === 'complete') {
       await clerk.setActive({ session: r.createdSessionId });
-      window.location.href = '/';
+      window.location.href = '/registro?continuar=1';
     }
   } catch(e) {
     const i = document.getElementById('vc');
