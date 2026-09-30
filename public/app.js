@@ -36108,13 +36108,16 @@ async function cuCargar(forzar) {
       if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
       _cuLista = d.cuentas || [];
     } catch (e) {
+      if (_cuTab !== 'cuentas') return;
       // Una lista vacía diría «no hay cuentas». Aquí se dice lo que pasó.
       cont.innerHTML = emptyAgua('alert', 'No se pudieron cargar las cuentas', esc(String(e.message || e)),
         '<button class="btn-pri sm" onclick="cuCargar(true)">Reintentar</button>');
       return;
     }
   }
-  cuPintar();
+  // La lista tarda (pagina todo Clerk): si mientras tanto se cambió de
+  // pestaña, pintarla ahora taparía la que se está mirando.
+  if (_cuTab === 'cuentas') cuPintar();
 }
 
 function cuPintar() {
@@ -36254,6 +36257,7 @@ async function cuAccesos() {
     const r = await fetchAuth('/api/cuentas?accesos=1');
     const d = await leerRespuesta(r);
     if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    if (_cuTab !== 'accesos') return;
     const filas = d.accesos || [];
     if (!filas.length) { cont.innerHTML = emptyAgua('eye', 'Todavía nadie ha entrado a una cuenta', 'Cada entrada queda aquí con quién, cuándo y para qué.'); return; }
     cont.innerHTML = '<div class="cu-mini" style="margin-bottom:10px">Cada vez que alguien del equipo entra a una cuenta queda anotado. Es lo que se le responde a un cliente que pregunta quién entró.</div>' +
@@ -36279,7 +36283,9 @@ async function cuEnlace() {
     const d = await leerRespuesta(r);
     if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
     e = d.enlace;
+    if (_cuTab !== 'enlace') return;
   } catch (err) {
+    if (_cuTab !== 'enlace') return;
     cont.innerHTML = emptyAgua('alert', 'No se pudo cargar tu enlace', esc(String(err.message || err)), '<button class="btn-pri sm" onclick="cuEnlace()">Reintentar</button>');
     return;
   }
