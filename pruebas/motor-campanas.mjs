@@ -185,6 +185,19 @@ console.log('\nEl tope diario del proveedor\n');
   chk('el lote se recorta al hueco, no se manda de más',
       a.m.cuenta.sobresVistos === 30, `sobres=${a.m.cuenta.sobresVistos}`);
 
+  // Lo que fallaba de verdad (30-09-2026): los envíos no decían de qué cuenta
+  // eran, `por_cuenta` no subía, y en la corrida siguiente —10 minutos
+  // después— la «mitad por cuenta» volvía a estar entera. El 29-09 salieron
+  // 259 correos y el reparto registró 3.
+  chk('lo enviado queda apuntado a SU cuenta',
+      a.m.cuota.porCuenta['user-1'] === 30, JSON.stringify(a.m.cuota.porCuenta));
+  process.env.EMAIL_TOPE_DIARIO = '100'; process.env.EMAIL_RESERVA = '40';
+  await cron(peticion, respuesta());      // la corrida de 10 minutos después, mismo día
+  process.env.EMAIL_TOPE_DIARIO = '1000000'; process.env.EMAIL_RESERVA = '0';
+  chk('y la corrida siguiente NO le da otra mitad: sigue en 30',
+      a.m.cola.filter(x => x.status === 'sent').length === 30,
+      `envió ${a.m.cola.filter(x => x.status === 'sent').length} en total`);
+
   // Con el día ya gastado por otros, esta campaña no manda NADA.
   const b = await conTope(100, 40, { cuotaUsada: 60 });
   chk('con el día agotado no sale ni uno',

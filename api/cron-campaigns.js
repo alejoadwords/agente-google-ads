@@ -168,12 +168,16 @@ function armarCorreo(campaign, lead) {
  * responde `data[i]` para el sobre `i`, y de ahí sale el resend_id con el que
  * después se cruzan las aperturas.
  */
-async function enviarLote(sobres) {
+async function enviarLote(sobres, usuario) {
+  // Con la cuenta: sin ella `por_cuenta` no subía, el tope de «media cuota por
+  // cuenta» (_correo.js) volvía a cero en cada corrida y una sola cuenta podía
+  // llevarse el cupo de campañas de todas en un día (el 29-09-2026 salieron
+  // 259 correos y el reparto registró 3).
   const r = await enviarResendLote('cron-campaigns', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(sobres),
-  });
+  }, usuario);
   const d = await r.json().catch(() => ({}));
   if (!r.ok) {
     const motivo = JSON.stringify(d).slice(0, 150);
@@ -507,7 +511,7 @@ export default async function handler(req, res) {
           const tanda = sobres.slice(i, i + cabe);
           if (hueco != null) hueco -= tanda.length;
           if (i > 0) await esperar(PAUSA_RESEND);
-          const res = await enviarLote(tanda.map(s => s.payload));
+          const res = await enviarLote(tanda.map(s => s.payload), c.user_id);
           // Si Resend está saturado, seguir mandándole lotes solo empeora la
           // cosa y se come la corrida. Se corta aquí y el resto queda pendiente.
           if (res[0]?.status === 'reintentar') {

@@ -7,7 +7,7 @@
 
 import crypto from 'crypto';
 import { abrirConexion, cifrar } from './_cifrado.js';
-import { enviarResend } from './_correo.js';
+import { enviarResend, huecoParaCampana } from './_correo.js';
 import { leerNps } from './_nps.js';
 import { emailHtml } from './_email-layout.js';
 import { latir } from './_latido.js';
@@ -111,14 +111,50 @@ async function volcarBitacora() {
 // Resend admite unas 2 peticiones por segundo. Con los trabajos corriendo en
 // paralelo, varios podrían llamar a la vez y ganarse un 429 que marca el paso
 // como fallido. Este turno los pone en fila —solo a ellos— sin frenar el resto.
+// ── El cupo diario de correo, por cuenta ─────────────────────────────────────
+// Los correos que una automatización le manda a un lead cuentan contra el mismo
+// cupo por cuenta que las campañas (_correo.js: ninguna cuenta se lleva más de
+// la mitad de lo que queda para correo masivo). Antes no lo miraban: una
+// cuenta con automatizaciones grandes podía agotar el tope diario y comerse la
+// reserva de las confirmaciones de cita de todos.
+//
+// Se consulta UNA vez por cuenta y corrida y se descuenta en memoria: mirar la
+// base en cada correo serían cientos de consultas por corrida. Se guarda la
+// PROMESA, no el número, para que dos trabajos de la misma cuenta que corren a
+// la vez no pregunten dos veces.
+let _cupoCorreo = new Map();
+export function reiniciarCupoCorreo() { _cupoCorreo = new Map(); }
+export async function tomarCupoCorreo(userId) {
+  if (!_cupoCorreo.has(userId)) {
+    _cupoCorreo.set(userId, huecoParaCampana(userId).then(h => ({ hueco: h })).catch(() => ({ hueco: null })));
+  }
+  const c = await _cupoCorreo.get(userId);
+  // null = no se pudo consultar. Mismo criterio que las campañas: quedarse sin
+  // mandar nada por una consulta caída es peor que pasarse un poco del tope.
+  if (c.hueco == null) return true;
+  if (c.hueco <= 0) return false;
+  c.hueco--;
+  return true;
+}
+
+// Mañana a las 00:05 UTC, que es cuando el cupo diario vuelve a empezar.
+function mananaUTC() {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + 1);
+  d.setUTCHours(0, 5, 0, 0);
+  return d.toISOString();
+}
+
 let _turno = Promise.resolve();
 let _ultimoEnvio = 0;
-function fetchResend(opciones) {
+function fetchResend(opciones, usuario) {
   const mio = _turno.then(async () => {
     const falta = 500 - (Date.now() - _ultimoEnvio);
     if (falta > 0) await esperar(falta);
     _ultimoEnvio = Date.now();
-    return enviarResend('cron-automations', opciones);
+    // Con la cuenta: sin ella el reparto del cupo diario por cuenta
+    // (_correo.js) no subía y no frenaba a nadie (30-09-2026).
+    return enviarResend('cron-automations', opciones, usuario);
   });
   // La cola no se puede romper por un fallo de un envío: el siguiente tiene que
   // poder tomar su turno igual.
@@ -183,7 +219,7 @@ async function actionSendEmail(step, lead, auto, job) {
       from: 'Acuarius <notificaciones@app.acuarius.app>', to: [lead.email], subject, html,
       headers: { 'List-Unsubscribe': '<' + baja + '>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
     }),
-  });
+  }, auto?.user_id);
   const d = await r.json().catch(() => ({}));
   if (!r.ok) return { result: 'failed', detail: 'Resend: ' + JSON.stringify(d).slice(0, 200) };
   // Registrar el envío — la rama "¿Abrió el email?" busca el último send del job
@@ -277,7 +313,7 @@ async function actionSendNps(step, lead, auto) {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: 'Acuarius <notificaciones@app.acuarius.app>', to: [lead.email], subject, html }),
-  });
+  }, auto?.user_id);
   const d = await r.json().catch(() => ({}));
   if (!r.ok) return { result: 'failed', detail: 'Resend: ' + JSON.stringify(d).slice(0, 200) };
   return { result: 'sent', detail: 'Encuesta NPS a ' + lead.email };
@@ -345,7 +381,7 @@ async function actionPedirResena(step, lead, auto) {
         subject: renderVars(step.asunto || '¿Nos dejas una reseña?', lead),
         html,
       }),
-    });
+    }, auto?.user_id);
     if (!r.ok) return { result: 'failed', detail: 'Resend: ' + (await r.text()).slice(0, 200) };
     envio = { result: 'sent', detail: 'Reseña pedida a ' + lead.email };
   }
@@ -686,6 +722,19 @@ async function ejecutarTrabajo(job, auto, lead) {
           break;
         }
 
+        // Cupo diario de correo de la cuenta: si está agotado, el paso ESPERA
+        // a mañana en vez de perderse o de gastar la reserva de los demás.
+        // Solo cuenta si de verdad va a salir un correo a este lead.
+        const vaCorreo = (step.type === 'send_email' || step.type === 'send_nps' ||
+          (step.type === 'pedir_resena' && step.canal !== 'whatsapp')) && lead.email && !dadoDeBajaCorreo(lead);
+        if (vaCorreo && !(await tomarCupoCorreo(auto.user_id))) {
+          const runAt = mananaUTC();
+          await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { step_index: i, run_at: runAt }, 'return=minimal');
+          await log(auto.id, job.user_id, lead.id, i, 'cupo', 'scheduled', 'Cupo diario de correo de la cuenta agotado — continúa mañana');
+          jobDone = false;
+          break;
+        }
+
         if (step.type === '_goto') { i = step.to; continue; }
 
         if (step.type === '_branch') {
@@ -896,6 +945,8 @@ export default async function handler(req, res) {
   // La entrada, aparte de la salida: un latido que solo se escribe al terminar
   // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
   await latir('cron-automations', { empezo: new Date().toISOString() });
+  // El cupo en memoria es de ESTA corrida: el de la anterior ya no vale.
+  reiniciarCupoCorreo();
 
   try {
     const enqueued = await processInactiveTriggers();
@@ -910,4 +961,4 @@ export default async function handler(req, res) {
 }
 
 // Para las pruebas: los tres pasos que envían correo, y que deben respetar la baja.
-export { actionSendEmail, actionSendNps, actionPedirResena };
+export { actionSendEmail, actionSendNps, actionPedirResena, ejecutarTrabajo };
