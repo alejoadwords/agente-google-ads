@@ -43,4 +43,13 @@ ok((eng.match(/pistasDelContacto\([^)]*suyos\.length \? suyos : hist\)/g) || [])
 ok(/pistasDelContacto\(userId, agent\.client_id \|\| null, todos\)/.test(eng), 'el probador, de toda la conversación del ensayo');
 const cron = (await import('node:fs')).readFileSync(new URL('../api/cron-seguimiento.js', import.meta.url), 'utf8');
 ok(/conocidoDelContacto\(/.test(cron), 'y el seguimiento de los 10 minutos tampoco vuelve a pedir el número');
+console.log('No se cobra un dato por lo que pidió');
+for (const [t, e] of [
+  ['Perfecto, tenemos varias opciones. Antes de mostrarle las disponibles, ¿cuál es su nombre? Y un número de contacto', true],
+  ['Primero necesito su número para enviarle las fotos.', true],
+  ['Para poder enviarle las fotos necesito su celular.', true],
+  ['Claro, le mando las fotos del de Riomar. Y para que un asesor le confirme disponibilidad, ¿me comparte un número?', false],
+  ['Antes de agendar la visita, revise que el horario le sirva. ¿Le queda bien el martes?', false],
+]) ok(m.condicionaAlDato(t) === e, (e ? 'se detecta: ' : 'pasa: ') + t.slice(0, 60));
+ok((eng.match(/if \(condicionaAlDato\(/g) || []).length === 2, 'el guardián está en producción y en el probador');
 process.exit(mal ? 1 : 0);
