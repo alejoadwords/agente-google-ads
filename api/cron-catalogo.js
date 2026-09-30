@@ -22,6 +22,10 @@ import { fuentesConWeb, sincronizarLote } from './_catalogo.js';
 import { latir } from './_latido.js';
 
 const CRON_SECRET = process.env.CRON_SECRET;
+// Edge: 25 s. Un lote de una fuente tarda hasta ~10 s (lee fichas de una web
+// ajena), así que no se empieza uno nuevo pasados 12 s. Las que queden van
+// primero en la siguiente pasada (fuentesConWeb ordena por ultimo_sync).
+export const TOPE_MS = 12 * 1000;
 
 export default async function handler(req) {
   if (req.headers.get('authorization') !== `Bearer ${CRON_SECRET}`) {
@@ -32,11 +36,20 @@ export default async function handler(req) {
   // cron-errores tiene que poder decir que esta sí arrancó.
   await latir('cron-catalogo', { empezo: new Date().toISOString() });
 
-  const fuentes = await fuentesConWeb();
+  let fuentes;
+  try {
+    fuentes = await fuentesConWeb();
+  } catch (e) {
+    await latir('cron-catalogo', { error: true }, e?.message || String(e));
+    return new Response(JSON.stringify({ error: e?.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+  const hasta = Date.now() + (Number(process.env.CATALOGO_TOPE_MS) || TOPE_MS);   // la variable solo existe en la prueba
   const resumen = [];
   let fallos = 0;
   let barridosTotal = 0;
+  let sinTiempo = 0;
   for (const f of fuentes) {
+    if (Date.now() >= hasta) { sinTiempo++; continue; }
     try {
       const r = await sincronizarLote(f);
       if (r.error) fallos++;
@@ -56,9 +69,10 @@ export default async function handler(req) {
     }
   }
 
-  await latir('cron-catalogo', { fuentes: fuentes.length, fallos, barridos: barridosTotal });
+  await latir('cron-catalogo', { fuentes: fuentes.length, fallos, barridos: barridosTotal, sinTiempo },
+    sinTiempo ? sinTiempo + ' fuente(s) quedan para la próxima pasada' : null);
 
-  return new Response(JSON.stringify({ fuentes: fuentes.length, fallos, resumen }), {
+  return new Response(JSON.stringify({ fuentes: fuentes.length, fallos, sinTiempo, resumen }), {
     headers: { 'Content-Type': 'application/json' },
   });
 }

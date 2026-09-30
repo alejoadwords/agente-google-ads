@@ -397,11 +397,16 @@ export async function sincronizarLote(fuente) {
 }
 
 // Las fuentes que hay que mantener al día: las que leen de una web.
+// Las que llevan más tiempo sin sincronizar, primero: si el cron no alcanza a
+// todas, la próxima pasada empieza por las que se quedaron fuera. Antes el
+// orden era fijo y las últimas no se actualizaban nunca (30-09-2026).
+// Y un fallo LANZA: devolver [] hacía que el latido dijera «0 fuentes, todo
+// bien» mientras ningún catálogo se actualizaba.
 export async function fuentesConWeb() {
   const r = await fetch(
-    `${SUPABASE_URL}/rest/v1/client_knowledge_sources?activo=is.true&base_url=not.is.null&select=*`,
+    `${SUPABASE_URL}/rest/v1/client_knowledge_sources?activo=is.true&base_url=not.is.null&select=*&order=ultimo_sync.asc.nullsfirst,id.asc`,
     { headers: sb() }
-  ).catch(() => null);
-  if (!r || !r.ok) return [];
-  return (await r.json().catch(() => [])) || [];
+  );
+  if (!r.ok) throw new Error('no se pudieron leer las fuentes del catálogo (Supabase ' + r.status + ')');
+  return (await r.json()) || [];
 }

@@ -16,7 +16,21 @@ import { latir } from './_latido.js';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const CRON_SECRET  = process.env.CRON_SECRET;
-const LOTE = 120;
+// Páginas y tope de tiempo (la función edge tiene 25 s). Antes se tomaban las
+// 120 más antiguas y las de cuentas con el aviso apagado se saltaban SIN
+// marcar: con más de 120 de esas, las de cuentas con el aviso encendido no se
+// miraban nunca y la ventana se les cerraba sin aviso (30-09-2026).
+export const PAGINA = 200;
+export const TOPE_MS = 18 * 1000;
+// Un lead cerrado ya no necesita rescate. La etapa vive en `stage` (y el
+// cierre sella closed_at): el cron pedía `status`, una columna que no existe,
+// PostgREST devolvía error, el lead se daba por inexistente y la conversación
+// se marcaba como avisada SIN crear la tarea. Desde el 14-08-2026 el aviso de
+// ventana no creó ni una.
+const CERRADAS = ['ganado', 'perdido', 'won', 'lost', 'cerrado', 'descartado'];
+export function leadCerrado(lead) {
+  return !!lead?.closed_at || CERRADAS.includes(String(lead?.stage || '').toLowerCase());
+}
 
 function sb() {
   return {
@@ -48,80 +62,78 @@ export default async function handler(req) {
   // «La base no contestó» no es «no hay ventanas por cerrarse»: confundirlo
   // deja a un cliente sin el aviso y la ventana de 24 h se le cierra sin que
   // nadie lo supiera. Ver api/_pedir.js.
-  let convs;
-  try {
-    convs = await pedirLista(
-      `${SUPABASE_URL}/rest/v1/chat_conversations?channel=eq.whatsapp&status=neq.resolved` +
-      `&aviso_ventana_at=is.null&lead_id=not.is.null` +
-      `&last_inbound_at=gt.${encodeURIComponent(desde)}&last_inbound_at=lt.${encodeURIComponent(hasta)}` +
-      `&select=id,user_id,lead_id,contact_name,last_inbound_at&order=last_inbound_at.asc&limit=${LOTE}`,
-      sb(), 'las conversaciones con la ventana por cerrarse'
-    );
-  } catch (e) {
-    await latir('cron-ventana', { error: true }, e?.message || String(e));
-    return new Response(JSON.stringify({ error: e?.message || 'no se pudo leer las conversaciones' }), {
-      status: 500, headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (!convs.length) {
-    await latir('cron-ventana', { avisadas: 0, sin_ventanas: true });
-    return new Response(JSON.stringify({ ok: true, avisadas: 0 }));
-  }
+  const tope = ahora + (Number(process.env.VENTANA_TOPE_MS) || TOPE_MS);   // la variable solo existe en la prueba
+  const marcar = (id) => fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${id}`, {
+    method: 'PATCH', headers: sb(), body: JSON.stringify({ aviso_ventana_at: new Date().toISOString() }),
+  });
 
   // La regla es por cuenta: se pide una vez por cuenta, no una por conversación.
   const reglas = new Map();
-  let avisadas = 0, saltadas = 0;
+  let avisadas = 0, saltadas = 0, revisadas = 0, errores = 0, sinTiempo = false;
 
-  for (const c of convs) {
+  for (let pagina = 0; ; pagina += PAGINA) {
+    if (Date.now() >= tope) { sinTiempo = true; break; }
+    // «La base no contestó» no es «no hay ventanas por cerrarse»: confundirlo
+    // deja a un cliente sin el aviso y la ventana de 24 h se le cierra sin que
+    // nadie lo supiera. Ver api/_pedir.js.
+    let convs;
     try {
-      if (!reglas.has(c.user_id)) reglas.set(c.user_id, await getRegla(c.user_id));
-      const regla = reglas.get(c.user_id);
-      if (!regla.ventana_24h) { saltadas++; continue; }
-
-      const quedanMs = new Date(c.last_inbound_at).getTime() + 24 * 3600000 - ahora;
-      const quedanH = quedanMs / 3600000;
-      // Todavía no toca: se deja para una pasada posterior, sin marcar nada.
-      if (quedanH > regla.ventana_horas_antes) continue;
-      // Ya caducó entre la consulta y aquí: avisar ahora no sirve de nada.
-      if (quedanH <= 0) {
-        await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${c.id}`, {
-          method: 'PATCH', headers: sb(),
-          body: JSON.stringify({ aviso_ventana_at: new Date().toISOString() }),
-        }).catch(() => {});
-        saltadas++; continue;
-      }
-
-      const lead = await fetch(
-        `${SUPABASE_URL}/rest/v1/leads?id=eq.${c.lead_id}&select=id,name,phone,client_id,status`,
-        { headers: sb() }
-      ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
-
-      // Ganado o perdido ya no necesita rescate.
-      if (!lead || ['ganado', 'perdido'].includes(String(lead.status || '').toLowerCase())) {
-        await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${c.id}`, {
-          method: 'PATCH', headers: sb(),
-          body: JSON.stringify({ aviso_ventana_at: new Date().toISOString() }),
-        }).catch(() => {});
-        saltadas++; continue;
-      }
-
-      await crearTareaVentana(c.user_id, lead, c, Math.max(1, Math.round(quedanH)));
-
-      // Se marca DESPUÉS de crear la tarea. Al revés, un fallo al crearla
-      // dejaría la conversación marcada como avisada sin que nadie lo sepa.
-      await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${c.id}`, {
-        method: 'PATCH', headers: sb(),
-        body: JSON.stringify({ aviso_ventana_at: new Date().toISOString() }),
-      }).catch(() => {});
-      avisadas++;
+      convs = await pedirLista(
+        `${SUPABASE_URL}/rest/v1/chat_conversations?channel=eq.whatsapp&status=neq.resolved` +
+        `&aviso_ventana_at=is.null&lead_id=not.is.null` +
+        `&last_inbound_at=gt.${encodeURIComponent(desde)}&last_inbound_at=lt.${encodeURIComponent(hasta)}` +
+        `&select=id,user_id,lead_id,contact_name,last_inbound_at&order=last_inbound_at.asc,id.asc&limit=${PAGINA}&offset=${pagina}`,
+        sb(), 'las conversaciones con la ventana por cerrarse'
+      );
     } catch (e) {
-      console.error('cron-ventana', c.id, e?.message);
+      await latir('cron-ventana', { error: true }, e?.message || String(e));
+      return new Response(JSON.stringify({ error: e?.message || 'no se pudo leer las conversaciones' }), {
+        status: 500, headers: { 'Content-Type': 'application/json' },
+      });
     }
+
+    for (const c of convs) {
+      if (Date.now() >= tope) { sinTiempo = true; break; }
+      revisadas++;
+      try {
+        if (!reglas.has(c.user_id)) reglas.set(c.user_id, await getRegla(c.user_id));
+        const regla = reglas.get(c.user_id);
+        if (!regla.ventana_24h) { saltadas++; continue; }
+
+        const quedanMs = new Date(c.last_inbound_at).getTime() + 24 * 3600000 - ahora;
+        const quedanH = quedanMs / 3600000;
+        // Todavía no toca: se deja para una pasada posterior, sin marcar nada.
+        if (quedanH > regla.ventana_horas_antes) continue;
+        // Ya caducó entre la consulta y aquí: avisar ahora no sirve de nada.
+        if (quedanH <= 0) { await marcar(c.id).catch(() => {}); saltadas++; continue; }
+
+        const rl = await fetch(
+          `${SUPABASE_URL}/rest/v1/leads?id=eq.${c.lead_id}&select=id,name,phone,client_id,stage,closed_at`,
+          { headers: sb() }
+        );
+        // Si no se pudo leer el lead NO se marca: se reintenta en la próxima
+        // pasada. Un fallo nunca puede pasar por «ya avisado».
+        if (!rl.ok) throw new Error('no se pudo leer el lead (Supabase ' + rl.status + ')');
+        const lead = (await rl.json())?.[0] || null;
+
+        // Borrado, o ganado/perdido: ya no necesita rescate.
+        if (!lead || leadCerrado(lead)) { await marcar(c.id).catch(() => {}); saltadas++; continue; }
+
+        // Lanza si no pudo crearla: entonces no se marca, y se reintenta.
+        await crearTareaVentana(c.user_id, lead, c, Math.max(1, Math.round(quedanH)));
+        await marcar(c.id).catch(() => {});
+        avisadas++;
+      } catch (e) {
+        errores++;
+        console.error('cron-ventana', c.id, e?.message);
+      }
+    }
+    if (sinTiempo || convs.length < PAGINA) break;
   }
 
-  await latir('cron-ventana', { avisadas, saltadas, revisadas: convs.length });
-  return new Response(JSON.stringify({ ok: true, avisadas, saltadas, revisadas: convs.length }), {
+  const fallo = [errores ? errores + ' aviso(s) no se pudieron crear' : '', sinTiempo ? 'no alcanzó el tiempo' : ''].filter(Boolean).join(' · ');
+  await latir('cron-ventana', { avisadas, saltadas, revisadas, errores, sinTiempo }, fallo || null);
+  return new Response(JSON.stringify({ ok: true, avisadas, saltadas, revisadas, errores, sinTiempo }), {
     headers: { 'Content-Type': 'application/json' },
   });
 }

@@ -21,9 +21,6 @@
     },
     "api/cron-tasks.js": {
       "maxDuration": 60
-    },
-    "api/cron-notas.js": {
-      "maxDuration": 60
     }
   },
   "headers": [

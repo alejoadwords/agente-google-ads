@@ -126,41 +126,41 @@ export async function crearTareaPrimerContacto(userId, lead, comercial) {
 // Tarea de "se cierra la ventana". Se separa de la de primer contacto porque
 // tiene otro título, otro plazo y otro motivo: aquí no se trata de atender
 // rápido, sino de que después de esa hora ya no se puede escribir.
+// Devuelve 'creada' o 'ya_habia', y LANZA si no pudo: antes se tragaba el
+// error y devolvía null, cron-ventana marcaba la conversación como avisada
+// igual, y el aviso se perdía sin que nadie lo supiera (30-09-2026).
 export async function crearTareaVentana(userId, lead, conv, quedan) {
-  try {
-    if (!lead?.id) return null;
-    // Una sola por lead: si ya hay una viva, apilar otra es ruido.
-    // El filtro por título se hace aquí y no en la consulta: PostgREST querría
-    // el patrón codificado y un espacio mal escapado se traga la condición
-    // entera, con lo que nunca encontraría la tarea previa y las duplicaría.
-    const abiertas = await fetch(
-      `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${encodeURIComponent(userId)}&lead_id=eq.${lead.id}` +
-      `&done=is.false&cancelled_at=is.null&type=eq.task&select=id,title&limit=20`,
-      { headers: sb() }
-    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-    if ((abiertas || []).some(t => String(t.title || '').startsWith(TITULO_VENTANA))) return null;
+  if (!lead?.id) throw new Error('sin lead');
+  // Una sola por lead: si ya hay una viva, apilar otra es ruido.
+  // El filtro por título se hace aquí y no en la consulta: PostgREST querría
+  // el patrón codificado y un espacio mal escapado se traga la condición
+  // entera, con lo que nunca encontraría la tarea previa y las duplicaría.
+  const ra = await fetch(
+    `${SUPABASE_URL}/rest/v1/activities?user_id=eq.${encodeURIComponent(userId)}&lead_id=eq.${lead.id}` +
+    `&done=is.false&cancelled_at=is.null&type=eq.task&select=id,title&limit=20`,
+    { headers: sb() }
+  );
+  if (!ra.ok) throw new Error('no se pudieron leer sus tareas (Supabase ' + ra.status + ')');
+  const abiertas = await ra.json();
+  if ((abiertas || []).some(t => String(t.title || '').startsWith(TITULO_VENTANA))) return 'ya_habia';
 
-    const vence = new Date(new Date(conv.last_inbound_at).getTime() + 24 * 3600000).toISOString();
-    const rows = await fetch(`${SUPABASE_URL}/rest/v1/activities`, {
-      method: 'POST', headers: sb(),
-      body: JSON.stringify({
-        user_id: userId,
-        client_id: lead.client_id || null,
-        lead_id: lead.id,
-        type: 'task',
-        title: `${TITULO_VENTANA}: ${lead.name || conv.contact_name || 'Contacto'}`,
-        description:
-          `Quedan unas ${quedan} horas para poder escribirle libremente por WhatsApp.\n` +
-          'Pasado ese plazo hay que esperar a que escriba él, o usar una plantilla aprobada por Meta.' +
-          (lead.phone ? `\nTeléfono: ${lead.phone}` : ''),
-        due_at: vence,
-        done: false,
-      }),
-    }).then(r => (r.ok ? r.json() : null)).catch(() => null);
-
-    return rows?.[0] || null;
-  } catch (e) {
-    console.error('crearTareaVentana:', e);
-    return null;
-  }
+  const vence = new Date(new Date(conv.last_inbound_at).getTime() + 24 * 3600000).toISOString();
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/activities`, {
+    method: 'POST', headers: sb(),
+    body: JSON.stringify({
+      user_id: userId,
+      client_id: lead.client_id || null,
+      lead_id: lead.id,
+      type: 'task',
+      title: `${TITULO_VENTANA}: ${lead.name || conv.contact_name || 'Contacto'}`,
+      description:
+        `Quedan unas ${quedan} horas para poder escribirle libremente por WhatsApp.\n` +
+        'Pasado ese plazo hay que esperar a que escriba él, o usar una plantilla aprobada por Meta.' +
+        (lead.phone ? `\nTeléfono: ${lead.phone}` : ''),
+      due_at: vence,
+      done: false,
+    }),
+  });
+  if (!r.ok) throw new Error('no se pudo crear la tarea (Supabase ' + r.status + ')');
+  return 'creada';
 }

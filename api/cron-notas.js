@@ -35,6 +35,11 @@ const sb = () => ({
 });
 
 const HORAS = 24;
+// Es edge: se corta a los 25 s, y el `maxDuration: 60` que tenía en
+// vercel.json no aplicaba a una función edge. Con muchas personas se cortaba a
+// mitad sin decir nada. Ahora se deja de tomar personas nuevas a los 18 s; las
+// que queden salen en la pasada de la tarde o al día siguiente (30-09-2026).
+export const TOPE_MS = 18 * 1000;
 const DIAS_MAXIMO = 7;   // una nota de hace un mes ya no se recuerda: se archiva sola
 
 /** El correo de esa persona: del equipo, o de Clerk si es el dueño. */
@@ -98,10 +103,14 @@ export default async function handler(req) {
     (bandejas[clave] = bandejas[clave] || []).push(n);
   }
 
-  const resumen = { personas: 0, recordadas: 0, sin_correo: 0, fallidos: 0 };
+  const resumen = { personas: 0, recordadas: 0, sin_correo: 0, fallidos: 0, sin_tiempo: 0 };
+  const hasta = Date.now() + (Number(process.env.NOTAS_TOPE_MS) || TOPE_MS);   // la variable solo existe en la prueba
   for (const clave of Object.keys(bandejas)) {
     const [ownerId, para] = clave.split('|');
     const suyas = bandejas[clave];
+    // El reloj se mira ANTES de apartar el día de esta persona: si se apartara
+    // y la función se cortara después, se quedaría sin su recordatorio de hoy.
+    if (Date.now() >= hasta) { resumen.sin_tiempo++; continue; }
 
     // Una persona, un recordatorio al día. Aunque le lleguen notas nuevas a lo
     // largo del día, no se le escribe dos veces.
@@ -111,7 +120,8 @@ export default async function handler(req) {
     if (!correo) { resumen.sin_correo++; continue; }
 
     // Los nombres de los leads, para que el correo diga de quién es cada nota.
-    const ids = [...new Set(suyas.map(n => n.lead_id).filter(Boolean))];
+    // Solo de las 8 que se enseñan: pedir cientos de ids en una URL falla.
+    const ids = [...new Set(suyas.slice(0, 8).map(n => n.lead_id).filter(Boolean))];
     const leads = ids.length ? await fetch(
       `${SUPABASE_URL}/rest/v1/leads?id=in.(${ids.join(',')})&select=id,name,company`,
       { headers: sb() }).then(r => (r.ok ? r.json() : [])).catch(() => []) : [];
@@ -172,18 +182,19 @@ export default async function handler(req) {
     // Se marcan aunque el correo falle: si no, mañana se vuelve a intentar con
     // las mismas y la persona acaba recibiendo el mismo recordatorio a diario.
     // El fallo del correo ya queda registrado por `_correo.js`.
-    for (const n of suyas) {
-      await fetch(`${SUPABASE_URL}/rest/v1/lead_activities?id=eq.${n.id}`, {
-        method: 'PATCH', headers: sb(),
-        body: JSON.stringify({ metadata: { ...(n.metadata || {}), recordada_at: new Date().toISOString() } }),
-      }).catch(() => {});
-    }
+    // En paralelo: una por una, en serie, se comían el tiempo de la función.
+    const marca = new Date().toISOString();
+    await Promise.all(suyas.map(n => fetch(`${SUPABASE_URL}/rest/v1/lead_activities?id=eq.${n.id}`, {
+      method: 'PATCH', headers: sb(),
+      body: JSON.stringify({ metadata: { ...(n.metadata || {}), recordada_at: marca } }),
+    }).catch(() => {})));
 
     resumen.personas++;
     resumen.recordadas += cuantas;
     if (!ok) resumen.fallidos++;
   }
 
-  await latir('cron-notas', resumen, resumen.fallidos ? resumen.fallidos + ' correo(s) no salieron' : null);
+  const fallo = [resumen.fallidos ? resumen.fallidos + ' correo(s) no salieron' : '', resumen.sin_tiempo ? resumen.sin_tiempo + ' persona(s) quedan para la próxima pasada' : ''].filter(Boolean).join(' · ');
+  await latir('cron-notas', resumen, fallo || null);
   return new Response(JSON.stringify({ ok: true, ...resumen }), { headers: { 'Content-Type': 'application/json' } });
 }
