@@ -213,6 +213,9 @@ async function processLeadgen(value) {
     platform: lead.platform,
   });
   if (formName) pauta['Formulario'] = formName.slice(0, 120);
+  // El id del lead en Meta: es la llave con la que Meta une una venta
+  // posterior con el anuncio que trajo al lead (api/_conversiones.js).
+  pauta['ID de lead de Meta'] = leadgenId;
 
   // Igual que el webhook genérico: el lead va al ámbito y al tablero que tiene
   // configurados la conexión, no al `null` fijo que lo dejaba en el tablero

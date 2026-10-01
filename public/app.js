@@ -10508,6 +10508,7 @@ function novIr(destino) {
         case 'plantillas':    navGo('marketing'); setTimeout(() => crmSetView('plantillas'), 150); break;
         case 'paginas':       navGo('marketing'); setTimeout(() => crmSetView('paginas'), 150); break;
         case 'pauta':         navGo('marketing'); setTimeout(() => crmSetView('pauta'), 150); break;
+        case 'pauta-ventas':  navGo('marketing'); setTimeout(() => { pautaVista = 'ventas'; crmSetView('pauta'); }, 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'campanas':      navGo('marketing'); setTimeout(() => crmSetView('campaigns'), 150); break;
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
@@ -39417,7 +39418,7 @@ function lpCerrarEditor() {
 // nunca ve los tokens de Google ni de Meta.
 
 let pautaDatos = null;
-let pautaVista = 'campanas';       // campanas | diagnostico | conexiones | cartera
+let pautaVista = 'campanas';       // campanas | diagnostico | conexiones | cartera | ventas
 let pautaDias = 30;
 let pautaCargando = false;
 
@@ -39471,6 +39472,7 @@ function pautaRender() {
         '<button class="pauta-tab' + (pautaVista === 'diagnostico' ? ' active' : '') + '" onclick="pautaIr(\'diagnostico\')">Diagnóstico</button>' +
         (hayCartera ? '<button class="pauta-tab' + (pautaVista === 'cartera' ? ' active' : '') + '" onclick="pautaIr(\'cartera\')">Cartera</button>' : '') +
         '<button class="pauta-tab' + (pautaVista === 'conexiones' ? ' active' : '') + '" onclick="pautaIr(\'conexiones\')">Conexiones</button>' +
+        '<button class="pauta-tab' + (pautaVista === 'ventas' ? ' active' : '') + '" onclick="pautaIr(\'ventas\')">Ventas a la pauta</button>' +
       '</div>' +
     '</div>' +
     '<div class="pauta-filtros">' +
@@ -39503,6 +39505,9 @@ function pautaError(msg) {
 async function pautaCargar() {
   const c = document.getElementById('pauta-cuerpo');
   if (!c || pautaCargando) return;
+  // Ventas a la pauta no depende del período ni de las campañas: tiene su
+  // propia carga (api/conversiones.js).
+  if (pautaVista === 'ventas') { ventasCargar(); return; }
   pautaCargando = true;
   c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + (pautaVista === 'diagnostico' ? ' Revisando tus campañas…' : ' Leyendo tus campañas…') + '</div>';
 
@@ -39851,6 +39856,226 @@ function pautaPintarConexiones(d) {
     '</div></div>';
 
   c.innerHTML = html;
+}
+
+// ── Ventas a la pauta ───────────────────────────────────────────────────────
+// Cada lead que se gana se le reporta a Meta y a Google como una venta, con su
+// valor. La cola, el envío y los reintentos viven en el servidor
+// (api/_conversiones.js); aquí se configura y se ve qué pasó con cada venta.
+let ventasDatos = null;
+
+async function ventasCargar() {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo la configuración…</div>';
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/conversiones' + (cliente ? '?client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok) { pautaError(d.error || 'No pudimos leer la configuración de ventas.'); return; }
+    ventasDatos = d;
+    ventasPintar();
+  } catch (e) {
+    pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+const VENTAS_ESTADO = {
+  enviado:   ['Enviada', 'pauta-pill-ok'],
+  pendiente: ['En cola', 'pauta-pill-off'],
+  rechazado: ['Rechazada', 'pauta-pill-mal'],
+  vencido:   ['Fuera de plazo', 'pauta-pill-ojo'],
+  sin_datos: ['Sin datos', 'pauta-pill-ojo'],
+  cancelado: ['No se envió', 'pauta-pill-off'],
+};
+
+function ventasPintar() {
+  const c = document.getElementById('pauta-cuerpo');
+  const d = ventasDatos;
+  if (!c || !d) return;
+  const puede = !!d.puede_configurar;
+  const cliente = crmAmbitoCliente();
+  let html = '<div class="pauta-aviso">' + icn('trend', 15) + '<div style="flex:1">' +
+    '<b>Cada lead que ganas se le reporta a Meta y a Google como una venta, con su valor.</b> ' +
+    'Así cada red sabe qué campañas venden de verdad —no solo cuáles traen leads— y puede optimizar hacia eso. ' +
+    'Se envían solas cada 10 minutos.' + (cliente ? ' Esta configuración es solo de este cliente.' : '') + '</div></div>';
+  if (!puede) {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) +
+      '<div style="flex:1">Esto lo configura el dueño de la cuenta o un administrador. Aquí puedes ver qué se envió.</div></div>';
+  }
+  html += '<div class="pauta-conxs">' + ventasTarjetaMeta(d.meta, puede) + ventasTarjetaGoogle(d.google, puede) + '</div>';
+  html += ventasRegistro(d.envios || [], puede);
+  c.innerHTML = html;
+}
+
+function ventasTarjetaMeta(m, puede) {
+  const top = (pill) => '<div class="pauta-conx-top"><div class="pauta-conx-logo meta">M</div>' +
+    '<div style="flex:1;min-width:0"><div class="pauta-conx-t">Meta ' + pill + '</div>' +
+    '<div class="pauta-conx-s">API de conversiones · Facebook e Instagram</div></div></div>';
+  const form = (conToken) =>
+    '<div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">' +
+      '<label style="font-size:var(--fs-xs);color:var(--muted);font-weight:600">ID del conjunto de datos (pixel)' +
+        '<input class="auto-input" id="vm-dataset" inputmode="numeric" autocomplete="off" placeholder="Ej. 1234567890123456" value="' + esc(m.dataset || '') + '" style="margin-top:4px"></label>' +
+      '<label style="font-size:var(--fs-xs);color:var(--muted);font-weight:600">Token de la API de conversiones' +
+        '<input class="auto-input" id="vm-token" type="password" autocomplete="off" placeholder="' + (conToken ? 'Guardado — déjalo vacío para conservarlo' : 'Pégalo aquí') + '" style="margin-top:4px"></label>' +
+      '<label style="font-size:var(--fs-xs);color:var(--muted);font-weight:600">Código de prueba (opcional)' +
+        '<input class="auto-input" id="vm-prueba" autocomplete="off" placeholder="Ej. TEST12345" value="' + esc(m.prueba || '') + '" style="margin-top:4px"></label>' +
+      '<div class="pauta-conx-nota" style="margin:0">Mientras haya un código de prueba, las ventas van a <b>Probar eventos</b> y no cuentan en tus informes. Bórralo para empezar a contar.</div>' +
+      '<div id="vm-err" style="display:none;color:var(--danger);font-size:var(--fs-sm)"></div>' +
+      '<div class="pauta-conx-btns" style="margin:0"><button class="btn-pri" id="vm-guardar" onclick="ventasMetaGuardar()">Guardar y comprobar</button>' +
+        (conToken ? '<button class="btn-ghost" onclick="ventasPintar()">Cancelar</button>' : '') + '</div>' +
+    '</div>' +
+    '<details style="margin-top:10px;font-size:var(--fs-sm);color:var(--muted)"><summary style="cursor:pointer;font-weight:600">Dónde saco estos datos</summary>' +
+      '<ol style="margin:8px 0 0;padding-left:18px;line-height:1.6">' +
+        '<li>Entra a <b>business.facebook.com</b> → <b>Administrador de eventos</b> y elige el conjunto de datos (tu pixel). Su ID aparece debajo del nombre.</li>' +
+        '<li>En <b>Configuración</b>, busca <b>API de conversiones</b> → <b>Generar token de acceso</b>, y cópialo.</li>' +
+        '<li>Para probar sin ensuciar informes: pestaña <b>Probar eventos</b> → copia el código que empieza por TEST.</li>' +
+      '</ol></details>';
+
+  if (!m.conectado) {
+    return '<div class="pauta-conx ojo">' + top('<span class="pauta-pill pauta-pill-off">Sin configurar</span>') +
+      (puede ? form(false) : '<div class="pauta-conx-nota">Todavía no se envían ventas a Meta.</div>') + '</div>';
+  }
+  if (window._ventasEditandoMeta && puede) {
+    return '<div class="pauta-conx viva">' + top('') + form(true) + '</div>';
+  }
+  const pill = m.prueba ? '<span class="pauta-pill pauta-pill-ojo">En prueba</span>'
+    : m.activo ? '<span class="pauta-pill pauta-pill-ok">Enviando</span>'
+    : '<span class="pauta-pill pauta-pill-off">En pausa</span>';
+  return '<div class="pauta-conx viva">' + top(pill) +
+    '<div class="pauta-conx-nota" style="margin-top:6px">Conjunto de datos <b>' + esc(m.nombre || m.dataset) + '</b>' +
+      (m.nombre ? ' <span style="color:var(--muted2)">· ' + esc(m.dataset) + '</span>' : '') + '</div>' +
+    (m.prueba ? '<div class="pauta-conx-nota ojo">Con el código de prueba <b>' + esc(m.prueba) + '</b> las ventas van a Probar eventos y <b>no cuentan</b> en tus informes. Quítalo cuando las veas llegar.</div>' : '') +
+    '<div class="pauta-conx-nota">Llaves que se usan, de mejor a peor: el lead del formulario de Meta, el clic a WhatsApp, el clic en tu web y, si no hay ninguno, teléfono y correo cifrados.</div>' +
+    '<div id="vm-err" style="display:none;color:var(--danger);font-size:var(--fs-sm)"></div>' +
+    (puede ? '<div class="pauta-conx-btns">' +
+      '<button class="btn-' + (m.activo ? 'ghost' : 'pri') + '" onclick="ventasMetaActivar(' + (!m.activo) + ', this)">' + (m.activo ? 'Pausar' : 'Activar') + '</button>' +
+      (m.prueba ? '<button class="btn-ghost" onclick="ventasMetaProbar(this)">' + icn('send', 13) + ' Mandar una de prueba</button>' : '') +
+      '<button class="btn-ghost" onclick="window._ventasEditandoMeta=true;ventasPintar()">Cambiar datos</button>' +
+      '<button class="pauta-link" onclick="ventasMetaQuitar(this)">Quitar</button>' +
+    '</div>' : '') +
+  '</div>';
+}
+
+function ventasTarjetaGoogle(g, puede) {
+  const top = (pill) => '<div class="pauta-conx-top"><div class="pauta-conx-logo google">G</div>' +
+    '<div style="flex:1;min-width:0"><div class="pauta-conx-t">Google Ads ' + pill + '</div>' +
+    '<div class="pauta-conx-s">Importación de conversiones' + (g.cuenta ? ' · ' + esc(g.cuenta) : '') + '</div></div></div>';
+  if (!g.conectado) {
+    return '<div class="pauta-conx ojo">' + top('<span class="pauta-pill pauta-pill-off">Sin conectar</span>') +
+      '<div class="pauta-conx-nota">Primero conecta tu cuenta de Google Ads y elige cuál es.</div>' +
+      '<div class="pauta-conx-btns"><button class="btn-ghost" onclick="pautaIr(\'conexiones\')">Ir a Conexiones</button></div></div>';
+  }
+  const pill = g.activo ? '<span class="pauta-pill pauta-pill-ok">Enviando</span>' : '<span class="pauta-pill pauta-pill-off">Apagado</span>';
+  return '<div class="pauta-conx viva">' + top(pill) +
+    (g.activo
+      ? '<div class="pauta-conx-nota">Las ventas se suben a la acción de conversión <b>«' + esc(g.accion || 'Venta en Acuarius') + '»</b> de tu cuenta, con el clic de Google del lead o, si no lo tiene, con su correo y teléfono cifrados.</div>' +
+        '<div class="pauta-conx-nota ojo">Para que Google <b>puje</b> por ventas y no solo las cuente, en Google Ads → Objetivos → Conversiones marca esa acción como <b>principal</b>.</div>'
+      : '<div class="pauta-conx-nota">Al activarlo creamos en tu cuenta de Google Ads la acción de conversión <b>«Venta en Acuarius»</b> y le subimos cada venta con su valor. No cambiamos nada más de tu cuenta.</div>') +
+    (g.de_la_cuenta ? '<div class="pauta-conx-nota">Es la conexión de toda la cuenta: activarla aquí la activa para todos los clientes que la usan.</div>' : '') +
+    '<div id="vg-err" style="display:none;color:var(--danger);font-size:var(--fs-sm)"></div>' +
+    (puede ? '<div class="pauta-conx-btns"><button class="btn-' + (g.activo ? 'ghost' : 'pri') + '" onclick="ventasGoogleActivar(' + (!g.activo) + ', this)">' +
+      (g.activo ? 'Apagar' : 'Activar envío de ventas') + '</button></div>' : '') +
+  '</div>';
+}
+
+function ventasRegistro(envios, puede) {
+  let html = '<div class="pauta-pasos-t" style="margin:22px 0 8px">Últimas ventas reportadas</div>';
+  if (!envios.length) {
+    return html + '<div class="pauta-vacio">Todavía no hay ventas en la cola. Aparecen aquí en cuanto ganes un lead con el envío activado.</div>';
+  }
+  html += '<div class="pauta-tabla-caja"><table class="pauta-tabla"><thead><tr>' +
+    '<th class="pauta-th">Cuándo</th><th class="pauta-th">Lead</th><th class="pauta-th">Red</th>' +
+    '<th class="pauta-th num">Valor</th><th class="pauta-th">Estado</th><th class="pauta-th">Detalle</th><th class="pauta-th"></th>' +
+    '</tr></thead><tbody>' +
+    envios.map(e => {
+      const st = VENTAS_ESTADO[e.estado] || [e.estado, 'pauta-pill-off'];
+      const cuando = e.ocurrio_at ? new Date(e.ocurrio_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '—';
+      const detalle = e.motivo || (e.llave ? 'Identificada por ' + e.llave : '');
+      const reintentable = puede && ['rechazado', 'sin_datos', 'pendiente'].includes(e.estado);
+      return '<tr>' +
+        '<td class="pauta-td" style="white-space:nowrap">' + esc(cuando) + '</td>' +
+        '<td class="pauta-td">' + (e.lead ? '<button class="pauta-link" onclick="crmAbrirFicha(\'' + esc(e.lead_id) + '\')">' + esc(e.lead) + '</button>' : '<span style="color:var(--muted2)">Lead borrado</span>') + '</td>' +
+        '<td class="pauta-td">' + pautaRedChip(e.red) + '</td>' +
+        '<td class="pauta-td num">' + (e.valor !== null && e.valor !== undefined ? pautaPlata(e.valor, e.moneda) : '—') + '</td>' +
+        '<td class="pauta-td"><span class="pauta-pill ' + st[1] + '">' + esc(st[0]) + '</span>' +
+          (e.estado === 'pendiente' && e.intentos ? '<div style="font-size:11px;color:var(--muted2)">intento ' + e.intentos + '</div>' : '') + '</td>' +
+        '<td class="pauta-td" style="font-size:12px;color:var(--muted);max-width:340px">' + esc(detalle) + '</td>' +
+        '<td class="pauta-td">' + (reintentable ? '<button class="btn-ghost sm" onclick="ventasReintentar(\'' + esc(e.id) + '\', this)">Reintentar</button>' : '') + '</td>' +
+      '</tr>';
+    }).join('') + '</tbody></table></div>';
+  return html;
+}
+
+function ventasErr(id, msg) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+  else showToast(msg, 'error');
+}
+
+async function ventasPost(cuerpo) {
+  const cliente = crmAmbitoCliente();
+  const r = await fetchAuth('/api/conversiones', { method: 'POST', body: JSON.stringify({ ...cuerpo, client_id: cliente || null }) });
+  const d = await leerRespuesta(r);
+  if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+
+async function ventasMetaGuardar() {
+  const btn = document.getElementById('vm-guardar');
+  const dataset = document.getElementById('vm-dataset')?.value || '';
+  const token = document.getElementById('vm-token')?.value || '';
+  const test_event_code = document.getElementById('vm-prueba')?.value || '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Comprobando con Meta…'; }
+  try {
+    const d = await ventasPost({ accion: 'meta-guardar', dataset, token, test_event_code });
+    window._ventasEditandoMeta = false;
+    showToast('Listo: Meta reconoce el conjunto ' + (d.nombre ? '«' + d.nombre + '»' : 'de datos'), 'success');
+    ventasCargar();
+  } catch (e) {
+    ventasErr('vm-err', e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar y comprobar'; }
+  }
+}
+
+async function ventasMetaActivar(activo, btn) {
+  if (btn) btn.disabled = true;
+  try { await ventasPost({ accion: 'meta-activar', activo }); ventasCargar(); }
+  catch (e) { ventasErr('vm-err', e.message); if (btn) btn.disabled = false; }
+}
+
+async function ventasMetaProbar(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    await ventasPost({ accion: 'meta-probar' });
+    showToast('Enviada. Mírala en Administrador de eventos → Probar eventos (tarda unos segundos).', 'success');
+  } catch (e) { ventasErr('vm-err', e.message); }
+  if (btn) { btn.disabled = false; btn.innerHTML = icn('send', 13) + ' Mandar una de prueba'; }
+}
+
+async function ventasMetaQuitar(btn) {
+  if (!confirm('¿Dejar de enviar ventas a Meta y borrar el token guardado?')) return;
+  if (btn) btn.disabled = true;
+  try { await ventasPost({ accion: 'meta-quitar' }); ventasCargar(); }
+  catch (e) { ventasErr('vm-err', e.message); if (btn) btn.disabled = false; }
+}
+
+async function ventasGoogleActivar(activo, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = activo ? 'Preparando tu cuenta de Google…' : 'Apagando…'; }
+  try {
+    await ventasPost({ accion: 'google-activar', activo });
+    if (activo) showToast('Listo: las ventas se subirán a «Venta en Acuarius» en tu Google Ads', 'success');
+    ventasCargar();
+  } catch (e) {
+    ventasErr('vg-err', e.message);
+    if (btn) { btn.disabled = false; btn.textContent = activo ? 'Activar envío de ventas' : 'Apagar'; }
+  }
+}
+
+async function ventasReintentar(id, btn) {
+  if (btn) btn.disabled = true;
+  try { await ventasPost({ accion: 'reintentar', id }); showToast('Vuelve a la cola: sale en los próximos 10 minutos', 'success'); ventasCargar(); }
+  catch (e) { showToast(e.message, 'error'); if (btn) btn.disabled = false; }
 }
 
 // Pedirle a la red a qué cuentas llega este permiso. Se pide al pulsar y no al

@@ -27,11 +27,12 @@ const el = () => ({ style: {}, textContent: '', title: '', disabled: false, inne
 console.log('\nEl selector del tablero\n');
 {
   const dom = { 'pipe-selector': el(), 'pipe-select': el(), 'pipe-select-txt': el() };
-  const f = new Function('document', 'crmPipelines', 'crmPipelineId', 'pipeAmbitoNombre',
+  // crmTodosActivo: «Todos los procesos» de la Lista (01-10-2026); aquí, apagado.
+  const f = new Function('document', 'crmPipelines', 'crmPipelineId', 'pipeAmbitoNombre', 'crmTodosActivo',
     cuerpo('function pipeRenderSelector() {') + '; return pipeRenderSelector;');
-  f({ getElementById: id => dom[id] }, [], null, () => null)();
+  f({ getElementById: id => dom[id] }, [], null, () => null, () => false)();
   ok(dom['pipe-selector'].style.display === 'flex' && dom['pipe-select'].style.display === 'none', 'sin procesos se ve el engranaje para crear el primero');
-  f({ getElementById: id => dom[id] }, [{ id: 'p1', name: 'Cierre de venta vehículos', is_default: true }], 'p1', () => null)();
+  f({ getElementById: id => dom[id] }, [{ id: 'p1', name: 'Cierre de venta vehículos', is_default: true }], 'p1', () => null, () => false)();
   ok(dom['pipe-select'].style.display === 'inline-flex' && dom['pipe-select-txt'].textContent === 'Cierre de venta vehículos', 'con uno, se ve su nombre (antes se escondía)');
 }
 
@@ -61,9 +62,10 @@ const leadsPide = async (clientId, cargada, clientes, pipes, actual, agencia = t
   let pedida = null;
   const f = new Function('crmAmbito', 'agencyActiveClientId', 'fetchAuth', 'crmPipelineId', 'crmPipelines', 'agencyClients', '_agencyCargada', 'esCuentaAgencia',
     'crmLeads', 'crmLeadsLoaded', 'crmFalloResuelto', 'crmFallo', 'console',
-    'let crmTodos;' + cuerpo('function crmCuentaSinCartera() {') + '\n' + cuerpo('async function crmLoadLeads() {') + '; return crmLoadLeads;');
+    'crmTodosActivo', 'crmAmbitoLeads', 'crmCargarEtapasTodas',
+    'let crmTodos, _leadsCargadosDe;' + cuerpo('function crmCuentaSinCartera() {') + '\n' + cuerpo('async function crmLoadLeads() {') + '; return crmLoadLeads;');
   await f(() => 'a', clientId, async (u) => { pedida = u; return { ok: false, status: 500, json: async () => ({}) }; }, actual, pipes, clientes, cargada, () => agencia,
-    [], false, () => {}, () => {}, { error() {}, warn() {} })();
+    [], false, () => {}, () => {}, { error() {}, warn() {} }, () => false, () => 'a', async () => true)();
   return pedida;
 };
 {

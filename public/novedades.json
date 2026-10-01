@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-01-ventas-a-la-pauta",
+      "fecha": "2026-10-01",
+      "tipo": "nuevo",
+      "titulo": "Tus ventas, reportadas a Meta y Google",
+      "texto": "Cada lead que ganas en Acuarius se le puede reportar a Meta y a Google Ads como una venta, con su valor. Así cada red sabe qué campañas venden de verdad, no solo cuáles traen leads, y puede optimizar hacia eso. Configúralo en Marketing → Plataformas de pauta → Ventas a la pauta: para Meta pegas el ID de tu pixel y un token del Administrador de eventos; para Google basta con activarlo. Ahí mismo ves cada venta enviada, y si alguna se rechazó, por qué.",
+      "accion": {
+        "texto": "Configurar",
+        "ir": "pauta-ventas"
+      }
+    },
+    {
       "id": "2026-10-01-movil-etapas-y-tableros",
       "fecha": "2026-10-01",
       "tipo": "arreglo",

@@ -185,6 +185,10 @@
     {
       "path": "/api/cron-catalogo",
       "schedule": "25,55 * * * *"
+    },
+    {
+      "path": "/api/cron-conversiones",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

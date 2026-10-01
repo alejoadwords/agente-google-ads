@@ -209,7 +209,7 @@ export function pautaDeReferral(ref) {
   const anuncio = corto(ref.headline) || corto(ref.source_id);
   if (anuncio) out['Anuncio'] = anuncio;
   if (corto(ref.source_id)) out['ID de anuncio'] = corto(ref.source_id);
-  if (corto(ref.ctwa_clid)) out['Clic de anuncio'] = corto(ref.ctwa_clid);
+  if (corto(ref.ctwa_clid)) { out['Clic de anuncio'] = corto(ref.ctwa_clid); out['Tipo de clic'] = 'ctwa_clid'; }
   // `source_type` es 'ad' o 'post': lo segundo es una publicación orgánica con
   // botón de WhatsApp, que NO es pauta y no debe contarse como tal.
   if (Object.keys(out).length) out['Plataforma'] = ref.source_type === 'post' ? 'Meta orgánico' : 'Meta';
@@ -226,6 +226,10 @@ export function camposDePauta(body) {
       const v = plano[a];
       if (v !== undefined && v !== null && String(v).trim() !== '') {
         out[destino] = String(v).trim().slice(0, 120);
+        // De qué clase es el clic: Google sube un gclid por un campo y un
+        // wbraid por otro, y Meta distingue el clic web del de WhatsApp. Sin
+        // esto, al reportar la venta habría que adivinarlo (api/_conversiones.js).
+        if (destino === 'Clic de anuncio') out['Tipo de clic'] = a;
         break;
       }
     }
