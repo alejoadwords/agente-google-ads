@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Campañas</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  La pantalla de Campañas con el CSS y las funciones REALES de public/ y
+  campañas de mentira de los tres canales (correo, WhatsApp y SMS) en todos
+  los estados: borrador, programada, en cola, enviando, pausada y enviada.
+
+  Arrancar con:  PUERTO=4183 node pruebas/servidor-boceto.mjs
+  Abrir:         http://localhost:4183/pruebas/banco-campanas.html
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle);color:var(--text)}
+  #crm-campaigns-view{display:flex !important;flex-direction:column;padding:18px 22px 80px}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:#0D0F1C;color:#fff;padding:9px 14px;z-index:5000;
+    display:flex;gap:10px;align-items:center;justify-content:center;font-size:12px;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:7px;padding:5px 10px;
+    font-family:inherit;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="crm-campaigns-view"></div>
+<div class="banco">
+  <span style="opacity:.6">BANCO ·</span>
+  <button onclick="conDatos('lleno')">con campañas</button>
+  <button onclick="conDatos('vacio')">sin campañas</button>
+  <button onclick="conDatos('sinsms')">cuenta sin SMS</button>
+  <button onclick="conDatos('error')">fallo al cargar</button>
+</div>
+
+<script>
+const hace = (d) => new Date(Date.now() - d * 86400000).toISOString();
+const CAMPANAS = [
+  { id: 'c1', name: 'Reactivación de leads fríos', channel: 'email', status: 'sent', subject: '{{nombre}}, ¿seguimos buscando tu apartamento?', body: 'Hola', stats: { total: 1840, sent: 1792, skipped: 41, failed: 7 }, created_at: hace(9), sent_at: hace(8) },
+  { id: 'c2', name: 'Lanzamiento Torre Norte', channel: 'whatsapp', status: 'sending', body: 'Hola {{nombre}}, ya abrimos la venta de Torre Norte…', stats: { total: 640, sent: 412, skipped: 18, failed: 2 }, created_at: hace(1), queued_at: hace(0.2) },
+  { id: 'c3', name: 'Recordatorio visita sábado', channel: 'sms', status: 'paused', body: 'Hola {{nombre}}, te esperamos el sábado a las 10 a.m. en la sala de ventas.', stats: { total: 300, sent: 100, skipped: 4, failed: 0, motivo_pausa: 'Sin créditos de SMS. Compra un paquete y reanúdala.' }, created_at: hace(2), queued_at: hace(2) },
+  { id: 'c4', name: 'Boletín de octubre', channel: 'email', status: 'queued', subject: 'Novedades de octubre en Certain', body: 'x', stats: { total: 2200 }, created_at: hace(0.5), scheduled_at: new Date(Date.now() + 2 * 86400000).toISOString() },
+  { id: 'c5', name: 'Encuesta post-visita', channel: 'sms', status: 'draft', body: '¿Cómo te fue en la visita? Responde del 1 al 5.', stats: {}, created_at: hace(0.1) },
+  { id: 'c6', name: 'Promo fin de mes', channel: 'email', status: 'draft', subject: '', body: '', stats: {}, created_at: hace(3) },
+  { id: 'c7', name: 'Bienvenida a nuevos inversionistas', channel: 'whatsapp', status: 'sent', body: 'Hola {{nombre}}…', stats: { total: 85, sent: 80, skipped: 5, failed: 0 }, created_at: hace(20), sent_at: hace(19) },
+];
+const SMS = { activo: true, proveedor: 'simulado', saldo: 100, mes: { enviados: 0, simulados: 100, creditos: 100 },
+  paquetes: [1000, 3000, 5000].map((c, i) => ({ creditos: c, usd: [8, 22, 35][i], pago: null })), movimientos: [] };
+let MODO = 'lleno';
+
+function conDatos(m) { MODO = m; _smsEstado = null; cmpRender(); }
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+  document.getElementById('estilos-reales').textContent = (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+  const trozo = (desde, hasta) => {
+    const a = js.indexOf(desde);
+    if (a < 0) throw new Error('No encontré en app.js: ' + desde);
+    const b = js.indexOf(hasta, a);
+    return js.slice(a, b > a ? b : js.length);
+  };
+  const codigo = [
+    (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
+    trozo('const ICN_PATHS = {', '\n};\n') + '\n};\n',
+    trozo('function emptyAgua(', '\n}\n') + '\n}\n',
+    trozo('function icn(', '\n}\n') + '\n}\n',
+    trozo('function confirmarAgua(', '\n}\n') + '\n}\n',
+    trozo('// ══ CAMPAÑAS MASIVAS (correo', '// ── Wizard de campaña'),
+    trozo('let _ddCerrar = null;', '\nfunction ddAbrir(') ,
+    trozo('function ddAbrir(', '\n}\n') + '\n}\n',
+    (js.match(/function ddCerrarMenu\(\)[^\n]*\n/) || [''])[0],
+    'var cmpQueue = function(id){ console.log("enviar", id); };',
+    'var cmpDelete = function(id){ console.log("eliminar", id); };',
+    'var crmTags = ["x"]; var crmLoadTags = async function(){};',
+    'var agencyActiveClientId = null;',
+    'var showToast = function(m){ console.log(m); };',
+    'var cmpBuilderOpen = function(id){ console.log("abrir", id); };',
+    // La red, de mentira: lo que devolvería el servidor en cada modo.
+    'var fetchAuth = async function(url){' +
+    '  if (MODO === "error") return new Response(JSON.stringify({ error: "caída" }), { status: 503 });' +
+    '  if (url.startsWith("/api/sms")) return new Response(JSON.stringify(MODO === "sinsms" ? { activo: false } : SMS));' +
+    '  if (url.includes("stats=1")) return new Response(JSON.stringify({ sent: 1792, opened: 731 }));' +
+    '  return new Response(JSON.stringify({ campaigns: MODO === "vacio" ? [] : CAMPANAS, quota: { unlimited: true, used: 1792 } }));' +
+    '};',
+  ].join('\n');
+  const s = document.createElement('script');
+  s.textContent = codigo;
+  document.body.appendChild(s);
+  cmpRender();
+})().catch(e => {
+  document.body.insertAdjacentHTML('beforeend', '<pre style="color:#B91C1C;white-space:pre-wrap">' + e.message + '</pre>');
+});
+</script>
+</body>
+</html>

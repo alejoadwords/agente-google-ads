@@ -10449,6 +10449,7 @@ function novIr(destino) {
         case 'paginas':       navGo('marketing'); setTimeout(() => crmSetView('paginas'), 150); break;
         case 'pauta':         navGo('marketing'); setTimeout(() => crmSetView('pauta'), 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
+        case 'campanas':      navGo('marketing'); setTimeout(() => crmSetView('campaigns'), 150); break;
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
         case 'conversaciones':navGo('conversaciones'); break;
         case 'analisis':      navGo('analisis'); break;
@@ -27491,6 +27492,9 @@ function seoGeoExportReport() {
 // ── SET DE ÍCONOS SVG (un solo lenguaje: stroke 2, esquinas redondas) ─────────
 // Reemplaza los emojis funcionales de la UI. Uso: icn('alert', 14)
 const ICN_PATHS = {
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  movil: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+  dots: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
   alert:    '<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
   check:    '<path d="M22 11.1V12a10 10 0 11-5.9-9.1"/><path d="M22 4L12 14l-3-3"/>',
   chart:    '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
@@ -29078,29 +29082,57 @@ async function prpDelete(id) {
   await prpLoad();
 }
 
-// ══ CAMPAÑAS MASIVAS (email + WhatsApp) ═════════════════════════════════════
+// ══ CAMPAÑAS MASIVAS (correo, WhatsApp y SMS) ═══════════════════════════════
 // Audiencia por etiquetas/etapa/fuente, cupo mensual de emails por plan,
-// envío por lotes en api/cron-campaigns.js, baja automática (etiqueta no-email).
+// envío por lotes en api/cron-campaigns.js, baja automática por canal
+// (etiquetas no-email / no-sms).
+//
+// La pantalla: un resumen arriba (lo enviado este mes por canal, lo que está en
+// curso, la apertura del correo y el saldo de SMS), pestañas por canal y una
+// fila por campaña con su progreso. Cada canal tiene su color y su icono para
+// que se distingan de un vistazo; antes eran todas iguales.
 let cmpList = [];
 let cmpQuota = null;
+let cmpError = null;
 let _cmpAudTags = [];
+let _cmpFiltro = 'todas';
+let _cmpBusca = '';
+const _cmpAperturas = {}; // id → { sent, opened } | 'cargando' | 'error'
 
-const CMP_STATUS = {
-  draft:   { label: 'Borrador',  color: '#6b7280' },
-  queued:  { label: 'En cola',   color: '#F59E0B' },
-  sending: { label: 'Enviando…', color: '#3B82F6' },
-  sent:    { label: 'Enviada ✓', color: '#10B981' },
-  paused:  { label: 'Pausada',   color: '#B45309' },
+const CMP_CANAL = {
+  email:    { nombre: 'Correo',   icono: 'mail',  clase: 'email' },
+  whatsapp: { nombre: 'WhatsApp', icono: 'chat',  clase: 'whatsapp' },
+  sms:      { nombre: 'SMS',      icono: 'movil', clase: 'sms' },
 };
+const CMP_STATUS = {
+  draft:      { label: 'Borrador',    clase: 'borrador' },
+  queued:     { label: 'En cola',     clase: 'cola' },
+  programada: { label: 'Programada',  clase: 'programada' },
+  sending:    { label: 'Enviando',    clase: 'enviando' },
+  sent:       { label: 'Enviada',     clase: 'enviada' },
+  paused:     { label: 'Pausada',     clase: 'pausada' },
+};
+const cmpCanal = (c) => CMP_CANAL[c.channel] || CMP_CANAL.email;
+const cmpProgramada = (c) => c.status === 'queued' && c.scheduled_at && new Date(c.scheduled_at) > new Date();
+const cmpEstado = (c) => CMP_STATUS[cmpProgramada(c) ? 'programada' : c.status] || CMP_STATUS.draft;
+const cmpNum = (n) => Number(n || 0).toLocaleString('es-CO');
 
 async function cmpLoad() {
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-    const d = await fetchAuth('/api/campaigns' + qs).then(r => r.json());
+    const r = await fetchAuth('/api/campaigns' + qs);
+    const d = await r.json().catch(() => ({}));
+    // Un fallo no puede pintarse como «tu primera campaña»: alguien con veinte
+    // campañas creería que las perdió.
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
     cmpList = d.campaigns || [];
     cmpQuota = d.quota || null;
-  } catch { cmpList = []; }
+    cmpError = null;
+  } catch (e) {
+    cmpList = [];
+    cmpError = 'No se pudieron cargar tus campañas. Revisa la conexión y reintenta.';
+  }
 }
 
 async function cmpRender() {
@@ -29110,58 +29142,279 @@ async function cmpRender() {
   if (typeof crmTags !== 'undefined' && !crmTags.length) { try { await crmLoadTags(); } catch {} }
   await Promise.all([cmpLoad(), smsCargarEstado()]);
 
-  const quotaHtml = cmpQuota && cmpQuota.unlimited
-    ? '<div style="font-size:var(--fs-sm);color:var(--muted)">📧 ' + (cmpQuota.used || 0).toLocaleString('es-CO') + ' enviados este mes · <strong style="color:var(--text)">envíos ilimitados</strong></div>'
-    : cmpQuota && cmpQuota.limit > 0
-    ? '<div style="font-size:var(--fs-sm);color:var(--muted)">📧 ' + (cmpQuota.used || 0).toLocaleString('es-CO') + ' / ' + cmpQuota.limit.toLocaleString('es-CO') + ' emails este mes</div>'
-    : '';
-
-  const header =
-    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;max-width:820px">' +
-      '<div>' +
-        '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em">Campañas</div>' +
-        '<div style="font-size:var(--fs-sm);color:var(--muted)">Envíos masivos de email y WhatsApp segmentados por etiquetas · con baja automática</div>' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:14px">' + quotaHtml +
-        '<button class="btn-pri" onclick="cmpBuilderOpen()">' + icn('plus', 13) + ' Nueva campaña</button>' +
-      '</div>' +
+  const cabecera =
+    '<div class="cmp-head">' +
+      '<div><div class="cmp-title">Campañas</div>' +
+      '<div class="cmp-sub">Correo, WhatsApp' + (smsVisible() ? ' y SMS' : '') + ' a tus contactos, segmentados por etiquetas y con baja automática</div></div>' +
+      '<button class="btn-pri" onclick="cmpNueva()">' + icn('plus', 13) + ' Nueva campaña</button>' +
     '</div>';
 
-  if (!cmpList.length) {
-    view.innerHTML = header + smsPanelHtml() + emptyAgua('chat', 'Tu primera campaña masiva',
-      'Escribe una vez, llega a todo un segmento: los leads con la etiqueta que elijas reciben tu email o WhatsApp personalizado con su nombre.',
-      '<button class="btn-sec sm" onclick="cmpBuilderOpen()">Crear campaña</button>');
+  if (cmpError) {
+    view.innerHTML = '<div class="cmp-wrap">' + cabecera +
+      '<div class="cmp-vacio"><div style="font-weight:700;margin-bottom:6px">' + esc(cmpError) + '</div>' +
+      '<button class="btn-ghost sm" onclick="cmpRender()">' + icn('refresh', 12) + ' Reintentar</button></div></div>';
     return;
   }
 
-  const cards = cmpList.map(c => {
-    const isScheduled = c.status === 'queued' && c.scheduled_at && new Date(c.scheduled_at) > new Date();
-    const st = isScheduled ? { label: 'Programada 🕑', color: '#8B5CF6' } : (CMP_STATUS[c.status] || CMP_STATUS.draft);
-    const s = c.stats || {};
-    const chan = c.channel === 'whatsapp' ? '💬 WhatsApp' : c.channel === 'sms' ? '📱 SMS' : '📧 Email';
-    const statsTxt = c.status === 'draft' ? 'Sin enviar'
-      : isScheduled ? 'Sale el ' + new Date(c.scheduled_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + (s.total || 0) + ' destinatarios'
-      : (s.sent || 0) + ' enviados' + (s.skipped ? ' · ' + s.skipped + ' omitidos' : '') + (s.failed ? ' · ' + s.failed + ' fallidos' : '') + ' de ' + (s.total || 0);
-    return '<div class="auto-card" style="max-width:820px">' +
-      '<div class="auto-ico">' + (c.channel === 'whatsapp' ? '💬' : c.channel === 'sms' ? '📱' : '📧') + '</div>' +
-      '<div style="flex:1;min-width:0">' +
-        '<div class="auto-name">' + esc(c.name) + '</div>' +
-        '<div class="auto-trigger">' + chan + (c.subject ? ' · "' + esc(c.subject) + '"' : '') + '</div>' +
-        '<div style="font-size:11.5px;color:var(--muted);margin-top:3px" id="cmp-stats-' + c.id + '">' + statsTxt + '</div>' +
-        (c.status === 'paused' && s.motivo_pausa ? '<div style="font-size:11.5px;color:var(--warning);margin-top:3px;font-weight:700">' + esc(s.motivo_pausa) + '</div>' : '') +
-      '</div>' +
-      '<span style="font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;background:' + st.color + '1A;color:' + st.color + ';white-space:nowrap">' + st.label + '</span>' +
-      '<div class="auto-actions">' +
-        (c.status === 'draft' ? '<button class="btn-sec sm" title="Editar" onclick="cmpBuilderOpen(\'' + c.id + '\')">✎ Editar</button>' : '') +
-        (c.status === 'draft' ? '<button class="btn-pri sm" onclick="cmpQueue(\'' + c.id + '\')">Enviar</button>' : '') +
-        (c.status === 'paused' && c.channel === 'sms' ? '<button class="btn-pri sm" onclick="cmpReanudar(\'' + c.id + '\')">Reanudar</button>' : '') +
-        (c.status === 'sent' && c.channel === 'email' ? '<button class="btn-ghost sm" title="Ver aperturas" onclick="cmpShowOpens(\'' + c.id + '\')">👀</button>' : '') +
-        '<button class="btn-ghost sm" title="Eliminar" onclick="cmpDelete(\'' + c.id + '\')">✕</button>' +
-      '</div>' +
-    '</div>';
-  }).join('');
+  view.innerHTML = '<div class="cmp-wrap">' + cabecera +
+    '<div class="cmp-kpis">' + cmpResumenHtml() + '</div>' +
+    '<div class="cmp-tools">' +
+      '<div class="cmp-tabs" id="cmp-tabs"></div>' +
+      '<div class="cmp-buscar">' + icn('search', 13) +
+        '<input placeholder="Buscar campaña" value="' + esc(_cmpBusca) + '" oninput="_cmpBusca=this.value;cmpPintarLista()"></div>' +
+    '</div>' +
+    '<div id="cmp-lista"></div>' +
+  '</div>';
+  cmpPintarLista();
+  cmpCargarAperturas();
+}
 
-  view.innerHTML = header + smsPanelHtml() + '<div>' + cards + '</div>';
+function smsVisible() {
+  return !!(_smsEstado && (_smsEstado.activo || _smsEstado.error)) || cmpList.some(c => c.channel === 'sms');
+}
+
+// ── Resumen ─────────────────────────────────────────────────────────────────
+function cmpResumenHtml() {
+  const ini = new Date(); ini.setDate(1); ini.setHours(0, 0, 0, 0);
+  const delMes = (c) => new Date(c.sent_at || c.queued_at || c.created_at) >= ini;
+  const sumar = (canal) => cmpList.filter(c => c.channel === canal && delMes(c)).reduce((s, c) => s + ((c.stats || {}).sent || 0), 0);
+  // El correo lo cuenta el servidor (incluye campañas que ya no están en la
+  // lista); el SMS, el libro de créditos. WhatsApp sale de las campañas.
+  const porCanal = {
+    email: cmpQuota ? (cmpQuota.used || 0) : sumar('email'),
+    whatsapp: sumar('whatsapp'),
+    sms: _smsEstado && _smsEstado.mes ? (_smsEstado.mes.enviados || 0) + (_smsEstado.mes.simulados || 0) : sumar('sms'),
+  };
+  const canales = ['email', 'whatsapp', ...(smsVisible() ? ['sms'] : [])];
+  const total = canales.reduce((s, k) => s + porCanal[k], 0);
+  const barra = total
+    ? '<div class="cmp-mix">' + canales.filter(k => porCanal[k]).map(k =>
+        '<span class="' + k + '" style="flex:' + porCanal[k] + '" title="' + CMP_CANAL[k].nombre + ': ' + cmpNum(porCanal[k]) + '"></span>').join('') + '</div>'
+    : '<div class="cmp-mix"></div>';
+  const leyenda = canales.map(k => '<span class="cmp-ley ' + k + '">' + CMP_CANAL[k].nombre + ' ' + cmpNum(porCanal[k]) + '</span>').join('');
+
+  const enCurso = cmpList.filter(c => c.status === 'sending' || (c.status === 'queued' && !cmpProgramada(c))).length;
+  const programadas = cmpList.filter(cmpProgramada).length;
+  const borradores = cmpList.filter(c => c.status === 'draft').length;
+  const pausadas = cmpList.filter(c => c.status === 'paused').length;
+
+  const tile = (lbl, num, sub, extra) =>
+    '<div class="cmp-kpi"><div class="cmp-kpi-lbl">' + lbl + '</div><div class="cmp-kpi-num">' + num + '</div>' +
+    (sub ? '<div class="cmp-kpi-sub">' + sub + '</div>' : '') + (extra || '') + '</div>';
+
+  return tile('Enviados este mes', cmpNum(total), '', barra + '<div class="cmp-leyendas">' + leyenda + '</div>') +
+    tile('En curso', cmpNum(enCurso),
+      [programadas ? programadas + ' programada' + (programadas === 1 ? '' : 's') : '',
+       pausadas ? '<b class="cmp-txt-aviso">' + pausadas + ' pausada' + (pausadas === 1 ? '' : 's') + '</b>' : '',
+       borradores ? borradores + ' borrador' + (borradores === 1 ? '' : 'es') : ''].filter(Boolean).join(' · ') || 'Nada enviándose ahora') +
+    '<div class="cmp-kpi" id="cmp-kpi-apertura">' + cmpAperturaTileHtml() + '</div>' +
+    (smsVisible() ? smsTileHtml()
+      : tile('Correo', cmpQuota && cmpQuota.unlimited ? 'Ilimitado' : cmpQuota && cmpQuota.limit > 0 ? cmpNum(Math.max(0, cmpQuota.limit - (cmpQuota.used || 0))) : '—',
+          cmpQuota && cmpQuota.unlimited ? 'Envíos de correo sin tope en tu plan' : cmpQuota && cmpQuota.limit > 0 ? 'correos disponibles este mes de ' + cmpNum(cmpQuota.limit) : 'Las campañas son parte del plan Pro'));
+}
+
+// La apertura media de las últimas campañas de correo enviadas. Se pregunta
+// aparte, campaña por campaña, porque cruzar envíos con aperturas cuesta: se
+// limita a las cinco más recientes.
+function cmpUltimosCorreos() {
+  return cmpList.filter(c => c.channel === 'email' && c.status === 'sent').slice(0, 5);
+}
+function cmpAperturaTileHtml() {
+  const ult = cmpUltimosCorreos();
+  const lbl = '<div class="cmp-kpi-lbl">Apertura del correo</div>';
+  if (!ult.length) return lbl + '<div class="cmp-kpi-num">—</div><div class="cmp-kpi-sub">Aún no has enviado campañas de correo</div>';
+  const datos = ult.map(c => _cmpAperturas[c.id]);
+  if (datos.some(d => d === 'cargando' || d === undefined)) return lbl + '<div class="cmp-kpi-num cmp-kpi-cargando">…</div><div class="cmp-kpi-sub">Calculando aperturas</div>';
+  const buenos = datos.filter(d => d && typeof d === 'object');
+  if (!buenos.length) return lbl + '<div class="cmp-kpi-num">—</div><div class="cmp-kpi-sub">No se pudieron calcular · <a href="#" onclick="cmpReintentarAperturas();return false">reintentar</a></div>';
+  const env = buenos.reduce((s, d) => s + d.sent, 0), abr = buenos.reduce((s, d) => s + d.opened, 0);
+  return lbl + '<div class="cmp-kpi-num">' + (env ? Math.round(abr / env * 100) : 0) + '%</div>' +
+    '<div class="cmp-kpi-sub">' + cmpNum(abr) + ' de ' + cmpNum(env) + (buenos.length === 1 ? ' en tu última campaña' : ' en tus últimas ' + buenos.length + ' campañas') + '</div>';
+}
+async function cmpCargarAperturas() {
+  const pendientes = cmpUltimosCorreos().filter(c => _cmpAperturas[c.id] === undefined);
+  pendientes.forEach(c => { _cmpAperturas[c.id] = 'cargando'; });
+  await Promise.all(pendientes.map(async c => {
+    try {
+      const r = await fetchAuth('/api/campaigns?stats=1&id=' + encodeURIComponent(c.id));
+      const d = await r.json();
+      _cmpAperturas[c.id] = r.ok ? { sent: d.sent || 0, opened: d.opened || 0 } : 'error';
+    } catch { _cmpAperturas[c.id] = 'error'; }
+  }));
+  const tile = document.getElementById('cmp-kpi-apertura');
+  if (tile) tile.innerHTML = cmpAperturaTileHtml();
+  if (pendientes.length) cmpPintarLista();
+}
+function cmpReintentarAperturas() {
+  cmpUltimosCorreos().forEach(c => { if (_cmpAperturas[c.id] === 'error') delete _cmpAperturas[c.id]; });
+  cmpCargarAperturas();
+}
+
+// ── Pestañas y lista ────────────────────────────────────────────────────────
+function cmpFiltrar(k) { _cmpFiltro = k; cmpPintarLista(); }
+
+function cmpPintarLista() {
+  const tabs = document.getElementById('cmp-tabs');
+  const box = document.getElementById('cmp-lista');
+  if (!tabs || !box) return;
+  const canales = ['email', 'whatsapp', ...(smsVisible() ? ['sms'] : [])];
+  const cuenta = (k) => k === 'todas' ? cmpList.length : cmpList.filter(c => c.channel === k).length;
+  tabs.innerHTML = ['todas', ...canales].map(k =>
+    '<button class="cmp-tab' + (_cmpFiltro === k ? ' on' : '') + '" onclick="cmpFiltrar(\'' + k + '\')">' +
+      (k === 'todas' ? '' : '<span class="cmp-tab-dot ' + k + '"></span>') +
+      (k === 'todas' ? 'Todas' : CMP_CANAL[k].nombre) + ' <span class="cmp-tab-n">' + cuenta(k) + '</span></button>').join('');
+
+  const q = _cmpBusca.trim().toLowerCase();
+  const filas = cmpList.filter(c => (_cmpFiltro === 'todas' || c.channel === _cmpFiltro) &&
+    (!q || String(c.name || '').toLowerCase().includes(q) || String(c.subject || '').toLowerCase().includes(q)));
+
+  if (!cmpList.length) {
+    box.innerHTML = emptyAgua('send', 'Tu primera campaña',
+      'Escribe una vez y llega a todo un segmento: los contactos con la etiqueta que elijas reciben tu mensaje personalizado con su nombre.',
+      '<button class="btn-pri sm" onclick="cmpNueva()">Crear campaña</button>');
+    return;
+  }
+  if (!filas.length) {
+    box.innerHTML = '<div class="cmp-vacio">' + (q
+      ? 'Ninguna campaña coincide con «' + esc(_cmpBusca.trim()) + '».'
+      : 'Aún no tienes campañas de ' + CMP_CANAL[_cmpFiltro].nombre + '. <a href="#" onclick="cmpBuilderOpen(null,\'' + _cmpFiltro + '\');return false">Crear una</a>') + '</div>';
+    return;
+  }
+  box.innerHTML = filas.map(cmpFilaHtml).join('');
+}
+
+function cmpCuando(c) {
+  const f = (d, conHora) => new Date(d).toLocaleString('es-CO', conHora
+    ? { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' } : { day: 'numeric', month: 'short' });
+  if (cmpProgramada(c)) return 'Sale el ' + f(c.scheduled_at, true);
+  if (c.status === 'sent' && c.sent_at) return 'Enviada el ' + f(c.sent_at);
+  if (c.status === 'draft') return 'Creada el ' + f(c.created_at);
+  return 'Desde el ' + f(c.queued_at || c.created_at);
+}
+
+function cmpFilaHtml(c) {
+  const k = cmpCanal(c), st = cmpEstado(c), s = c.stats || {};
+  const detalle = c.channel === 'email' ? (c.subject || 'Sin asunto todavía') : (String(c.body || '').split('\n')[0] || 'Sin mensaje todavía');
+  const total = s.total || 0, hechos = (s.sent || 0) + (s.skipped || 0) + (s.failed || 0);
+  const pct = total ? Math.min(100, Math.round(hechos / total * 100)) : 0;
+
+  let progreso;
+  if (c.status === 'draft') {
+    progreso = '<div class="cmp-prog-txt">Sin enviar</div>';
+  } else if (cmpProgramada(c) || (c.status === 'queued' && !hechos)) {
+    progreso = '<div class="cmp-prog-txt">' + cmpNum(total) + ' destinatarios</div>';
+  } else {
+    const ap = _cmpAperturas[c.id];
+    const apertura = c.channel === 'email' && c.status === 'sent'
+      ? (ap && typeof ap === 'object'
+          ? ' · <b>' + (ap.sent ? Math.round(ap.opened / ap.sent * 100) : 0) + '% abrió</b>'
+          : ap === 'cargando' ? ' · calculando aperturas…'
+          : ' · <a href="#" onclick="cmpVerAperturas(\'' + c.id + '\');return false">ver aperturas</a>')
+      : '';
+    progreso = '<div class="cmp-prog"><span class="' + k.clase + '" style="width:' + pct + '%"></span></div>' +
+      '<div class="cmp-prog-txt"><b>' + cmpNum(s.sent) + '</b> de ' + cmpNum(total) + ' enviados' +
+        (s.skipped ? ' · ' + cmpNum(s.skipped) + ' omitidos' : '') +
+        (s.failed ? ' · <span class="cmp-txt-error">' + cmpNum(s.failed) + ' fallidos</span>' : '') + apertura + '</div>';
+  }
+
+  const acciones =
+    (c.status === 'draft' ? '<button class="btn-ghost sm" onclick="cmpBuilderOpen(\'' + c.id + '\')">' + icn('edit', 12) + ' Editar</button>' +
+                            '<button class="btn-pri sm" onclick="cmpQueue(\'' + c.id + '\')">Enviar</button>' : '') +
+    (c.status === 'paused' && c.channel === 'sms' ? '<button class="btn-pri sm" onclick="cmpReanudar(\'' + c.id + '\')">Reanudar</button>' : '') +
+    '<button class="btn-ghost sm cmp-mas" title="Más acciones" onclick="cmpMenu(this,\'' + c.id + '\')">' + icn('dots', 14) + '</button>';
+
+  return '<div class="cmp-row">' +
+    '<div class="cmp-id">' +
+      '<div class="cmp-canal ' + k.clase + '" title="' + k.nombre + '">' + icn(k.icono, 18) + '</div>' +
+      '<div style="min-width:0">' +
+        '<div class="cmp-nombre">' + esc(c.name || 'Sin nombre') + '</div>' +
+        '<div class="cmp-detalle">' + k.nombre + ' · ' + esc(detalle.replace(/\{\{\s*nombre\s*\}\}/gi, 'Ana')) + '</div>' +
+        (c.status === 'paused' && s.motivo_pausa ? '<div class="cmp-aviso">' + icn('alert', 12) + ' ' + esc(s.motivo_pausa) + '</div>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div class="cmp-col-prog">' + progreso + '</div>' +
+    '<div class="cmp-col-estado"><span class="cmp-estado ' + st.clase + '">' + st.label + '</span><div class="cmp-cuando">' + cmpCuando(c) + '</div></div>' +
+    '<div class="cmp-acc">' + acciones + '</div>' +
+  '</div>';
+}
+
+function cmpMenu(btn, id) {
+  const c = cmpList.find(x => x.id === id);
+  if (!c) return;
+  const ops = [
+    ...(c.status === 'draft' ? [{ id: 'editar', name: 'Editar' }] : []),
+    { id: 'duplicar', name: 'Duplicar' },
+    ...(c.channel === 'email' && c.status === 'sent' ? [{ id: 'aperturas', name: 'Ver aperturas' }] : []),
+    { sep: true },
+    { id: 'eliminar', name: c.status === 'sending' || c.status === 'queued' ? 'Cancelar y eliminar' : 'Eliminar' },
+  ];
+  ddAbrir(btn, ops, null, (op) => {
+    if (op === 'editar') cmpBuilderOpen(id);
+    else if (op === 'duplicar') cmpDuplicar(id);
+    else if (op === 'aperturas') cmpVerAperturas(id);
+    else if (op === 'eliminar') cmpDelete(id);
+  });
+}
+
+async function cmpVerAperturas(id) {
+  delete _cmpAperturas[id];
+  _cmpAperturas[id] = 'cargando';
+  cmpPintarLista();
+  try {
+    const r = await fetchAuth('/api/campaigns?stats=1&id=' + encodeURIComponent(id));
+    const d = await r.json();
+    _cmpAperturas[id] = r.ok ? { sent: d.sent || 0, opened: d.opened || 0 } : 'error';
+  } catch { _cmpAperturas[id] = 'error'; }
+  if (_cmpAperturas[id] === 'error') showToast('No se pudieron calcular las aperturas', 'error');
+  cmpPintarLista();
+}
+
+// Una copia en borrador con el mismo contenido y la misma audiencia: lo más
+// pedido después de una campaña que funcionó es repetirla con otro segmento.
+async function cmpDuplicar(id) {
+  const c = cmpList.find(x => x.id === id);
+  if (!c) return;
+  const campos = ['channel', 'subject', 'body', 'from_name', 'audience', 'preheader', 'reply_to', 'cta_text', 'cta_url',
+    'accent_color', 'utm', 'header_image_url', 'html', 'template_id', 'wa_template'];
+  const cuerpo = { name: (c.name || 'Campaña') + ' (copia)' };
+  campos.forEach(k => { if (c[k] !== undefined && c[k] !== null) cuerpo[k] = c[k]; });
+  try {
+    const r = await fetchAuth('/api/campaigns', { method: 'POST', body: JSON.stringify(cuerpo) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { showToast(d.error || 'No se pudo duplicar', 'error'); return; }
+    showToast('Copia creada como borrador', 'success');
+    cmpRender();
+  } catch { showToast('Sin conexión: no se pudo duplicar', 'error'); }
+}
+
+// ── Nueva campaña: primero el canal ─────────────────────────────────────────
+function cmpNueva() {
+  const canales = [
+    { k: 'email', titulo: 'Correo', texto: 'Diseño con imágenes y botón, asunto y vista previa. Mide quién lo abre.',
+      pie: cmpQuota && cmpQuota.unlimited ? 'Envíos ilimitados en tu plan' : cmpQuota && cmpQuota.limit > 0 ? cmpNum(Math.max(0, cmpQuota.limit - (cmpQuota.used || 0))) + ' disponibles este mes' : '' },
+    { k: 'whatsapp', titulo: 'WhatsApp', texto: 'Plantillas aprobadas por Meta para escribirle a toda tu audiencia, no solo a quien te escribió.',
+      pie: 'Requiere un canal de WhatsApp conectado' },
+    ...(_smsEstado && _smsEstado.activo ? [{ k: 'sms', titulo: 'SMS', texto: 'Mensaje de texto al móvil: llega aunque no tengan internet. Hasta 160 caracteres por SMS.',
+      pie: cmpNum(_smsEstado.saldo) + ' créditos disponibles' }] : []),
+  ];
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  const tecla = e => { if (e.key === 'Escape') cerrar(); };
+  const cerrar = () => { ov.remove(); document.removeEventListener('keydown', tecla); };
+  document.addEventListener('keydown', tecla);
+  ov.addEventListener('mousedown', e => { if (e.target === ov) cerrar(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:' + (canales.length > 2 ? 760 : 540) + 'px">' +
+    '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">¿Por qué canal la envías?</div><button class="btn-ghost sm" data-x>✕</button></div>' +
+    '<div class="auto-modal-body"><div class="cmp-elegir">' + canales.map(x =>
+      '<button class="cmp-opcion" data-canal="' + x.k + '">' +
+        '<div class="cmp-canal ' + x.k + '">' + icn(CMP_CANAL[x.k].icono, 20) + '</div>' +
+        '<div class="cmp-opcion-tit">' + x.titulo + '</div>' +
+        '<div class="cmp-opcion-txt">' + x.texto + '</div>' +
+        (x.pie ? '<div class="cmp-opcion-pie">' + x.pie + '</div>' : '') +
+      '</button>').join('') + '</div></div></div>';
+  ov.querySelector('[data-x]').onclick = cerrar;
+  ov.querySelectorAll('[data-canal]').forEach(b => b.onclick = () => { cerrar(); cmpBuilderOpen(null, b.dataset.canal); });
+  document.body.appendChild(ov);
 }
 
 // ── SMS ─────────────────────────────────────────────────────────────────────
@@ -29225,25 +29478,21 @@ function smsCuentaHtml(texto) {
     '<div style="font-size:11px;color:var(--muted2);margin-top:3px">Las tildes de á, í, ó y ú se envían sin tilde para que el mensaje no cueste el doble. La ñ se conserva.</div>';
 }
 
-// La tarjeta de saldo de la pantalla de Campañas.
-function smsPanelHtml() {
+// La tarjeta de SMS del resumen de Campañas: saldo y botón de compra.
+function smsTileHtml() {
   const e = _smsEstado;
-  if (!e || e.activo === false) return '';
-  if (e.error) {
-    return '<div class="auto-card" style="max-width:820px;margin-bottom:14px"><div style="flex:1;font-size:12.5px;color:var(--muted)">' + esc(e.error) + '</div>' +
-      '<button class="btn-ghost sm" onclick="smsCargarEstado(true).then(cmpRender)">Reintentar</button></div>';
+  const lbl = '<div class="cmp-kpi-lbl">Créditos de SMS</div>';
+  if (!e || e.error) {
+    return '<div class="cmp-kpi">' + lbl + '<div class="cmp-kpi-num">—</div><div class="cmp-kpi-sub">' +
+      esc((e && e.error) || 'No se pudo leer el saldo.') + ' <a href="#" onclick="smsCargarEstado(true).then(cmpRender);return false">Reintentar</a></div></div>';
   }
+  if (!e.activo) return '';
   const m = e.mes || {};
-  return '<div class="auto-card" style="max-width:820px;margin-bottom:14px">' +
-    '<div class="auto-ico">📱</div>' +
-    '<div style="flex:1;min-width:0">' +
-      '<div class="auto-name">Créditos de SMS: ' + Number(e.saldo || 0).toLocaleString('es-CO') + '</div>' +
-      '<div class="auto-trigger">Este mes: ' + Number(m.creditos || 0).toLocaleString('es-CO') + ' créditos usados · ' +
-        Number(m.enviados || 0).toLocaleString('es-CO') + ' enviados' + (m.fallidos ? ' · ' + m.fallidos + ' no aceptados' : '') +
-        (e.proveedor === 'simulado' ? ' · <b>modo de prueba: no sale ningún SMS real</b>' : '') + '</div>' +
-    '</div>' +
-    '<div class="auto-actions"><button class="btn-pri sm" onclick="smsAbrirCompra()">Comprar créditos</button></div>' +
-  '</div>';
+  return '<div class="cmp-kpi">' + lbl + '<div class="cmp-kpi-num">' + Number(e.saldo || 0).toLocaleString('es-CO') + '</div>' +
+    '<div class="cmp-kpi-sub">' + (e.proveedor === 'simulado'
+      ? '<b class="cmp-txt-aviso">Modo de prueba:</b> no sale ningún SMS real'
+      : Number(m.creditos || 0).toLocaleString('es-CO') + ' usados este mes' + (m.fallidos ? ' · ' + m.fallidos + ' no aceptados' : '')) + '</div>' +
+    '<button class="btn-ghost sm" onclick="smsAbrirCompra()">' + icn('plus', 11) + ' Comprar créditos</button></div>';
 }
 
 function smsAbrirCompra() {
@@ -29290,11 +29539,11 @@ let _cmpW = null;
 let _cmpChannel = 'email';
 const CMP_STEPS = ['Configuración', 'Contenido', 'Audiencia', 'Revisión y envío'];
 
-function cmpBuilderOpen(id) {
+function cmpBuilderOpen(id, canal) {
   const c = id ? cmpList.find(x => x.id === id) : null;
   _cmpW = {
     id: c ? c.id : null, step: 1,
-    channel: c ? c.channel : 'email',
+    channel: c ? c.channel : (canal || 'email'),
     name: (c && c.name) || '', from_name: (c && c.from_name) || '',
     subject: (c && c.subject) || '', preheader: (c && c.preheader) || '',
     reply_to: (c && c.reply_to) || '', body: (c && c.body) || '',
@@ -30845,16 +31094,6 @@ async function cmpQueue(id) {
     showToast('🚀 Campaña en cola: ' + d.total + ' destinatarios', 'success');
     cmpRender();
   } catch (e) { showToast('Error encolando', 'error'); }
-}
-
-async function cmpShowOpens(id) {
-  const el = document.getElementById('cmp-stats-' + id);
-  if (el) el.textContent = 'Calculando aperturas…';
-  try {
-    const d = await fetchAuth('/api/campaigns?stats=1&id=' + encodeURIComponent(id)).then(r => r.json());
-    const pct = d.sent ? Math.round((d.opened / d.sent) * 100) : 0;
-    if (el) el.innerHTML = d.sent + ' enviados · <b>' + d.opened + ' abiertos (' + pct + '%)</b>';
-  } catch { if (el) el.textContent = 'No se pudieron calcular las aperturas'; }
 }
 
 async function cmpDelete(id) {

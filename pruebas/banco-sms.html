@@ -26,7 +26,7 @@
 </style>
 </head>
 <body>
-<h3>Tarjeta de saldo en Campañas</h3>
+<h3>Tarjeta de SMS del resumen de Campañas</h3>
 <div id="panel"></div>
 
 <h3>Contador debajo del mensaje</h3>
@@ -61,7 +61,7 @@ ESTADOS.poco = { ...ESTADOS.real, saldo: 120 };
 
 function estado(k) {
   _smsEstado = ESTADOS[k];
-  document.getElementById('panel').innerHTML = smsPanelHtml() || '<i>(sin módulo: no se pinta nada)</i>';
+  document.getElementById('panel').innerHTML = '<div style="max-width:260px">' + (smsTileHtml() || '<i>(sin módulo: no se pinta nada)</i>') + '</div>';
   _cmpW = { body: document.getElementById('msg').value };
   document.getElementById('costo').innerHTML = cmpWCostoSms(640);
 }
@@ -84,6 +84,8 @@ function texto(k) {
   };
   const codigo = [
     (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
+    trozo('const ICN_PATHS = {', '\n};\n') + '\n};\n',
+    trozo('function icn(', '\n}\n') + '\n}\n',
     trozo('// ── SMS ──', '// ── Wizard de campaña'),
     trozo('// Lo que costará la campaña de SMS', 'function cmpWSchedToggle'),
     trozo('function confirmarAgua(', '\n}\n') + '\n}\n',
