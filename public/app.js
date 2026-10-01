@@ -19425,6 +19425,45 @@ function ddAbrir(ancla, opciones, valor, alElegir) {
 }
 
 function ddCerrarMenu() { if (_ddCerrar) _ddCerrar(); }
+
+// Convierte un <select> en el desplegable de la app SIN tocar su lógica: el
+// select se queda en la página (oculto) y sigue guardando el valor, así que el
+// código que lee .value o escucha onchange funciona igual que antes. Las
+// opciones de relleno («Excluir una lista…») no se ofrecen como opción.
+function ddDesdeSelect(sel) {
+  if (sel.dataset.dd) return;
+  sel.dataset.dd = '1';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'dd-btn dd-btn-select';
+  btn.style.cssText = sel.style.cssText;
+  btn.innerHTML = '<span class="dd-btn-txt"></span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+  const txt = btn.firstChild;
+  const pintar = () => {
+    const o = sel.options[sel.selectedIndex];
+    txt.textContent = o ? o.textContent : '';
+    btn.disabled = sel.disabled;
+  };
+  btn.onclick = () => {
+    const ops = [...sel.options]
+      .filter(o => !(o.value === '' && /…$/.test(o.textContent.trim()) && sel.options.length > 1))
+      .map(o => ({ id: o.value, name: o.textContent }));
+    ddAbrir(btn, ops, sel.value, v => {
+      sel.value = v;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      pintar();
+    });
+  };
+  sel.style.display = 'none';
+  sel.after(btn);
+  sel.addEventListener('change', pintar);
+  // Las opciones de algunas listas llegan después (plantillas, listas).
+  new MutationObserver(pintar).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+  pintar();
+}
+function ddConvertirSelects(raiz) {
+  raiz.querySelectorAll('select.auto-input:not([data-dd])').forEach(ddDesdeSelect);
+}
 window.addEventListener('resize', ddCerrarMenu);
 window.addEventListener('scroll', ddCerrarMenu, true);
 
@@ -29541,9 +29580,14 @@ const CMP_STEPS = ['Configuración', 'Contenido', 'Audiencia', 'Revisión y env�
 
 function cmpBuilderOpen(id, canal) {
   const c = id ? cmpList.find(x => x.id === id) : null;
+  const channel = c ? c.channel : (canal || 'email');
   _cmpW = {
-    id: c ? c.id : null, step: 1,
-    channel: c ? c.channel : (canal || 'email'),
+    id: c ? c.id : null,
+    // El canal ya se eligió antes de abrir: el asistente no lo vuelve a
+    // preguntar. Y fuera del correo el paso de configuración solo tenía el
+    // nombre, así que se arranca directo en el mensaje.
+    step: channel === 'email' ? 1 : 2,
+    channel,
     name: (c && c.name) || '', from_name: (c && c.from_name) || '',
     subject: (c && c.subject) || '', preheader: (c && c.preheader) || '',
     reply_to: (c && c.reply_to) || '', body: (c && c.body) || '',
@@ -29566,20 +29610,22 @@ function cmpBuilderOpen(id, canal) {
   document.getElementById('cmp-overlay')?.remove();
   const ov = document.createElement('div');
   ov.id = 'cmp-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;flex-direction:column';
+  ov.className = 'cmpw';
   ov.innerHTML =
-    '<style>@media (max-width:760px){.cmpw-grid{grid-template-columns:1fr !important}}</style>' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 26px;border-bottom:1px solid var(--border);flex-wrap:wrap">' +
-      '<div id="cmpw-steps" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap"></div>' +
-      '<button class="btn-ghost sm" onclick="cmpWClose()">Cancelar</button>' +
+    '<div class="cmpw-top">' +
+      '<div class="cmpw-canal" id="cmpw-canal"></div>' +
+      '<div class="cmpw-pasos" id="cmpw-steps"></div>' +
+      '<div class="cmpw-cerrar"><button class="btn-ghost sm" onclick="cmpWClose()">Salir</button></div>' +
     '</div>' +
-    '<div id="cmpw-body" style="flex:1;overflow-y:auto;padding:26px 26px 40px"></div>' +
-    '<div id="cmpw-footer" style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:12px 26px;border-top:1px solid var(--border);background:var(--bg)"></div>';
+    '<div id="cmpw-body" class="cmpw-body"></div>' +
+    '<div id="cmpw-footer" class="cmpw-foot"></div>';
   document.body.appendChild(ov);
+  // Todos los <select> del asistente se pintan con el desplegable de la app,
+  // también los que llegan después (plantillas, listas, exclusiones).
+  ddConvertirSelects(ov);
+  new MutationObserver(() => ddConvertirSelects(ov)).observe(ov, { childList: true, subtree: true });
   cmpWRender();
-  // El botón de SMS solo existe si la cuenta tiene el módulo: se pregunta al
-  // abrir y se repinta el paso 1 si llega después.
-  if (!_smsEstado) smsCargarEstado().then(() => { if (_cmpW && _cmpW.step === 1) cmpWRender(); });
+  if (channel === 'sms' && !_smsEstado) smsCargarEstado();
 }
 
 function cmpWClose() {
@@ -29588,28 +29634,50 @@ function cmpWClose() {
   _cmpW = null;
 }
 
+// Los pasos que tiene ESTE canal. El número de cada uno no cambia (1 a 4) para
+// que validar, guardar y los «Editar» de la revisión sigan apuntando igual.
+function cmpWPasos() {
+  const email = _cmpW && _cmpW.channel === 'email';
+  return (email ? [1, 2, 3, 4] : [2, 3, 4]).map(n => ({
+    n, nombre: { 1: 'Configuración', 2: email ? 'Contenido' : 'Mensaje', 3: 'Audiencia', 4: 'Revisión' }[n],
+  }));
+}
+
 function cmpWRender() {
   const w = _cmpW;
-  document.getElementById('cmpw-steps').innerHTML = CMP_STEPS.map((s, i) => {
-    const n = i + 1;
-    const state = n < w.step ? 'color:var(--accent);cursor:pointer' : n === w.step ? 'color:var(--text);font-weight:800' : 'color:var(--muted2)';
-    return (i ? '<span style="color:var(--muted2);margin:0 4px">›</span>' : '') +
-      '<span style="font-size:var(--fs-sm);' + state + '"' + (n < w.step ? ' onclick="cmpWGo(' + n + ')"' : '') + '>' + s + '</span>';
+  const k = CMP_CANAL[w.channel] || CMP_CANAL.email;
+  const pasos = cmpWPasos();
+  const pos = pasos.findIndex(p => p.n === w.step);
+
+  document.getElementById('cmpw-canal').innerHTML =
+    '<div class="cmp-canal ' + k.clase + '">' + icn(k.icono, 16) + '</div>' +
+    '<div style="min-width:0"><div class="cmpw-canal-tit">' + esc(w.name || 'Nueva campaña') + '</div>' +
+    '<div class="cmpw-canal-sub">Campaña de ' + k.nombre + '</div></div>';
+  document.getElementById('cmpw-steps').innerHTML = pasos.map((p, i) => {
+    const estado = i < pos ? 'hecho' : i === pos ? 'actual' : '';
+    return (i ? '<span class="cmpw-linea' + (i <= pos ? ' hecha' : '') + '"></span>' : '') +
+      '<button class="cmpw-paso ' + estado + '"' + (i < pos ? ' onclick="cmpWGo(' + p.n + ')"' : ' tabindex="-1"') + '>' +
+        '<span class="cmpw-paso-n">' + (i < pos ? icn('check', 12) : i + 1) + '</span>' +
+        '<span class="cmpw-paso-txt">' + p.nombre + '</span></button>';
   }).join('');
+
   const body = document.getElementById('cmpw-body');
   if (w.step === 1) body.innerHTML = cmpWStep1();
   else if (w.step === 2) body.innerHTML = cmpWStep2();
   else if (w.step === 3) body.innerHTML = cmpWStep3();
   else body.innerHTML = cmpWStep4();
+  body.scrollTop = 0;
+
+  const anterior = pos > 0 ? pasos[pos - 1].n : null;
   const foot = document.getElementById('cmpw-footer');
-  if (w.step < 4) {
-    foot.innerHTML = (w.step > 1 ? '<button class="btn-sec" onclick="cmpWGo(' + (w.step - 1) + ')">Volver</button>' : '') +
-      '<button class="btn-pri" onclick="cmpWNext()">Guardar y continuar</button>';
-  } else {
-    foot.innerHTML = '<button class="btn-sec" onclick="cmpWGo(3)">Volver</button>' +
-      '<button class="btn-sec" id="cmpw-draft-btn" onclick="cmpWSaveDraft()">Guardar como borrador</button>' +
-      '<button class="btn-pri" id="cmpw-send-btn" onclick="cmpWSend()">' + (w.schedule ? 'Programar envío' : 'Enviar') + '</button>';
-  }
+  foot.innerHTML = '<div class="cmpw-foot-info">Paso ' + (pos + 1) + ' de ' + pasos.length + '</div><div class="cmpw-foot-acc">' +
+    (anterior ? '<button class="btn-ghost" onclick="cmpWGo(' + anterior + ')">Volver</button>' : '') +
+    (w.step < 4
+      ? '<button class="btn-pri" onclick="cmpWNext()">Continuar</button>'
+      : '<button class="btn-ghost" id="cmpw-draft-btn" onclick="cmpWSaveDraft()">Guardar borrador</button>' +
+        '<button class="btn-pri" id="cmpw-send-btn" onclick="cmpWSend()">' + (w.schedule ? 'Programar envío' : 'Enviar campaña') + '</button>') +
+  '</div>';
+
   if (w.step === 1) cmpWSyncInbox();
   if (w.step === 2) cmpWSyncEmail();
   // Las plantillas se preguntan a Meta cada vez que se entra al paso: una
@@ -29626,58 +29694,48 @@ function cmpWRender() {
   if (w.step === 4) { cmpWPintarChecks(); cmpWPintarDestinatarios(); cmpWSyncEmail(); }
 }
 
-// Paso 1 — Configuración inicial + vista previa de inbox
+// Paso 1 (solo correo) — los datos del sobre y cómo se ve en la bandeja.
 function cmpWStep1() {
   const w = _cmpW;
-  const isEmail = w.channel === 'email';
-  const field = (id, label, val, ph, extra) =>
-    '<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">' + label + '</div>' +
-    '<input class="auto-input" id="' + id + '" value="' + esc(val || '') + '" placeholder="' + ph + '" style="width:100%" oninput="cmpWSyncInbox()"' + (extra || '') + '>' + (id === 'cmpw-subject' ? varsBoton('cmpw-subject') : '') + '</div>';
-  return '<div style="display:grid;grid-template-columns:minmax(300px,460px) minmax(280px,400px);gap:34px;justify-content:center;align-items:start" class="cmpw-grid">' +
+  const field = (id, label, val, ph, ayuda) =>
+    '<div class="cmpw-campo"><div class="cmpw-label">' + label + '</div>' +
+    '<input class="auto-input cmpw-input" id="' + id + '" value="' + esc(val || '') + '" placeholder="' + ph + '" oninput="cmpWSyncInbox()">' +
+    (id === 'cmpw-subject' ? varsBoton('cmpw-subject') : '') +
+    (ayuda ? '<div class="cmpw-ayuda">' + ayuda + '</div>' : '') + '</div>';
+  return '<div class="cmpw-grid">' +
     '<div>' +
-      '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Configuración inicial</div>' +
-      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:16px">Define los datos principales y observa la vista previa</div>' +
-      '<div class="flow-estado" style="margin-bottom:14px">' +
-        '<button class="' + (isEmail ? 'on pub' : '') + '" onclick="cmpWSetChannel(\'email\')">📧 Email</button>' +
-        '<button class="' + (w.channel === 'whatsapp' ? 'on pub' : '') + '" onclick="cmpWSetChannel(\'whatsapp\')">💬 WhatsApp</button>' +
-        (_smsEstado && _smsEstado.activo || w.channel === 'sms'
-          ? '<button class="' + (w.channel === 'sms' ? 'on pub' : '') + '" onclick="cmpWSetChannel(\'sms\')">📱 SMS</button>' : '') +
+      '<div class="cmpw-h">Configuración del correo</div>' +
+      '<div class="cmpw-hsub">El nombre es para ti; el resto es lo que ve quien lo recibe antes de abrirlo.</div>' +
+      '<div class="cmpw-card">' +
+        field('cmpw-name', 'Nombre de la campaña *', w.name, 'Ej: Reactivación julio', 'Solo lo ves tú, en la lista de campañas.') +
       '</div>' +
-      (w.channel === 'sms' ? '<div style="font-size:11.5px;color:var(--muted);background:var(--bg-subtle);border-radius:10px;padding:8px 12px;margin-bottom:12px">Llega a los móviles colombianos de tus leads. Por ley solo sale de lunes a viernes de 7:00 a 19:00 y sábados de 8:00 a 15:00, nunca domingos ni festivos: fuera de ese horario la campaña espera sola.</div>' : '') +
-      (w.channel === 'whatsapp' ? '<div style="font-size:11.5px;color:#B45309;background:#FEF3C7;border-radius:10px;padding:8px 12px;margin-bottom:12px">WhatsApp solo llega a leads con conversación abierta en tu Inbox (limitación de Meta hasta habilitar plantillas). Los demás quedan como omitidos.</div>' : '') +
-      field('cmpw-name', 'Nombre de la campaña *', w.name, 'Ej: Reactivación julio') +
-      (isEmail ?
+      '<div class="cmpw-card">' +
+        '<div class="cmpw-card-tit">' + icn('mail', 14) + ' Sobre del correo</div>' +
         field('cmpw-subject', 'Asunto *', w.subject, 'Usa {{nombre}} para personalizar') +
-        field('cmpw-preheader', 'Preencabezado', w.preheader, 'El texto gris que se ve en el inbox junto al asunto') +
-        field('cmpw-from', 'Remitente', w.from_name, 'Ej: Alejandro de Acuarius') +
-        field('cmpw-reply', 'Responder a', w.reply_to, 'tu@correo.com — las respuestas llegan aquí, no al remitente técnico')
-      : '') +
+        field('cmpw-preheader', 'Preencabezado', w.preheader, 'El texto gris que se ve junto al asunto') +
+        '<div class="cmpw-dos">' +
+          field('cmpw-from', 'Remitente', w.from_name, 'Ej: Alejandro de Acuarius') +
+          field('cmpw-reply', 'Responder a', w.reply_to, 'tu@correo.com', 'Las respuestas llegan aquí.') +
+        '</div>' +
+      '</div>' +
     '</div>' +
-    (isEmail ?
-    '<div style="position:sticky;top:0">' +
-      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;text-align:right">Vista previa</div>' +
-      '<div style="border:1px solid var(--border);border-radius:14px;padding:16px 18px;background:var(--panel);box-shadow:var(--shadow-sm)">' +
-        '<div style="height:10px;border-radius:6px;background:var(--border);opacity:.5;margin-bottom:10px;width:60%"></div>' +
-        '<div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">' +
-          '<div style="width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px" id="cmpw-prev-avatar">A</div>' +
+    '<div class="cmpw-prev">' +
+      '<div class="cmpw-prev-lbl">Así se ve en la bandeja</div>' +
+      '<div class="cmpw-bandeja">' +
+        '<div class="cmpw-bandeja-fila tenue"></div>' +
+        '<div class="cmpw-bandeja-correo">' +
+          '<div class="cmpw-bandeja-avatar" id="cmpw-prev-avatar">A</div>' +
           '<div style="flex:1;min-width:0">' +
-            '<div style="font-weight:800;font-size:13px" id="cmpw-prev-from">Remitente</div>' +
-            '<div style="font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="cmpw-prev-subject">Este es el asunto del correo</div>' +
-            '<div style="font-size:12px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="cmpw-prev-pre">Este es el preencabezado</div>' +
+            '<div class="cmpw-bandeja-de" id="cmpw-prev-from">Remitente</div>' +
+            '<div class="cmpw-bandeja-asunto" id="cmpw-prev-subject">Este es el asunto del correo</div>' +
+            '<div class="cmpw-bandeja-pre" id="cmpw-prev-pre">Este es el preencabezado</div>' +
           '</div>' +
         '</div>' +
-        '<div style="height:10px;border-radius:6px;background:var(--border);opacity:.35;margin-top:10px;width:80%"></div>' +
-        '<div style="height:10px;border-radius:6px;background:var(--border);opacity:.25;margin-top:6px;width:70%"></div>' +
+        '<div class="cmpw-bandeja-fila tenue"></div>' +
+        '<div class="cmpw-bandeja-fila tenue corta"></div>' +
       '</div>' +
-    '</div>' : '<div></div>') +
+    '</div>' +
   '</div>';
-}
-
-function cmpWSetChannel(ch) {
-  cmpWCollect();
-  _cmpW.channel = ch;
-  _cmpChannel = ch;
-  cmpWRender();
 }
 
 function cmpWSyncInbox() {
@@ -29717,12 +29775,12 @@ const CMP_CAMPOS_WA = [
 ];
 
 function cmpWTarjetaPlantillaWA() {
-  return '<div id="cmpw-wa-box" style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--panel)">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">' +
-      '<div style="font-size:12px;font-weight:800">' + icn('chat', 12) + ' Plantilla aprobada de WhatsApp</div>' +
-      '<button class="btn-sec sm" onclick="waNuevaPlantilla()">Crear plantilla</button>' +
+  return '<div id="cmpw-wa-box" class="cmpw-card">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">' +
+      '<div class="cmpw-card-tit" style="margin:0">' + icn('chat', 14) + ' Plantilla aprobada de WhatsApp</div>' +
+      '<button class="btn-ghost sm" onclick="waNuevaPlantilla()">' + icn('plus', 12) + ' Crear plantilla</button>' +
     '</div>' +
-    '<div id="cmpw-wa-cuerpo" style="font-size:12px;color:var(--muted)">Consultando tus plantillas…</div>' +
+    '<div id="cmpw-wa-cuerpo" style="font-size:12.5px;color:var(--muted)">Consultando tus plantillas…</div>' +
   '</div>';
 }
 
@@ -30254,6 +30312,7 @@ function cmpWMapearWA(parte, i, valor) {
   cmpWPintarMapeoWA();
 }
 
+// Paso 2 — el mensaje. En WhatsApp y SMS es también donde se le pone nombre.
 function cmpWStep2() {
   const w = _cmpW;
   const isEmail = w.channel === 'email';
@@ -30262,73 +30321,86 @@ function cmpWStep2() {
   // Antes seguían ahí, editables, y quien subía una imagen la perdía sin que
   // nada se lo dijera. Ahora se esconden y se explica por qué.
   const conDiseno = isEmail && !!w.html;
+  const nombreCanal = isEmail ? 'correo' : w.channel === 'sms' ? 'SMS' : 'WhatsApp';
 
-  return '<div style="display:grid;grid-template-columns:minmax(300px,460px) minmax(280px,420px);gap:34px;justify-content:center;align-items:start" class="cmpw-grid">' +
+  return '<div class="cmpw-grid">' +
     '<div>' +
-      '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Contenido</div>' +
-      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:14px">' +
+      '<div class="cmpw-h">' + (isEmail ? 'Contenido del correo' : 'Mensaje de ' + nombreCanal) + '</div>' +
+      '<div class="cmpw-hsub">' +
         (conDiseno
           ? 'Este correo usa un diseño. Edítalo con el constructor o vuelve al correo sencillo.'
-          : 'Parte de una plantilla, escríbelo tú, o deja que la IA lo redacte con el contexto de tu negocio') +
+          : 'Parte de una plantilla, escríbelo tú o deja que la IA lo redacte con el contexto de tu negocio.') +
       '</div>' +
+
+      (!isEmail
+        ? '<div class="cmpw-card"><div class="cmpw-campo"><div class="cmpw-label">Nombre de la campaña *</div>' +
+            '<input class="auto-input cmpw-input" id="cmpw-name" value="' + esc(w.name || '') + '" placeholder="Ej: Recordatorio visita sábado">' +
+            '<div class="cmpw-ayuda">Solo lo ves tú, en la lista de campañas.</div></div></div>'
+        : '') +
+
+      (w.channel === 'sms'
+        ? '<div class="cmpw-nota">' + icn('calendar', 14) + '<span>Por ley los SMS solo salen de lunes a viernes de 7:00 a 19:00 y sábados de 8:00 a 15:00, nunca domingos ni festivos. Fuera de ese horario la campaña espera sola.</span></div>'
+        : '') +
 
       (w.channel === 'whatsapp' ? cmpWTarjetaPlantillaWA() : '') +
 
       (conDiseno ? cmpWTarjetaDiseno(w) :
-      // ── Correo sencillo (se conserva entero) ──────────────────────────────
-      '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--panel)" id="cmpw-pln-box">' +
-        '<div style="font-size:12px;font-weight:800;margin-bottom:6px">' + icn(isEmail ? 'file' : 'chat', 12) + ' ' +
-          (isEmail ? 'Partir de una plantilla' : 'Partir de una respuesta guardada') + '</div>' +
-        '<div style="display:flex;gap:8px;align-items:center">' +
-          '<select class="auto-input" id="cmpw-pln-sel" style="flex:1"><option value="">Cargando…</option></select>' +
-          '<button class="btn-sec sm" id="cmpw-pln-btn" onclick="cmpWUsarPlantilla()" disabled>Usar</button>' +
+      '<div class="cmpw-atajos">' +
+        '<div class="cmpw-card" id="cmpw-pln-box">' +
+          '<div class="cmpw-card-tit">' + icn(isEmail ? 'file' : 'chat', 14) + ' ' + (isEmail ? 'Partir de una plantilla' : 'Partir de una respuesta guardada') + '</div>' +
+          '<div style="display:flex;gap:8px;align-items:center">' +
+            '<select class="auto-input" id="cmpw-pln-sel" style="flex:1;min-width:0"><option value="">Cargando…</option></select>' +
+            '<button class="btn-ghost sm" id="cmpw-pln-btn" onclick="cmpWUsarPlantilla()" disabled>Usar</button>' +
+          '</div>' +
+          '<div class="cmpw-ayuda">Se copia aquí. Editarlo no cambia el original.</div>' +
         '</div>' +
-        '<div style="font-size:11px;color:var(--muted2);margin-top:6px">Se copia su contenido aquí. Editarlo no cambia el original.</div>' +
-      '</div>' +
-      '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--panel)">' +
-        '<div style="font-size:12px;font-weight:800;margin-bottom:6px">✨ Redactar con IA</div>' +
-        '<div style="display:flex;gap:8px">' +
-          '<input class="auto-input" id="cmpw-ai-obj" placeholder="Objetivo: ej. reactivar leads fríos con 20% de descuento" style="flex:1">' +
-          '<button class="btn-sec sm" id="cmpw-ai-btn" onclick="cmpWAI()">Generar</button>' +
+        '<div class="cmpw-card">' +
+          '<div class="cmpw-card-tit">' + icn('sparkles', 14) + ' Redactar con IA</div>' +
+          '<div style="display:flex;gap:8px">' +
+            '<input class="auto-input cmpw-input" id="cmpw-ai-obj" placeholder="Ej: reactivar leads fríos con 20% de descuento" style="flex:1;min-width:0">' +
+            '<button class="btn-ghost sm" id="cmpw-ai-btn" onclick="cmpWAI()">Generar</button>' +
+          '</div>' +
+          '<div class="cmpw-ayuda">Usa el contexto de tu negocio y personaliza con {{nombre}}.</div>' +
         '</div>' +
       '</div>' +
-      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Mensaje *</div>' +
-      '<textarea class="auto-input" id="cmpw-msg" rows="9" placeholder="Escribe el mensaje…" style="width:100%;font-family:var(--font);font-size:12.5px" oninput="cmpWSyncEmail()">' + esc(w.body || '') + '</textarea>' +
-      (w.channel === 'sms' ? '<div id="cmpw-sms-cuenta">' + smsCuentaHtml(w.body) + '</div>' : '') +
-      '<div style="margin-bottom:14px">' + varsBoton('cmpw-msg') + '</div>' +
-      (isEmail ?
-      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Imagen de cabecera (opcional)</div>' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap" id="cmpw-img-row">' +
-        '<input type="file" id="cmpw-img-file" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="cmpWImgUpload(this)">' +
-        '<button class="btn-sec sm" id="cmpw-img-btn" onclick="document.getElementById(\'cmpw-img-file\').click()">' + (w.header_image_url ? 'Cambiar imagen' : '🖼️ Subir imagen') + '</button>' +
-        (w.header_image_url ? '<button class="btn-ghost sm" onclick="cmpWImgRemove()">✕ Quitar</button>' : '') +
-        '<span style="font-size:11px;color:var(--muted2)">PNG/JPG, máx 2MB — ancho ideal 1120px</span>' +
-      '</div>' +
-      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Botón de acción (opcional)</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-bottom:12px">' +
-        '<input class="auto-input" id="cmpw-cta-text" value="' + esc(w.cta_text || '') + '" placeholder="Texto: ej. Agendar llamada" oninput="cmpWSyncEmail()">' +
-        '<input class="auto-input" id="cmpw-cta-url" value="' + esc(w.cta_url || '') + '" placeholder="https://tu-link.com" oninput="cmpWSyncEmail()">' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">' +
-        '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer">Color de marca ' +
-          '<input type="color" id="cmpw-accent" value="' + esc(w.accent_color || '#2563EB') + '" style="width:34px;height:26px;border:none;border-radius:6px;padding:0;cursor:pointer" oninput="cmpWSyncEmail()"></label>' +
-      '</div>' : '')) +
 
-      // El UTM y el guardar-como valen para los dos modos.
+      '<div class="cmpw-card">' +
+        '<div class="cmpw-label">Mensaje *</div>' +
+        '<textarea class="auto-input cmpw-input" id="cmpw-msg" rows="' + (w.channel === 'sms' ? 5 : 9) + '" placeholder="Escribe el mensaje…" oninput="cmpWSyncEmail()">' + esc(w.body || '') + '</textarea>' +
+        (w.channel === 'sms' ? '<div id="cmpw-sms-cuenta">' + smsCuentaHtml(w.body) + '</div>' : '') +
+        varsBoton('cmpw-msg') +
+        '<div class="cmpw-card-pie">' +
+          (isEmail
+            ? '<label class="cmpw-check" title="Los links del correo llevan utm_source=acuarius&utm_medium=email para que midas visitas en tu Analytics">' +
+                '<input type="checkbox" id="cmpw-utm"' + (w.utm ? ' checked' : '') + '> Medir clics con UTM</label>'
+            : '<span></span>') +
+          '<button class="btn-ghost sm" onclick="cmpWGuardarComoPlantilla()">' + icn('plus', 12) + ' ' +
+            (isEmail ? 'Guardar como plantilla' : 'Guardar como respuesta') + '</button>' +
+        '</div>' +
+      '</div>' +
+
       (isEmail ?
-      '<div style="margin-top:14px">' +
-        '<label style="display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer" title="Los links del email llevan utm_source=acuarius&utm_medium=email para que midas visitas en tu Analytics">' +
-          '<input type="checkbox" id="cmpw-utm"' + (w.utm ? ' checked' : '') + '> Medir clics con UTM en mis links</label>' +
-      '</div>' : '') +
-      (conDiseno ? '' :
-      '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
-        '<button class="btn-ghost sm" onclick="cmpWGuardarComoPlantilla()">' + icn('plus', 12) + ' ' +
-          (isEmail ? 'Guardar esto como plantilla' : 'Guardar esto como respuesta') + '</button>' +
-      '</div>') +
+      '<div class="cmpw-card">' +
+        '<div class="cmpw-card-tit">' + icn('edit', 14) + ' Diseño</div>' +
+        '<div class="cmpw-campo"><div class="cmpw-label">Imagen de cabecera</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap" id="cmpw-img-row">' +
+            '<input type="file" id="cmpw-img-file" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="cmpWImgUpload(this)">' +
+            '<button class="btn-ghost sm" id="cmpw-img-btn" onclick="document.getElementById(\'cmpw-img-file\').click()">' + icn('plus', 12) + ' ' + (w.header_image_url ? 'Cambiar imagen' : 'Subir imagen') + '</button>' +
+            (w.header_image_url ? '<button class="btn-ghost sm" onclick="cmpWImgRemove()">Quitar</button>' : '') +
+            '<span class="cmpw-ayuda" style="margin:0">PNG o JPG, máx. 2 MB · ancho ideal 1120 px</span>' +
+          '</div></div>' +
+        '<div class="cmpw-campo"><div class="cmpw-label">Botón de acción</div>' +
+          '<div class="cmpw-dos">' +
+            '<input class="auto-input cmpw-input" id="cmpw-cta-text" value="' + esc(w.cta_text || '') + '" placeholder="Texto: ej. Agendar llamada" oninput="cmpWSyncEmail()">' +
+            '<input class="auto-input cmpw-input" id="cmpw-cta-url" value="' + esc(w.cta_url || '') + '" placeholder="https://tu-link.com" oninput="cmpWSyncEmail()">' +
+          '</div></div>' +
+        '<label class="cmpw-check">Color de marca ' +
+          '<input type="color" id="cmpw-accent" value="' + esc(w.accent_color || '#2563EB') + '" class="cmpw-color" oninput="cmpWSyncEmail()"></label>' +
+      '</div>' : '')) +
     '</div>' +
-    '<div style="position:sticky;top:0">' +
-      '<div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;text-align:right">Así llega el ' + (isEmail ? 'email' : w.channel === 'sms' ? 'SMS' : 'WhatsApp') + '</div>' +
-      '<div id="cmpw-mailprev" style="border:1px solid var(--border);border-radius:14px;background:#ffffff;color:#1a1a2e;padding:22px 22px 16px;box-shadow:var(--shadow-sm);max-height:62vh;overflow-y:auto"></div>' +
+    '<div class="cmpw-prev">' +
+      '<div class="cmpw-prev-lbl">Así llega el ' + nombreCanal + '</div>' +
+      '<div id="cmpw-mailprev" class="cmpw-mailprev' + (isEmail ? '' : ' chat') + '"></div>' +
     '</div>' +
   '</div>';
 }
@@ -30425,7 +30497,7 @@ async function cmpWAI() {
       }
     }
     cmpWSyncEmail();
-    showToast('✨ Listo — el asunto y preencabezado también se actualizaron', 'success');
+    showToast('Listo: el asunto y preencabezado también se actualizaron', 'success');
   } catch { showToast('Error generando con IA', 'error'); }
   finally { btn.disabled = false; btn.textContent = 'Generar'; }
 }
@@ -30448,7 +30520,7 @@ function cmpWImgUpload(input) {
       cmpWCollect();
       _cmpW.header_image_url = d.url;
       cmpWRender();
-      showToast('🖼️ Imagen de cabecera lista', 'success');
+      showToast('Imagen de cabecera lista', 'success');
     } catch { showToast('Error subiendo la imagen', 'error'); }
     finally { const b = document.getElementById('cmpw-img-btn'); if (b) { b.disabled = false; } }
   };
@@ -30474,24 +30546,24 @@ async function cmpWLoadLists() {
 
 function cmpWStep3() {
   const w = _cmpW;
-  const tab = (m, label) => '<button class="' + (w.mode === m ? 'on pub' : '') + '" onclick="cmpWAudMode(\'' + m + '\')">' + label + '</button>';
-  return '<div style="max-width:640px;margin:0 auto">' +
-    '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Destinatarios</div>' +
-    '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:14px">Elige a quién le llega esta campaña</div>' +
-    '<div class="flow-estado" style="margin-bottom:14px">' +
-      tab('filters', '🎯 Por filtros') + tab('list', '📋 Lista guardada') + tab('manual', '☝️ Elegir uno a uno') +
+  const tab = (m, ico, label) => '<button class="cmp-tab' + (w.mode === m ? ' on' : '') + '" onclick="cmpWAudMode(\'' + m + '\')">' + icn(ico, 13) + ' ' + label + '</button>';
+  return '<div class="cmpw-solo">' +
+    '<div class="cmpw-h">¿A quién le llega?</div>' +
+    '<div class="cmpw-hsub">Elige la audiencia por filtros, con una lista guardada o contacto por contacto.</div>' +
+    '<div class="cmp-tabs" style="margin-bottom:14px;display:inline-flex">' +
+      tab('filters', 'tag', 'Por filtros') + tab('list', 'file', 'Lista guardada') + tab('manual', 'users', 'Uno a uno') +
     '</div>' +
-    '<div id="cmpw-aud-box"></div>' +
-    '<div id="cmpw-excluir" style="margin-top:18px"></div>' +
-    '<div id="cmp-count" style="font-size:var(--fs-sm);color:var(--muted);margin-top:14px">Calculando audiencia…</div>' +
+    '<div class="cmpw-card" id="cmpw-aud-box"></div>' +
+    '<div class="cmpw-card" id="cmpw-excluir"></div>' +
+    '<div class="cmpw-total" id="cmp-count">Calculando audiencia…</div>' +
     (w.channel === 'email' ?
-    '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-top:18px;background:var(--panel)">' +
-      '<div style="font-size:12px;font-weight:800;margin-bottom:6px">✉️ Correo de prueba</div>' +
+    '<div class="cmpw-card" style="margin-top:14px">' +
+      '<div class="cmpw-card-tit">' + icn('mail', 14) + ' Correo de prueba</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-        '<input class="auto-input" id="cmpw-test-to" placeholder="cualquier@correo.com" style="flex:1;min-width:200px">' +
-        '<button class="btn-sec sm" id="cmpw-test3-btn" onclick="cmpWTestTo()">Enviar prueba</button>' +
+        '<input class="auto-input cmpw-input" id="cmpw-test-to" placeholder="cualquier@correo.com" style="flex:1;min-width:200px">' +
+        '<button class="btn-ghost sm" id="cmpw-test3-btn" onclick="cmpWTestTo()">Enviar prueba</button>' +
       '</div>' +
-      '<div style="font-size:11px;color:var(--muted2);margin-top:5px">Llega con asunto [PRUEBA] y datos de ejemplo · no gasta tu cupo</div>' +
+      '<div class="cmpw-ayuda">Llega con asunto [PRUEBA] y datos de ejemplo. No gasta tu cupo.</div>' +
     '</div>' : '') +
   '</div>';
 }
@@ -30519,17 +30591,17 @@ function cmpWAudRender() {
         '<select class="auto-input" id="cmp-stage" onchange="cmpPreview()"><option value="">Cualquier etapa</option>' + autoStageOptions(w.stage || '') + '</select>' +
         '<select class="auto-input" id="cmp-source" onchange="cmpPreview()"><option value="">Cualquier fuente</option>' + ['manual', 'webhook', 'landing_page', 'meta_ads', 'google_ads', 'referido', 'importacion'].map(s => '<option value="' + s + '"' + (w.source === s ? ' selected' : '') + '>' + s.replace('_', ' ') + '</option>').join('') + '</select>' +
       '</div>' +
-      '<button class="btn-ghost sm" onclick="cmpWSaveList()">💾 Guardar este segmento como lista</button>';
+      '<button class="btn-ghost sm" onclick="cmpWSaveList()">' + icn('file', 12) + ' Guardar este segmento como lista</button>';
   } else if (w.mode === 'list') {
     const opts = _cmpLists.map(l =>
       '<option value="' + l.id + '"' + (w.list_id === l.id ? ' selected' : '') + '>' + esc(l.name) + (l.kind === 'static' ? ' (' + (l.lead_ids || []).length + ' contactos)' : ' (dinámica)') + '</option>').join('');
     box.innerHTML = _cmpLists.length
       ? '<div style="display:flex;gap:8px;align-items:center">' +
           '<select class="auto-input" id="cmpw-list-sel" style="flex:1" onchange="_cmpW.list_id=this.value;cmpPreview()"><option value="">Elige una lista…</option>' + opts + '</select>' +
-          '<button class="btn-ghost sm" title="Eliminar la lista seleccionada" onclick="cmpWDeleteList()">🗑</button>' +
+          '<button class="btn-ghost sm" title="Eliminar la lista seleccionada" onclick="cmpWDeleteList()">Eliminar</button>' +
         '</div>' +
         '<div style="font-size:11.5px;color:var(--muted2);margin-top:6px">Las listas dinámicas se resuelven al momento del envío (entran los leads que cumplan los filtros en ese momento); las estáticas son los contactos exactos que guardaste.</div>'
-      : '<div style="font-size:12.5px;color:var(--muted);padding:14px;border:1px dashed var(--border);border-radius:12px">Aún no tienes listas guardadas. Créalas desde "Por filtros" (💾 Guardar segmento) o desde "Elegir uno a uno" (💾 Guardar selección).</div>';
+      : '<div style="font-size:12.5px;color:var(--muted);padding:14px;border:1px dashed var(--border);border-radius:12px">Aún no tienes listas guardadas. Créalas desde «Por filtros» (Guardar este segmento) o desde «Uno a uno» (Guardar selección).</div>';
   } else {
     const sel = w.lead_ids.map(id => {
       const l = (crmLeads || []).find(x => x.id === id);
@@ -30540,7 +30612,7 @@ function cmpWAudRender() {
       '<div id="cmpw-man-results" style="max-height:220px;overflow-y:auto;margin-bottom:10px"></div>' +
       '<div style="font-size:12px;font-weight:700;margin-bottom:5px">Seleccionados (' + w.lead_ids.length + ')</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">' + (sel || '<span style="font-size:11.5px;color:var(--muted2)">Nadie aún — busca arriba y ve sumando</span>') + '</div>' +
-      (w.lead_ids.length ? '<button class="btn-ghost sm" onclick="cmpWSaveList()">💾 Guardar selección como lista</button>' : '');
+      (w.lead_ids.length ? '<button class="btn-ghost sm" onclick="cmpWSaveList()">' + icn('file', 12) + ' Guardar selección como lista</button>' : '');
     cmpWManualSearch();
   }
 }
@@ -30623,7 +30695,7 @@ async function cmpWTestTo() {
     await cmpWSave();
     const d = await fetchAuth('/api/campaigns?action=test', { method: 'POST', body: JSON.stringify({ id: _cmpW.id, to }) }).then(r => r.json());
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
-    showToast('✉️ Prueba enviada a ' + d.to, 'success');
+    showToast('Prueba enviada a ' + d.to, 'success');
   } catch (e) { showToast('⚠️ ' + (e.message || 'Error enviando la prueba'), 'error'); }
   finally { btn.disabled = false; btn.textContent = 'Enviar prueba'; }
 }
@@ -30672,9 +30744,9 @@ function cmpPreview() {
       const b = d.breakdown || {};
       const excl = [];
       if (b.unsubscribed) excl.push(b.unsubscribed + ' dados de baja');
-      if (b.missing) excl.push(b.missing + (_cmpChannel === 'email' ? ' sin email' : ' sin teléfono'));
-      el.innerHTML = '🎯 <b>' + d.count + '</b> destinatarios' +
-        (d.sample?.length ? ' · ej: ' + d.sample.slice(0, 3).map(esc).join(', ') : '') +
+      if (b.missing) excl.push(b.missing + (_cmpChannel === 'email' ? ' sin email' : _cmpChannel === 'sms' ? ' sin móvil válido' : ' sin teléfono'));
+      el.innerHTML = '<div>' + icn('users', 14) + ' <b>' + Number(d.count || 0).toLocaleString('es-CO') + '</b> destinatarios</div>' +
+        (d.sample?.length ? '<div style="font-size:12px;color:var(--muted)">Por ejemplo: ' + d.sample.slice(0, 3).map(esc).join(', ') + '</div>' : '') +
         (excl.length ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:4px">Excluidos: ' + excl.join(' · ') + '</div>' : '') +
         (_cmpChannel === 'email' && cmpQuota && cmpQuota.limit > 0 ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:2px">Cupo restante del mes: ' + Math.max(0, cmpQuota.limit - (cmpQuota.used || 0)).toLocaleString('es-CO') + '</div>' : '') +
         // Se avisa aqui, donde todavia se puede segmentar, y no al final: al
@@ -30690,14 +30762,17 @@ function cmpPreview() {
 function cmpWStep4() {
   const w = _cmpW;
   const isEmail = w.channel === 'email';
+  const k = CMP_CANAL[w.channel] || CMP_CANAL.email;
+  // Fuera del correo el nombre se escribe en el paso del mensaje.
+  const pasoNombre = isEmail ? 1 : 2;
 
   // Cada línea con su enlace al paso donde se arregla. Volver atrás a mano y
   // buscar el campo es lo que hace que la gente envíe con erratas.
   const row = (label, val, paso) =>
-    '<div style="display:flex;gap:14px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px">' +
-      '<div style="width:132px;flex-shrink:0;color:var(--muted);font-weight:600">' + label + '</div>' +
-      '<div style="flex:1;min-width:0">' + val + '</div>' +
-      (paso ? '<button class="btn-ghost sm" style="font-size:11px;padding:2px 8px;flex-shrink:0" onclick="cmpWGo(' + paso + ')">Editar</button>' : '') +
+    '<div class="cmpw-fila">' +
+      '<div class="cmpw-fila-lbl">' + label + '</div>' +
+      '<div class="cmpw-fila-val">' + val + '</div>' +
+      (paso ? '<button class="btn-ghost sm cmpw-fila-ed" onclick="cmpWGo(' + paso + ')">Editar</button>' : '') +
     '</div>';
 
   const audParts = w.mode === 'manual' ? 'Selección manual: ' + w.lead_ids.length + ' contactos'
@@ -30708,47 +30783,51 @@ function cmpWStep4() {
     ? 'Diseño' + (w.template_nombre ? ': ' + esc(w.template_nombre) : '')
     : (w.body ? esc(w.body.slice(0, 80)) + (w.body.length > 80 ? '…' : '') : '—');
 
-  return '<div style="display:grid;grid-template-columns:minmax(320px,1fr) minmax(280px,380px);gap:28px;max-width:1000px;margin:0 auto;align-items:start" class="cmpw-grid">' +
+  return '<div class="cmpw-grid">' +
     '<div>' +
-      '<div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:-.02em;margin-bottom:2px">Revisión y envío</div>' +
-      '<div style="font-size:var(--fs-sm);color:var(--muted);margin-bottom:16px">Comprueba lo que va a salir. Puedes corregir cualquier cosa sin perder lo avanzado.</div>' +
+      '<div class="cmpw-h">Revisión y envío</div>' +
+      '<div class="cmpw-hsub">Comprueba lo que va a salir. Puedes corregir cualquier cosa sin perder lo avanzado.</div>' +
 
       '<div id="cmpw-checks"></div>' +
 
-      '<div style="border:1px solid var(--border);border-radius:14px;padding:6px 18px;background:var(--panel);margin-bottom:16px">' +
-        row('Nombre', esc(w.name || '—'), 1) +
-        row('Canal', isEmail ? '📧 Email' : w.channel === 'sms' ? '📱 SMS' : '💬 WhatsApp', 1) +
-        (isEmail ? row('Asunto', esc(w.subject || '<span style=\'color:#B91C1C\'>Falta el asunto</span>'), 1) +
+      '<div class="cmpw-card" style="padding:4px 18px">' +
+        row('Nombre', esc(w.name || '—'), pasoNombre) +
+        row('Canal', '<span class="cmpw-chip ' + k.clase + '">' + icn(k.icono, 12) + ' ' + k.nombre + '</span>') +
+        (isEmail ? row('Asunto', w.subject ? esc(w.subject) : '<span class="cmp-txt-error">Falta el asunto</span>', 1) +
           row('Preencabezado', esc(w.preheader || '—'), 1) +
           row('Remitente', esc(w.from_name || 'Acuarius') + ' <span style="color:var(--muted2)">&lt;notificaciones@app.acuarius.app&gt;</span>', 1) +
-          row('Responder a', esc(w.reply_to || 'No configurado — las respuestas se pierden'), 1) : '') +
-        row('Contenido', contenido, 2) +
+          row('Responder a', w.reply_to ? esc(w.reply_to) : '<span class="cmp-txt-aviso">No configurado: las respuestas se pierden</span>', 1) : '') +
+        row(isEmail ? 'Contenido' : 'Mensaje', contenido, 2) +
         (isEmail && !w.html ? row('Botón', w.cta_text && w.cta_url ? esc(w.cta_text) + ' → ' + esc(w.cta_url) : '—', 2) : '') +
-        (isEmail ? row('UTM en links', w.utm ? 'Sí — utm_source=acuarius' : 'No', 2) : '') +
+        (isEmail ? row('UTM en links', w.utm ? 'Sí, utm_source=acuarius' : 'No', 2) : '') +
         row('Audiencia', audParts, 3) +
       '</div>' +
 
-      '<div id="cmpw-destinatarios" style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel);margin-bottom:16px">' +
+      '<div id="cmpw-destinatarios" class="cmpw-card">' +
         '<div style="font-size:12px;color:var(--muted)">Calculando destinatarios…</div>' +
       '</div>' +
 
-      '<div style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel)">' +
-        '<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;cursor:pointer">' +
-          '<input type="checkbox" id="cmpw-sched-on"' + (w.schedule ? ' checked' : '') + ' onchange="cmpWSchedToggle()"> Programar envío</label>' +
+      '<div class="cmpw-card">' +
+        '<label class="cmpw-check" style="font-weight:700;font-size:13px">' +
+          '<input type="checkbox" id="cmpw-sched-on"' + (w.schedule ? ' checked' : '') + ' onchange="cmpWSchedToggle()"> ' + icn('calendar', 13) + ' Programar el envío</label>' +
         '<div id="cmpw-sched-box" style="display:' + (w.schedule ? 'block' : 'none') + ';margin-top:10px">' +
-          '<input type="datetime-local" class="auto-input" id="cmpw-sched" value="' + esc(w.schedule || '') + '" onchange="cmpWSchedChange()">' +
-          '<div style="font-size:11.5px;color:var(--muted2);margin-top:5px">El envío arranca en el ciclo siguiente a la hora elegida (máx. 10 min después)</div>' +
+          '<input type="datetime-local" class="auto-input cmpw-input" id="cmpw-sched" value="' + esc(w.schedule || '') + '" onchange="cmpWSchedChange()">' +
+          '<div class="cmpw-ayuda">Arranca en el ciclo siguiente a la hora elegida (máx. 10 min después).' +
+            (w.channel === 'sms' ? ' Si cae fuera del horario legal de los SMS, espera al siguiente hueco permitido.' : '') + '</div>' +
         '</div>' +
       '</div>' +
     '</div>' +
 
-    // La columna de la derecha: ver el correo tal cual y probarlo.
-    '<div style="position:sticky;top:0">' +
-      '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">' +
-        (isEmail ? '<button class="btn-sec sm" id="cmpw-test-btn" onclick="cmpWTest()">✉️ Enviarme un correo de prueba</button>' : '') +
-        '<button class="btn-ghost sm" onclick="cmpWGo(2)">Editar contenido</button>' +
+    // La columna de la derecha: ver el mensaje tal cual y probarlo.
+    '<div class="cmpw-prev">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
+        '<div class="cmpw-prev-lbl" style="margin:0">Vista previa</div>' +
+        '<div style="display:flex;gap:6px">' +
+          (isEmail ? '<button class="btn-ghost sm" id="cmpw-test-btn" onclick="cmpWTest()">' + icn('send', 12) + ' Enviarme una prueba</button>' : '') +
+          '<button class="btn-ghost sm" onclick="cmpWGo(2)">' + icn('edit', 12) + ' Editar</button>' +
+        '</div>' +
       '</div>' +
-      '<div id="cmpw-mailprev" style="border:1px solid var(--border);border-radius:14px;background:#fff;color:#1a1a2e;padding:20px;box-shadow:var(--shadow-sm);max-height:58vh;overflow-y:auto"></div>' +
+      '<div id="cmpw-mailprev" class="cmpw-mailprev' + (isEmail ? '' : ' chat') + '"></div>' +
     '</div>' +
   '</div>';
 }
@@ -30800,18 +30879,17 @@ function cmpWPintarChecks() {
   if (!cont) return;
   const { graves, avisos } = cmpWComprobar();
   if (!graves.length && !avisos.length) {
-    cont.innerHTML = '<div style="display:flex;align-items:center;gap:8px;border:1px solid #A7F3D0;background:#ECFDF5;color:#065F46;border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:12.5px">' +
-      icn('check', 13) + ' Todo revisado. No encontramos nada que vaya a salir mal.</div>';
+    cont.innerHTML = '<div class="cmpw-revision ok">' + icn('check', 14) + ' Todo revisado. No encontramos nada que vaya a salir mal.</div>';
     return;
   }
-  const caja = (items, color, fondo, borde, titulo) =>
-    '<div style="border:1px solid ' + borde + ';background:' + fondo + ';color:' + color + ';border-radius:12px;padding:11px 14px;margin-bottom:10px;font-size:12.5px">' +
-      '<div style="font-weight:800;margin-bottom:5px">' + titulo + '</div>' +
-      '<ul style="margin:0;padding-left:17px;line-height:1.65">' + items.map(t => '<li>' + t + '</li>').join('') + '</ul>' +
+  const caja = (items, clase, titulo) =>
+    '<div class="cmpw-revision ' + clase + '">' + icn('alert', 14) +
+      '<div><div style="font-weight:800;margin-bottom:4px">' + titulo + '</div>' +
+      '<ul>' + items.map(t => '<li>' + t + '</li>').join('') + '</ul></div>' +
     '</div>';
   cont.innerHTML =
-    (graves.length ? caja(graves, '#991B1B', '#FEF2F2', '#FCA5A5', 'Corrige esto antes de enviar') : '') +
-    (avisos.length ? caja(avisos, '#92400E', '#FFFBEB', '#FDE68A', 'Revisa esto, por si acaso') : '');
+    (graves.length ? caja(graves, 'grave', 'Corrige esto antes de enviar') : '') +
+    (avisos.length ? caja(avisos, 'aviso', 'Revisa esto, por si acaso') : '');
 }
 
 // El desglose de a quién le llega y a quién no. Un número solo no basta: la
@@ -30886,13 +30964,13 @@ function cmpWSchedToggle() {
     if (inp) inp.value = _cmpW.schedule;
   }
   const btn = document.getElementById('cmpw-send-btn');
-  if (btn) btn.textContent = _cmpW.schedule ? 'Programar envío' : 'Enviar';
+  if (btn) btn.textContent = _cmpW.schedule ? 'Programar envío' : 'Enviar campaña';
 }
 
 function cmpWSchedChange() {
   _cmpW.schedule = document.getElementById('cmpw-sched')?.value || '';
   const btn = document.getElementById('cmpw-send-btn');
-  if (btn) btn.textContent = _cmpW.schedule ? 'Programar envío' : 'Enviar';
+  if (btn) btn.textContent = _cmpW.schedule ? 'Programar envío' : 'Enviar campaña';
 }
 
 
@@ -30908,6 +30986,7 @@ function cmpWCollect() {
     if (g('cmpw-from')) w.from_name = g('cmpw-from').value.trim();
     if (g('cmpw-reply')) w.reply_to = g('cmpw-reply').value.trim();
   } else if (w.step === 2) {
+    if (g('cmpw-name')) w.name = g('cmpw-name').value.trim();
     if (g('cmpw-msg')) w.body = g('cmpw-msg').value.trim();
     if (g('cmpw-cta-text')) w.cta_text = g('cmpw-cta-text').value.trim();
     if (g('cmpw-cta-url')) w.cta_url = g('cmpw-cta-url').value.trim();
@@ -30934,6 +31013,7 @@ function cmpWValidate(step) {
     if (w.reply_to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(w.reply_to)) { showToast('El email de "Responder a" no es válido', 'error'); return false; }
   }
   if (step === 2) {
+    if (w.channel !== 'email' && !w.name) { showToast('La campaña necesita un nombre', 'error'); return false; }
     // Con diseño el cuerpo de texto no se envía, así que exigirlo no tiene sentido.
     if (w.channel === 'email' && w.html) {
       if (!String(w.html).trim()) { showToast('El diseño está vacío', 'error'); return false; }
@@ -30961,6 +31041,7 @@ function cmpWValidate(step) {
 }
 
 function cmpWNext() {
+  if (_cmpW.step >= 4) return; // la revisión es el último paso
   cmpWCollect();
   if (!cmpWValidate(_cmpW.step)) return;
   _cmpW.step++;
@@ -31004,9 +31085,9 @@ async function cmpWTest() {
     await cmpWSave();
     const d = await fetchAuth('/api/campaigns?action=test', { method: 'POST', body: JSON.stringify({ id: _cmpW.id }) }).then(r => r.json());
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
-    showToast('✉️ Prueba enviada a ' + d.to + ' — revisa tu inbox', 'success');
+    showToast('Prueba enviada a ' + d.to + ' — revisa tu inbox', 'success');
   } catch (e) { showToast('⚠️ ' + (e.message || 'Error enviando la prueba'), 'error'); }
-  finally { btn.disabled = false; btn.textContent = '✉️ Enviarme un correo de prueba'; }
+  finally { btn.disabled = false; btn.innerHTML = icn('send', 12) + ' Enviarme una prueba'; }
 }
 
 async function cmpWSaveDraft() {
@@ -31018,7 +31099,7 @@ async function cmpWSaveDraft() {
     await cmpWSave();
     document.getElementById('cmp-overlay')?.remove();
     _cmpW = null;
-    showToast('💾 Borrador guardado', 'success');
+    showToast('Borrador guardado', 'success');
     cmpRender();
   } catch (e) { showToast('⚠️ ' + (e.message || 'Error guardando'), 'error'); btn.disabled = false; }
 }
@@ -38153,20 +38234,18 @@ function cmpWExcluirPintar() {
   const nombreLista = id => (_cmpLists.find(l => l.id === id) || {}).name || 'Lista';
 
   const chips =
-    listas.map(id => '<span class="tag-chip">📋 ' + esc(nombreLista(id)) +
+    listas.map(id => '<span class="tag-chip">' + esc(nombreLista(id)) +
       ' <span style="cursor:pointer;font-weight:700" onclick="cmpWExcluirQuitar(\'lista\',\'' + esc(id) + '\')">×</span></span>').join('') +
-    etiquetas.map(t => '<span class="tag-chip">🏷️ ' + esc(t) +
+    etiquetas.map(t => '<span class="tag-chip">' + icn('tag', 10) + ' ' + esc(t) +
       ' <span style="cursor:pointer;font-weight:700" onclick="cmpWExcluirQuitar(\'tag\',\'' + esc(t) + '\')">×</span></span>').join('');
 
   const disponibles = _cmpLists.filter(l => !listas.includes(l.id));
   const tagsDisponibles = (typeof crmTags !== 'undefined' ? crmTags : []).map(t => t.name || t).filter(t => !etiquetas.includes(t));
 
   cont.innerHTML =
-    '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--panel)">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-        '<div style="font-size:12px;font-weight:800">🚫 No enviar a</div>' +
-        '<div style="font-size:11px;color:var(--muted2)">Se descuentan de la audiencia, la elijas como la elijas</div>' +
-      '</div>' +
+    '<div>' +
+      '<div class="cmpw-card-tit" style="margin-bottom:2px">' + icn('alert', 14) + ' No enviar a</div>' +
+      '<div class="cmpw-ayuda" style="margin:0 0 6px">Se descuentan de la audiencia, la elijas como la elijas.</div>' +
       (chips ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin:8px 0">' + chips + '</div>' : '') +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' +
         (disponibles.length

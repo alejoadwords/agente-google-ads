@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-09-30-asistente-campanas",
+      "fecha": "2026-09-30",
+      "tipo": "mejora",
+      "titulo": "Crear una campaña es más rápido",
+      "texto": "El asistente de campañas tiene un diseño nuevo y ya no te vuelve a preguntar el canal: si eliges WhatsApp o SMS, empiezas directo en el mensaje y son solo tres pasos. Arriba ves en qué paso vas y puedes volver a cualquiera de los anteriores con un clic.",
+      "accion": {
+        "texto": "Crear una campaña",
+        "ir": "campanas"
+      }
+    },
+    {
       "id": "2026-09-30-campanas-nuevas",
       "fecha": "2026-09-30",
       "tipo": "mejora",

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Asistente de campaña</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  El asistente de nueva campaña con el CSS y el código REALES de public/: todo
+  el bloque de campañas más las funciones de las que depende, sacadas de
+  app.js por su nombre. La red es de mentira.
+
+  Arrancar con:  PUERTO=4183 node pruebas/servidor-boceto.mjs
+  Abrir:         http://localhost:4183/pruebas/banco-asistente.html
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle);color:var(--text)}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:#0D0F1C;color:#fff;padding:7px 14px;z-index:99999;
+    display:flex;gap:8px;align-items:center;justify-content:center;font-size:12px;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:7px;padding:4px 9px;
+    font-family:inherit;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="banco">
+  <span style="opacity:.6">BANCO ·</span>
+  <button onclick="abrir('email')">correo</button>
+  <button onclick="abrir('whatsapp')">WhatsApp</button>
+  <button onclick="abrir('sms')">SMS</button>
+  <button onclick="cmpWNext()">continuar →</button>
+</div>
+<script>
+var crmTags = [{ name: 'interesado' }, { name: 'inversionista' }, { name: 'no-email' }];
+var crmLeads = [{ id: 'l1', name: 'Ana Gómez', email: 'ana@x.co' }, { id: 'l2', name: 'Beto Ruiz', email: 'b@x.co' }];
+var crmStages = [{ key: 'nuevo', label: 'Nuevo' }, { key: 'contactado', label: 'Contactado' }];
+var agencyActiveClientId = null;
+function abrir(canal) {
+  document.getElementById('cmp-overlay')?.remove();
+  _cmpW = null;
+  cmpBuilderOpen(null, canal);
+  _cmpW.name = canal === 'email' ? '' : 'Recordatorio visita sábado';
+}
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+  document.getElementById('estilos-reales').textContent = (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+  const trozo = (desde, hasta) => {
+    const a = js.indexOf(desde);
+    if (a < 0) throw new Error('No encontré en app.js: ' + desde);
+    const b = js.indexOf(hasta, a);
+    return js.slice(a, b > a ? b : js.length);
+  };
+  const fn = (nombre) => {
+    const m = js.match(new RegExp('^(async )?function ' + nombre + '\\(', 'm'));
+    if (!m) throw new Error('No encontré la función ' + nombre);
+    const a = m.index, b = js.indexOf('\n}\n', a);
+    return js.slice(a, b + 3);
+  };
+  const codigo = [
+    (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
+    trozo('const ICN_PATHS = {', '\n};\n') + '\n};\n',
+    ...['icn', 'emptyAgua', 'confirmarAgua', 'ddAbrir', 'ddDesdeSelect', 'ddConvertirSelects', 'varsBoton', 'varsToggle',
+        'varsInsertar', 'varsDesconocidas', 'tagColor', 'autoStageOptions', 'cmpWCargarPlantillas', 'cmpWUsarPlantilla',
+        'cmpWGuardarComoPlantilla', 'cmpWExcluirPintar', 'cmpWExcluirAdd', 'cmpWExcluirQuitar', 'cmpWCargarListas'].map(fn),
+    'let _ddCerrar = null;',
+    (js.match(/function ddCerrarMenu\(\)[^\n]*\n/) || [''])[0],
+    (js.match(/const TAG_PALETTE = [^\n]*\n/) || [''])[0],
+    trozo('const CAMPO_VARIABLES', '\n];\n') + '\n];\n',
+    trozo('// ══ CAMPAÑAS MASIVAS (correo', '// ══ CREACIÓN DE CAMPAÑAS DE GOOGLE ADS'),
+    'var _cmpwPlns = []; _cmpLists = [{ id: "L1", name: "Clientes VIP", kind: "static", lead_ids: ["l1"] }];',
+    trozo('(function () {\n  const _prev = cmpWRender;', '})();') + '})();',
+    'var showToast = function(m){ console.log("toast:", m); };',
+    'var plnCargar = async function(){ return [{ id: "p1", nombre: "Bienvenida" }]; };',
+    'var qrCargar = async function(){ return [{ id: "q1", titulo: "Precio y formas de pago", texto: "Hola {{nombre}}, te cuento…" }]; };',
+    'var crmLoadLeads = async function(){};',
+    'var fetchAuth = async function(url){' +
+    '  if (url.startsWith("/api/sms")) return new Response(JSON.stringify({ activo: true, proveedor: "simulado", saldo: 100, mes: {}, paquetes: [], movimientos: [] }));' +
+    '  if (url.startsWith("/api/whatsapp-templates")) return new Response(JSON.stringify({ aprobadas: 1, plantillas: [{ name: "promo_octubre", language: "es", status: "APPROVED", category: "MARKETING", body: "Hola {{1}}, tenemos novedades para ti.", variables: { header: 0, body: 1 } }] }));' +
+    '  if (url.startsWith("/api/lead-lists")) return new Response(JSON.stringify({ lists: _cmpLists }));' +
+    '  if (url.includes("preview=1")) return new Response(JSON.stringify({ count: 612, sample: ["Ana Gómez", "Beto Ruiz", "Caro Díaz"], breakdown: { matched: 640, missing: 20, unsubscribed: 8 } }));' +
+    '  return new Response(JSON.stringify({ campaigns: [], quota: { unlimited: true, used: 0 } }));' +
+    '};',
+  ].join('\n');
+  const s = document.createElement('script');
+  s.textContent = codigo;
+  document.body.appendChild(s);
+  abrir(new URLSearchParams(location.search).get('canal') || 'sms');
+})().catch(e => {
+  document.body.insertAdjacentHTML('beforeend', '<pre style="color:#B91C1C;white-space:pre-wrap">' + e.message + '</pre>');
+});
+</script>
+</body>
+</html>
