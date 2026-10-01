@@ -71,6 +71,16 @@ async function guardarExtra(id, cambio) {
   return extra;
 }
 
+// Una venta inventada para Probar eventos: correo de ejemplo, valor mínimo.
+function eventoDePrueba() {
+  return {
+    event_name: 'Purchase', event_time: Math.floor(Date.now() / 1000), event_id: 'acu-prueba-' + Date.now(),
+    action_source: 'system_generated',
+    user_data: { em: ['973dfe463ec85785f5f95af5ba3906eedb2d931c24e69824a89ea65dba4e813b'] },   // sha256 de test@example.com
+    custom_data: { value: 1000, currency: 'COP', lead_event_source: 'Acuarius', event_source: 'crm' },
+  };
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const sesion = await verificarSesion(req);
@@ -103,7 +113,7 @@ export default async function handler(req) {
           activo: !!meta.extra_data?.activo, prueba: meta.extra_data?.test_event_code || null,
         } : { conectado: false },
         google: google ? {
-          conectado: !!google.account_id, cuenta: google.account_name || google.account_id || null,
+          conectado: !!google.account_id, sin_cuenta: !google.account_id, cuenta: google.account_name || google.account_id || null,
           activo: !!google.extra_data?.conversiones?.activo, accion: google.extra_data?.conversiones?.accion ? NOMBRE_ACCION_GOOGLE : null,
           de_la_cuenta: !google.client_id && !!clientId,
         } : { conectado: false },
@@ -133,18 +143,33 @@ export default async function handler(req) {
       if (!tokenFinal) return jsonResp({ error: 'Falta el token de la API de conversiones.' }, 400);
       // Se comprueba ANTES de guardar: un token equivocado guardado como bueno
       // dejaría las ventas fallando una a una sin que nadie lo viera venir.
-      const r = await fetch(`${GRAPH}/${dataset}?fields=id,name&access_token=${encodeURIComponent(tokenFinal)}`);
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d.id) {
-        const m = d?.error?.code === 190 ? 'Ese token no es válido o venció.'
-          : 'Meta no deja leer ese conjunto de datos con ese token. Revisa que el token sea de ese mismo conjunto.';
-        return jsonResp({ error: m, detalle: d?.error?.message || null }, 400);
+      //
+      // Pero un token de la API de conversiones solo sirve para MANDAR eventos
+      // a su conjunto: leer el conjunto (nombre, id) le da «sin permiso» aunque
+      // el token esté perfecto. Por eso la prueba de verdad es mandar un evento
+      // de PRUEBA con el código de Probar eventos, que no cuenta en informes.
+      // Leer el nombre se intenta por cortesía; si no se puede, no pasa nada.
+      // Si no cambió ni el token ni el conjunto, ya se comprobó al guardarlo.
+      const cambia = !!token || !actual || actual.account_id !== dataset;
+      let nombre = actual && !cambia ? actual.account_name : null;
+      if (cambia) {
+        const r = await fetch(`${GRAPH}/${dataset}?fields=id,name&access_token=${encodeURIComponent(tokenFinal)}`).catch(() => null);
+        const d = r ? await r.json().catch(() => ({})) : {};
+        if (d?.error?.code === 190) return jsonResp({ error: 'Ese token no es válido o venció. Genera uno nuevo en el Administrador de eventos.' }, 400);
+        if (r?.ok && d.id) nombre = d.name || null;
+        else {
+          if (!prueba) {
+            return jsonResp({ error: 'Para comprobar el token hace falta el código de prueba (Administrador de eventos → Probar eventos → el código que empieza por TEST). Pégalo y vuelve a guardar; luego lo quitas.' }, 400);
+          }
+          const t = await mandarAMeta({ dataset, token: tokenFinal, testCode: prueba, eventos: [eventoDePrueba()] });
+          if (!t.ok) return jsonResp({ error: t.motivo }, 400);
+        }
       }
       // Un conjunto recién guardado queda ACTIVO: quien pega el token quiere
       // que se usen. Al cambiarlo se respeta lo que hubiera decidido antes.
       const activo = actual ? !!actual.extra_data?.activo : true;
       const fila = {
-        user_id: userId, client_id: clientId, red: 'meta', dataset, nombre: d.name || null,
+        user_id: userId, client_id: clientId, red: 'meta', dataset, nombre,
         token: await cifrar(tokenFinal), activo, test_event_code: prueba, updated_at: new Date().toISOString(),
       };
       if (actual) {
@@ -152,7 +177,7 @@ export default async function handler(req) {
       } else {
         await sb('/conversiones_conexion', { method: 'POST', headers: sbH({ Prefer: 'return=minimal' }), body: JSON.stringify(fila) });
       }
-      return jsonResp({ ok: true, nombre: d.name || null, activo });
+      return jsonResp({ ok: true, nombre, activo, probado: cambia });
     }
 
     if (body.accion === 'meta-probar') {
@@ -162,12 +187,7 @@ export default async function handler(req) {
       if (!code) return jsonResp({ error: 'Para probar sin ensuciar tus informes hace falta el código de prueba: Administrador de eventos → Probar eventos.' }, 400);
       const r = await mandarAMeta({
         dataset: con.account_id, token: con.access_token, testCode: code,
-        eventos: [{
-          event_name: 'Purchase', event_time: Math.floor(Date.now() / 1000), event_id: 'acu-prueba-' + Date.now(),
-          action_source: 'system_generated',
-          user_data: { em: ['973dfe463ec85785f5f95af5ba3906eedb2d931c24e69824a89ea65dba4e813b'] },   // sha256 de test@example.com
-          custom_data: { value: 1000, currency: 'COP', lead_event_source: 'Acuarius', event_source: 'crm' },
-        }],
+        eventos: [eventoDePrueba()],
       });
       if (!r.ok) return jsonResp({ error: r.motivo }, 400);
       return jsonResp({ ok: true, recibidos: r.respuesta?.events_received || 0 });

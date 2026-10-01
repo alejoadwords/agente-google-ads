@@ -39920,7 +39920,7 @@ function ventasTarjetaMeta(m, puede) {
         '<input class="auto-input" id="vm-token" type="password" autocomplete="off" placeholder="' + (conToken ? 'Guardado — déjalo vacío para conservarlo' : 'Pégalo aquí') + '" style="margin-top:4px"></label>' +
       '<label style="font-size:var(--fs-xs);color:var(--muted);font-weight:600">Código de prueba (opcional)' +
         '<input class="auto-input" id="vm-prueba" autocomplete="off" placeholder="Ej. TEST12345" value="' + esc(m.prueba || '') + '" style="margin-top:4px"></label>' +
-      '<div class="pauta-conx-nota" style="margin:0">Mientras haya un código de prueba, las ventas van a <b>Probar eventos</b> y no cuentan en tus informes. Bórralo para empezar a contar.</div>' +
+      '<div class="pauta-conx-nota" style="margin:0"><span>Mientras haya un código de prueba, las ventas van a <b>Probar eventos</b> y no cuentan en tus informes. Bórralo para empezar a contar.</span></div>' +
       '<div id="vm-err" style="display:none;color:var(--danger);font-size:var(--fs-sm)"></div>' +
       '<div class="pauta-conx-btns" style="margin:0"><button class="btn-pri" id="vm-guardar" onclick="ventasMetaGuardar()">Guardar y comprobar</button>' +
         (conToken ? '<button class="btn-ghost" onclick="ventasPintar()">Cancelar</button>' : '') + '</div>' +
@@ -39934,7 +39934,7 @@ function ventasTarjetaMeta(m, puede) {
 
   if (!m.conectado) {
     return '<div class="pauta-conx ojo">' + top('<span class="pauta-pill pauta-pill-off">Sin configurar</span>') +
-      (puede ? form(false) : '<div class="pauta-conx-nota">Todavía no se envían ventas a Meta.</div>') + '</div>';
+      (puede ? form(false) : '<div class="pauta-conx-nota"><span>Todavía no se envían ventas a Meta.</span></div>') + '</div>';
   }
   if (window._ventasEditandoMeta && puede) {
     return '<div class="pauta-conx viva">' + top('') + form(true) + '</div>';
@@ -39943,10 +39943,10 @@ function ventasTarjetaMeta(m, puede) {
     : m.activo ? '<span class="pauta-pill pauta-pill-ok">Enviando</span>'
     : '<span class="pauta-pill pauta-pill-off">En pausa</span>';
   return '<div class="pauta-conx viva">' + top(pill) +
-    '<div class="pauta-conx-nota" style="margin-top:6px">Conjunto de datos <b>' + esc(m.nombre || m.dataset) + '</b>' +
-      (m.nombre ? ' <span style="color:var(--muted2)">· ' + esc(m.dataset) + '</span>' : '') + '</div>' +
-    (m.prueba ? '<div class="pauta-conx-nota ojo">Con el código de prueba <b>' + esc(m.prueba) + '</b> las ventas van a Probar eventos y <b>no cuentan</b> en tus informes. Quítalo cuando las veas llegar.</div>' : '') +
-    '<div class="pauta-conx-nota">Llaves que se usan, de mejor a peor: el lead del formulario de Meta, el clic a WhatsApp, el clic en tu web y, si no hay ninguno, teléfono y correo cifrados.</div>' +
+    '<div class="pauta-conx-nota" style="margin-top:6px"><span>Conjunto de datos <b>' + esc(m.nombre || m.dataset) + '</b>' +
+      (m.nombre ? ' <span style="color:var(--muted2)">· ' + esc(m.dataset) + '</span>' : '') + '</span></div>' +
+    (m.prueba ? '<div class="pauta-conx-nota ojo"><span>Con el código de prueba <b>' + esc(m.prueba) + '</b> las ventas van a Probar eventos y <b>no cuentan</b> en tus informes. Quítalo cuando las veas llegar.</span></div>' : '') +
+    '<div class="pauta-conx-nota"><span>Llaves que se usan, de mejor a peor: el lead del formulario de Meta, el clic a WhatsApp, el clic en tu web y, si no hay ninguno, teléfono y correo cifrados.</span></div>' +
     '<div id="vm-err" style="display:none;color:var(--danger);font-size:var(--fs-sm)"></div>' +
     (puede ? '<div class="pauta-conx-btns">' +
       '<button class="btn-' + (m.activo ? 'ghost' : 'pri') + '" onclick="ventasMetaActivar(' + (!m.activo) + ', this)">' + (m.activo ? 'Pausar' : 'Activar') + '</button>' +
@@ -39962,17 +39962,23 @@ function ventasTarjetaGoogle(g, puede) {
     '<div style="flex:1;min-width:0"><div class="pauta-conx-t">Google Ads ' + pill + '</div>' +
     '<div class="pauta-conx-s">Importación de conversiones' + (g.cuenta ? ' · ' + esc(g.cuenta) : '') + '</div></div></div>';
   if (!g.conectado) {
-    return '<div class="pauta-conx ojo">' + top('<span class="pauta-pill pauta-pill-off">Sin conectar</span>') +
-      '<div class="pauta-conx-nota">Primero conecta tu cuenta de Google Ads y elige cuál es.</div>' +
+    // Conectada pero sin cuenta elegida NO es «sin conectar»: decirlo así
+    // mandaría a autorizar otra vez algo que ya está autorizado.
+    return '<div class="pauta-conx ojo">' + top(g.sin_cuenta
+        ? '<span class="pauta-pill pauta-pill-ojo">Falta elegir la cuenta</span>'
+        : '<span class="pauta-pill pauta-pill-off">Sin conectar</span>') +
+      '<div class="pauta-conx-nota"><span>' + (g.sin_cuenta
+        ? 'Autorizaste Google, pero falta decir cuál de tus cuentas publicitarias es. Elígela en Conexiones y vuelve aquí.'
+        : 'Primero conecta tu cuenta de Google Ads y elige cuál es.') + '</span></div>' +
       '<div class="pauta-conx-btns"><button class="btn-ghost" onclick="pautaIr(\'conexiones\')">Ir a Conexiones</button></div></div>';
   }
   const pill = g.activo ? '<span class="pauta-pill pauta-pill-ok">Enviando</span>' : '<span class="pauta-pill pauta-pill-off">Apagado</span>';
   return '<div class="pauta-conx viva">' + top(pill) +
     (g.activo
-      ? '<div class="pauta-conx-nota">Las ventas se suben a la acción de conversión <b>«' + esc(g.accion || 'Venta en Acuarius') + '»</b> de tu cuenta, con el clic de Google del lead o, si no lo tiene, con su correo y teléfono cifrados.</div>' +
-        '<div class="pauta-conx-nota ojo">Para que Google <b>puje</b> por ventas y no solo las cuente, en Google Ads → Objetivos → Conversiones marca esa acción como <b>principal</b>.</div>'
-      : '<div class="pauta-conx-nota">Al activarlo creamos en tu cuenta de Google Ads la acción de conversión <b>«Venta en Acuarius»</b> y le subimos cada venta con su valor. No cambiamos nada más de tu cuenta.</div>') +
-    (g.de_la_cuenta ? '<div class="pauta-conx-nota">Es la conexión de toda la cuenta: activarla aquí la activa para todos los clientes que la usan.</div>' : '') +
+      ? '<div class="pauta-conx-nota"><span>Las ventas se suben a la acción de conversión <b>«' + esc(g.accion || 'Venta en Acuarius') + '»</b> de tu cuenta, con el clic de Google del lead o, si no lo tiene, con su correo y teléfono cifrados.</span></div>' +
+        '<div class="pauta-conx-nota ojo"><span>Para que Google <b>puje</b> por ventas y no solo las cuente, en Google Ads → Objetivos → Conversiones marca esa acción como <b>principal</b>.</span></div>'
+      : '<div class="pauta-conx-nota"><span>Al activarlo creamos en tu cuenta de Google Ads la acción de conversión <b>«Venta en Acuarius»</b> y le subimos cada venta con su valor. No cambiamos nada más de tu cuenta.</span></div>') +
+    (g.de_la_cuenta ? '<div class="pauta-conx-nota"><span>Es la conexión de toda la cuenta: activarla aquí la activa para todos los clientes que la usan.</span></div>' : '') +
     '<div id="vg-err" style="display:none;color:var(--danger);font-size:var(--fs-sm)"></div>' +
     (puede ? '<div class="pauta-conx-btns"><button class="btn-' + (g.activo ? 'ghost' : 'pri') + '" onclick="ventasGoogleActivar(' + (!g.activo) + ', this)">' +
       (g.activo ? 'Apagar' : 'Activar envío de ventas') + '</button></div>' : '') +
@@ -40030,7 +40036,9 @@ async function ventasMetaGuardar() {
   try {
     const d = await ventasPost({ accion: 'meta-guardar', dataset, token, test_event_code });
     window._ventasEditandoMeta = false;
-    showToast('Listo: Meta reconoce el conjunto ' + (d.nombre ? '«' + d.nombre + '»' : 'de datos'), 'success');
+    showToast(d.probado && !d.nombre
+      ? 'Listo: Meta recibió una venta de prueba. Mírala en Probar eventos.'
+      : 'Guardado' + (d.nombre ? ': conjunto «' + d.nombre + '»' : ''), 'success');
     ventasCargar();
   } catch (e) {
     ventasErr('vm-err', e.message);
