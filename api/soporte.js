@@ -15,6 +15,7 @@ export const config = { runtime: 'edge' };
 import { CONOCIMIENTO } from './_soporte-conocimiento.js';
 import { registrarUso } from './_uso-ia.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+import { soporteDe } from './_soporte-sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -230,7 +231,7 @@ export default async function handler(req) {
     // Un admin dentro de la cuenta del cliente (api/cuentas.js) puede LEER el
     // hilo —para saber qué le dijimos—, pero no escribir en él: quedaría como
     // si el cliente hubiera preguntado, y le abriría casos que no pidió.
-    if (req.method === 'POST' && sesion.datos?.act?.sub) {
+    if (req.method === 'POST' && (await soporteDe(sesion))) {
       return jsonResp({ error: 'Estás dentro de la cuenta de un cliente: el chat de soporte es suyo. Vuelve a tu cuenta para escribir.' }, 403);
     }
 

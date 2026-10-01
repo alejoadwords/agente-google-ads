@@ -792,7 +792,10 @@ document.addEventListener('click', e => {
   }
   // Una sesión de soporte (un admin dentro de la cuenta de un cliente) no
   // completa el alta por él: se va a la app.
-  if (clerk.session?.actor) { location.href = '/'; return; }
+  // Desde el 01-10-2026 la entrada no lleva `actor`: la marca la deja login.html
+  // (ver enSoporte() en app.js), y el servidor de onboarding frena igual.
+  let marca = null; try { marca = JSON.parse(localStorage.getItem('acuarius_soporte') || 'null'); } catch {}
+  if (clerk.session?.actor || (marca && clerk.session && marca.sid === clerk.session.id)) { location.href = '/'; return; }
   if (clerk.user) { await trasEntrar(); return; }
   // Un alta a medias en esta pestaña (cerró en el código): se retoma.
   if (clerk.client?.signUp?.status === 'missing_requirements' && clerk.client.signUp.emailAddress

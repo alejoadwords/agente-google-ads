@@ -41,8 +41,50 @@ window._bienvenidaAhora = new URLSearchParams(location.search).get('bienvenida')
 // su nombre lo que haría él al entrar: arrancar su prueba, canjear
 // invitaciones, suscribir avisos a ESTE navegador, contar uso o marcarle
 // novedades y tours como vistos.
+//
+// Desde el 01-10-2026 la entrada ya no usa la suplantación de Clerk (cinco al
+// mes en nuestro plan), así que la sesión no trae `actor`: la marca la deja
+// login.html al canjear el ticket, atada al id de ESA sesión, y el servidor la
+// confirma al arrancar (soporteComprobar). Las dos formas valen.
+const SOPORTE_KEY = 'acuarius_soporte';
+function marcaSoporte() {
+  try { return JSON.parse(localStorage.getItem(SOPORTE_KEY) || 'null'); } catch { return null; }
+}
 function enSoporte() {
-  return !!(clerkInstance && clerkInstance.session && clerkInstance.session.actor);
+  const s = clerkInstance && clerkInstance.session;
+  if (!s) return false;
+  if (s.actor) return true;
+  const m = marcaSoporte();
+  return !!(m && m.sid && m.sid === s.id);
+}
+
+// La marca del navegador es para no esperar; la verdad la tiene el servidor.
+// Una marca borrada (o una pestaña de otro perfil) no puede hacer pasar al
+// equipo por el cliente, y una marca que quedó de otra sesión no puede pintar
+// el banner a quien no está en soporte.
+async function soporteComprobar() {
+  try {
+    const r = await fetchAuth('/api/cuentas?soporte=1');
+    if (!r.ok) return;   // si no se pudo preguntar, se queda lo que diga la marca
+    const d = await r.json();
+    const sid = clerkInstance?.session?.id;
+    const m = marcaSoporte();
+    if (!d.soporte) {
+      if (m && m.sid === sid) { localStorage.removeItem(SOPORTE_KEY); location.reload(); }
+      return;
+    }
+    if (d.soporte.vencida) {
+      // El servidor ya la cerró en Clerk: se sale por la puerta de siempre.
+      try { localStorage.removeItem(SOPORTE_KEY); } catch {}
+      alert('La hora de acceso a esta cuenta terminó. Vuelve a entrar con tu cuenta.');
+      logout();
+      return;
+    }
+    if (d.soporte.origen === 'acuarius' && !(m && m.sid === sid)) {
+      localStorage.setItem(SOPORTE_KEY, JSON.stringify({ sid, hasta: d.soporte.hasta, admin_email: d.soporte.admin_email }));
+      location.reload();   // para que todo lo que mira enSoporte() arranque bien
+    }
+  } catch (e) { console.warn('soporteComprobar', e); }
 }
 
 // Datos de una cuenta que se guardan en el navegador SIN el id del usuario.
@@ -69,8 +111,12 @@ function limpiarSiCambioLaCuenta(uid) {
 
 // Cambiar de sesión pasa siempre por login.html, que canjea el ticket. Va por
 // sessionStorage y no por la URL: un ticket en la barra acaba en el historial.
-function cambiarDeCuentaConTicket(ticket) {
+function cambiarDeCuentaConTicket(ticket, clave) {
   sessionStorage.setItem('acuarius_cambio_ticket', ticket);
+  // Solo al ENTRAR a un cliente: con ella login.html ata la sesión nueva a su
+  // entrada. Al volver no hay clave y la marca de soporte se borra allí.
+  if (clave) sessionStorage.setItem('acuarius_cambio_clave', clave);
+  else sessionStorage.removeItem('acuarius_cambio_clave');
   sessionStorage.removeItem('acuarius_cambio_ticket_n');
   window.location.href = '/login.html?cambio=1';
 }
@@ -97,7 +143,12 @@ function soporteBanner() {
   const u = clerkInstance.user;
   const quien = [u.firstName, u.lastName].filter(Boolean).join(' ') || '';
   const correo = u.primaryEmailAddress?.emailAddress || '';
-  const expira = clerkInstance.session.expireAt ? new Date(clerkInstance.session.expireAt).getTime() : 0;
+  // La hora la marca la entrada, no la sesión de Clerk: con el token normal la
+  // sesión duraría días, y el límite de una hora es nuestro.
+  const m = marcaSoporte();
+  const expira = (m && m.hasta) ? Number(m.hasta)
+    : clerkInstance.session.expireAt ? new Date(clerkInstance.session.expireAt).getTime() : 0;
+  let volviendo = false;
   const b = document.createElement('div');
   b.id = 'soporte-banner';
   b.setAttribute('role', 'status');
@@ -117,6 +168,12 @@ function soporteBanner() {
     if (!el || !expira) return;
     const min = Math.max(0, Math.round((expira - Date.now()) / 60000));
     el.textContent = min > 0 ? 'quedan ' + min + ' min' : 'sesión vencida';
+    // Cumplida la hora se vuelve solo: dejar la cuenta del cliente abierta en
+    // una pestaña olvidada es justo lo que el límite quiere evitar.
+    if (expira && Date.now() >= expira && !volviendo) {
+      volviendo = true;
+      soporteVolver(b.querySelector('.sb-soporte-btn'));
+    }
   };
   pintar();
   setInterval(pintar, 30000);
@@ -409,6 +466,9 @@ async function initAuth(){
       }
     } catch {}
     updateUserUI(clerkInstance.user);
+    // El servidor confirma (o corrige) la marca. No se espera: si cambia algo,
+    // recarga.
+    soporteComprobar();
     if (enSoporte()) {
       soporteBanner();
       // Lo de abajo es el primer ingreso del CLIENTE (conversión, referido,
@@ -37006,7 +37066,7 @@ async function cuEntrarYa(id) {
     const r = await fetchAuth('/api/cuentas', { method: 'POST', body: JSON.stringify({ accion: 'entrar', cuenta: id, motivo }) });
     const d = await leerRespuesta(r);
     if (!r.ok || !d.ticket) throw new Error(d.error || ('HTTP ' + r.status));
-    cambiarDeCuentaConTicket(d.ticket);
+    cambiarDeCuentaConTicket(d.ticket, d.clave);
   } catch (e) {
     err.textContent = String(e.message || e); err.style.display = 'block';
     btn.disabled = false; btn.innerHTML = icn('enter', 13) + ' Iniciar sesión';

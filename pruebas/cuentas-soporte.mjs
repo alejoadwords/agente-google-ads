@@ -28,7 +28,7 @@ const usuarios = {
   [OTRO]:    { id: OTRO, first_name: 'Otro', last_name: '', email: `otro${T}@prueba.test`, created_at: T, public_metadata: {} },
 };
 const clerkUser = u => ({ ...u, primary_email_address_id: 'e1', email_addresses: [{ id: 'e1', email_address: u.email }] });
-const emitidos = { actor: [], revocados: [], signIn: [] };
+const emitidos = { actor: [], revocados: [], signIn: [], sitRevocados: [], sesionesRevocadas: [] };
 
 const par = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
 const jwk = { ...(await crypto.subtle.exportKey('jwk', par.publicKey)), kid: 'prueba-cu', alg: 'RS256', use: 'sig' };
@@ -59,7 +59,13 @@ globalThis.fetch = async (url, init = {}) => {
     if (ruta.startsWith('/users?')) return J(ruta.includes('offset=0') ? Object.values(usuarios).map(clerkUser) : []);
     if (ruta === '/actor_tokens' && m === 'POST') { const b = JSON.parse(init.body); emitidos.actor.push(b); return J({ id: 'act_prueba_' + emitidos.actor.length, token: 'ticket-actor', status: 'pending' }); }
     if ((x = ruta.match(/^\/actor_tokens\/([^/]+)\/revoke$/))) { emitidos.revocados.push(x[1]); return J({ status: 'revoked' }); }
-    if (ruta === '/sign_in_tokens' && m === 'POST') { const b = JSON.parse(init.body); emitidos.signIn.push(b); return J({ token: 'ticket-vuelta' }); }
+    if (ruta === '/sign_in_tokens' && m === 'POST') {
+      const b = JSON.parse(init.body); emitidos.signIn.push(b);
+      // Al cliente = entrar; al admin = volver. Tickets distintos para no confundirlos.
+      return J({ id: 'sit_prueba_' + emitidos.signIn.length, token: b.user_id === ADMIN ? 'ticket-vuelta' : 'ticket-entrada' });
+    }
+    if ((x = ruta.match(/^\/sign_in_tokens\/([^/]+)\/revoke$/))) { emitidos.sitRevocados.push(x[1]); return J({ status: 'revoked' }); }
+    if ((x = ruta.match(/^\/sessions\/([^/]+)\/revoke$/))) { emitidos.sesionesRevocadas.push(x[1]); return J({ status: 'revoked' }); }
     return J({ errors: [{ message: 'ruta no simulada ' + ruta }] }, 500);
   }
   return fetchReal(url, init);
@@ -69,9 +75,12 @@ const cuentas = (await import('../api/cuentas.js?v=' + T)).default;
 const onboarding = (await import('../api/onboarding.js?v=' + T)).default;
 const trial = (await import('../api/trial.js?v=' + T)).default;
 
-async function llamar(h, { metodo = 'GET', q = '', cuerpo, sub, act } = {}) {
+const SID = 'sess_prueba_cu_' + T;   // la sesión que abre la entrada
+async function llamar(h, { metodo = 'GET', q = '', cuerpo, sub, act, sid } = {}) {
   const headers = { 'Content-Type': 'application/json' };
-  if (sub) headers.Authorization = 'Bearer ' + await jwt(act ? { sub, act: { sub: act } } : { sub });
+  const pl = { sub, sid: sid || 'sess_normal_' + T };
+  if (act) pl.act = { sub: act };
+  if (sub) headers.Authorization = 'Bearer ' + await jwt(pl);
   const r = await h(new Request('https://app.acuarius.app/api/x' + q, { method: metodo, headers, body: cuerpo ? JSON.stringify(cuerpo) : undefined }));
   return { s: r.status, d: await r.json().catch(() => ({})) };
 }
@@ -97,32 +106,73 @@ try {
   r = await llamar(cuentas, { metodo: 'POST', sub: CLIENTE, cuerpo: { accion: 'entrar', cuenta: OTRO, motivo: 'revisión' } });
   ok(r.s === 403 && !emitidos.actor.length, 'un cliente no puede entrar a otra cuenta, y no se emitió nada');
   r = await llamar(cuentas, { metodo: 'POST', sub: ADMIN, cuerpo: { accion: 'entrar', cuenta: CLIENTE, motivo: 'Prueba automática' } });
-  ok(r.s === 200 && r.d.ticket === 'ticket-actor', 'el admin entra y recibe el ticket');
-  const emit = emitidos.actor[0] || {};
-  ok(emit.user_id === CLIENTE && emit.actor?.sub === ADMIN, 'el acceso es a nombre del CLIENTE con el admin como actor');
-  ok(emit.session_max_duration_in_seconds === 3600, 'la sesión dura una hora como mucho');
+  ok(r.s === 200 && r.d.ticket === 'ticket-entrada' && /^[0-9a-f]{64}$/.test(r.d.clave || ''), 'el admin entra y recibe el ticket y la clave');
+  const CLAVE = r.d.clave;
+  ok(!emitidos.actor.length, 'ya no se gasta una suplantación de Clerk (tope de 5 al mes)');
+  ok(emitidos.signIn[0]?.user_id === CLIENTE && emitidos.signIn[0]?.expires_in_seconds === 300, 'el ticket es a nombre del CLIENTE y caduca en 5 minutos');
   let log = await sbGet(`acceso_cuentas?cuenta_id=eq.${CLIENTE}&select=*`);
-  ok(log.length === 1 && log[0].motivo === 'Prueba automática' && !log[0].fin, 'la entrada quedó anotada con su motivo, abierta');
+  ok(log.length === 1 && log[0].motivo === 'Prueba automática' && !log[0].fin && log[0].metodo === 'propio', 'la entrada quedó anotada con su motivo, abierta');
+  ok(log[0].clave_hash && log[0].clave_hash !== CLAVE && !log[0].session_id, 'de la clave solo se guarda el hash, y aún no hay sesión atada');
 
-  console.log('Dentro de la cuenta (sesión con act)');
-  r = await llamar(cuentas, { q: '?lista=1', sub: CLIENTE, act: ADMIN });
+  console.log('Atar la sesión nueva a su entrada');
+  r = await llamar(cuentas, { metodo: 'POST', sub: CLIENTE, sid: SID, cuerpo: { accion: 'vincular', clave: 'f'.repeat(64) } });
+  ok(r.s === 403, 'con una clave inventada no se ata nada');
+  r = await llamar(cuentas, { metodo: 'POST', sub: OTRO, sid: SID, cuerpo: { accion: 'vincular', clave: CLAVE } });
+  ok(r.s === 403, 'la clave de una entrada no sirve en la sesión de otra cuenta');
+  r = await llamar(cuentas, { q: '?soporte=1', sub: CLIENTE, sid: SID });
+  ok(r.s === 200 && r.d.soporte === null, 'antes de atarla, la sesión no cuenta como soporte');
+  r = await llamar(cuentas, { metodo: 'POST', sub: CLIENTE, sid: SID, cuerpo: { accion: 'vincular', clave: CLAVE } });
+  ok(r.s === 200 && r.d.ok && r.d.sid === SID && r.d.hasta > Date.now() + 50 * 60000, 'se ata, con la hora límite');
+  r = await llamar(cuentas, { metodo: 'POST', sub: CLIENTE, sid: 'sess_otra_' + T, cuerpo: { accion: 'vincular', clave: CLAVE } });
+  ok(r.s === 403, 'la clave sirve UNA vez: no se puede atar una segunda sesión');
+  log = await sbGet(`acceso_cuentas?cuenta_id=eq.${CLIENTE}&select=session_id,clave_hash`);
+  ok(log[0]?.session_id === SID && !log[0]?.clave_hash, 'la fila guarda la sesión y borra el hash de la clave');
+
+  console.log('Dentro de la cuenta (sesión atada, sin act)');
+  r = await llamar(cuentas, { q: '?soporte=1', sub: CLIENTE, sid: SID });
+  ok(r.s === 200 && r.d.soporte?.admin_email === ADMIN_MAIL && !r.d.soporte.vencida && r.d.soporte.origen === 'acuarius', 'la app pregunta y el servidor dice quién está detrás');
+  r = await llamar(cuentas, { q: '?soporte=1', sub: CLIENTE });
+  ok(r.s === 200 && r.d.soporte === null, 'otra sesión del MISMO cliente (la suya) no es soporte');
+  r = await llamar(cuentas, { q: '?lista=1', sub: CLIENTE, sid: SID });
   ok(r.s === 403, 'desde dentro no se abre la lista de cuentas');
-  r = await llamar(cuentas, { metodo: 'POST', sub: CLIENTE, act: ADMIN, cuerpo: { accion: 'entrar', cuenta: OTRO, motivo: 'encadenar' } });
+  r = await llamar(cuentas, { metodo: 'POST', sub: CLIENTE, sid: SID, cuerpo: { accion: 'entrar', cuenta: OTRO, motivo: 'encadenar' } });
   ok(r.s === 403, 'ni se encadenan entradas');
-  r = await llamar(trial, { metodo: 'POST', sub: CLIENTE, act: ADMIN });
+  r = await llamar(trial, { metodo: 'POST', sub: CLIENTE, sid: SID });
   ok(r.d.reason === 'sesion_de_soporte', 'la prueba del cliente no se arranca desde soporte');
-  r = await llamar(onboarding, { metodo: 'POST', sub: CLIENTE, act: ADMIN, cuerpo: { paso: 'moneda', moneda: 'COP' } });
+  r = await llamar(onboarding, { metodo: 'POST', sub: CLIENTE, sid: SID, cuerpo: { paso: 'moneda', moneda: 'COP' } });
   ok(r.s === 403, 'el alta no la completa quien revisa');
+
+  console.log('Sesiones viejas con act (las de antes del 01-10-2026)');
+  r = await llamar(trial, { metodo: 'POST', sub: CLIENTE, act: ADMIN });
+  ok(r.d.reason === 'sesion_de_soporte', 'con act también se frena la prueba');
   r = await llamar(cuentas, { metodo: 'POST', sub: CLIENTE, act: OTRO, cuerpo: { accion: 'volver' } });
-  ok(r.s === 403 && !emitidos.signIn.length, 'si quien está detrás no es del equipo, no hay regreso (ni ticket)');
+  ok(r.s === 403 && emitidos.signIn.length === 1, 'si quien está detrás no es del equipo, no hay regreso (ni ticket)');
+
+  console.log('Volver');
   r = await llamar(cuentas, { metodo: 'POST', sub: CLIENTE, cuerpo: { accion: 'volver' } });
   ok(r.s === 400, 'una sesión normal no «vuelve» a ningún sitio');
-  r = await llamar(cuentas, { metodo: 'POST', sub: CLIENTE, act: ADMIN, cuerpo: { accion: 'volver' } });
-  ok(r.s === 200 && r.d.ticket === 'ticket-vuelta' && emitidos.signIn[0]?.user_id === ADMIN, 'volver da un ticket para el ADMIN');
-  log = await sbGet(`acceso_cuentas?cuenta_id=eq.${CLIENTE}&select=fin`);
-  ok(log[0]?.fin, 'y cierra la entrada en el registro');
+  r = await llamar(cuentas, { metodo: 'POST', sub: CLIENTE, sid: SID, cuerpo: { accion: 'volver' } });
+  ok(r.s === 200 && r.d.ticket === 'ticket-vuelta' && emitidos.signIn[1]?.user_id === ADMIN, 'volver da un ticket para el ADMIN');
+  log = await sbGet(`acceso_cuentas?cuenta_id=eq.${CLIENTE}&select=fin,revocada`);
+  ok(log[0]?.fin && !log[0]?.revocada, 'y cierra la entrada en el registro (la sesión la cierra el navegador; si no, el cron)');
+  r = await llamar(trial, { metodo: 'POST', sub: CLIENTE, sid: SID });
+  ok(r.d.reason === 'sesion_de_soporte', 'una sesión de soporte cerrada sigue sin poder hacer de cliente');
+
+  console.log('La hora límite');
+  const { cerrarSoportesVencidos } = await import('../api/_soporte-sesion.js?v=' + T);
+  const SID2 = 'sess_prueba_cu_vieja_' + T;
+  await fetchReal(`${SB}/rest/v1/acceso_cuentas`, { method: 'POST', headers: sbH, body: JSON.stringify({
+    admin_id: ADMIN, admin_email: ADMIN_MAIL, cuenta_id: CLIENTE, cuenta_email: usuarios[CLIENTE].email, motivo: 'olvidada',
+    metodo: 'propio', session_id: SID2, inicio: new Date(Date.now() - 2 * 3600000).toISOString() }) });
+  r = await llamar(cuentas, { q: '?soporte=1', sub: CLIENTE, sid: SID2 });
+  ok(r.d.soporte?.vencida === true && emitidos.sesionesRevocadas.includes(SID2), 'pasada la hora, la app se entera y Clerk la cierra en el acto');
+  emitidos.sesionesRevocadas.length = 0;
+  const c = await cerrarSoportesVencidos();
+  ok(emitidos.sesionesRevocadas.includes(SID) && emitidos.sesionesRevocadas.includes(SID2), 'el cron revoca las vencidas y las devueltas · ' + JSON.stringify(c));
+  log = await sbGet(`acceso_cuentas?cuenta_id=eq.${CLIENTE}&select=revocada,fin&order=inicio`);
+  ok(log.filter(f => f.revocada && f.fin).length === 2, 'y las deja revocadas y cerradas');
   r = await llamar(cuentas, { q: '?accesos=1&cuenta=' + CLIENTE, sub: ADMIN });
-  ok(r.s === 200 && r.d.accesos?.length === 1, 'el registro de accesos se lee');
+  ok(r.s === 200 && r.d.accesos?.length === 2, 'el registro de accesos se lee');
 
   console.log('Enlace de registro');
   r = await llamar(cuentas, { q: '?enlace=1', sub: ADMIN });

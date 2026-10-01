@@ -5,6 +5,8 @@
 //   GET  ?enlace=1                mi enlace de registro (admin)
 //   GET  ?registro=<slug>         datos PÚBLICOS de un enlace, para la página de alta
 //   POST {accion:'entrar', cuenta, motivo}   abre sesión en la cuenta del cliente (admin)
+//   POST {accion:'vincular', clave}          ata la sesión recién abierta a su entrada
+//   GET  ?soporte=1                          ¿esta sesión es del equipo? (la app, al arrancar)
 //   POST {accion:'volver'}                   cierra esa sesión y devuelve la del admin
 //   POST {accion:'enlace', slug, titulo, bienvenida, video_url}   guarda mi enlace (admin)
 //   POST {accion:'enviar-enlace', nombre, email, nota}           lo manda por correo (admin)
@@ -31,14 +33,26 @@
 //   2. No se entra a la cuenta de otro administrador ni se encadenan entradas.
 //   3. La sesión dura una hora como mucho (`session_max_duration`).
 //   4. Cada entrada y cada salida quedan en `acceso_cuentas`, con el motivo.
-//   5. Volver exige que la sesión actual lleve `act.sub` de un administrador:
-//      ese claim lo firma Clerk, no se puede fabricar desde el navegador.
+//   5. Volver exige que la sesión actual sea una entrada de soporte de un
+//      administrador, según `acceso_cuentas` (o el claim `act` de las viejas).
+//
+// DESDE EL 01-10-2026, SIN ACTOR TOKEN
+//
+// El plan de Clerk solo da cinco suplantaciones al mes y se agotaron el primer
+// día; liberarlas cuesta 100 USD/mes. Ahora se entra con un token de inicio de
+// sesión normal (sin tope): la sesión sigue siendo la del cliente, pero ya no
+// lleva `act`. Quién está detrás lo anota Acuarius: la entrada guarda el hash
+// de una clave que solo recibe el navegador del admin, y al canjear el ticket
+// login.html la presenta ('vincular') para atar el `sid` de la sesión nueva.
+// `soporteDe()` en api/_soporte-sesion.js responde desde ahí, y la hora de
+// límite la hace cumplir cron-ventana revocando la sesión en Clerk.
 
 export const config = { runtime: 'edge' };
 
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 import { emailHtml, bloque, esc, RESPONDER_A } from './_email-layout.js';
 import { enviarResend } from './_correo.js';
+import { soporteDe, sha256, cerrarEntrada, revocarSesionClerk, DURACION_SOPORTE_MS } from './_soporte-sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -139,7 +153,10 @@ export default async function handler(req) {
   const sesion = await verificarSesion(req);
   if (!sesion.id) return jsonResp(await cuerpoSinSesion(sesion, 'cuentas'), 401);
   const yo = sesion.id;
-  const actor = sesion.datos?.act?.sub || null;   // quién está detrás, si es una entrada de soporte
+  // Quién está detrás, si es una entrada de soporte. Si no se pudo mirar,
+  // cuenta como soporte: aquí eso solo frena, nunca abre nada.
+  const soporte = await soporteDe(sesion);
+  const actor = soporte ? (soporte.admin || 'desconocido') : null;
 
   let body = {};
   if (req.method === 'POST') body = await req.json().catch(() => ({}));
@@ -175,12 +192,60 @@ export default async function handler(req) {
     }
   }
 
+  // ── ¿Esta sesión es del equipo? ───────────────────────────────────────────
+  // La app lo pregunta al arrancar. El navegador guarda una marca para no
+  // esperar a esta respuesta, pero la verdad está aquí: una pestaña nueva o
+  // una marca borrada no pueden hacer pasar al equipo por el cliente.
+  if (req.method === 'GET' && url.searchParams.get('soporte')) {
+    if (!soporte) return jsonResp({ soporte: null });
+    if (soporte.desconocido) return jsonResp({ error: 'No se pudo comprobar la sesión: ' + soporte.error }, 502);
+    const f = soporte.fila;
+    let correo = f?.admin_email || null;
+    if (!correo && soporte.admin) { try { correo = correoPrincipal(await clerkUsuario(soporte.admin)); } catch {} }
+    const hasta = f ? Date.parse(f.inicio) + DURACION_SOPORTE_MS : null;
+    // Vencida: se cierra ya en Clerk, sin esperar al cron. La app, al leerlo,
+    // manda de vuelta al login.
+    if (soporte.vencida && soporte.origen === 'acuarius') {
+      await revocarSesionClerk(sesion.datos.sid);
+      if (f && !f.fin) await cerrarEntrada(f.id);
+    }
+    return jsonResp({ soporte: { admin_email: correo, sid: sesion.datos?.sid || null, hasta, vencida: !!soporte.vencida, origen: soporte.origen } });
+  }
+
+  // ── Atar la sesión recién canjeada a su entrada ────────────────────────────
+  // La pide login.html justo después de canjear el ticket, con la sesión YA
+  // del cliente. Prueba de que viene del admin que la abrió: la clave, que
+  // solo viajó a su navegador y de la que aquí solo hay un hash.
+  if (req.method === 'POST' && body.accion === 'vincular') {
+    const clave = String(body.clave || '');
+    const sid = sesion.datos?.sid;
+    if (!clave || !sid) return jsonResp({ error: 'Falta la clave o la sesión' }, 400);
+    try {
+      const desde = new Date(Date.now() - 10 * 60000).toISOString();
+      const filas = await sbGet(
+        `acceso_cuentas?clave_hash=eq.${await sha256(clave)}&cuenta_id=eq.${encodeURIComponent(yo)}` +
+        `&session_id=is.null&fin=is.null&inicio=gt.${encodeURIComponent(desde)}&select=id,admin_email,inicio&limit=1`);
+      if (!filas.length) return jsonResp({ error: 'Esta entrada ya se usó o venció. Vuelve a entrar desde tu cuenta.' }, 403);
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/acceso_cuentas?id=eq.${filas[0].id}&session_id=is.null`, {
+        method: 'PATCH', headers: sbH({ Prefer: 'return=representation' }),
+        body: JSON.stringify({ session_id: sid, clave_hash: null }),
+      });
+      const hecho = r.ok ? await r.json() : [];
+      if (!hecho.length) throw new Error('Supabase ' + r.status);
+      return jsonResp({ ok: true, sid, admin_email: filas[0].admin_email, hasta: Date.parse(filas[0].inicio) + DURACION_SOPORTE_MS });
+    } catch (e) {
+      return jsonResp({ error: 'No se pudo registrar la entrada: ' + e.message }, 502);
+    }
+  }
+
   // ── Volver a la cuenta propia ─────────────────────────────────────────────
   // Va ANTES de la puerta de administrador a propósito: en este momento la
   // sesión es la del cliente, así que «¿es admin quien pregunta?» diría que no.
-  // Lo que se comprueba es `act.sub`, que firma Clerk.
+  // Lo que se comprueba es la entrada anotada en `acceso_cuentas` (o el
+  // `act.sub` que firma Clerk, en las sesiones de antes).
   if (req.method === 'POST' && body.accion === 'volver') {
     if (!actor) return jsonResp({ error: 'Esta sesión no es una entrada de soporte' }, 400);
+    if (actor === 'desconocido') return jsonResp({ error: 'No se pudo comprobar la sesión: ' + (soporte.error || '') }, 502);
     try {
       const adminU = await clerkUsuario(actor);
       if (!adminU || !admins().includes(correoPrincipal(adminU))) {
@@ -193,8 +258,11 @@ export default async function handler(req) {
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d.token) throw new Error('Clerk devolvió ' + r.status + ' al pedir el regreso');
       // Cierra la entrada abierta. Si falla, el regreso sigue: quedarse
-      // atrapado en la cuenta de un cliente por un registro es peor.
-      await fetch(`${SUPABASE_URL}/rest/v1/acceso_cuentas?admin_id=eq.${encodeURIComponent(actor)}&cuenta_id=eq.${encodeURIComponent(yo)}&fin=is.null`, {
+      // atrapado en la cuenta de un cliente por un registro es peor. La
+      // sesión del cliente la cierra el navegador al canjear el regreso; si
+      // no lo lograra, el cron la revoca porque la fila ya tiene `fin`.
+      if (soporte.fila) await cerrarEntrada(soporte.fila.id);
+      else await fetch(`${SUPABASE_URL}/rest/v1/acceso_cuentas?admin_id=eq.${encodeURIComponent(actor)}&cuenta_id=eq.${encodeURIComponent(yo)}&fin=is.null`, {
         method: 'PATCH', headers: sbH(), body: JSON.stringify({ fin: new Date().toISOString() }),
       }).catch(() => {});
       return jsonResp({ ticket: d.token });
@@ -300,34 +368,33 @@ export default async function handler(req) {
       const correoDestino = correoPrincipal(destino);
       if (admins().includes(correoDestino)) return jsonResp({ error: 'No se entra a la cuenta de otra persona del equipo' }, 403);
 
-      const r = await fetch(`${CLERK}/actor_tokens`, {
+      const r = await fetch(`${CLERK}/sign_in_tokens`, {
         method: 'POST', headers: clerkH(),
-        body: JSON.stringify({
-          user_id: cuenta,
-          actor: { sub: yo },
-          expires_in_seconds: 300,                  // lo que tarda en canjearse
-          session_max_duration_in_seconds: DURACION_SESION,
-        }),
+        body: JSON.stringify({ user_id: cuenta, expires_in_seconds: 300 }),   // lo que tarda en canjearse
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d.token) {
         const det = d?.errors?.[0]?.long_message || d?.errors?.[0]?.message || ('estado ' + r.status);
         throw new Error('Clerk no emitió el acceso (' + det + ')');
       }
+      // La clave con la que el navegador del admin atará la sesión al
+      // canjearla. Aquí solo se guarda su hash.
+      const bytes = crypto.getRandomValues(new Uint8Array(32));
+      const clave = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
       // El registro va ANTES de devolver el acceso: una entrada que no quedó
       // anotada no se entrega. Es la única garantía que se puede enseñar.
       const log = await fetch(`${SUPABASE_URL}/rest/v1/acceso_cuentas`, {
         method: 'POST', headers: sbH({ Prefer: 'return=minimal' }),
         body: JSON.stringify({
           admin_id: yo, admin_email: miCorreo, cuenta_id: cuenta, cuenta_email: correoDestino,
-          motivo, actor_token_id: d.id,
+          motivo, metodo: 'propio', sign_in_token_id: d.id, clave_hash: await sha256(clave),
         }),
       });
       if (!log.ok) {
-        await fetch(`${CLERK}/actor_tokens/${d.id}/revoke`, { method: 'POST', headers: clerkH() }).catch(() => {});
+        await fetch(`${CLERK}/sign_in_tokens/${d.id}/revoke`, { method: 'POST', headers: clerkH() }).catch(() => {});
         throw new Error('no se pudo anotar la entrada, así que no se abre');
       }
-      return jsonResp({ ticket: d.token, cuenta: { id: cuenta, correo: correoDestino, nombre: nombreDe(destino) }, minutos: DURACION_SESION / 60 });
+      return jsonResp({ ticket: d.token, clave, cuenta: { id: cuenta, correo: correoDestino, nombre: nombreDe(destino) }, minutos: DURACION_SESION / 60 });
     } catch (e) {
       return jsonResp({ error: 'No se pudo entrar: ' + e.message }, 502);
     }

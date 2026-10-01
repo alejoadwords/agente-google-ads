@@ -16,6 +16,7 @@
 export const config = { runtime: 'edge' };
 
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+import { soporteDe } from './_soporte-sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -79,7 +80,7 @@ export default async function handler(req) {
   const sesion = await verificarSesion(req);
   if (!sesion.id) return jsonResp(await cuerpoSinSesion(sesion, 'onboarding'), 401);
   const yo = sesion.id;
-  const soporte = !!sesion.datos?.act?.sub;
+  const soporte = !!(await soporteDe(sesion));
 
   let u;
   try {

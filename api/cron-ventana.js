@@ -12,6 +12,7 @@ export const config = { runtime: 'edge' };
 import { getRegla, crearTareaVentana } from './_followup.js';
 import { pedirLista } from './_pedir.js';
 import { latir } from './_latido.js';
+import { cerrarSoportesVencidos } from './_soporte-sesion.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -50,6 +51,14 @@ export default async function handler(req) {
   // La entrada, aparte de la salida: un latido que solo se escribe al terminar
   // no distingue «Vercel no lo llamó» de «lo llamó y se murió a mitad».
   await latir('cron-ventana', { empezo: new Date().toISOString() });
+
+  // De paso, cada hora: las entradas del equipo a cuentas de clientes que
+  // pasaron su hora se cierran en Clerk (ver api/_soporte-sesion.js). Va
+  // primero y aparte: un fallo de las ventanas no puede dejar abierta la
+  // cuenta de un cliente, ni al revés.
+  let soportes;
+  try { soportes = await cerrarSoportesVencidos(); }
+  catch (e) { soportes = { error: e?.message || String(e) }; }
 
 
   const ahora = Date.now();
@@ -132,8 +141,10 @@ export default async function handler(req) {
   }
 
   const fallo = [errores ? errores + ' aviso(s) no se pudieron crear' : '', sinTiempo ? 'no alcanzó el tiempo' : ''].filter(Boolean).join(' · ');
-  await latir('cron-ventana', { avisadas, saltadas, revisadas, errores, sinTiempo }, fallo || null);
-  return new Response(JSON.stringify({ ok: true, avisadas, saltadas, revisadas, errores, sinTiempo }), {
+  const falloSoporte = soportes?.error ? 'entradas de soporte: ' + soportes.error
+    : soportes?.fallidas ? soportes.fallidas + ' sesiones de soporte vencidas que Clerk no cerró' : null;
+  await latir('cron-ventana', { avisadas, saltadas, revisadas, errores, sinTiempo, soportes }, [fallo, falloSoporte].filter(Boolean).join(' · ') || null);
+  return new Response(JSON.stringify({ ok: true, avisadas, saltadas, revisadas, errores, sinTiempo, soportes }), {
     headers: { 'Content-Type': 'application/json' },
   });
 }

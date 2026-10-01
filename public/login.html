@@ -488,6 +488,8 @@ function waitForClerk(t=6000){
 // signOut() navega por su cuenta, así que se le pide volver aquí mismo y el
 // ticket sigue esperando en la pestaña. Ver api/cuentas.js.
 const CAMBIO_KEY = 'acuarius_cambio_ticket';
+const CLAVE_KEY = 'acuarius_cambio_clave';     // solo al entrar a un cliente
+const SOPORTE_KEY = 'acuarius_soporte';         // la marca que lee enSoporte() en app.js
 let _cambiando = false;
 async function canjearCambioDeCuenta(c) {
   const ticket = sessionStorage.getItem(CAMBIO_KEY);
@@ -509,13 +511,39 @@ async function canjearCambioDeCuenta(c) {
       await c.signOut({ redirectUrl: '/login.html?cambio=1' });
       return true;
     }
+    const clave = sessionStorage.getItem(CLAVE_KEY);
     const si = await c.client.signIn.create({ strategy: 'ticket', ticket });
     sessionStorage.removeItem(CAMBIO_KEY); sessionStorage.removeItem(CAMBIO_KEY + '_n');
+    sessionStorage.removeItem(CLAVE_KEY);
     if (si.status !== 'complete') throw new Error('Clerk dejó el acceso en «' + si.status + '»');
     await c.setActive({ session: si.createdSessionId });
+    if (clave) {
+      // Entrar a un cliente: la sesión nueva se ata a su entrada ANTES de abrir
+      // la app. Sin eso sería una sesión del cliente sin marca de soporte —sin
+      // banner, sin hora límite, arrancando su prueba—, así que si no se puede
+      // atar se cierra y se dice.
+      try {
+        const tok = await c.session.getToken();
+        const r = await fetch('/api/cuentas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+          body: JSON.stringify({ accion: 'vincular', clave }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        localStorage.setItem(SOPORTE_KEY, JSON.stringify({ sid: d.sid, hasta: d.hasta, admin_email: d.admin_email || null }));
+      } catch (e) {
+        try { await c.signOut(); } catch {}
+        throw new Error('no se pudo registrar la entrada (' + (e.message || e) + '). Por seguridad se cerró la sesión; vuelve a entrar con tu cuenta.');
+      }
+    } else {
+      // Volver a la cuenta propia (o cualquier otro cambio): fuera la marca.
+      try { localStorage.removeItem(SOPORTE_KEY); } catch {}
+    }
     window.location.href = '/';
   } catch (e) {
     sessionStorage.removeItem(CAMBIO_KEY); sessionStorage.removeItem(CAMBIO_KEY + '_n');
+    sessionStorage.removeItem(CLAVE_KEY);
     cambioFallo(e?.errors?.[0]?.long_message || e?.errors?.[0]?.message || e?.message || 'error desconocido');
   }
   return true;

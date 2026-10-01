@@ -18,6 +18,7 @@
 export const config = { runtime: 'edge' };
 
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+import { soporteDe } from './_soporte-sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -50,7 +51,7 @@ export default async function handler(req) {
   if (!userId) return json(await cuerpoSinSesion(sesion, 'uso-pantallas'), 401);
   // Lo que mira el equipo dentro de una cuenta (api/cuentas.js) no es uso del
   // cliente: contarlo inflaría justo la pantalla que se revisa.
-  if (sesion.datos?.act?.sub) return json({ ok: true, guardadas: 0, soporte: true });
+  if (await soporteDe(sesion)) return json({ ok: true, guardadas: 0, soporte: true });
 
   let body;
   try { body = await req.json(); } catch { return json({ error: 'Body inválido' }, 400); }

@@ -15,6 +15,7 @@ import { asegurarUsuario } from './_usuario-espejo.js';
 import { quienPregunta, gestionaEquipo, normalizarPerfil, puedeTocarA, paraElCliente, PERFILES } from './_perfiles.js';
 import { enviarResend } from './_correo.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+import { soporteDe } from './_soporte-sesion.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -430,7 +431,7 @@ export default async function handler(req, contexto) {
     // el caso normal, no el raro: la gente va a la web y se registra.
     // Una sesión de soporte (api/cuentas.js) no ata invitaciones: meter al
     // cliente en un equipo es decisión suya, no de quien entró a revisar.
-    const atada = sesion.datos?.act?.sub ? null : await vincularPorCorreo(userId);
+    const atada = (await soporteDe(sesion)) ? null : await vincularPorCorreo(userId);
     return jsonResp({
       membership: atada, vinculado_ahora: !!atada,
       ...(atada ? await planDelDueno(atada.owner_user_id) : {}),
@@ -439,7 +440,7 @@ export default async function handler(req, contexto) {
 
   // POST ?action=redeem — canjear invitación (cualquier usuario autenticado)
   if (req.method === 'POST' && url.searchParams.get('action') === 'redeem') {
-    if (sesion.datos?.act?.sub) return jsonResp({ error: 'Una sesión de soporte no canjea invitaciones' }, 403);
+    if (await soporteDe(sesion)) return jsonResp({ error: 'Una sesión de soporte no canjea invitaciones' }, 403);
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     const token = String(body.token || '');
