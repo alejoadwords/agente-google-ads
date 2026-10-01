@@ -622,17 +622,15 @@ export default async function handler(req, res) {
         await sb('/campaign_recipients?on_conflict=id', 'POST', filas.slice(i, i + LOTE_BASE),
                  'resolution=merge-duplicates,return=minimal');
       }
-      // Stats acumuladas en vivo
-      const stats = c.stats || {};
-      await sb(`/campaigns?id=eq.${c.id}`, 'PATCH', {
-        stats: {
-          ...(motivoPausa ? { motivo_pausa: motivoPausa } : {}),
-          total: stats.total || 0,
-          sent: (stats.sent || 0) + counts.sent,
-          skipped: (stats.skipped || 0) + counts.skipped,
-          failed: (stats.failed || 0) + counts.failed,
-        },
-      }, 'return=minimal');
+      // Stats acumuladas en vivo, SUMANDO en la base (campana_sumar_stats).
+      // Antes se leían al empezar, se sumaba aquí y se escribía el objeto
+      // entero: un SMS que el operador rechaza mientras el motor sigue con la
+      // campaña (api/sms-ack.js lo pasa de enviado a fallido) quedaba pisado y
+      // la campaña decía «enviado» a quien nunca le llegó nada.
+      await sb('/rpc/campana_sumar_stats', 'POST', {
+        p_id: c.id, p_sent: counts.sent, p_skipped: counts.skipped, p_failed: counts.failed,
+        p_extra: motivoPausa ? { motivo_pausa: motivoPausa } : null,
+      });
       // ¿Quedó vacía la cola? Cerrar de una vez
       const left = await sb(`/campaign_recipients?campaign_id=eq.${c.id}&status=eq.pending&select=id&limit=1`);
       if (!left?.length) {

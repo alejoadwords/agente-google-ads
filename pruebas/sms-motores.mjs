@@ -42,7 +42,7 @@ async function tokenDe(sub) {
 }
 
 // ── Supabase de mentira ─────────────────────────────────────────────────────
-let T, saldo, llamadas, labs;
+let T, saldo, llamadas, labs, lecturaVieja = false;
 function cumple(fila, k, v) {
   if (!(k in fila)) return true;
   const x = fila[k];
@@ -80,9 +80,23 @@ globalThis.fetch = async (url, init = {}) => {
     return resp(id);
   }
   if (tabla === 'rpc/sms_devolver') return resp(true);
+  if (tabla === 'rpc/campana_sumar_stats') {
+    const b = JSON.parse(init.body); const c = T.campaigns.find(x => x.id === b.p_id);
+    if (!c) return resp(null);
+    const st = c.stats || {};
+    c.stats = { ...st, sent: Math.max(0, (st.sent || 0) + (b.p_sent || 0)), skipped: Math.max(0, (st.skipped || 0) + (b.p_skipped || 0)),
+      failed: Math.max(0, (st.failed || 0) + (b.p_failed || 0)), ...(b.p_extra || {}) };
+    return resp(c.stats);
+  }
   if (tabla === 'cron_latidos' || tabla === 'error_log') return resp([], 201);
-  const filas = filtrar(tabla, u.searchParams);
-  if (metodo === 'PATCH') { const c = JSON.parse(init.body); filas.forEach(f => Object.assign(f, c)); return resp(null, 204); }
+  let filas = filtrar(tabla, u.searchParams);
+  // Carrera: dos avisos casi a la vez. El primero ya cambió la fila, pero el
+  // segundo la leyó antes y la cree «enviado».
+  if (lecturaVieja && tabla === 'sms_envios' && metodo === 'GET') filas = filas.map(f => ({ ...f, estado: 'enviado' }));
+  if (metodo === 'PATCH') {
+    const c = JSON.parse(init.body); filas.forEach(f => Object.assign(f, c));
+    return /return=representation/.test((init.headers || {}).Prefer || '') ? resp(filas) : resp(null, 204);
+  }
   if (metodo === 'POST') {
     const nuevas = [].concat(JSON.parse(init.body));
     if (tabla === 'campaign_recipients' && u.searchParams.get('on_conflict') === 'id') {
@@ -263,6 +277,40 @@ console.log('\nConfirmación de entrega');
   ok(T.sms_envios[0].estado === 'entregado', 'llegó al teléfono: entregado');
   r = await h(new Request(`https://app.acuarius.app/api/sms-ack?subid=${sub}&k=${k}&status=ko&acklevel=error&desc=UNDELIV`));
   ok(T.sms_envios[0].estado === 'entregado', 'un aviso tardío de error no pisa un entregado');
+}
+
+console.log('\nUn rechazo del operador corrige la campaña');
+{
+  const h = (await import('../api/sms-ack.js')).default;
+  const { firmaAck } = await import('../api/_sms.js');
+  mundo();
+  const sub = 'b'.repeat(20), k = await firmaAck(sub);
+  T.campaigns[0].status = 'sent'; T.campaigns[0].stats = { total: 2, sent: 2, skipped: 0, failed: 0 };
+  T.campaign_recipients = [{ id: 'R1', campaign_id: 'C1', lead_id: 'L1', status: 'sent' }, { id: 'R4', campaign_id: 'C1', lead_id: 'L4', status: 'sent' }];
+  T.sms_envios.push({ id: 'E9', subid: sub, estado: 'enviado', campaign_id: 'C1', lead_id: 'L1', user_id: 'dueno' });
+  const aviso = (q) => h(new Request(`https://app.acuarius.app/api/sms-ack?subid=${sub}&k=${k}&${q}`));
+  let r = await aviso('status=ko&acklevel=error&desc=REJECTD');
+  ok(r.status === 200 && T.sms_envios.find(e => e.id === 'E9').estado === 'fallido', 'el rechazo marca el envío como fallido');
+  ok(T.campaigns[0].stats.sent === 1 && T.campaigns[0].stats.failed === 1 && T.campaigns[0].stats.total === 2, 'y la campaña pasa a 1 enviado y 1 fallido', JSON.stringify(T.campaigns[0].stats));
+  const r1 = T.campaign_recipients.find(x => x.id === 'R1');
+  ok(r1.status === 'failed' && /REJECTD/.test(r1.detail || ''), 'el destinatario queda como fallido con el motivo', JSON.stringify(r1));
+  ok(T.campaign_recipients.find(x => x.id === 'R4').status === 'sent', 'sin tocar a los demás destinatarios');
+  await aviso('status=ko&acklevel=error&desc=REJECTD');
+  ok(T.campaigns[0].stats.sent === 1 && T.campaigns[0].stats.failed === 1, 'el mismo aviso repetido no vuelve a restar', JSON.stringify(T.campaigns[0].stats));
+  await aviso('status=ok&acklevel=handset&desc=DELIVRD');
+  ok(T.sms_envios.find(e => e.id === 'E9').estado === 'entregado' && T.campaigns[0].stats.sent === 2 && T.campaigns[0].stats.failed === 0 && r1.status === 'sent',
+    'un «entregado» tardío que desmiente el fallo lo deshace', JSON.stringify(T.campaigns[0].stats));
+  T.sms_envios.push({ id: 'E10', subid: 'c'.repeat(20), estado: 'enviado', campaign_id: null, lead_id: 'L4', user_id: 'dueno' });
+  await h(new Request(`https://app.acuarius.app/api/sms-ack?subid=${'c'.repeat(20)}&k=${await firmaAck('c'.repeat(20))}&status=ko&acklevel=error&desc=UNDELIV`));
+  ok(T.sms_envios.find(e => e.id === 'E10').estado === 'fallido' && T.campaigns[0].stats.failed === 0, 'un SMS de automatización (sin campaña) no toca ninguna campaña');
+  // E9 está entregado y la campaña en 2/0. Un aviso de rechazo que leyó el
+  // envío antes de que cambiara no puede restar: el cambio condicional lo frena.
+  T.sms_envios.find(e => e.id === 'E9').estado = 'fallido';
+  T.campaigns[0].stats = { total: 2, sent: 1, skipped: 0, failed: 1 };
+  lecturaVieja = true;
+  await aviso('status=ko&acklevel=error&desc=REJECTD');
+  lecturaVieja = false;
+  ok(T.campaigns[0].stats.sent === 1 && T.campaigns[0].stats.failed === 1, 'dos avisos a la vez no restan dos veces', JSON.stringify(T.campaigns[0].stats));
 }
 
 console.log('\nBaja por «SALIR»');

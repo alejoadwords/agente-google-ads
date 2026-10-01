@@ -76,6 +76,14 @@ function montar(nDestinatarios, { resendFalla = false, muchosSaltables = false, 
       return { ok: true, status: 200, json: async () => ({ data: cuerpo.map((_, i) => ({ id: `re-${cuenta.resend}-${i}` })) }) };
     }
     if (u.includes('/campaigns?') && met === 'GET') return ok([campana]);
+    // Igual que campana_sumar_stats en la base: suma, nunca baja de cero, mezcla p_extra.
+    if (u.includes('/rpc/campana_sumar_stats')) {
+      const st = campana.stats || {};
+      campana.stats = { ...st, sent: Math.max(0, (st.sent || 0) + (cuerpo.p_sent || 0)),
+        skipped: Math.max(0, (st.skipped || 0) + (cuerpo.p_skipped || 0)), failed: Math.max(0, (st.failed || 0) + (cuerpo.p_failed || 0)),
+        ...(cuerpo.p_extra || {}) };
+      return ok(campana.stats);
+    }
     if (u.includes('/campaigns?') && met === 'PATCH') { Object.assign(campana, cuerpo); return ok([]); }
 
     if (u.includes('/campaign_recipients?') && met === 'GET') {
