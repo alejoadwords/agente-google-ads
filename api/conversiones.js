@@ -72,12 +72,23 @@ async function guardarExtra(id, cambio) {
 }
 
 // Una venta inventada para Probar eventos: correo de ejemplo, valor mínimo.
+//
+// Va como evento de SERVIDOR de la web (`website`), no como evento de CRM
+// (`system_generated`): Meta acepta los de CRM sin un id de lead suyo, pero
+// Probar eventos no los enseña, y una prueba que «se envió» y no aparece en
+// ningún sitio no prueba nada (01-10-2026). Lo que se comprueba aquí es que
+// el pixel y el token funcionan; las ventas de verdad salen como CRM.
 function eventoDePrueba() {
   return {
     event_name: 'Purchase', event_time: Math.floor(Date.now() / 1000), event_id: 'acu-prueba-' + Date.now(),
-    action_source: 'system_generated',
-    user_data: { em: ['973dfe463ec85785f5f95af5ba3906eedb2d931c24e69824a89ea65dba4e813b'] },   // sha256 de test@example.com
-    custom_data: { value: 1000, currency: 'COP', lead_event_source: 'Acuarius', event_source: 'crm' },
+    action_source: 'website',
+    event_source_url: 'https://app.acuarius.app/',
+    user_data: {
+      em: ['973dfe463ec85785f5f95af5ba3906eedb2d931c24e69824a89ea65dba4e813b'],   // sha256 de test@example.com
+      client_user_agent: 'Acuarius (prueba de ventas a la pauta)',
+      client_ip_address: '190.0.0.1',
+    },
+    custom_data: { value: 1000, currency: 'COP' },
   };
 }
 
@@ -190,7 +201,8 @@ export default async function handler(req) {
         eventos: [eventoDePrueba()],
       });
       if (!r.ok) return jsonResp({ error: r.motivo }, 400);
-      return jsonResp({ ok: true, recibidos: r.respuesta?.events_received || 0 });
+      // Lo que dijo Meta, tal cual: si avisa algo (`messages`), se ve.
+      return jsonResp({ ok: true, recibidos: r.respuesta?.events_received || 0, avisos: r.respuesta?.messages || [], traza: r.respuesta?.fbtrace_id || null });
     }
 
     if (body.accion === 'meta-activar') {

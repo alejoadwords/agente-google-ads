@@ -40055,8 +40055,10 @@ async function ventasMetaActivar(activo, btn) {
 async function ventasMetaProbar(btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
   try {
-    await ventasPost({ accion: 'meta-probar' });
-    showToast('Enviada. Mírala en Administrador de eventos → Probar eventos (tarda unos segundos).', 'success');
+    const d = await ventasPost({ accion: 'meta-probar' });
+    const avisos = (d.avisos || []).map(a => typeof a === 'string' ? a : (a.message || JSON.stringify(a))).join(' · ');
+    showToast('Meta recibió ' + (d.recibidos || 0) + ' evento. Búscalo en Probar eventos como «Purchase», recibido de Servidor.' +
+      (avisos ? ' Meta avisa: ' + avisos : ''), 'success');
   } catch (e) { ventasErr('vm-err', e.message); }
   if (btn) { btn.disabled = false; btn.innerHTML = icn('send', 13) + ' Mandar una de prueba'; }
 }
