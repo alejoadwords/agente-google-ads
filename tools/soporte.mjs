@@ -48,7 +48,11 @@ function disparador(t) {
   return detalle ? `${base} → ${detalle}` : base;
 }
 
-const LIMITES_PLAN ={ free: 10, trial: 2000, pro: 2000, agency: 10000 };
+// Copia EXACTA de PLAN_LEADS en api/leads.js y api/diagnostico.js, alias
+// históricos de Clerk incluidos. Si se separan, la radiografía dice que a un
+// Pro le caben 2.000 contactos mientras el servidor le corta en 1.000, y el
+// aviso de capacidad —que es justo para lo que está— no salta nunca.
+const LIMITES_PLAN = { free: 50, trial: 1000, pro: 1000, individual: 1000, agency: 5000, agencia: 5000 };
 
 function token() {
   try {

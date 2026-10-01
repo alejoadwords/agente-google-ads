@@ -70,6 +70,39 @@ select created_at, message, context from public.error_log
 where user_id = 'user_XXX' order by created_at desc limit 20;
 ```
 
+**¿Corrió el cron?** La primera pregunta de medio soporte, y la que antes no
+se podía contestar. Los dieciséis laten desde el 27-09-2026:
+
+```sql
+select cron, ultima_vez, ultimo_resultado, ultimo_fallo
+from cron_latidos order by ultima_vez desc;
+```
+
+`ultimo_resultado` trae el resumen de la corrida (`{correos, cuentas,
+fallidos…}`), así que distingue «no corrió» de «corrió y no había nada» de
+«corrió y falló». La API de registros de Vercel da 404 con nuestro token: no
+perder tiempo ahí.
+
+**Cuánto correo se ha gastado hoy.** El tope de Resend es diario y **de la
+plataforma entera**, no de cada cliente: una sola cuenta puede dejar a todas
+las demás sin correo, y ya pasó el 21-09-2026.
+
+```sql
+select dia, enviados from email_cuota order by dia desc limit 10;
+```
+
+Para ver si fue una cuenta la que se lo comió, la columna `por_cuenta` de esa
+misma fila lo reparte. `EMAIL_TOPE_DIARIO` vale **10.000**, no 100 — el 100 es
+solo el valor por defecto del código si falta la variable.
+
+**Quién entró a la cuenta de un cliente y por qué.** Cada entrada y cada salida
+por «Cuentas de clientes» quedan registradas, con el motivo:
+
+```sql
+select admin_email, cuenta_email, motivo, inicio, fin
+from acceso_cuentas order by inicio desc limit 20;
+```
+
 **Tickets abiertos.**
 
 ```sql
@@ -122,10 +155,20 @@ Ver [[project_agujero_ads_sin_sesion]].
 
 ## Probar en producción como un usuario real
 
-Se puede, con Clerk: pedir un *sign-in token* con la clave secreta y canjearlo
-por `strategy=ticket`. Es la forma de reproducir un fallo con los datos reales
-del cliente sin pedirle la contraseña. **Revocar la sesión al terminar.** Y
-avisar a Alejandro antes: es entrar en la cuenta de otro.
+Desde el 30-09-2026 hay una puerta hecha para esto y es la que se usa:
+**«Cuentas de clientes»** en la cabecera (solo `ADMIN_EMAILS`). Pide a Clerk un
+*actor token*, así que la sesión **es la del cliente** y el JWT lleva `act.sub`
+con quien entró; el motivo es obligatorio y queda en `acceso_cuentas`. Dentro,
+`enSoporte()` corta la prueba, las invitaciones, el push, la analítica y los
+tours para que nada se dispare en nombre de otro.
+
+Sigue valiendo: **avisar a Alejandro antes** —es entrar en la cuenta de otro—,
+mirar sin escribir, y salir por el botón «volver».
+
+El camino viejo a mano (pedir un *sign-in token* con la clave secreta y
+canjearlo por `strategy=ticket`) sigue funcionando y es lo que se usa para dar
+sesión al navegador integrado sin contraseña. Si se usa, **revocar la sesión al
+terminar**.
 
 Ojo: las variables `sensitive` de Vercel **no se pueden leer de vuelta**; si
 `decrypt=true` devuelve algo que empieza por `eyJ2IjoidjIi`, está cifrada y no

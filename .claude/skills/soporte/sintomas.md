@@ -15,8 +15,11 @@ Antes de nada, siempre: `node tools/soporte.mjs <correo>`.
    no puede entrar nada. La radiografía lo avisa en alto.
 3. **¿El formulario está pausado?** `lead_forms.active`. Un formulario pausado
    devuelve 410 y la web del cliente no muestra ningún error visible.
-4. **¿Llegó al tope del plan?** free 10, pro/trial 2000, agency 10000. Al tope,
-   los leads nuevos se rechazan.
+4. **¿Llegó al tope del plan?** Lo que se limita son **contactos**: free 50,
+   pro/trial 1.000, agency 5.000, más 1.000 por cada paquete de `leads_extra`.
+   Al tope, los leads nuevos se rechazan. (El tope vive en `PLAN_LEADS`, en
+   `api/leads.js`, `api/diagnostico.js` y `tools/soporte.mjs`: si alguna vez
+   los tres no dicen lo mismo, el que manda es el de `api/leads.js`.)
 5. **Si es un conector en web ajena**: el script manda por `sendBeacon`, que
    **solo conserva el cuerpo si el content-type está en la lista segura**. Con
    otro, el envío se pierde entero y en silencio. Ver [[project_form_connector]].
@@ -62,11 +65,40 @@ Ver [[project_meta_acceso_avanzado]].
 
 ## «No llegan los correos de mi campaña»
 
+**Ojo: el «cupo mensual de Pro 2.000 / Agency 10.000» ya no existe.** Está en
+`Infinity` para pro, agency y trial desde hace tiempo — repetirlo es
+diagnosticar con un número inventado. Lo que se limita son **contactos**, no
+correos (free 50, pro/trial 1.000, agency 5.000, más paquetes de 1.000). Ver
+[[project_modelo_envios]].
+
+Lo que sí puede frenar un envío, en orden de probabilidad:
+
+- El motor va **por lotes cada 10 minutos**, no al instante. Una base de 7.000
+  sale en una sola corrida de ~55 s; una de 40.000 tarda unos 30 minutos.
+- **Tope diario de toda la plataforma.** El de Resend es diario y **de la
+  cuenta entera**, no de cada cliente. Lo contamos en `api/_correo.js` con la
+  tabla `email_cuota`: `select dia, enviados from email_cuota order by dia desc`.
+  Hay una **reserva que nunca se le presta a una campaña** (`EMAIL_RESERVA`,
+  40) para que una confirmación de cita siempre salga, y **ninguna cuenta se
+  lleva más de la mitad** de lo que quede. **`EMAIL_TOPE_DIARIO` vale 10.000,
+  NO 100** — el 100 es solo el valor por defecto del código si falta la
+  variable, y confundirlo lleva a diagnosticar mal.
+- **Cuenta de menos de 24 h**: no manda más de **300** destinatarios por
+  campaña (`TOPE_CUENTA_NUEVA`). Es el freno que caza el patrón de abuso.
+- **`envio_bloqueado`** en el `public_metadata` de Clerk. Se respeta al encolar
+  **y en el cron**; si no se puede consultar, **no se envía**.
 - El envío sale **solo desde app.acuarius.app** (dominio verificado en Resend).
-- **Cupo mensual por plan**: Pro 2.000, Agency 10.000.
 - Los que rebotaron se **suprimen solos** y no vuelven a recibir.
 - La etiqueta `no-email` da de baja: revisar que no la tengan.
-- El motor va **por lotes cada 10 minutos**, no al instante.
+
+## «Mi campaña lleva horas en "enviando"»
+
+Si el tope diario la retuvo, **la pantalla no lo dice**: el cliente la ve
+«enviando» sin explicación. Es un fallo silencioso conocido y sin arreglar.
+Se comprueba en `email_cuota` (arriba) y se le explica a mano.
+
+Con SMS la pausa sí se ve: si se queda sin saldo a mitad, la campaña se pausa
+con `stats.motivo_pausa` y se reanuda con `?action=resume`.
 
 ## «La automatización no hace nada»
 
@@ -83,6 +115,10 @@ Ver [[project_meta_acceso_avanzado]].
   abre desde Safari, el permiso ni se pide. La interfaz lo dice.
 - Hoy se avisa al **entrar un lead** y al **haber actividad**. El aviso de
   **tarea vencida todavía no existe**: no prometerlo.
+- **Casi nadie lo tiene activado**, y por eso el canal de verdad sigue siendo
+  el correo. Se comprueba mirando si esa persona tiene fila en `push_subs`.
+  Una nota dirigida tardaba de media **82 horas** en leerse por esto; lo que
+  queda lo cubre `cron-notas`, que recuerda las que nadie abrió.
 
 ## «A mis asesores no les llega el resumen de tareas» / «solo le llega a uno»
 
@@ -91,20 +127,33 @@ Ver [[project_meta_acceso_avanzado]].
   es su filtro, no nuestro envío: Microsoft decide buzón por buzón según el
   historial con el remitente, así que al que lleva meses recibiéndonos le
   entra y a los recién creados se los lleva a Correo no deseado o a la
-  cuarentena del administrador. Ver [[project-entregabilidad-correo]].
+  cuarentena del administrador. Ver [[project_entregabilidad_correo]].
+- **Antes de nada, mirar si corrió**, que ya no hay que adivinarlo:
+
+```sql
+select ultima_vez, ultimo_resultado, ultimo_fallo
+from cron_latidos where cron = 'cron-tasks';
+```
+
+  `ultimo_resultado` trae `{cuentas, correos, fallidos, errores}` de la última
+  corrida. El 23-09-2026 este mismo síntoma se investigó a ciegas durante horas
+  porque no existía esta tabla: la consulta de tareas se resolvía con
+  `.catch(() => [])` y un fallo se volvía «hoy nadie tiene nada» → 200 «todo
+  bien». Ver [[project_latidos_crons]].
 - **Comprobar que sí sale** disparando el cron (avisar antes: manda el correo
-  de verdad al equipo del cliente):
+  de verdad al equipo del cliente, y gasta cuota diaria compartida):
 
 ```bash
 curl -s -X GET "https://app.acuarius.app/api/cron-tasks" -H "x-acuarius-secret: $CRON_SECRET"
 ```
 
-  Devuelve `{cuentas, correos, fallidos, errores}`. Con `fallidos: []` el envío
-  salió y el problema está del lado de ellos. Desde el 17-09-2026 cada fallo
-  queda además en `error_log`.
-- **Ojo a la expectativa**: el resumen sale **a las 7:00 de Colombia, de lunes
-  a viernes**, y nada más. **No hay aviso al crear ni al asignar una tarea.**
-  Si lo que echan de menos es enterarse en el momento, eso todavía no existe.
+  Con `fallidos: []` el envío salió y el problema está del lado de ellos. Desde
+  el 17-09-2026 cada fallo queda además en `error_log`.
+- **Ojo a la expectativa**: el resumen sale **de lunes a viernes a las 7:00 de
+  Colombia**, con **tres intentos** (12:00, 12:10 y 12:20 UTC) para que un
+  tropiezo no se coma el día. Y nada más: **no hay aviso al crear ni al asignar
+  una tarea.** Si lo que echan de menos es enterarse en el momento, eso todavía
+  no existe.
 
 ## «Le dejo una nota al comercial y no se entera»
 
@@ -131,9 +180,26 @@ order by created_at desc limit 20;
 
 ## «El chat con el agente no responde / se corta»
 
-- Hay **cupo de uso de IA** por plan (`ai_usage`). Agotado, no responde.
+**Primero: ¿de cuál de los dos agentes habla?**
+
+- **Agentes de marketing** (Consultor, Google Ads, SEO, Contenido…): **se
+  apagaron el 17-09-2026.** No es un fallo. Nadie los usaba —`ai_usage` no
+  tiene ni una fila con `origen='agente'` en toda su historia— y cargaban
+  304 KB de prompts en cada visita. Sus funciones se reubican bajo Marketing.
+- **Agente conversacional** (WhatsApp, Instagram, chat web): ese sí está vivo y
+  es lo que casi siempre quieren decir.
+
+Para el conversacional:
+
+- **Cupo mensual de mensajes** por plan: free 0 · trial 300 · pro 500 · agency
+  2.000, contados en hora de Colombia desde `ai_usage`. Se ve en
+  Conversaciones → Agentes IA. **El probador no gasta cupo.**
+- Si la tira dice «no se pudo consultar», eso es un **503**, no un cliente sin
+  consumo: no se le responde que va en cero.
 - Sonnet 5 **razona por defecto** y ese razonamiento comparte presupuesto con
   el texto: con `max_tokens` bajo la respuesta llega vacía.
+- Si se queda a medias y no retoma, mirar `cron-seguimiento` (cada 10 min):
+  es el que reengancha la conversación que murió sin respuesta.
 
 ## «Pagué y sigo en prueba»
 
@@ -201,6 +267,54 @@ Si el problema es que **no está en el equipo**, mirar `team_members`: `status`
 debe ser `active` y `member_user_id` no puede estar vacío. Desde el 14-09-2026
 la invitación se aplica sola al entrar con el correo invitado **verificado**;
 si su correo no está verificado en Clerk, no se ata y es correcto que no se ate.
+
+## «Creé un proceso y no lo encuentro» / «no veo mis etapas, veo otras columnas»
+
+Lo que le pasó a Karvio en plena capacitación. Dos causas que se parecen:
+
+- **El selector de cliente es SOLO de las cuentas de agencia.** Una cuenta Pro
+  o de prueba guarda su negocio como un único cliente (`pro_main`) y trabaja
+  siempre dentro de él. Antes había dos espacios —«Mi cuenta» y el negocio— con
+  procesos distintos: el cliente creaba un proceso en uno y lo buscaba en el
+  otro. Arreglado el 29-09-2026.
+- **La «vista global»** (columnas Abiertas / Ganadas / Perdidas) es solo para
+  una agencia con cartera mirando a todos sus clientes. Una cuenta **sin**
+  cartera caía ahí siempre y nunca veía sus propias etapas.
+
+Al verificar un arreglo del CRM, mirar **las columnas pintadas**
+(`crmColumnasTablero`), no solo que `crmStages` cargara: ese despiste ya hizo
+dar por bueno un arreglo incompleto. Ver [[project_cuenta_un_negocio]].
+
+## «Me faltan días en la agenda» / «el mes sale incompleto»
+
+Arreglado el 29-09-2026. La consulta traía `limit=500` ordenado de forma
+ascendente, así que en una cuenta con muchas actividades **se perdían los
+últimos días del mes**: Certain tenía 626 actividades y el 29 de septiembre
+salía con 19 de 67. Ahora pagina con `todasLasFilas()`.
+
+Regla que deja esto: **una consulta nueva que liste actividades o leads por
+rango nunca lleva un `limit=` fijo.** PostgREST además corta en 1.000 filas
+aunque pidas más. Ver [[feedback_postgrest_mil]].
+
+## «Mi asesor llama a un lead que ya estaba» / «no puede buscar»
+
+El perfil **Ventas** solo ve los leads que le asignaron, y **eso se queda
+así**: un asesor nuevo no debe encontrarse la cartera entera. Pero desde el
+22-09-2026 tiene encima del tablero un buscador de «¿ya existe?» que consulta
+toda la cuenta y devuelve **solo** nombre, empresa, etapa y asesor. Ni
+teléfono, ni correo, ni valor, ni notas. Mínimo 3 caracteres.
+
+Si dice que no le aparece: solo sale a quien tiene el tablero acotado, es
+decir al perfil Ventas. Al dueño y a los admin no, porque ellos ya ven todo.
+
+## «¿Pueden mandar SMS?»
+
+**Todavía no.** El módulo existe desde el 30-09-2026 pero está **en beta y en
+modo simulado**: solo lo ven las cuentas de `SMS_BETA` y, sin las credenciales
+de LabsMobile, reserva créditos y no envía nada. No prometerlo ni dar fecha.
+
+Cuando se abra: solo móviles colombianos, horario de la Ley 2300 (lun–vie 7–19,
+sáb 8–15, nunca domingos ni festivos) y baja con la etiqueta `no-sms`.
 
 ## «Cambié algo y no lo veo»
 
