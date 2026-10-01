@@ -128,6 +128,12 @@ Lee hasta **1.000 filas**, acotadas al cliente activo.
 4. **¿Se disparó el trigger?** Un `stage_changed` a Ganado no corre si el lead
    llegó a Ganado antes de crear la automatización.
 5. **¿Cuota de Resend?** Un 429 en `automation_logs` lo dice tal cual.
+6. **¿Nuestro propio tope diario?** Distinto del anterior y mucho menos
+   evidente: el NPS sale por `enviarResend`/`huecoParaCampana` de
+   `api/_correo.js`, la misma puerta que las campañas, y comparte el tope
+   diario de **toda la plataforma**. Ahí no hay 429 que mirar — se comprueba
+   con `select dia, enviados from email_cuota order by dia desc`. Ver
+   [[project_cuota_correo_diaria]].
 
 Consulta de solo lectura:
 
