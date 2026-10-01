@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-01-lista-todos-los-procesos",
+      "fecha": "2026-10-01",
+      "tipo": "nuevo",
+      "titulo": "Ve los leads de todos tus procesos en la Lista",
+      "texto": "En CRM → Lista, el selector de procesos tiene ahora la opción «Todos los procesos»: ves en una sola tabla los leads de Arriendo, Venta o los procesos que tengas, con una columna Proceso que dice de cuál es cada uno y su etapa con el nombre correcto. El Tablero sigue mostrando un proceso a la vez, porque cada uno tiene sus propias etapas."
+    },
+    {
       "id": "2026-09-30-asistente-campanas",
       "fecha": "2026-09-30",
       "tipo": "mejora",

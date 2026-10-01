@@ -17513,6 +17513,7 @@ async function crmLoadPipelines() {
     if (mio !== crmAmbitoCliente()) return false;   // el cliente cambió mientras viajaba
     crmPipelines = d.pipelines || [];
     _pipesAmbito = mio;
+    _etapasTodasDe = null;   // un proceso o una etapa pudo cambiar: se piden de nuevo
     crmFalloResuelto('pipelines');
     // Recordar el último elegido en este ámbito; si ya no existe, al principal
     const guardado = pipeRecordado();
@@ -17547,16 +17548,43 @@ function pipeRenderSelector() {
   cont.style.display = 'flex';
   sel.style.display = crmPipelines.length ? 'inline-flex' : 'none';
   const actual = crmPipelines.find(p => p.id === crmPipelineId) || crmPipelines[0] || {};
-  txt.textContent = actual.name || '';
+  txt.textContent = crmTodosActivo() ? 'Todos los procesos' : (actual.name || '');
   const cliente = pipeAmbitoNombre();
   sel.title = cliente ? 'Procesos de ' + cliente : 'Procesos sin cliente asignado';
 }
 
+const PIPE_TODOS = '__todos';
+
 function pipeAbrirSelector(btn) {
-  ddAbrir(btn, crmPipelines.map(p => ({ id: p.id, name: p.name })), crmPipelineId, id => pipeCambiar(id));
+  const ops = crmPipelines.map(p => ({ id: p.id, name: p.name }));
+  // «Todos» solo se ofrece en la Lista: en el Tablero no hay columnas comunes.
+  if (crmView === 'list' && crmPipelines.length > 1) {
+    ops.unshift({ id: PIPE_TODOS, name: 'Todos los procesos' }, { sep: true });
+  }
+  ddAbrir(btn, ops, crmTodosActivo() ? PIPE_TODOS : crmPipelineId, id => pipeCambiar(id));
 }
 
 async function pipeCambiar(id) {
+  if (id === PIPE_TODOS) {
+    if (crmTodosActivo()) return;
+    crmListaTodos = true;
+    crmLeadsLoaded = false;
+    pipeRenderSelector();
+    await crmLoadLeads();
+    crmRender();
+    return;
+  }
+  // Elegir un proceso concreto quita «Todos», aunque sea el mismo que ya estaba
+  // detrás: es la forma de volver a ver uno solo.
+  if (crmListaTodos && id === crmPipelineId) {
+    crmListaTodos = false;
+    crmLeadsLoaded = false;
+    pipeRenderSelector();
+    await crmLoadLeads();
+    crmRender();
+    return;
+  }
+  crmListaTodos = false;
   if (!id || id === crmPipelineId) return;
   crmPipelineId = id;
   // El <select> nativo se reetiquetaba solo al elegir; el botón no. Sin esto el
@@ -17837,6 +17865,75 @@ function crmAmbito() {
   return c + '|' + (crmPipelineId || '');
 }
 
+// ── «Todos los procesos», solo en la Lista ──────────────────────────────────
+// Cada proceso tiene sus etapas (Certain: Arriendo 12, Venta 9, Captación 7),
+// así que un tablero común no existe. Una tabla sí: cada fila dice su proceso
+// y su etapa. Por eso «Todos» vive solo en la Lista y el Tablero sigue en el
+// proceso elegido; al volver a la Lista, «Todos» sigue puesto (01-10-2026).
+let crmListaTodos = false;
+let crmEtapasPorProceso = {};     // pipeline_id -> etapas, para nombrar la de cada fila
+let _etapasTodasDe = null;        // para qué cliente se cargaron
+let _leadsCargadosDe = null;      // crmAmbitoLeads() de los leads que hay en memoria
+
+function crmTodosActivo() {
+  return crmListaTodos && crmView === 'list' && crmPipelines.length > 1;
+}
+
+// Los leads dependen también de si se está viendo «Todos»: la clave de la carga
+// lo incluye para que cambiar de vista recargue y una respuesta vieja no pise.
+function crmAmbitoLeads() {
+  return crmAmbito() + '|' + (crmTodosActivo() ? 'todos' : '');
+}
+
+async function crmCargarEtapasTodas() {
+  const mio = crmAmbitoCliente();
+  if (_etapasTodasDe === mio) return true;
+  try {
+    const listas = await Promise.all(crmPipelines.map(p =>
+      fetchAuth('/api/pipeline-stages?pipeline_id=' + encodeURIComponent(p.id))
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(d => [p.id, d.stages || []])));
+    if (mio !== crmAmbitoCliente()) return false;
+    crmEtapasPorProceso = Object.fromEntries(listas);
+    _etapasTodasDe = mio;
+    crmFalloResuelto('etapas');
+    return true;
+  } catch (e) {
+    // Sin las etapas de los otros procesos, sus filas saldrían con la clave
+    // interna («envio-de-condiciones») en vez del nombre: se avisa.
+    console.error('crmCargarEtapasTodas', e);
+    crmFallo('etapas');
+    return false;
+  }
+}
+
+// El proceso de un lead. Los que no tienen (anteriores a crear el primero)
+// cuentan como del principal, que es donde los suma el tablero.
+function crmProcesoDeLead(l) {
+  return crmPipelines.find(p => p.id === l.pipeline_id)
+    || (!l.pipeline_id ? crmPipelines.find(p => p.is_default) : null)
+    || null;
+}
+
+// Las etapas del proceso de un lead. Si es el abierto (o no se conocen las de
+// su proceso), las de siempre.
+function crmEtapasDelLead(l) {
+  const p = crmProcesoDeLead(l);
+  const propias = p && p.id !== crmPipelineId ? crmEtapasPorProceso[p.id] : null;
+  return (propias && propias.length) ? propias : (crmStages || []);
+}
+
+// La etapa de un lead con el nombre de SU proceso. Fuera de «Todos» todas las
+// filas son del proceso abierto y basta con crmStages.
+function crmEtapaDeLead(l) {
+  if (crmTodosActivo()) {
+    const p = crmProcesoDeLead(l);
+    const s = p && (crmEtapasPorProceso[p.id] || []).find(x => x.key === l.stage);
+    if (s) return s;
+  }
+  return crmStages.find(x => x.key === l.stage) || null;
+}
+
 async function crmLoadStages() {
   const mio = crmAmbito();
   try {
@@ -17909,11 +18006,15 @@ function crmAbrirLeadPendiente() {
 }
 
 async function crmLoadLeads() {
-  const mio = crmAmbito();
+  const mio = crmAmbitoLeads();
+  const todos = crmTodosActivo();
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const params = [];
     if (clientId) params.push('client_id=' + encodeURIComponent(clientId));
+    // En «Todos» no se filtra por proceso: el servidor devuelve el ámbito entero
+    // y la columna Proceso dice de cuál es cada uno.
+    if (todos) await crmCargarEtapasTodas();
     // Sin cliente activo esto es una vista de TODOS los clientes. Filtrar por el
     // pipeline de ese ambito escondia los leads de cada cliente, que viven en
     // los suyos. Aqui no se filtra: se ve todo.
@@ -17922,14 +18023,15 @@ async function crmLoadLeads() {
     // proceso enseña solo sus leads. Al principal se le suman los que no tienen
     // proceso (los de antes de crear el primero), para no esconder ninguno.
     const sinCartera = !clientId && crmCuentaSinCartera();
-    if (crmPipelineId && (clientId || sinCartera)) params.push('pipeline_id=' + encodeURIComponent(crmPipelineId));
-    if (crmPipelineId && sinCartera && (crmPipelines.find(p => p.id === crmPipelineId) || {}).is_default) params.push('con_sueltos=1');
+    if (crmPipelineId && (clientId || sinCartera) && !todos) params.push('pipeline_id=' + encodeURIComponent(crmPipelineId));
+    if (crmPipelineId && sinCartera && !todos && (crmPipelines.find(p => p.id === crmPipelineId) || {}).is_default) params.push('con_sueltos=1');
     const qs = params.length ? '?' + params.join('&') : '';
     const res = await fetchAuth(`/api/leads${qs}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    if (mio !== crmAmbito()) return false;   // respuesta caducada: descartar
+    if (mio !== crmAmbitoLeads()) return false;   // respuesta caducada: descartar
     crmLeads = data.leads || [];
+    _leadsCargadosDe = mio;
     // El servidor avisa cuando no cupo todo. Callarlo seria lo de antes con
     // otro numero: el cliente veria una parte de su base creyendola completa.
     if (data.truncado) {
@@ -18214,6 +18316,7 @@ function crmAvisoEtapasAjenas(leads) {
   const ID = 'crm-aviso-etapas';
   document.getElementById(ID)?.remove();
   if (crmVistaGlobal()) return;   // ahí todo cae en abiertas/ganadas/perdidas
+  if (crmTodosActivo()) return;   // en «Todos» cada fila lleva su proceso
   if (!crmStagesLoaded || !crmStages.length) return;
   const claves = new Set(crmStages.map(s => s.key));
   const fuera = leads.filter(l => !claves.has(l.stage)).length;
@@ -18251,7 +18354,23 @@ function crmAvisoSinCartera() {
   ancla.parentElement.insertBefore(el, ancla);
 }
 
+// Pasar de Lista a Tablero (o al revés) con «Todos» puesto cambia qué leads
+// tocan: el tablero solo lleva los de su proceso. Se recarga aquí porque es
+// por donde pasan todos los caminos que cambian de vista.
+function crmRecargarSiCambioTodos() {
+  if (!crmLeadsLoaded || !_leadsCargadosDe) return;
+  if (crmView !== 'kanban' && crmView !== 'list') return;
+  if (_leadsCargadosDe === crmAmbitoLeads()) return;
+  // Solo si lo único distinto es «Todos»: un cambio de cliente o de proceso ya
+  // recarga por su lado y aquí se pediría dos veces.
+  if (_leadsCargadosDe.split('|').slice(0, 2).join('|') !== crmAmbito()) return;
+  crmLeadsLoaded = false;
+  crmLoadLeads();
+}
+
 function crmRender() {
+  crmRecargarSiCambioTodos();
+  pipeRenderSelector();
   if (crmView === 'kanban') crmRenderKanban();
   else crmRenderList();
   crmAvisoSinCartera();
@@ -20705,6 +20824,7 @@ const CRM_COLS_BASE = [
   { key: 'email',         label: 'Email' },
   { key: 'phone',         label: 'Teléfono' },
   { key: 'assigned_name', label: 'Comercial' },
+  { key: 'pipeline',      label: 'Proceso' },
   { key: 'stage',         label: 'Etapa' },
   { key: 'estado',        label: 'Estado' },
   { key: 'source',        label: 'Fuente' },
@@ -20741,15 +20861,22 @@ function crmColsCatalogo() {
   );
 }
 
-function crmColsSel() {
+function crmColsSel(sinForzar) {
   let g = null;
   try { g = JSON.parse(localStorage.getItem(CRM_COLS_LS) || 'null'); } catch { g = null; }
   const validas = new Set(crmColsCatalogo().map(c => c.key));
   // Una columna guardada puede haber desaparecido (campo propio que ya no usa
   // nadie). Se cae sola en vez de pintar una columna de guiones.
-  const sel = Array.isArray(g) ? g.filter(k => validas.has(k)) : CRM_COLS_DEFECTO.slice();
+  let sel = Array.isArray(g) ? g.filter(k => validas.has(k)) : CRM_COLS_DEFECTO.slice();
+  if (!sel.length) sel = CRM_COLS_DEFECTO.slice();
   if (!sel.includes('name')) sel.unshift('name');
-  return sel.length ? sel : CRM_COLS_DEFECTO.slice();
+  // Con «Todos los procesos» la columna Proceso no es opcional: sin ella, una
+  // fila de Venta y una de Arriendo en la misma etapa no se distinguen.
+  if (!sinForzar && crmTodosActivo() && !sel.includes('pipeline')) {
+    const i = sel.indexOf('stage');
+    sel.splice(i >= 0 ? i : sel.length, 0, 'pipeline');
+  }
+  return sel;
 }
 
 function crmColsGuardar(sel) {
@@ -20784,7 +20911,8 @@ function crmColValor(l, key) {
     return v == null ? '' : v;
   }
   switch (key) {
-    case 'stage':  return (crmStages.find(s => s.key === l.stage) || {}).label || l.stage || '';
+    case 'stage':  return (crmEtapaDeLead(l) || {}).label || l.stage || '';
+    case 'pipeline': return (crmProcesoDeLead(l) || {}).name || '';
     case 'source': return fuenteLabel(l.source);
     case 'value':  return Number(l.value) || 0;
     case 'tags':   return (l.tags || []).join(', ');
@@ -20818,8 +20946,12 @@ function crmColCelda(l, key, sel) {
     }
     case 'assigned_name': return '<td>' + crmCeldaComercial(l) + '</td>';
     case 'stage': {
-      const s = crmStages.find(x => x.key === l.stage) || { label: l.stage || '—', color: 'var(--muted)' };
+      const s = crmEtapaDeLead(l) || { label: l.stage || '—', color: 'var(--muted)' };
       return '<td><span class="crm-stage-pill" style="background:' + esc(s.color) + '20;color:' + esc(s.color) + '">' + esc(s.label) + '</span></td>';
+    }
+    case 'pipeline': {
+      const p = crmProcesoDeLead(l);
+      return '<td style="font-size:12px;font-weight:600;white-space:nowrap">' + (p ? esc(p.name) : '<span style="color:var(--muted2)">—</span>') + '</td>';
     }
     case 'estado': {
       const e = crmEstadoLead(l);
@@ -20945,7 +21077,10 @@ function crmColsAbrir(btn) {
     if (op) {
       const k = op.dataset.col;
       if (k === 'name') return;                 // el nombre es el ancla de la fila
-      const sel = crmColsSel();
+      if (k === 'pipeline' && crmTodosActivo()) return;   // en «Todos» es obligatoria
+      // Lo guardado, sin la columna Proceso que «Todos» pone sola: si no, se
+      // quedaría también en la lista de un solo proceso.
+      const sel = crmColsSel(true);
       const i = sel.indexOf(k);
       if (i >= 0) sel.splice(i, 1); else sel.push(k);
       // Se guarda en el orden del catálogo, no en el de marcado: así la tabla
@@ -20983,7 +21118,8 @@ function crmColsPintar(pop) {
       // acaba de crear el campo lo busca aquí y si no aparece cree que se perdió.
       const conDatos = leads.some(l => crmColValor(l, c.key) !== '' && crmColValor(l, c.key) !== 0);
       return '<div class="dd-opt' + (sel.includes(c.key) ? ' sel' : '') + '" data-col="' + esc(c.key) + '"' +
-        (c.key === 'name' ? ' style="opacity:.6;cursor:default" title="El nombre siempre se muestra"' : '') + '>' +
+        (c.key === 'name' ? ' style="opacity:.6;cursor:default" title="El nombre siempre se muestra"'
+          : (c.key === 'pipeline' && crmTodosActivo()) ? ' style="opacity:.6;cursor:default" title="Con todos los procesos, el proceso siempre se muestra"' : '') + '>' +
         '<svg class="dd-opt-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
         '<span style="text-transform:' + (c.propio ? 'capitalize' : 'none') + '">' + esc(c.label) + '</span>' +
         (conDatos ? '' : '<span class="crm-cols-vacia">sin datos</span>') + '</div>';
@@ -21614,7 +21750,13 @@ async function crmOpenDetail(leadId, leadSuelto) {
     notesSection.style.display = 'none';
   }
   crmPopulateStageSelects();
-  document.getElementById('crm-d-stage').value = lead.stage;
+  // Desde «Todos los procesos» se abren leads de otros procesos: su ficha
+  // ofrece SUS etapas, no las del proceso abierto. Con las de otro, una etapa
+  // como «Envío de condiciones» no existía en la lista y el desplegable salía
+  // en blanco, invitando a moverlo a una etapa ajena.
+  const selEtapa = document.getElementById('crm-d-stage');
+  selEtapa.innerHTML = crmEtapasDelLead(lead).map(s => `<option value="${esc(s.key)}">${esc(s.label)}</option>`).join('');
+  selEtapa.value = lead.stage;
   crmRenderCloseInfo(lead);
   document.getElementById('crm-detail-overlay').classList.add('open');
   document.getElementById('crm-detail-panel').classList.add('open');
@@ -22185,7 +22327,7 @@ async function crmChangeStage(newStage) {
     crmRender();
     lfEmbudoRefrescar();
   };
-  const etapaDestino = (crmStages || []).find(x => x.key === newStage);
+  const etapaDestino = crmEtapasDelLead(crmDetailLead).find(x => x.key === newStage);
   if (etapaDestino && citaAbrir(crmDetailLead, etapaDestino, oldStage, deshacer)) return;
 
   // Mismo criterio que el tablero: si no se guarda, se deshace y se dice.
