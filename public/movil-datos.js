@@ -542,6 +542,33 @@ export async function cargarFicha(fetchAuth, leadId, { clientId } = {}) {
   };
 }
 
+// ── Etapas por tablero ──────────────────────────────────────────────────────
+/** Etapas del API a la forma del móvil: {k, t}, en el orden del tablero. */
+export function aEtapas(lista) {
+  return (lista || [])
+    .slice()
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map((e) => ({ k: e.key, t: e.label || ETIQUETA_ETAPA[e.key] || e.key }));
+}
+
+/**
+ * Un objeto {id del tablero: etapas}. Una cuenta sin tableros (anterior a los
+ * procesos) tiene un solo juego de etapas, que va bajo la clave ''.
+ * Si falla cualquiera, null: un tablero con sus etapas y otro con las
+ * inventadas sería peor que decir que no se pudieron traer.
+ */
+async function cargarEtapas(uno, pipelines) {
+  if (pipelines === null) return null;
+  const ids = pipelines.length ? pipelines.map((p) => p.id) : [''];
+  const listas = await Promise.all(ids.map((id) =>
+    uno('/api/pipeline-stages' + (id ? '?pipeline_id=' + encodeURIComponent(id) : ''),
+        (d) => aEtapas(d.stages))));
+  if (listas.some((l) => l === null)) return null;
+  const out = {};
+  ids.forEach((id, i) => { out[id] = listas[i]; });
+  return out;
+}
+
 // ── Carga ───────────────────────────────────────────────────────────────────
 /**
  * Pide lo que necesita el móvil. Devuelve SIEMPRE un objeto con las claves
@@ -596,12 +623,19 @@ export async function cargarTodo(fetchAuth, { clientId } = {}) {
     uno('/api/pipelines' + (clientId ? '?client_id=' + encodeURIComponent(clientId) : ''),
         (d) => (d.pipelines || []).map((p) => ({ id: p.id, nom: p.name || 'Sin nombre', principal: !!p.is_default }))),
   ]);
+  // Las etapas de CADA tablero, con sus nombres. Antes el móvil traía seis
+  // fijas (Nuevo, Contactado, Calificado, Propuesta, Ganado, Perdido): en
+  // Certain, «Presentación de propuesta» salía como «Calificado», «Envío de
+  // condiciones» con su clave cruda, y la mitad de sus etapas no se podían
+  // elegir desde el teléfono (01-10-2026). null = no se pudieron traer.
+  const etapas = await cargarEtapas(uno, pipelines);
   // Las tres cestas del servidor, con su clasificación intacta. `aTarea`
   // sigue dando el texto y la hora, pero el «vencida / hoy / próxima» ya no se
   // decide aquí.
   const deCesta = (lista, cuando) => (lista || []).map((t) => ({ ...aTarea(t), cuando }));
   return {
     pipelines,
+    etapas,
     leads,
     tareas: tareas
       ? deCesta(tareas.vencidas, 'vencida')

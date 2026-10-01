@@ -9,7 +9,7 @@
 
 import {
   aLead, aTarea, aCita, aConversacion, esCita, hace, plata,
-  etiquetaEtapa, cargarTodo, diaSuelto,
+  etiquetaEtapa, cargarTodo, diaSuelto, aEtapas,
 } from '../public/movil-datos.js';
 
 const AHORA = Date.parse('2026-09-24T12:00:00Z');
@@ -248,6 +248,34 @@ console.log('\nLa clave de la respuesta es la que manda el servidor\n');
           'no la manda el servidor');
     }
   }
+}
+
+console.log('\nLas etapas son las de cada tablero, con sus nombres\n');
+{
+  // El móvil traía seis etapas fijas: en Certain «Presentación de propuesta»
+  // salía como «Calificado» y «Envío de condiciones» con su clave cruda.
+  const e = aEtapas([
+    { key: 'ganado', label: 'Entrega de inmueble', position: 3 },
+    { key: 'nuevo', label: 'Cliente recibido', position: 1 },
+    { key: 'envio-de-condiciones', label: 'Envío de condiciones', position: 2 },
+  ]);
+  chk('en el orden del tablero', e.map((x) => x.k).join() === 'nuevo,envio-de-condiciones,ganado', JSON.stringify(e));
+  chk('con el nombre que les puso la cuenta', e[2].t === 'Entrega de inmueble' && e[1].t === 'Envío de condiciones');
+  // Se cargan por tablero: un fetch falso que responde según el pipeline_id.
+  const pedidas = [];
+  const falso = async (ruta) => {
+    pedidas.push(ruta);
+    if (ruta.startsWith('/api/pipelines')) return { ok: true, json: async () => ({ pipelines: [{ id: 'p1', name: 'Arriendo', is_default: true }, { id: 'p2', name: 'Venta' }] }) };
+    const m = ruta.match(/pipeline-stages\?pipeline_id=(\w+)/);
+    if (m) return { ok: true, json: async () => ({ stages: [{ key: 'ganado', label: m[1] === 'p1' ? 'Entrega de inmueble' : 'Firma de promesa', position: 1 }] }) };
+    return { ok: true, json: async () => ({}) };
+  };
+  const d = await cargarTodo(falso, {});
+  chk('trae las etapas de cada tablero por separado',
+      d.etapas && d.etapas.p1[0].t === 'Entrega de inmueble' && d.etapas.p2[0].t === 'Firma de promesa', JSON.stringify(d.etapas));
+  const roto = async (ruta) => ruta.includes('pipeline_id=p2') ? { ok: false } : falso(ruta);
+  const d2 = await cargarTodo(roto, {});
+  chk('si falla un tablero, null: nunca mitad reales y mitad inventadas', d2.etapas === null, JSON.stringify(d2.etapas));
 }
 
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');

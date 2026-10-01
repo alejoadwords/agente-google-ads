@@ -72,7 +72,7 @@ function sinLista(queEs){
 // ha tenido esta pantalla: no parece un fallo, parece su cuenta.
 function vaciarEjemplos(){
   LEADS = null; TAREAS = null; CITAS = null; CONVS = null;
-  BOTS = null; PIPELINES = null; PULSO = [];
+  BOTS = null; PIPELINES = null; ETAPAS_DE = null; PULSO = [];
   MODULO_CACHE = {};
 }
 
@@ -205,14 +205,46 @@ var CITAS = [
 
 var PIPELINES = null;
 var pipelineActual = null;   // null = todos los tableros
+// Las etapas de cada tablero, con los nombres de la cuenta: {id: [{k, t}]}.
+// null mientras no lleguen (o en el modo de ejemplo): entonces valen las seis
+// de ETAPAS, que son las de una cuenta nueva.
+var ETAPAS_DE = null;
 var filtroEtapa = 'todos';
 var textoBusqueda = '';
 
 // ── Pintado ─────────────────────────────────────────────────────────────────
-function etiquetaEtapa(k){
-  for (var i=0;i<ETAPAS.length;i++) if (ETAPAS[i].k===k) return ETAPAS[i].t;
+function principalId(){
+  if (!PIPELINES) return null;
+  for (var i=0;i<PIPELINES.length;i++) if (PIPELINES[i].principal) return PIPELINES[i].id;
+  return PIPELINES.length ? PIPELINES[0].id : null;
+}
+// Las etapas de un tablero. Un lead sin tablero (de antes de crear el primero)
+// vive en el principal, que es donde lo pone la web.
+function etapasDe(pid){
+  if (ETAPAS_DE) {
+    var id = pid || principalId() || '';
+    if (ETAPAS_DE[id] && ETAPAS_DE[id].length) return ETAPAS_DE[id];
+  }
+  return ETAPAS;
+}
+// El nombre de una etapa EN SU tablero: la misma clave se llama distinto en
+// cada uno («ganado» es «Entrega de inmueble» en Arriendo y «Firma de promesa»
+// en Venta).
+function etiquetaEtapa(k, pid){
+  var ls = etapasDe(pid);
+  for (var i=0;i<ls.length;i++) if (ls[i].k===k) return ls[i].t;
+  for (var j=0;j<ETAPAS.length;j++) if (ETAPAS[j].k===k) return ETAPAS[j].t;
   return k;
 }
+function nombreDelTablero(pid){
+  var id = pid || principalId();
+  if (!PIPELINES) return '';
+  for (var i=0;i<PIPELINES.length;i++) if (String(PIPELINES[i].id) === String(id)) return PIPELINES[i].nom;
+  return '';
+}
+// En «Todos los tableros» cada fila dice de cuál es: dos contactos en
+// «Cliente contactado» pueden ser uno de Arriendo y otro de Venta.
+function variosTableros(){ return !pipelineActual && PIPELINES && PIPELINES.length > 1; }
 function leadsVisibles(){
   return LEADS.filter(function(l){
     if (pipelineActual && l.pipeline !== pipelineActual) return false;
@@ -222,11 +254,19 @@ function leadsVisibles(){
     return (l.nom+' '+l.origen+' '+l.interes).toLowerCase().indexOf(q) >= 0;
   });
 }
+// Los filtros por etapa son los del tablero elegido. En «Todos» no hay etapas
+// comunes salvo cerrar ganado o perdido, que significan lo mismo en todos.
+function etapasDelFiltro(){
+  if (variosTableros()) return [{k:'ganado',t:'Ganados'},{k:'perdido',t:'Perdidos'}];
+  return etapasDe(pipelineActual);
+}
 function pintarFiltros(){
   if (LEADS === null) { $('#leads .filtros').innerHTML = ''; return; }
-  var f = [{k:'todos',t:'Todos'}].concat(ETAPAS);
+  var f = [{k:'todos',t:'Todos'}].concat(etapasDelFiltro());
+  // Los números son los del tablero que se ve, no los de toda la cuenta.
+  var base = LEADS.filter(function(l){ return !pipelineActual || l.pipeline === pipelineActual; });
   $('#leads .filtros').innerHTML = f.map(function(x){
-    var n = x.k==='todos' ? LEADS.length : LEADS.filter(function(l){return l.etapa===x.k;}).length;
+    var n = x.k==='todos' ? base.length : base.filter(function(l){return l.etapa===x.k;}).length;
     if (x.k!=='todos' && n===0) return '';
     return '<button class="filtro" aria-pressed="'+(filtroEtapa===x.k)+'" onclick="M.filtrar(\''+x.k+'\')">'+esc(x.t)+' '+n+'</button>';
   }).join('');
@@ -234,6 +274,9 @@ function pintarFiltros(){
 function filtrar(k){ filtroEtapa = k; toque(); pintarFiltros(); pintarLeads(); }
 function elegirTablero(id){
   pipelineActual = id || null;
+  // Una etapa de Arriendo no existe en Venta: el filtro se quedaba puesto y la
+  // lista salía vacía sin decir por qué.
+  filtroEtapa = 'todos';
   toque(); cerrarSheet(); pintarTableros(); pintarFiltros(); pintarLeads(); pintarSubtitulos();
 }
 function nombreTablero(){
@@ -277,8 +320,8 @@ function pintarLeads(){
     return '<button class="lead" onclick="M.abrirLead(\''+l.id+'\')">'
       + '<span class="ini">'+esc(l.nom[0])+'</span>'
       + '<span class="cuerpo"><span class="nom">'+esc(l.nom)+'</span>'
-      + '<span class="meta">'+esc(l.origen)+' · '+esc(l.hace)+'</span></span>'
-      + '<span class="chip '+l.etapa+'">'+esc(etiquetaEtapa(l.etapa))+'</span></button>';
+      + '<span class="meta">'+(variosTableros() ? esc(nombreDelTablero(l.pipeline))+' · ' : '')+esc(l.origen)+' · '+esc(l.hace)+'</span></span>'
+      + '<span class="chip '+esc(l.etapa)+'">'+esc(etiquetaEtapa(l.etapa, l.pipeline))+'</span></button>';
   }).join('') : '<div class="vacio">Ningún contacto con ese filtro.</div>';
 }
 function pintarTareas(){
@@ -1001,7 +1044,7 @@ async function guardarNota(){
 }
 function abrirEtapas(){
   var l = leadAbierto; if (!l) return;
-  abrirSheet(ETAPAS.map(function(e){
+  abrirSheet(etapasDe(l.pipeline).map(function(e){
     return '<button class="opcion" aria-current="'+(l.etapa===e.k)+'" onclick="M.ponerEtapa(\''+e.k+'\')">'
       + '<span class="chip '+e.k+'">'+esc(e.t)+'</span>'
       + '<span class="marca">'+icn('check',18)+'</span></button>';
@@ -1952,6 +1995,7 @@ async function elegirCliente(id){
   // Y se recarga TODO: dejar los leads del cliente anterior en pantalla bajo el
   // nombre del nuevo es la peor forma de equivocarse en una agencia.
   pipelineActual = null;
+  filtroEtapa = 'todos';
   MODULO_CACHE = {};
   cargarReales();
 }
@@ -2068,7 +2112,7 @@ var PINTORES = {
     var prom = activos.length ? Math.round(plataAct / activos.length) : 0;
     var pes = function(n){ return '$ ' + Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }); };
 
-    var orden = ETAPAS.map(function(e){ return e.k; });
+    var orden = etapasDe(pipelineActual).map(function(e){ return e.k; });
     var claves = Object.keys(cuenta).sort(function(a, b){
       var ia = orden.indexOf(a), ib = orden.indexOf(b);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
@@ -2107,7 +2151,7 @@ var PINTORES = {
       + '</div>'
       + '<div class="secc"><h2>Embudo</h2></div><div class="embudo">'
       + claves.map(function(k){
-          var t = etiquetaEtapa(k);
+          var t = etiquetaEtapa(k, pipelineActual);
           var cl = k === 'ganado' ? 'ganada' : k === 'perdido' ? 'perdida' : '';
           return '<div class="etapa-f ' + cl + '"><div class="ef"><b>' + esc(t) + '</b>'
             + '<span>' + cuenta[k] + (valEtapa[k] ? ' · ' + pes(valEtapa[k]) : '') + '</span></div>'
@@ -2124,7 +2168,7 @@ var PINTORES = {
                   + '<span class="ini urge">' + d + 'd</span>'
                   + '<span class="cuerpo"><span class="nom">' + esc(l.nom) + '</span>'
                   + '<span class="meta">' + esc(l.empresa || l.origen) + '</span></span>'
-                  + '<span class="chip ' + esc(l.etapa) + '">' + esc(etiquetaEtapa(l.etapa)) + '</span></button>';
+                  + '<span class="chip ' + esc(l.etapa) + '">' + esc(etiquetaEtapa(l.etapa, l.pipeline)) + '</span></button>';
               }).join('') + '</div>'
           : '');
   },
@@ -2416,9 +2460,9 @@ function pintarFicha(){
      : fichaPestana === 'pasado' ? fichaPasado(l) : fichaFalta(l));
 }
 function pintarEmbudoFicha(l){
-  var iActual = 0;
-  for (var i=0;i<ETAPAS.length;i++) if (ETAPAS[i].k === l.etapa) iActual = i;
-  return '<div class="fem">' + ETAPAS.map(function(e,i){
+  var iActual = 0, ets = etapasDe(l.pipeline);
+  for (var i=0;i<ets.length;i++) if (ets[i].k === l.etapa) iActual = i;
+  return '<div class="fem">' + ets.map(function(e,i){
     var cl = e.k === l.etapa ? 'actual' : (i < iActual ? 'hecho' : '');
     return '<button class="fpaso '+cl+'" onclick="M.ponerEtapa(\''+e.k+'\')">'+esc(e.t)+'</button>';
   }).join('') + '</div>';
@@ -2644,6 +2688,7 @@ function fichaFalta(l){
 function verTodosLosTableros(){
   if (!pipelineActual) return;
   pipelineActual = null;
+  filtroEtapa = 'todos';
   pintarTableros(); pintarFiltros(); pintarLeads(); pintarSubtitulos();
 }
 
@@ -2711,7 +2756,7 @@ function pulsoDeDatos(){
     cards.push({tono:'warn',
       t: 'CRM · ' + stale.length + (stale.length === 1 ? ' lead sin actividad' : ' leads sin actividad'),
       b: 'Sin contacto hace más de 3 días. Incluye a «' + stale[0].nom + '»'
-         + (stale[0].etapa ? ' (etapa ' + etiquetaEtapa(stale[0].etapa) + ')' : '') + '.',
+         + (stale[0].etapa ? ' (etapa ' + etiquetaEtapa(stale[0].etapa, stale[0].pipeline) + ')' : '') + '.',
       cta:'Ver cuáles', ir:function(){ verTodosLosTableros(); verMod('crm'); verSub('crm','leads'); }});
   }
 
@@ -2963,6 +3008,7 @@ async function cargarReales(){
   //
   // Cada pantalla ya sabe pintar el null: «No se pudieron traer tus tareas».
   PIPELINES = d.pipelines;
+  ETAPAS_DE = d.etapas || null;
   LEADS  = d.leads;
   TAREAS = d.tareas;
   if (PIPELINES && PIPELINES.length > 1 && LEADS && LEADS.length && !pipelineActual) {
