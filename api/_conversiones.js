@@ -151,12 +151,24 @@ export async function metaComoConexion(f) {
  * y `event_source: crm`. El clic a WhatsApp va por `business_messaging`, que
  * es como Meta lo une a su anuncio.
  */
-export async function eventoMeta({ fila, lead, moneda }) {
+/**
+ * `whatsapp` = { waba } cuando el lead vino de un clic a WhatsApp y se conoce
+ * la cuenta de WhatsApp Business por la que entró. Solo entonces el evento va
+ * como mensajería de negocio: Meta exige el `whatsapp_business_account_id`
+ * junto al `ctwa_clid`, y sin él lo rechaza. Sin cuenta, el clic no se manda
+ * y la venta sale como CRM con teléfono y correo.
+ */
+export async function eventoMeta({ fila, lead, moneda, whatsapp }) {
   const k = llavesDelLead(lead);
   const ud = {};
   const llaves = [];
+  const porWhatsapp = !!(k.ctwa && whatsapp?.waba);
   if (k.metaLeadId) { ud.lead_id = k.metaLeadId; llaves.push('lead de Meta'); }
-  if (k.ctwa) { ud.ctwa_clid = k.ctwa; llaves.push('clic a WhatsApp'); }
+  if (porWhatsapp) {
+    ud.ctwa_clid = k.ctwa;
+    ud.whatsapp_business_account_id = String(whatsapp.waba);
+    llaves.push('clic a WhatsApp');
+  }
   if (k.fbclid) {
     const t = Date.parse(lead.created_at) || Date.now();
     ud.fbc = `fb.1.${t}.${k.fbclid}`;
@@ -181,7 +193,7 @@ export async function eventoMeta({ fila, lead, moneda }) {
   // El valor es de la VENTA. Un «Lead» con el importe del negocio haría creer
   // a Meta que entrar ya facturó.
   if (evento.event_name === 'Purchase') evento.custom_data = { value: Number(lead.value) || 0, currency: moneda };
-  if (k.ctwa) {
+  if (porWhatsapp) {
     evento.action_source = 'business_messaging';
     evento.messaging_channel = 'whatsapp';
   } else {
@@ -222,6 +234,51 @@ function motivoMeta(err, status) {
     return 'Meta no encuentra ese conjunto de datos, o el token no tiene permiso sobre él.';
   }
   return 'Meta lo rechazó: ' + (err.error_user_msg || err.message || ('estado ' + status));
+}
+
+// ── WhatsApp: el conjunto de datos de la cuenta de WhatsApp Business ────────
+/**
+ * La conexión de WhatsApp por la que entró el lead: la de su conversación, y
+ * si no hay conversación ligada, la conexión activa de su cuenta o cliente.
+ * Trae el token descifrado, que es el que manda los eventos de mensajería.
+ */
+export async function canalWhatsappDelLead(lead) {
+  let conexionId = null;
+  const convs = await sb(`/chat_conversations?lead_id=eq.${encodeURIComponent(lead.id)}&channel=eq.whatsapp` +
+    `&select=connection_id&order=last_message_at.desc.nullslast&limit=1`).catch(() => []);
+  conexionId = convs?.[0]?.connection_id || null;
+  const filtro = conexionId
+    ? `id=eq.${encodeURIComponent(conexionId)}`
+    : `user_id=eq.${encodeURIComponent(lead.user_id)}&channel=eq.whatsapp&is_active=eq.true` +
+      (lead.client_id ? `&or=(client_id.eq.${encodeURIComponent(lead.client_id)},client_id.is.null)` : '');
+  const filas = await sb(`/channel_connections?${filtro}&select=id,waba_id,access_token,conversiones_dataset,client_id&limit=5`).catch(() => []);
+  const fila = (filas || []).find(f => lead.client_id && f.client_id === lead.client_id) || (filas || [])[0];
+  if (!fila || !fila.waba_id || !fila.access_token) return null;
+  return { id: fila.id, waba: fila.waba_id, token: await descifrar(fila.access_token), dataset: fila.conversiones_dataset || null };
+}
+
+/**
+ * El conjunto de datos de la WABA. Meta lo crea al pedirlo, o devuelve el que
+ * ya tenga (pedirlo dos veces no crea dos). Se guarda en la conexión para no
+ * preguntarlo en cada venta.
+ */
+export async function datasetDeWhatsapp(canal) {
+  if (canal.dataset) return canal.dataset;
+  const r = await fetch(`${GRAPH}/${encodeURIComponent(canal.waba)}/dataset`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ access_token: canal.token }),
+  }).catch(() => null);
+  const d = r ? await r.json().catch(() => ({})) : {};
+  if (!r || !r.ok || !d.id) {
+    throw new Error('Meta no dio el conjunto de datos de tu cuenta de WhatsApp: ' +
+      (d?.error?.error_user_msg || d?.error?.message || 'sin respuesta') +
+      '. El token de WhatsApp necesita el permiso whatsapp_business_management.');
+  }
+  await fetch(`${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(canal.id)}`, {
+    method: 'PATCH', headers: sbH({ Prefer: 'return=minimal' }), body: JSON.stringify({ conversiones_dataset: d.id }),
+  }).catch(() => {});
+  canal.dataset = d.id;
+  return d.id;
 }
 
 // ── Google ──────────────────────────────────────────────────────────────────
@@ -375,12 +432,22 @@ export async function procesarFila(fila, { lead, conexiones, moneda }) {
         if (Date.now() - Date.parse(fila.ocurrio_at) > DIAS_META * 86400000) {
           cambio = { estado: 'vencido', motivo: 'Meta solo acepta eventos de los últimos 7 días.' };
         } else {
-          const ev = await eventoMeta({ fila, lead, moneda: mon });
+          // Un clic a WhatsApp va al conjunto de datos de la cuenta de
+          // WhatsApp, con el token de WhatsApp; todo lo demás, al pixel.
+          let canal = null, nota = null;
+          if (llavesDelLead(lead).ctwa) {
+            canal = await canalWhatsappDelLead(lead).catch(() => null);
+            if (!canal) nota = 'Vino de un anuncio de WhatsApp, pero ese WhatsApp no está conectado a Acuarius: se usaron teléfono y correo.';
+          }
+          const ev = await eventoMeta({ fila, lead, moneda: mon, whatsapp: canal });
           if (ev.sinDatos) cambio = { estado: 'sin_datos', motivo: 'El lead no tiene teléfono, correo ni datos del anuncio: Meta no podría reconocerlo.' };
           else {
-            const r = await mandarAMeta({ dataset: con.account_id, token: con.access_token, eventos: [ev.evento], testCode: con.extra_data?.test_event_code || null });
+            const destino = canal
+              ? { dataset: await datasetDeWhatsapp(canal), token: canal.token }
+              : { dataset: con.account_id, token: con.access_token };
+            const r = await mandarAMeta({ ...destino, eventos: [ev.evento], testCode: con.extra_data?.test_event_code || null });
             cambio = r.ok
-              ? { estado: 'enviado', enviado_at: new Date().toISOString(), llave: ev.llave, motivo: null, respuesta: r.respuesta }
+              ? { estado: 'enviado', enviado_at: new Date().toISOString(), llave: ev.llave, motivo: nota, respuesta: r.respuesta }
               : { estado: r.red && intentos < MAX_INTENTOS ? 'pendiente' : 'rechazado', llave: ev.llave, motivo: r.motivo, respuesta: r.respuesta || null };
             if (fila.evento !== 'Lead') { cambio.valor = Number(lead.value) || 0; cambio.moneda = mon; }
           }
