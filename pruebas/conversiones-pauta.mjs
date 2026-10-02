@@ -13,13 +13,17 @@ const ok = (c, t, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + t + (!c &&
 // ── Red y base simuladas ────────────────────────────────────────────────────
 let respuestaMeta = () => ({ status: 200, body: { events_received: 1 } });
 let respuestaGoogle = () => ({ status: 200, body: { results: [{}] } });
-const enviadoA = { meta: [], google: [] };
+const enviadoA = { meta: [], google: [], metaUrl: [], datasetsPedidos: [], canalParcheado: [] };
+let canalWA = null;   // la fila de channel_connections que devuelve la base simulada
 const parches = [];
 const J = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json' } });
 globalThis.fetch = async (url, init = {}) => {
   const u = String(url);
+  if (u.startsWith('https://graph.facebook.com/') && /\/dataset$/.test(u)) {
+    enviadoA.datasetsPedidos.push(u); return J({ id: 'DS_WABA' });
+  }
   if (u.startsWith('https://graph.facebook.com/')) {
-    enviadoA.meta.push(JSON.parse(init.body));
+    enviadoA.meta.push(JSON.parse(init.body)); enviadoA.metaUrl.push(u);
     const r = respuestaMeta(); return J(r.body, r.status);
   }
   if (u.includes('googleads.googleapis.com')) {
@@ -31,6 +35,11 @@ globalThis.fetch = async (url, init = {}) => {
     parches.push(JSON.parse(init.body)); return new Response(null, { status: 204 });
   }
   if (u.startsWith('https://base.falsa/rest/v1/platform_connections')) return new Response(null, { status: 204 });
+  if (u.startsWith('https://base.falsa/rest/v1/chat_conversations')) return J(canalWA ? [{ connection_id: canalWA.id }] : []);
+  if (u.startsWith('https://base.falsa/rest/v1/channel_connections')) {
+    if (init.method === 'PATCH') { enviadoA.canalParcheado.push(JSON.parse(init.body)); return new Response(null, { status: 204 }); }
+    return J(canalWA ? [canalWA] : []);
+  }
   return J([]);
 };
 
@@ -76,11 +85,30 @@ ok(ev.user_data.ph[0].length === 64 && !JSON.stringify(ev).includes('3001234567'
 ok(ev.event_id === 'acu-x-1', 'el mismo event_id en cada reintento: Meta no la cuenta dos veces');
 ok(c.llave.startsWith('lead de Meta'), 'la fila dice con qué se identificó · ' + c.llave);
 
-enviadoA.meta.length = 0;
-c = await m.procesarFila(fila('meta'), { lead: lead({ custom_fields: { 'Clic de anuncio': 'CTWA9', 'Plataforma': 'Meta', 'ID de anuncio': '1' } }), conexiones: [META], moneda: 'COP' });
+console.log('Clic a WhatsApp');
+const deWhatsapp = lead({ custom_fields: { 'Clic de anuncio': 'CTWA9', 'Plataforma': 'Meta', 'ID de anuncio': '1', 'Tipo de clic': 'ctwa_clid' } });
+canalWA = { id: 'cc1', waba_id: 'WABA1', access_token: 'token-wa', conversiones_dataset: null, client_id: null };
+enviadoA.meta.length = 0; enviadoA.metaUrl.length = 0;
+c = await m.procesarFila(fila('meta'), { lead: deWhatsapp, conexiones: [META], moneda: 'COP' });
 const ew = enviadoA.meta[0]?.data?.[0] || {};
-ok(ew.action_source === 'business_messaging' && ew.messaging_channel === 'whatsapp' && ew.user_data.ctwa_clid === 'CTWA9',
-   'un clic a WhatsApp va como mensajería de negocio, con su ctwa_clid');
+ok(c.estado === 'enviado' && ew.action_source === 'business_messaging' && ew.messaging_channel === 'whatsapp',
+   'con el WhatsApp conectado, la venta va como mensajería de negocio', JSON.stringify(c));
+ok(ew.user_data.ctwa_clid === 'CTWA9' && ew.user_data.whatsapp_business_account_id === 'WABA1',
+   'con el ctwa_clid Y el id de la cuenta de WhatsApp Business, que Meta exige juntos');
+ok(enviadoA.datasetsPedidos[0]?.includes('/WABA1/dataset') && enviadoA.metaUrl[0]?.includes('/DS_WABA/events'),
+   'al conjunto de datos de la cuenta de WhatsApp (pedido a Meta), no al pixel');
+ok(enviadoA.meta[0]?.access_token === 'token-wa', 'con el token de WhatsApp, que es el que tiene permiso sobre esa cuenta');
+ok(enviadoA.canalParcheado[0]?.conversiones_dataset === 'DS_WABA', 'el conjunto se guarda en la conexión para no pedirlo en cada venta');
+ok(ew.custom_data.value === 2500000 && ew.custom_data.currency === 'COP' && !ew.custom_data.event_source,
+   'la compra lleva valor y moneda, sin los campos de CRM');
+
+canalWA = null;
+enviadoA.meta.length = 0; enviadoA.metaUrl.length = 0;
+c = await m.procesarFila(fila('meta'), { lead: deWhatsapp, conexiones: [META], moneda: 'COP' });
+const ex = enviadoA.meta[0]?.data?.[0] || {};
+ok(c.estado === 'enviado' && ex.action_source === 'system_generated' && !ex.user_data.ctwa_clid && enviadoA.metaUrl[0]?.includes('/987654321/'),
+   'sin el WhatsApp conectado: al pixel como CRM, sin un ctwa_clid que Meta rechazaría');
+ok(/no está conectado a Acuarius/.test(c.motivo || ''), 'y la fila lo dice, para que no parezca la llave buena · ' + c.motivo);
 
 enviadoA.meta.length = 0;
 c = await m.procesarFila(fila('meta', { ocurrio_at: hace(8) }), { lead: lead(), conexiones: [META], moneda: 'COP' });
