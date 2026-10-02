@@ -101,6 +101,13 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (metodo === 'POST') {
     const nuevas = [].concat(JSON.parse(init.body));
+    if (tabla === 'user_profiles' && u.searchParams.get('on_conflict') === 'user_id,agent_key') {
+      for (const n of nuevas) {
+        const f = T.user_profiles.find(x => x.user_id === n.user_id && x.agent_key === n.agent_key);
+        if (f) Object.assign(f, n); else T.user_profiles.push(n);
+      }
+      return resp(null, 201);
+    }
     if (tabla === 'campaign_recipients' && u.searchParams.get('on_conflict') === 'id') {
       for (const n of nuevas) Object.assign(T.campaign_recipients.find(r => r.id === n.id) || {}, n);
       return resp(null, 201);
@@ -122,6 +129,11 @@ function mundo() {
   saldo = {}; llamadas = []; labs = []; idn = 0;
   T = {
     team_members: [], sms_envios: [], sms_movimientos: [], campaign_recipients: [], email_events: [],
+    // El nombre con que firma cada SMS: el del dueño y el de la cuenta nueva.
+    user_profiles: [
+      { user_id: 'dueno', agent_key: '__sms_remitente__', profile_data: { _cuenta: 'Inmobiliaria Sol' } },
+      { user_id: 'nuevo', agent_key: '__sms_remitente__', profile_data: { _cuenta: 'Nuevo' } },
+    ],
     leads: [
       { id: 'L1', user_id: 'dueno', client_id: null, name: 'Ana', phone: '300 111 2233', tags: [], deleted_at: null },
       { id: 'L2', user_id: 'dueno', client_id: null, name: 'Beto', phone: '601 7654321', tags: [], deleted_at: null },
@@ -157,7 +169,7 @@ console.log('\nCampaña de SMS');
   ok(rcpt('R1').status === 'sent' && rcpt('R4').status === 'sent' && rcpt('R5').status === 'sent', 'los tres móviles válidos reciben el SMS');
   ok(rcpt('R2').status === 'skipped' && /móvil/.test(rcpt('R2').detail), 'un teléfono fijo se salta con el motivo', rcpt('R2').detail);
   ok(rcpt('R3').status === 'skipped' && /baja/.test(rcpt('R3').detail), 'quien pidió no recibir SMS se salta', rcpt('R3').detail);
-  ok(T.sms_envios.length === 3 && T.sms_envios.some(e => e.mensaje === 'Hola Ana, tenemos una promocion para ti.'), 'el texto sale personalizado y sin la tilde que lo haría Unicode',
+  ok(T.sms_envios.length === 3 && T.sms_envios.some(e => e.mensaje === 'Inmobiliaria Sol: Hola Ana, tenemos una promocion para ti.'), 'el texto sale personalizado y sin la tilde que lo haría Unicode',
     T.sms_envios.map(e => e.mensaje).join(' | '));
   ok(T.campaigns[0].status === 'sent' && T.campaigns[0].stats.sent === 3 && T.campaigns[0].stats.skipped === 2, 'la campaña se cierra con sus cifras', JSON.stringify(T.campaigns[0].stats));
   ok(saldo.dueno === 7, 'se cobraron 3 créditos', saldo.dueno);
@@ -184,6 +196,11 @@ console.log('\nAPI de campañas');
 
   T.campaigns[0].status = 'draft'; T.campaign_recipients = [];
   saldo.dueno = 1000;
+  const remitentes = T.user_profiles; T.user_profiles = [];
+  r = await pedir('/api/campaigns?action=queue', 'POST', { id: 'C1', consentimiento: true });
+  d = await r.json();
+  ok(r.status === 400 && d.falta_remitente && !T.campaign_recipients.length, 'sin el nombre del negocio configurado no se encola', `${r.status} ${JSON.stringify(d)}`);
+  T.user_profiles = remitentes;
   r = await pedir('/api/campaigns?action=queue', 'POST', { id: 'C1' });
   d = await r.json();
   ok(r.status === 400 && d.falta_consentimiento && !T.campaign_recipients.length, 'sin confirmar el consentimiento de la audiencia no se encola', `${r.status} ${JSON.stringify(d)}`);
@@ -230,6 +247,39 @@ console.log('\nAPI de campañas');
   process.env.SMS_BETA = 'dueno';
 }
 
+console.log('\nEl nombre del negocio (remitente)');
+{
+  const h = (await import('../api/sms.js')).default;
+  const { conRemitente, validarRemitente } = await import('../api/_sms.js');
+  const tok = await tokenDe('dueno');
+  const pedir = (metodo, cuerpo, qs = '') => h(new Request('https://app.acuarius.app/api/sms' + qs, { method: metodo, headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined }));
+  mundo(); T.user_profiles = [];
+  let r = await pedir('GET');
+  let d = await r.json();
+  ok(r.status === 200 && d.remitente === null, 'una cuenta sin configurar no tiene remitente', JSON.stringify(d.remitente));
+  r = await pedir('POST', { remitente: '  Inmobiliaria Sólida  ' });
+  d = await r.json();
+  ok(r.status === 200 && d.remitente === 'Inmobiliaria Solida', 'se guarda limpio y sin la tilde que lo haría Unicode', JSON.stringify(d));
+  r = await pedir('GET'); d = await r.json();
+  ok(d.remitente === 'Inmobiliaria Solida', 'y se lee de vuelta');
+  for (const [malo, que] of [['😀 Sol', 'emojis'], ['Una empresa con un nombre larguísimo', 'más de 20 caracteres'], ['ganadinero.com', 'un enlace'], ['X', 'una sola letra']]) {
+    r = await pedir('POST', { remitente: malo });
+    ok(r.status === 400, 'no acepta ' + que, r.status);
+  }
+  r = await pedir('POST', { remitente: 'Marca Dos' }, '?client_id=cli_2');
+  r = await pedir('GET', null, '?client_id=cli_2'); d = await r.json();
+  const cuenta = await (await pedir('GET')).json();
+  ok(d.remitente === 'Marca Dos' && cuenta.remitente === 'Inmobiliaria Solida', 'en una agencia cada cliente tiene el suyo y no pisa al de la cuenta', `${d.remitente} / ${cuenta.remitente}`);
+  ok(conRemitente('Sol:', 'Hola') === 'Sol: Hola' && !validarRemitente('Café Ñandú'), 'firma «Remitente: mensaje» sin dos puntos dobles, y la ñ vale');
+
+  // El motor: sin remitente no sale nada, y queda dicho por qué.
+  mundo(); T.user_profiles = []; saldo.dueno = 10;
+  await correrCron();
+  ok(!T.sms_envios.length && saldo.dueno === 10 && T.campaign_recipients.filter(x => x.status === 'skipped').every(x => /nombre del negocio|móvil|baja/.test(x.detail || '')) &&
+    T.campaign_recipients.some(x => /nombre del negocio/.test(x.detail || '')), 'sin remitente el motor no envía ni cobra, y dice por qué',
+    JSON.stringify(T.campaign_recipients.map(x => x.detail)));
+}
+
 console.log('\nAutomatizaciones con SMS: consentimiento');
 {
   const h = (await import('../api/automations.js')).default;
@@ -243,6 +293,11 @@ console.log('\nAutomatizaciones con SMS: consentimiento');
   let r = await guardar('POST', flujo);
   let d = await r.json();
   ok(r.status === 400 && d.falta_consentimiento && !T.automations.length, 'una automatización con SMS no se guarda sin confirmar el consentimiento', `${r.status} ${JSON.stringify(d)}`);
+  const remitentes = T.user_profiles; T.user_profiles = [];
+  r = await guardar('POST', { ...flujo, consentimiento_sms: true });
+  d = await r.json();
+  ok(r.status === 400 && d.falta_remitente, 'sin el nombre del negocio tampoco se guarda', `${r.status} ${JSON.stringify(d)}`);
+  T.user_profiles = remitentes;
   r = await guardar('POST', { ...flujo, consentimiento_sms: true });
   ok(r.status === 201 && T.automations[0]?.consentimiento_sms_por === 'dueno' && !!T.automations[0]?.consentimiento_sms_at, 'con la confirmación se guarda y queda registrada', `${r.status} ${JSON.stringify(T.automations[0])}`);
   T.automations[0].id = 'A1';
@@ -268,6 +323,8 @@ console.log('\nAutomatización');
   r = await actionSendSms({ body: 'Hola' }, T.leads[0], auto);
   AHORA = bog('2026-10-01T10:00');
   ok(r.result !== 'sent' && T.sms_envios.length === 1 && saldo.dueno === 4, 'un domingo no sale ni se cobra', JSON.stringify(r));
+  // Con su remitente configurado: lo único que la frena es estar fuera de la beta.
+  T.user_profiles.push({ user_id: 'otra', agent_key: '__sms_remitente__', profile_data: { _cuenta: 'Otra' } });
   r = await actionSendSms({ body: 'Hola' }, { ...T.leads[0], user_id: 'otra' }, { id: 'A2', user_id: 'otra' });
   ok(r.result === 'skipped' && T.sms_envios.length === 1, 'una cuenta fuera de la beta no envía', JSON.stringify(r));
   saldo.dueno = 0;

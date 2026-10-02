@@ -7,7 +7,7 @@
 // las compara con las del servidor sobre textos que tocan cada caso raro.
 
 import { readFileSync } from 'node:fs';
-import { prepararTexto, contarSegmentos, MAX_SEGMENTOS } from '../api/_sms.js';
+import { prepararTexto, contarSegmentos, MAX_SEGMENTOS, conRemitente } from '../api/_sms.js';
 
 let mal = 0;
 const ok = (c, m, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c && extra !== undefined ? ' → ' + extra : '')); if (!c) mal++; };
@@ -16,7 +16,7 @@ const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
 const ini = app.indexOf('const SMS_GSM = ');
 const fin = app.indexOf('// Debajo del mensaje', ini);
 ok(ini > 0 && fin > ini, 'las funciones de SMS están en public/app.js');
-const front = new Function(app.slice(ini, fin) + '\nreturn { smsPreparar, smsSegmentos, SMS_MAX_SEGMENTOS };')();
+const front = new Function(app.slice(ini, fin) + '\nreturn { smsPreparar, smsSegmentos, SMS_MAX_SEGMENTOS, smsConRemitente };')();
 
 const textos = [
   '', 'Hola', 'Hola María, ¿cómo estás? Él está aquí.', 'Año nuevo “feliz” – ¡ya!… • ok',
@@ -33,6 +33,11 @@ for (const t of textos) {
 }
 ok(iguales === textos.length, `los ${textos.length} textos dan el mismo texto y los mismos créditos en los dos lados`);
 ok(front.SMS_MAX_SEGMENTOS === MAX_SEGMENTOS, 'y el mismo máximo de SMS por persona');
+// La firma «Negocio: mensaje» también ocupa caracteres: la pantalla tiene que
+// armarla igual que el servidor o el contador miente.
+const firmas = [['Inmobiliaria Sol', 'Hola Ana'], ['  Café Ñandú  ', ' hola '], ['Sol:', 'x'.repeat(150)], ['Marca  con   espacios', 'Hola']];
+ok(firmas.every(([r, t]) => prepararTexto(conRemitente(r, t)) === front.smsPreparar(front.smsConRemitente(r, t))),
+  'la firma del negocio se arma igual en los dos lados', JSON.stringify(firmas.map(([r, t]) => [conRemitente(r, t), front.smsConRemitente(r, t)])));
 
 console.log(mal ? `\n${mal} fallos` : '\nTodo en verde');
 process.exit(mal ? 1 : 0);

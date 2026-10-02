@@ -8,7 +8,7 @@ export const config = { runtime: 'edge' };
 
 import { quienPregunta, puedeVer, exigeModulo, alcanceDeCliente } from './_perfiles.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
-import { contarSegmentos, prepararTexto, MAX_SEGMENTOS } from './_sms.js';
+import { contarSegmentos, prepararTexto, MAX_SEGMENTOS, leerRemitente } from './_sms.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -117,6 +117,10 @@ function validateSteps(steps, depth) {
 export function tienePasoSms(steps) {
   return (steps || []).some(s => s && (s.type === 'send_sms' || tienePasoSms(s.yes) || tienePasoSms(s.no)));
 }
+const FALTA_REMITENTE_SMS = {
+  error: 'Falta el nombre de tu negocio para los SMS. Configúralo en Marketing → Campañas → Créditos de SMS: así sabrán quién les escribe.',
+  falta_remitente: true,
+};
 const FALTA_CONSENTIMIENTO_SMS = {
   error: 'Esta automatización envía SMS: confirma que los contactos que la activen aceptaron recibir mensajes de tu negocio.',
   falta_consentimiento: true,
@@ -403,6 +407,7 @@ export default async function handler(req) {
     // que en las campañas: se confirma al guardar y queda quién y cuándo.
     const conSms = tienePasoSms(body.steps);
     if (conSms && body.consentimiento_sms !== true) return jsonResp(FALTA_CONSENTIMIENTO_SMS, 400);
+    if (conSms && !(await leerRemitente(userId, clientId))) return jsonResp(FALTA_REMITENTE_SMS, 400);
     // El trigger webhook recibe su token secreto aquí (nunca lo elige el cliente)
     if (body.trigger.type === 'webhook') {
       body.trigger = { type: 'webhook', token: crypto.randomUUID().replace(/-/g, ''), ...(body.trigger.window ? { window: body.trigger.window } : {}) };
@@ -441,6 +446,7 @@ export default async function handler(req) {
       if (err) return jsonResp({ error: err }, 400);
       if (tienePasoSms(body.steps)) {
         if (body.consentimiento_sms !== true) return jsonResp(FALTA_CONSENTIMIENTO_SMS, 400);
+        if (!(await leerRemitente(userId, clientId))) return jsonResp(FALTA_REMITENTE_SMS, 400);
         update.consentimiento_sms_at = new Date().toISOString();
         update.consentimiento_sms_por = actorId;
       }

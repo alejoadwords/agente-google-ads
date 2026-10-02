@@ -128,13 +128,76 @@ export const MAX_SEGMENTOS = 6;
  * holgado para una empresa, una etapa o un asesor. Es una estimación para
  * avisar ANTES de encolar; el cobro real lo hace enviarSms con el texto final.
  */
-export function creditosEstimados(plantilla, leads) {
+export function creditosEstimados(plantilla, leads, remitente = '') {
   let total = 0;
   for (const l of leads) {
     const t = String(plantilla || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_, v) => v === 'nombre' ? String(l.name || '') : 'x'.repeat(15));
-    total += contarSegmentos(prepararTexto(t)).segmentos;
+    total += contarSegmentos(prepararTexto(remitente ? conRemitente(remitente, t) : t)).segmentos;
   }
   return total;
+}
+
+// ── El remitente ────────────────────────────────────────────────────────────
+// LabsMobile envía desde un código corto COMPARTIDO con otras empresas: quien
+// recibe el SMS ve un número que no dice quién le escribe. Por eso cada SMS
+// empieza con el nombre del negocio («Certain Pezzano: Hola Ana…»). Lo
+// configura la cuenta —una vez por cliente en las agencias— y se pone aquí,
+// en el único sitio por el que sale todo SMS, para que nadie lo olvide.
+export const REMITENTE_KEY = '__sms_remitente__';
+export const REMITENTE_MIN = 2;
+export const REMITENTE_MAX = 20;
+
+/** El nombre tal como saldrá: sin las tildes que pasan a Unicode y sin espacios de más. */
+export function normalizarRemitente(v) {
+  return prepararTexto(String(v || '')).replace(/[\s:]+$/, '').replace(/\s+/g, ' ').trim();
+}
+
+/** null si sirve; si no, el motivo para enseñarlo. */
+export function validarRemitente(v) {
+  const r = normalizarRemitente(v);
+  if (r.length < REMITENTE_MIN) return 'Escribe el nombre de tu negocio, como lo reconocen tus clientes.';
+  if (r.length > REMITENTE_MAX) return `El nombre del negocio puede tener hasta ${REMITENTE_MAX} caracteres.`;
+  if (contarSegmentos(r).codificacion !== 'gsm') return 'El nombre del negocio no puede llevar emojis ni símbolos especiales.';
+  if (/https?:|www\.|\.(com|co|net|org|app|io|ly)\b/i.test(r)) return 'El nombre del negocio no puede ser un enlace.';
+  return null;
+}
+
+/** El texto completo de un SMS: «Remitente: mensaje». */
+export function conRemitente(remitente, texto) {
+  return normalizarRemitente(remitente) + ': ' + String(texto || '').trim();
+}
+
+/**
+ * El remitente guardado para la cuenta (o para ese cliente de la agencia).
+ * null si nunca se configuró. Lanza si la base no responde: un envío sin
+ * saber si hay remitente debe esperar, no salir sin firma.
+ */
+export async function leerRemitente(userId, clientId) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${encodeURIComponent(userId)}` +
+    `&agent_key=eq.${REMITENTE_KEY}&select=profile_data&limit=1`, { headers: sbHeaders() });
+  if (!r.ok) throw new Error('No se pudo leer el remitente de SMS (Supabase ' + r.status + ')');
+  const todo = (await r.json())?.[0]?.profile_data || {};
+  const v = todo[clientId || '_cuenta'];
+  return v && !validarRemitente(v) ? normalizarRemitente(v) : null;
+}
+
+/** Lo guarda para la cuenta o el cliente, sin tocar el de los demás clientes. */
+export async function guardarRemitente(userId, clientId, valor) {
+  const error = validarRemitente(valor);
+  if (error) return { error };
+  const r1 = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${encodeURIComponent(userId)}` +
+    `&agent_key=eq.${REMITENTE_KEY}&select=profile_data&limit=1`, { headers: sbHeaders() });
+  if (!r1.ok) throw new Error('No se pudo leer el remitente de SMS (Supabase ' + r1.status + ')');
+  const todo = (await r1.json())?.[0]?.profile_data || {};
+  const remitente = normalizarRemitente(valor);
+  todo[clientId || '_cuenta'] = remitente;
+  const r2 = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?on_conflict=user_id,agent_key`, {
+    method: 'POST',
+    headers: sbHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify({ user_id: userId, agent_key: REMITENTE_KEY, profile_data: todo, updated_at: new Date().toISOString() }),
+  });
+  if (!r2.ok) throw new Error('No se pudo guardar el remitente de SMS: ' + (await r2.text()).slice(0, 150));
+  return { remitente };
 }
 
 // ── Horario legal ───────────────────────────────────────────────────────────
@@ -262,13 +325,18 @@ async function mandarLabsmobile({ telefono, texto, subid }) {
  * Lanza solo si la base no responde: ese envío no se sabe cobrado o no, y
  * quien llama debe dejarlo pendiente para reintentar, no darlo por hecho.
  */
-export async function enviarSms({ userId, lead, texto, campaignId = null, automationId = null, ahora = new Date() }) {
+export async function enviarSms({ userId, lead, texto, campaignId = null, automationId = null, ahora = new Date(), remitente }) {
   if (!smsActivo(userId)) return { estado: 'omitido', detalle: 'El módulo de SMS no está activo en esta cuenta' };
   const telefono = normalizarTelefono(lead?.phone);
   if (!telefono) return { estado: 'omitido', detalle: 'Sin móvil colombiano válido' };
   if ((lead.tags || []).includes(ETIQUETA_BAJA)) return { estado: 'omitido', detalle: 'Dado de baja de SMS' };
-  const mensaje = prepararTexto(texto);
-  if (!mensaje) return { estado: 'omitido', detalle: 'Mensaje vacío' };
+  if (!prepararTexto(texto)) return { estado: 'omitido', detalle: 'Mensaje vacío' };
+  // Quien llama puede pasar el remitente (una campaña lo lee una vez para
+  // todos); si no, se busca. Sin remitente no sale: un SMS anónimo desde un
+  // código compartido parece spam y nadie sabe a quién decirle «SALIR».
+  if (remitente === undefined) remitente = await leerRemitente(userId, lead.client_id || null);
+  if (!remitente) return { estado: 'omitido', detalle: 'Falta el nombre del negocio para los SMS: configúralo en Créditos de SMS' };
+  const mensaje = prepararTexto(conRemitente(remitente, texto));
   const { segmentos } = contarSegmentos(mensaje);
   if (segmentos > MAX_SEGMENTOS) return { estado: 'omitido', detalle: `El mensaje ocupa ${segmentos} SMS; el máximo es ${MAX_SEGMENTOS}` };
   if (!enHorarioPermitido(ahora)) return { estado: 'fuera_de_horario', siguiente: siguienteHorario(ahora).toISOString(), detalle: 'Fuera del horario permitido' };

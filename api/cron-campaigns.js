@@ -13,7 +13,7 @@ import { campaignHtml } from './_campaign-email.js';
 import { abrirConexion, cifrar } from './_cifrado.js';
 import { enviarResendLote, huecoParaCampana } from './_correo.js';
 import { latir } from './_latido.js';
-import { enviarSms, enHorarioPermitido } from './_sms.js';
+import { enviarSms, enHorarioPermitido, leerRemitente } from './_sms.js';
 
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
@@ -458,6 +458,11 @@ export default async function handler(req, res) {
         // proveedor. _sms.js decide todo lo demás (móvil válido, baja, horario,
         // saldo); aquí solo se traduce su respuesta a la cola.
         let sinSaldo = false;
+        // El nombre del negocio, una vez para toda la campaña. Si la base no
+        // responde, la campaña espera a la próxima vuelta: no sale sin firma.
+        let remitente;
+        try { remitente = await leerRemitente(c.user_id, c.client_id || null); }
+        catch (e) { console.error('[cron-campaigns] sin remitente de SMS, se reintenta:', e.message); continue; }
         for (let i = 0; i < pending.length && !sinSaldo; i += LOTE_SMS) {
           if (Date.now() - T0 > LIMITE_MS) break;
           const tanda = pending.slice(i, i + LOTE_SMS);
@@ -465,7 +470,7 @@ export default async function handler(req, res) {
             const lead = byId[rcpt.lead_id];
             if (!lead || lead.deleted_at) return { status: 'skipped', detail: 'lead eliminado' };
             try {
-              const r = await enviarSms({ userId: c.user_id, lead, texto: renderVars(c.body || '', lead), campaignId: c.id });
+              const r = await enviarSms({ userId: c.user_id, lead, texto: renderVars(c.body || '', lead), campaignId: c.id, remitente });
               return traducirSms(r);
             } catch (e) {
               // La base no respondió: no se sabe si se cobró. Queda pendiente.

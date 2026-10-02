@@ -1,6 +1,7 @@
 // api/sms.js — saldo y actividad de SMS de la cuenta.
 //
-//   GET /api/sms  →  { activo, proveedor, saldo, paquetes, movimientos, mes }
+//   GET  /api/sms[?client_id=]  →  { activo, proveedor, saldo, paquetes, movimientos, mes, remitente }
+//   POST /api/sms[?client_id=]  { remitente }  →  { remitente } · el nombre del negocio con que firma cada SMS
 //
 // El saldo es de la CUENTA (el dueño), como el cupo del agente: un vendedor y
 // su dueña ven lo mismo porque los créditos se gastan entre todos.
@@ -10,14 +11,14 @@
 export const config = { runtime: 'edge' };
 
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
-import { cuentaDe } from './_uso-ia.js';
-import { saldoSms, smsActivo, paquetesConPago, proveedorSms } from './_sms.js';
+import { quienPregunta, alcanceDeCliente } from './_perfiles.js';
+import { saldoSms, smsActivo, paquetesConPago, proveedorSms, leerRemitente, guardarRemitente } from './_sms.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 const jsonResp = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', ...CORS } });
@@ -30,19 +31,37 @@ async function leer(ruta) {
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'GET') return jsonResp({ error: 'Método no permitido' }, 405);
+  if (req.method !== 'GET' && req.method !== 'POST') return jsonResp({ error: 'Método no permitido' }, 405);
   const sesion = await verificarSesion(req);
   if (!sesion.id) return jsonResp(await cuerpoSinSesion(sesion, 'sms'), 401);
 
-  const cuenta = await cuentaDe(sesion.id);
+  // La cuenta del dueño, y el cliente: el que se pide, salvo que quien
+  // pregunta esté acotado a uno (entonces ese, pida lo que pida).
+  let quien;
+  try { quien = await quienPregunta(sesion.id); }
+  catch { return jsonResp({ error: 'No se pudo comprobar tu acceso. Intenta de nuevo en un momento.' }, 503); }
+  const cuenta = quien.userId;
+  const clientId = alcanceDeCliente(quien, new URL(req.url).searchParams.get('client_id'));
   if (!smsActivo(cuenta)) return jsonResp({ activo: false });
+
+  if (req.method === 'POST') {
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    try {
+      const r = await guardarRemitente(cuenta, clientId, body.remitente);
+      return r.error ? jsonResp({ error: r.error }, 400) : jsonResp({ remitente: r.remitente });
+    } catch (e) {
+      console.error('[sms] remitente:', e.message);
+      return jsonResp({ error: 'No se pudo guardar el nombre del negocio. Intenta de nuevo.' }, 503);
+    }
+  }
 
   try {
     const inicioMes = new Date();
     inicioMes.setUTCDate(1); inicioMes.setUTCHours(5, 0, 0, 0); // 00:00 en Bogotá
     if (inicioMes > new Date()) inicioMes.setUTCMonth(inicioMes.getUTCMonth() - 1);
     const c = encodeURIComponent(cuenta);
-    const [saldo, movimientos, envios] = await Promise.all([
+    const [saldo, movimientos, envios, remitente] = await Promise.all([
       saldoSms(cuenta),
       leer(`/sms_movimientos?user_id=eq.${c}&motivo=neq.envio&select=cantidad,motivo,referencia,created_at&order=created_at.desc&limit=30`),
       // Resumen del mes: una fila por envío, solo el estado y los créditos.
@@ -56,6 +75,7 @@ export default async function handler(req) {
         }
         return filas;
       })(),
+      leerRemitente(cuenta, clientId),
     ]);
     const mes = { enviados: 0, entregados: 0, fallidos: 0, simulados: 0, creditos: 0 };
     for (const e of envios) {
@@ -65,7 +85,7 @@ export default async function handler(req) {
       if (e.estado === 'simulado') mes.simulados++;
       else { mes.enviados++; if (e.estado === 'entregado') mes.entregados++; }
     }
-    return jsonResp({ activo: true, proveedor: proveedorSms(), saldo, paquetes: paquetesConPago(), movimientos, mes, desde: inicioMes.toISOString() });
+    return jsonResp({ activo: true, proveedor: proveedorSms(), saldo, paquetes: paquetesConPago(), movimientos, mes, desde: inicioMes.toISOString(), remitente });
   } catch (e) {
     console.error('[sms]', e.message);
     return jsonResp({ error: 'No se pudo leer el saldo de SMS. Intenta de nuevo en un momento.' }, 503);

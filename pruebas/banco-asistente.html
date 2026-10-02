@@ -75,8 +75,10 @@ function abrir(canal) {
     'var plnCargar = async function(){ return [{ id: "p1", nombre: "Bienvenida" }]; };',
     'var qrCargar = async function(){ return [{ id: "q1", titulo: "Precio y formas de pago", texto: "Hola {{nombre}}, te cuento…" }]; };',
     'var crmLoadLeads = async function(){};',
-    'var fetchAuth = async function(url){' +
-    '  if (url.startsWith("/api/sms")) return new Response(JSON.stringify({ activo: true, proveedor: "simulado", saldo: 100, mes: {}, paquetes: [], movimientos: [] }));' +
+    'var _remBanco = "";' +
+    'var fetchAuth = async function(url, init){' +
+    '  if (url.startsWith("/api/sms") && init && init.method === "POST") { const v = JSON.parse(init.body).remitente.trim(); if (v.length < 2) return new Response(JSON.stringify({ error: "Escribe el nombre de tu negocio." }), { status: 400 }); _remBanco = v; return new Response(JSON.stringify({ remitente: v })); }' +
+    '  if (url.startsWith("/api/sms")) return new Response(JSON.stringify({ activo: true, proveedor: "simulado", saldo: 100, mes: {}, paquetes: [], movimientos: [], remitente: _remBanco || null }));' +
     '  if (url.startsWith("/api/whatsapp-templates")) return new Response(JSON.stringify({ aprobadas: 1, plantillas: [{ name: "promo_octubre", language: "es", status: "APPROVED", category: "MARKETING", body: "Hola {{1}}, tenemos novedades para ti.", variables: { header: 0, body: 1 } }] }));' +
     '  if (url.startsWith("/api/lead-lists")) return new Response(JSON.stringify({ lists: _cmpLists }));' +
     '  if (url.includes("preview=1")) return new Response(JSON.stringify({ count: 612, sample: ["Ana Gómez", "Beto Ruiz", "Caro Díaz"], breakdown: { matched: 640, missing: 20, unsubscribed: 8 } }));' +

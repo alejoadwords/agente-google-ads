@@ -28138,6 +28138,9 @@ function autoStepFields(s, path) {
   if (s.type === 'send_sms') {
     return '<div class="auto-field"><label class="auto-label">Mensaje SMS</label><textarea class="auto-input" rows="4" oninput="' + U + '\'body\',this.value);document.getElementById(\'auto-sms-cuenta\').innerHTML=smsCuentaHtml(this.value)">' + esc(s.body || '') + '</textarea>' +
       '<div id="auto-sms-cuenta">' + smsCuentaHtml(s.body) + '</div>' +
+      (smsRemitente()
+        ? '<div class="auto-vars-hint">Sale firmado: «' + esc(smsRemitente()) + ': …»</div>'
+        : '<div class="auto-vars-hint" style="color:var(--danger)">Falta el nombre de tu negocio para los SMS: configúralo en Marketing → Campañas → Créditos de SMS antes de guardar.</div>') +
       '<div class="auto-vars-hint">Llega al móvil del lead y gasta créditos de SMS · solo sale lun–vie 7:00–19:00 y sáb 8:00–15:00, sin festivos · Variables: {{nombre}} {{empresa}} {{asesor}}</div></div>';
   }
   if (s.type === 'send_whatsapp') {
@@ -29717,14 +29720,66 @@ function cmpNueva() {
 // pruebas/sms-front-igual.mjs compara las dos con los mismos textos.
 let _smsEstado = null; // null = sin preguntar · {activo:false} · el estado · {error}
 
+function smsClienteQs() {
+  const cli = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  return cli ? '?client_id=' + encodeURIComponent(cli) : '';
+}
 async function smsCargarEstado(forzar) {
-  if (_smsEstado && !forzar && !_smsEstado.error) return _smsEstado;
+  // El remitente es por cliente en las agencias: si se cambió de cliente, se
+  // vuelve a preguntar aunque ya hubiera estado.
+  if (_smsEstado && !forzar && !_smsEstado.error && _smsEstado._qs === smsClienteQs()) return _smsEstado;
   try {
-    const r = await fetchAuth('/api/sms');
+    const qs = smsClienteQs();
+    const r = await fetchAuth('/api/sms' + qs, { noCache: true });
     const d = await r.json().catch(() => ({}));
-    _smsEstado = r.ok ? d : { error: d.error || 'No se pudo leer el saldo de SMS.' };
+    _smsEstado = r.ok ? { ...d, _qs: qs } : { error: d.error || 'No se pudo leer el saldo de SMS.' };
   } catch { _smsEstado = { error: 'Sin conexión: no se pudo leer el saldo de SMS.' }; }
   return _smsEstado;
+}
+
+// Guarda el nombre del negocio con que firma cada SMS. Devuelve el error a
+// enseñar, o null si quedó guardado.
+async function smsGuardarRemitente(valor) {
+  try {
+    const r = await fetchAuth('/api/sms' + smsClienteQs(), { method: 'POST', body: JSON.stringify({ remitente: valor }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return d.error || 'No se pudo guardar el nombre del negocio.';
+    if (_smsEstado && !_smsEstado.error) _smsEstado.remitente = d.remitente;
+    return null;
+  } catch { return 'Sin conexión: no se pudo guardar el nombre del negocio.'; }
+}
+const smsRemitente = () => (_smsEstado && _smsEstado.remitente) || '';
+
+// La caja para escribirlo, con la que se guarda sola al dejar de escribir.
+let _smsRemReloj = null;
+function smsRemitenteHtml(idAyuda) {
+  return '<input class="auto-input cmpw-input" id="sms-remitente" maxlength="20" value="' + esc(smsRemitente()) + '" placeholder="Ej: Certain Pezzano"' +
+      ' oninput="smsRemitenteEscribe(this.value, \'' + idAyuda + '\')">' +
+    '<div class="cmpw-ayuda" id="' + idAyuda + '">' + (smsRemitente()
+      ? 'Tus SMS empiezan así: «' + esc(smsRemitente()) + ': …»'
+      : 'Obligatorio. El número que envía es compartido con otras empresas: así sabrán quién les escribe.') + '</div>';
+}
+function smsRemitenteEscribe(valor, idAyuda) {
+  clearTimeout(_smsRemReloj);
+  const ayuda = document.getElementById(idAyuda);
+  if (ayuda) { ayuda.style.color = ''; ayuda.textContent = 'Guardando…'; }
+  _smsRemReloj = setTimeout(async () => {
+    const err = await smsGuardarRemitente(valor);
+    const a = document.getElementById(idAyuda);
+    if (a) {
+      a.style.color = err ? 'var(--danger)' : '';
+      a.textContent = err || 'Guardado. Tus SMS empiezan así: «' + smsRemitente() + ': …»';
+    }
+    if (typeof cmpWSyncEmail === 'function' && _cmpW && _cmpW.step === 2) cmpWSyncEmail();
+  }, 700);
+}
+// Espera a que termine de guardarse lo que se está escribiendo.
+async function smsRemitenteListo() {
+  const el = document.getElementById('sms-remitente');
+  if (!el) return smsRemitente() ? null : 'Escribe el nombre de tu negocio para los SMS.';
+  clearTimeout(_smsRemReloj);
+  if (el.value.trim() && el.value.trim() !== smsRemitente()) return smsGuardarRemitente(el.value);
+  return smsRemitente() ? null : 'Escribe el nombre de tu negocio para los SMS.';
 }
 
 const SMS_GSM = '@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà';
@@ -29737,6 +29792,9 @@ const SMS_EQUIV = {
   '–': '-', '—': '-', '…': '...', '•': '-', ' ': ' ', '\t': ' ',
 };
 const SMS_MAX_SEGMENTOS = 6;
+function smsConRemitente(remitente, texto) {
+  return smsPreparar(String(remitente || '')).replace(/[\s:]+$/, '').replace(/\s+/g, ' ').trim() + ': ' + String(texto || '').trim();
+}
 function smsPreparar(texto) {
   return Array.from(String(texto || '')).map(c => SMS_EQUIV[c] ?? c).join('').trim();
 }
@@ -29758,7 +29816,9 @@ function smsSegmentos(texto) {
 // Debajo del mensaje: cuánto ocupa y por qué. Se calcula con un nombre de
 // ejemplo en {{nombre}}: con el real puede subir un poco.
 function smsCuentaHtml(texto) {
-  const ejemplo = smsPreparar(String(texto || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, v) => v === 'nombre' ? 'Ana' : 'x'.repeat(15)));
+  const cuerpo = String(texto || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, v) => v === 'nombre' ? 'Ana' : 'x'.repeat(15));
+  // Se cuenta con la firma del negocio, que también ocupa caracteres.
+  const ejemplo = smsPreparar(smsRemitente() ? smsConRemitente(smsRemitente(), cuerpo) : cuerpo);
   const c = smsSegmentos(ejemplo);
   const pasa = c.segmentos > SMS_MAX_SEGMENTOS;
   return '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11.5px;margin-top:6px;color:' + (pasa ? 'var(--danger)' : 'var(--muted)') + '">' +
@@ -29806,6 +29866,7 @@ function smsAbrirCompra() {
     titulo: 'Créditos de SMS',
     texto: 'Tienes <b>' + Number(e.saldo || 0).toLocaleString('es-CO') + '</b> créditos. Un crédito es un SMS de hasta 160 caracteres. ' +
       'Los paquetes se suman y no vencen: si necesitas 4.000, compra 3.000 + 1.000.' +
+      '<div style="margin-top:14px"><div class="cmpw-label">Nombre de tu negocio en los SMS</div>' + smsRemitenteHtml('sms-rem-ayuda-modal') + '</div>' +
       '<div style="margin-top:12px">' + filas + '</div>' +
       '<div style="margin-top:10px;font-size:11.5px">Los créditos llegan solos a tu cuenta unos minutos después del pago. Compra con el mismo correo con el que entras a Acuarius.</div>' +
       (movs ? '<div style="margin-top:14px;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Movimientos</div>' + movs : ''),
@@ -30593,6 +30654,9 @@ function cmpWStep2() {
         : '') +
 
       (w.channel === 'sms'
+        ? '<div class="cmpw-card"><div class="cmpw-label">Nombre de tu negocio en los SMS *</div>' + smsRemitenteHtml('sms-rem-ayuda') + '</div>'
+        : '') +
+      (w.channel === 'sms'
         ? '<div class="cmpw-nota">' + icn('calendar', 14) + '<span>Por ley los SMS solo salen de lunes a viernes de 7:00 a 19:00 y sábados de 8:00 a 15:00, nunca domingos ni festivos. Fuera de ese horario la campaña espera sola.</span></div>'
         : '') +
 
@@ -30698,7 +30762,8 @@ function cmpWSyncEmail() {
   const bodyTxt = render(val('cmpw-msg', 'body'));
   if (_cmpW.channel === 'sms') {
     // Se enseña el texto tal como sale: sin las tildes que se cambian.
-    box.innerHTML = '<div style="background:#E9E9EB;border-radius:14px 14px 14px 4px;padding:10px 13px;font-size:13px;line-height:1.5;max-width:85%;white-space:pre-wrap">' + (esc(smsPreparar(bodyTxt)) || '<span style="opacity:.5">Tu mensaje…</span>') + '</div>';
+    const conFirma = bodyTxt.trim() ? smsPreparar(smsConRemitente(smsRemitente() || 'Tu negocio', bodyTxt)) : '';
+    box.innerHTML = '<div style="background:#E9E9EB;border-radius:14px 14px 14px 4px;padding:10px 13px;font-size:13px;line-height:1.5;max-width:85%;white-space:pre-wrap">' + (esc(conFirma) || '<span style="opacity:.5">Tu mensaje…</span>') + '</div>';
     const cuenta = document.getElementById('cmpw-sms-cuenta');
     if (cuenta) cuenta.innerHTML = smsCuentaHtml(val('cmpw-msg', 'body'));
     return;
@@ -31203,7 +31268,8 @@ async function cmpWPintarDestinatarios() {
 // Lo que costará la campaña de SMS contra el saldo. El servidor vuelve a
 // comprobarlo al encolar: esto es para enterarse antes de darle a Enviar.
 function cmpWCostoSms(personas) {
-  const porPersona = smsSegmentos(smsPreparar(String(_cmpW.body || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, v) => v === 'nombre' ? 'Ana' : 'x'.repeat(15)))).segmentos;
+  const cuerpo = String(_cmpW.body || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, v) => v === 'nombre' ? 'Ana' : 'x'.repeat(15));
+  const porPersona = smsSegmentos(smsPreparar(smsRemitente() ? smsConRemitente(smsRemitente(), cuerpo) : cuerpo)).segmentos;
   const total = (personas || 0) * porPersona;
   const saldo = _smsEstado && !_smsEstado.error ? Number(_smsEstado.saldo || 0) : null;
   const falta = saldo !== null && total > saldo;
@@ -31305,10 +31371,14 @@ function cmpWValidate(step) {
   return true;
 }
 
-function cmpWNext() {
+async function cmpWNext() {
   if (_cmpW.step >= 4) return; // la revisión es el último paso
   cmpWCollect();
   if (!cmpWValidate(_cmpW.step)) return;
+  if (_cmpW.channel === 'sms' && _cmpW.step === 2) {
+    const err = await smsRemitenteListo();
+    if (err) { showToast(err, 'error'); document.getElementById('sms-remitente')?.focus(); return; }
+  }
   _cmpW.step++;
   cmpWRender();
 }

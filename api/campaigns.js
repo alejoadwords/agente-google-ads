@@ -13,7 +13,7 @@ import { campaignHtml } from './_campaign-email.js';
 // PostgREST corta en 1.000 filas aunque se le pida más. Aquí eso significaba
 // que una audiencia de 4.000 salía a mil personas sin decirlo. Ver _paginado.js.
 import { traerTodo } from './_paginado.js';
-import { smsActivo, saldoSms, normalizarTelefono, prepararTexto, contarSegmentos, creditosEstimados, MAX_SEGMENTOS, ETIQUETA_BAJA as BAJA_SMS } from './_sms.js';
+import { smsActivo, saldoSms, normalizarTelefono, prepararTexto, contarSegmentos, creditosEstimados, MAX_SEGMENTOS, ETIQUETA_BAJA as BAJA_SMS, leerRemitente, conRemitente } from './_sms.js';
 
 // La conexión de WhatsApp del cliente: de ahí salen el waba_id y el token con
 // los que se le pregunta a Meta por el estado de una plantilla.
@@ -718,13 +718,20 @@ export default async function handler(req) {
     // escribió en las últimas 24 h. Encolar 50.000 destinatarios contra una
     // plantilla que no está aprobada gasta la cola entera en rechazos, así que
     // se comprueba ANTES, contra Meta, no contra lo que guardamos.
+    let remitenteSms = null;
     if (c.channel === 'whatsapp') {
       const problema = await revisarPlantilla(userId, clientId, c.wa_template);
       if (problema) return jsonResp(problema, 400);
     }
     if (c.channel === 'sms') {
       if (!smsActivo(userId)) return jsonResp({ error: 'Los SMS todavía no están disponibles en esta cuenta.' }, 403);
-      const seg = contarSegmentos(prepararTexto(c.body)).segmentos;
+      // Cada SMS sale firmado con el nombre del negocio (ver _sms.js): sin
+      // él no se encola, en vez de descubrirlo cuando ya se omitieron todos.
+      remitenteSms = await leerRemitente(userId, c.client_id || null);
+      if (!remitenteSms) {
+        return jsonResp({ error: 'Falta el nombre de tu negocio para los SMS. Escríbelo en el paso del mensaje: así sabrán quién les escribe.', falta_remitente: true }, 400);
+      }
+      const seg = contarSegmentos(prepararTexto(conRemitente(remitenteSms, c.body))).segmentos;
       if (seg > MAX_SEGMENTOS) return jsonResp({ error: `El mensaje ocupa ${seg} SMS por persona; el máximo es ${MAX_SEGMENTOS}. Acórtalo.` }, 400);
       // LabsMobile exige consentimiento previo, expreso e informado de cada
       // destinatario (cláusula 8e) y puede pedir la prueba. Quien envía lo
@@ -801,7 +808,7 @@ export default async function handler(req) {
       }
     }
     if (c.channel === 'sms') {
-      const [necesarios, saldo] = [creditosEstimados(c.body, leads), await saldoSms(userId)];
+      const [necesarios, saldo] = [creditosEstimados(c.body, leads, remitenteSms), await saldoSms(userId)];
       if (necesarios > saldo) {
         return jsonResp({
           error: `Esta campaña necesita unos ${necesarios.toLocaleString('es-CO')} créditos de SMS y tienes ${saldo.toLocaleString('es-CO')}. Compra un paquete o reduce la audiencia.`,

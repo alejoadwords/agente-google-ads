@@ -16,11 +16,14 @@ const ok = (c, m, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c &&
 const m = await import('../api/_sms.js');
 
 const bog = (s) => new Date(s + '-05:00');
+// El remitente se pasa directo, como hace el motor de campañas: guardarlo en
+// user_profiles exigiría que el usuario de prueba existiera en public.users.
+const enviar = (o) => m.enviarSms({ remitente: 'Prueba', ...o });
 
 console.log('\nSaldo contra Supabase');
 const U = 'user_prueba_sms_' + Date.now();
 process.env.SMS_BETA = U;
-ok((await m.enviarSms({ userId: 'otra_cuenta', lead: { phone: '3001234567', tags: [] }, texto: 'Hola', ahora: bog('2026-10-01T10:00') })).estado === 'omitido', 'una cuenta fuera de la beta no envía');
+ok((await enviar({ userId: 'otra_cuenta', lead: { phone: '3001234567', tags: [] }, texto: 'Hola', ahora: bog('2026-10-01T10:00') })).estado === 'omitido', 'una cuenta fuera de la beta no envía');
 const H = { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + process.env.SUPABASE_SERVICE_KEY };
 const SB = process.env.SUPABASE_URL;
 const lead = { phone: '300 123 4567', tags: [] };
@@ -28,25 +31,25 @@ const jueves = bog('2026-10-01T10:00');
 const fetchReal = globalThis.fetch;
 try {
   ok(await m.saldoSms(U) === 0, 'una cuenta nueva no tiene saldo');
-  let r = await m.enviarSms({ userId: U, lead, texto: 'Hola', ahora: jueves });
+  let r = await enviar({ userId: U, lead, texto: 'Hola', ahora: jueves });
   ok(r.estado === 'sin_saldo', 'sin saldo no sale nada', r.estado);
 
   ok((await m.acreditarSms(U, 3, 'prueba-' + U)).nuevo === true, 'se acreditan 3 créditos');
   ok((await m.acreditarSms(U, 3, 'prueba-' + U)).nuevo === false, 'el mismo aviso de compra repetido no suma otra vez');
   ok(await m.saldoSms(U) === 3, 'saldo 3', await m.saldoSms(U));
 
-  r = await m.enviarSms({ userId: U, lead: { ...lead, tags: ['no-sms'] }, texto: 'Hola', ahora: jueves });
+  r = await enviar({ userId: U, lead: { ...lead, tags: ['no-sms'] }, texto: 'Hola', ahora: jueves });
   ok(r.estado === 'omitido' && await m.saldoSms(U) === 3, 'a quien se dio de baja no se le envía ni se le cobra');
-  r = await m.enviarSms({ userId: U, lead, texto: 'Hola', ahora: bog('2026-10-04T10:00') });
+  r = await enviar({ userId: U, lead, texto: 'Hola', ahora: bog('2026-10-04T10:00') });
   ok(r.estado === 'fuera_de_horario' && r.siguiente === bog('2026-10-05T07:00').toISOString() && await m.saldoSms(U) === 3, 'un domingo espera al lunes 7:00 sin cobrar');
-  r = await m.enviarSms({ userId: U, lead, texto: 'x'.repeat(153 * 6 + 1), ahora: jueves });
+  r = await enviar({ userId: U, lead, texto: 'x'.repeat(153 * 6 + 1), ahora: jueves });
   ok(r.estado === 'omitido' && /máximo/.test(r.detalle), 'un texto de más de 6 SMS se frena antes de cobrar');
 
-  r = await m.enviarSms({ userId: U, lead, texto: 'Hola, ¿cómo estás?', ahora: jueves });
+  r = await enviar({ userId: U, lead, texto: 'Hola, ¿cómo estás?', ahora: jueves });
   ok(r.estado === 'simulado' && r.creditos === 1, 'sin proveedor sale como simulado y cobra 1', JSON.stringify(r));
 
   const largo = 'y'.repeat(200); // 2 créditos; quedan 2: solo uno de los dos puede salir
-  const [a, b] = await Promise.all([m.enviarSms({ userId: U, lead, texto: largo, ahora: jueves }), m.enviarSms({ userId: U, lead, texto: largo, ahora: jueves })]);
+  const [a, b] = await Promise.all([enviar({ userId: U, lead, texto: largo, ahora: jueves }), enviar({ userId: U, lead, texto: largo, ahora: jueves })]);
   ok([a.estado, b.estado].sort().join() === 'simulado,sin_saldo', 'dos envíos a la vez no gastan el mismo crédito', `${a.estado} ${b.estado}`);
   ok(await m.saldoSms(U) === 0, 'y el saldo queda en cero, nunca negativo', await m.saldoSms(U));
 
@@ -58,7 +61,7 @@ try {
     if (String(url).includes('labsmobile')) { llamada = { url: String(url), init }; return new Response(JSON.stringify({ code: 35, message: 'The account has no enough credit' }), { status: 200 }); }
     return fetchReal(url, init);
   };
-  r = await m.enviarSms({ userId: U, lead, texto: 'Oferta: 20% hoy', ahora: jueves });
+  r = await enviar({ userId: U, lead, texto: 'Oferta: 20% hoy', ahora: jueves });
   globalThis.fetch = fetchReal;
   ok(r.estado === 'fallido' && /LabsMobile 35/.test(r.detalle), 'un rechazo del proveedor queda como fallido con su motivo', JSON.stringify(r));
   ok(await m.saldoSms(U) === 1, 'y el crédito vuelve a la cuenta', await m.saldoSms(U));
