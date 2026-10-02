@@ -17,12 +17,14 @@ sospechar que se saltó un paso.
 revisor no puede comprobar que el permiso sirva para algo, y eso es rechazo casi
 seguro.
 
-**Compruébalo primero, sin grabar**: entra a Acuarius con tu cuenta, abre el
-agente **Meta Ads** en la barra lateral y mira si el panel trae impresiones,
-clics y gasto distintos de cero. Si sale vacío, para aquí: hay que dejar correr
-una campaña con presupuesto mínimo tres o cuatro días antes de grabar. Es el
-mismo bloqueo que tienen parados los videos 9 y 10 de la Academia, así que una
-sola campaña destraba las dos cosas.
+**Compruébalo primero, sin grabar**: entra a Acuarius con la cuenta que tiene
+Meta conectado, ve a **Marketing → Plataformas de pauta → Campañas** y mira que
+la campaña de Meta traiga inversión, impresiones y clics distintos de cero. (El
+agente Meta Ads está apagado desde el 17-09-2026: el panel ya no está ahí.)
+
+**Comprobado por API el 02-10-2026**: «Acuarius — Tráfico al sitio (App Review)»
+activa, 5 días seguidos entregando; en 30 días 5.845 impresiones, 487 clics,
+233 visitas a la página y $35.860 COP. El panel NO sale en ceros.
 
 ### Preparación
 
@@ -36,7 +38,11 @@ sola campaña destraba las dos cosas.
       pestañas abiertas.
 - [ ] **Pantalla completa a 1920×1080.** Nada de ventanas a medias.
 - [ ] **Un segundo dispositivo o navegador** con otra cuenta de Facebook, para
-      escribirle a la página Acuarius AI por Messenger en la escena 8.
+      escribirle a la página Acuarius AI por Messenger e Instagram (escenas 11 y
+      11 bis). **Esa cuenta necesita rol de tester en la app**: mientras no se
+      apruebe la revisión, Meta solo entrega mensajes de personas con rol. Johana
+      la invita en developers.facebook.com → app Acuarius → Roles de la app, y
+      hay que aceptar la invitación antes de grabar.
 - [ ] Cerrar Slack, correo y todo lo que pueda sacar una notificación encima.
 
 ### Ajustes
@@ -123,16 +129,20 @@ números.
 
 > **Justifica `ads_read`**: es lectura de campañas, anuncios y estado de la cuenta.
 
-### 10 · Pausar una campaña que gasta sin resultados (3:10 – 4:00)
+### 10 · Pausar una campaña (3:10 – 4:00)
 
-En un hallazgo «gastó … y no trajo ningún lead», pulsar **Pausar campaña**,
-confirmar, y enseñar el aviso «Campaña pausada». Después, abrir el Administrador de
-anuncios de Meta y enseñar esa campaña **en pausa**.
+Volver a la pestaña **Campañas**. En la fila de «Acuarius — Tráfico al sitio (App
+Review)», debajo de «Activa», pulsar **Pausar**, confirmar en el cuadro que
+aparece y enseñar el aviso «Campaña pausada»: la fila pasa a «Pausada». Después,
+abrir el **Administrador de anuncios** de Meta y enseñar esa campaña **en pausa**.
 
-> **Justifica `ads_management`.** Antes de grabar: la cuenta necesita una campaña
-> de **leads** que haya gastado sin traer leads al CRM (una de tráfico no dispara el
-> hallazgo, a propósito). Decir en voz alta —o con un texto en pantalla— que desde
-> Acuarius solo se pausa: nunca se activa ni se cambia presupuesto.
+> **Justifica `ads_management`.** Desde el 02-10-2026 cada campaña activa de la
+> tabla tiene su botón «Pausar» (antes solo salía en el diagnóstico, y solo para
+> campañas de leads: la de tráfico no lo disparaba). Poner un texto en pantalla:
+> desde Acuarius solo se pausa; nunca se activa ni se cambia el presupuesto.
+>
+> **Después de grabar, reactivarla** desde el Administrador de anuncios: la
+> campaña tiene que seguir entregando para que el revisor vea datos.
 
 ### 11 · Un mensaje real de Messenger (4:00 – 4:45)
 

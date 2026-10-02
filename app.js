@@ -39666,9 +39666,22 @@ function pautaPintarDiagnostico(d) {
         grupo('Lo que funciona', bien));
 }
 
+// «Pausar» en cada campaña activa de la tabla, no solo en los hallazgos del
+// diagnóstico: quien ve una campaña que no le conviene la para desde aquí.
+// Solo pausar —nunca activar ni tocar presupuesto—, que es lo único que no
+// puede costarle dinero al cliente (02-10-2026).
+function pautaBotonPausar(x, d) {
+  const activa = ['enabled', 'active'].includes(String(x.estado || '').toLowerCase());
+  if (!activa || !d.puede_pausar || !x.conexion_id || !x.id) return '';
+  const p = { nombre: x.nombre, conexion_id: x.conexion_id, campana_id: x.id };
+  return '<button class="pauta-link" style="display:block;margin-top:4px;font-size:11.5px" ' +
+    'onclick="event.stopPropagation();pautaPausar(' + JSON.stringify(p).replace(/"/g, '&quot;') + ', this)">Pausar</button>';
+}
+
 async function pautaPausar(p, btn) {
   if (!confirm('¿Pausar «' + (p.nombre || 'esta campaña') + '»?\n\nDeja de gastar desde ya. La puedes volver a activar cuando quieras desde ' +
     'el administrador de anuncios.')) return;
+  const textoBtn = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Pausando…'; }
   try {
     const r = await fetchAuth('/api/pauta', {
@@ -39681,7 +39694,7 @@ async function pautaPausar(p, btn) {
     pautaCargar();
   } catch (e) {
     showToast('No se pudo pausar: ' + String(e.message || e), 'error');
-    if (btn) { btn.disabled = false; btn.textContent = 'Pausar campaña'; }
+    if (btn) { btn.disabled = false; btn.textContent = textoBtn || 'Pausar campaña'; }
   }
 }
 
@@ -39766,7 +39779,7 @@ function pautaPintarCampanas(d) {
     '<tr onclick="pautaDetalle(' + JSON.stringify(x.id || x.nombre).replace(/"/g, '&quot;') + ')" tabindex="0" class="pauta-fila">' +
       '<td class="pauta-td"><div class="pauta-camp">' + pautaRedChip(x.red) +
         '<span class="pauta-camp-n">' + esc(x.nombre) + '</span></div></td>' +
-      '<td class="pauta-td">' + pautaEstadoChip(x.estado) + '</td>' +
+      '<td class="pauta-td">' + pautaEstadoChip(x.estado) + pautaBotonPausar(x, d) + '</td>' +
       '<td class="pauta-td num">' + pautaPlata(x.inversion, x.moneda || m) + '</td>' +
       '<td class="pauta-td num" style="color:var(--muted)" title="' +
         (x.red === 'google' ? 'Google reporta conversiones, no leads del formulario' : 'Leads del formulario que reporta Meta') + '">' +

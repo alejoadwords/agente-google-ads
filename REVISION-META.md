@@ -75,6 +75,16 @@ Hasta decidir, las instrucciones de prueba (sección 5) y el guion hay que cambi
 el panel de datos va por **Marketing → Plataformas de pauta**, y los mensajes por
 **Conversaciones** con el «Asistente de prueba».
 
+### Estado al 02-10-2026
+
+- **Datos para el video: LISTOS.** La campaña entrega desde el 28-09 sin parar; en 30
+  días 5.845 impresiones, 487 clics, 233 visitas, $35.860 COP (comprobado por API).
+- **`ads_management` ya no necesita una campaña de leads**: desde el 02-10-2026 cada
+  campaña activa de Campañas tiene su botón «Pausar». El video pausa la de tráfico y
+  luego se reactiva a mano en el Administrador de anuncios.
+- La cuenta del revisor sigue sin conexión de Meta (comprobado).
+- Las llamadas de prueba del 28-09 valen hasta el **28-10-2026**: enviar antes.
+
 ### Lo que falta, en orden
 
 1. **Johana agrega a Alejandro como administrador** de la app (si quiere conectar
@@ -211,12 +221,13 @@ Párrafo común que abre todas (Meta valora que se repita el contexto):
 
 ### ads_management
 
-> We use `ads_management` for one action only: **pausing** a campaign from the Diagnosis
-> tab when it keeps spending without bringing any lead into the user's CRM. The user sees
-> the finding with its numbers, presses "Pause campaign", confirms, and the campaign is
-> paused in Meta. We never activate campaigns, change budgets or delete anything: pausing
-> stops spend, it never creates it, and turning a campaign back on is left to the user in
-> Ads Manager. Shown in the video on the Diagnosis tab.
+> We use `ads_management` for one action only: **pausing** a campaign. Every active
+> campaign in the Campaigns tab has a "Pausar" (pause) button, and the Diagnosis tab
+> offers the same action when a campaign keeps spending without bringing any lead into
+> the user's CRM. The user presses it, confirms, and the campaign is paused in Meta. We
+> never activate campaigns, change budgets or delete anything: pausing stops spend, it
+> never creates it, and turning a campaign back on is left to the user in Ads Manager.
+> Shown in the video on the Campaigns tab.
 
 ### business_management
 
@@ -325,7 +336,7 @@ pantalla completa, sin pestañas ni marcadores que enseñen cuentas de clientes.
 | 7 | Volver a Acuarius: la cuenta aparece conectada, con su nombre e ID | contexto |
 | 8 | Abrir el agente **Meta Ads**: el panel de campañas se carga solo dentro del chat, con impresiones, clics y gasto **distintos de cero** | `ads_read` |
 | 9 | Pedirle al agente que analice una campaña; se ve la respuesta con los datos reales | `ads_read` |
-| 10 | Crear una campaña desde el chat y mostrar que **queda en pausa** | `ads_management` |
+| 10 | Pausar una campaña desde Campañas («Pausar») y mostrarla **en pausa** en el Administrador de anuncios | `ads_management` |
 | 11 | Conversaciones → llega un mensaje real de Messenger y se responde desde el inbox | `pages_messaging`, `pages_manage_metadata` |
 | 12 | Mostrar el nombre y la foto de la página conectada en el inbox | `pages_read_engagement` |
 | 13 | Integraciones → **Desconectar**, y mostrar que el acceso desapareció | control del usuario |
@@ -358,9 +369,10 @@ Texto para pegar (en inglés):
 >    account with spend, impressions and clicks, next to their leads in the CRM. (`ads_read`)
 > 6. Open the "Diagnóstico" tab: it lists errors and improvement opportunities for those
 >    campaigns, each with the numbers behind it. (`ads_read`)
-> 7. On a finding marked "gastó … y no trajo ningún lead", press "Pausar campaña" and
->    confirm: the campaign is paused in Meta. Nothing is ever activated or re-budgeted
->    from Acuarius. (`ads_management`)
+> 7. Back on the "Campañas" tab, press "Pausar" under an active campaign and confirm: the
+>    campaign is paused in Meta (the same action appears in Diagnóstico for a campaign
+>    that spends without leads). Nothing is ever activated or re-budgeted from Acuarius.
+>    (`ads_management`)
 > 8. Send a message to the connected Page from any Facebook account. It appears in
 >    Conversaciones (inbox); reply from there and the reply is delivered to Messenger.
 >    (`pages_messaging`, `pages_manage_metadata`, `pages_read_engagement`)

@@ -445,7 +445,12 @@ async function listaDeCampanas(quien, url) {
   const porClic = await atribuirPorClic(conexiones, leads);
 
   const campanas = resultados.flatMap(r => r.filas);
-  const { filas, huerfanos, sueltos } = unir(campanas, leads);
+  const { filas: unidas, huerfanos, sueltos } = unir(campanas, leads);
+  // De qué conexión es cada campaña: el botón «Pausar» de la tabla la manda
+  // al servidor para saber con qué token hablarle a la red.
+  const deConexion = new Map();
+  for (const r of resultados) for (const f of r.filas) deConexion.set(r.conexion.platform + ':' + f.id, r.conexion.id);
+  const filas = unidas.map(f => ({ ...f, conexion_id: deConexion.get((f.red === 'google' ? 'google_ads' : 'meta_ads') + ':' + f.id) || null }));
   filas.sort((a, b) => b.inversion - a.inversion);
 
   const moneda = monedaDe(campanas);
@@ -459,6 +464,8 @@ async function listaDeCampanas(quien, url) {
     moneda_mixta: moneda === null && campanas.length > 0,
     conexiones: resultados.map(estadoConexion),
     campanas: filas,
+    // La misma regla que en el diagnóstico: quien solo ve sus leads no pausa.
+    puede_pausar: !soloSusLeads(quien.perfil),
     sin_campana: { ...sinCampana, motivo: 'Entraron sin el dato de campaña, o por una fuente que no lo manda.' },
     // Qué pasó con los leads que solo traían el clic del anuncio. Va al
     // navegador para poder decirlo: si Google no contestó, el cliente tiene
