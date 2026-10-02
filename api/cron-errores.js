@@ -84,10 +84,20 @@ export default async function handler(req) {
   }
 
   const icono = { navegador: '🖥️', api: '⚙️', cron: '⏱️' };
+  // Un fallo de red se calla mientras es poca cosa y avisa cuando se repite.
+  // Para entonces puede llevar semanas: el correo del 02-10-2026 llamó
+  // «nuevos» a dos que venían del 3 y del 21 de septiembre. Se dice desde
+  // cuándo, para no confundir lo acumulado con lo recién roto.
+  const desde = (e) => {
+    const t = new Date(e.primera_vez).getTime();
+    if (!t || Date.now() - t < 86400000) return '';
+    return ' desde el ' + new Date(t).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
+  };
   const cuerpo = nuevos.slice(0, 10).map(e => bloque(
     `<b>${icono[e.origen] || ''} ${esc(e.mensaje)}</b><br>` +
     `<span style="color:#5B6072">en ${esc(e.donde || 'sitio desconocido')} · ` +
     `${e.veces} ${e.veces === 1 ? 'vez' : 'veces'}` +
+    desde(e) +
     (e.usuarios && e.usuarios.length
       ? ` · ${e.usuarios.length} cuenta${e.usuarios.length > 1 ? 's' : ''} afectada${e.usuarios.length > 1 ? 's' : ''}`
       : '') +
@@ -107,10 +117,10 @@ export default async function handler(req) {
       from: 'Acuarius <alertas@app.acuarius.app>',
       reply_to: RESPONDER_A,
       to: [AVISAR_A],
-      subject: `⚠️ ${nuevos.length} error${nuevos.length > 1 ? 'es' : ''} nuevo${nuevos.length > 1 ? 's' : ''} en Acuarius`,
+      subject: `⚠️ ${nuevos.length} error${nuevos.length > 1 ? 'es' : ''} por revisar en Acuarius`,
       html: emailHtml({
-        titulo: `${nuevos.length} error${nuevos.length > 1 ? 'es' : ''} que no se había${nuevos.length > 1 ? 'n' : ''} visto antes`,
-        intro: 'Solo se avisa de lo nuevo. Un fallo ya conocido no vuelve a escribir.',
+        titulo: `${nuevos.length} error${nuevos.length > 1 ? 'es' : ''} sin avisar todavía`,
+        intro: 'Solo se avisa una vez de cada fallo. Los de red esperan a repetirse antes de avisar, así que pueden venir de días atrás: la fecha de cada uno dice desde cuándo pasa.',
         preheader: String(nuevos[0] && nuevos[0].mensaje || '').slice(0, 90),
         cuerpo,
         pie: '<b>Equipo de Soporte — Acuarius</b>',

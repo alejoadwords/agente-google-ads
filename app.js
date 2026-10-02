@@ -917,6 +917,24 @@ if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => { _paginaSeVa = true; });
 }
 
+// ¿Llega el navegador al servidor ahora mismo? Si el sistema dice que no hay
+// red no se pregunta; si dice que sí, se comprueba con /api/ping (sin caché ni
+// service worker de por medio) con 4 s de margen. Las peticiones que fallan
+// juntas comparten una sola comprobación.
+let _pingEnVuelo = null;
+function hayConexion() {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve(false);
+  if (!_pingEnVuelo) {
+    const ctl = new AbortController();
+    const reloj = setTimeout(() => ctl.abort(), 4000);
+    _pingEnVuelo = fetch('/api/ping?t=' + Date.now(), { cache: 'no-store', signal: ctl.signal })
+      .then(r => r.ok)
+      .catch(() => false)
+      .finally(() => { clearTimeout(reloj); setTimeout(() => { _pingEnVuelo = null; }, 5000); });
+  }
+  return _pingEnVuelo;
+}
+
 async function _fetchAuthRaw(url, opts = {}) {
   const withAuth = async (fresh) => {
     const headers = await getAuthHeaders({ fresh });
@@ -943,10 +961,18 @@ async function _fetchAuthRaw(url, opts = {}) {
     // Un registro que llora sin motivo deja de leerse, y entonces no sirve
     // para lo que sí importa. Se descartan los abortos y lo que pasa con la
     // pestaña ya oculta o descargándose.
+    //
+    // Y tampoco lo es cuando la que falló fue la conexión de la persona: el
+    // 02-10-2026 llegó un aviso de «errores nuevos» que eran cinco pantallas
+    // cayendo en el mismo segundo, el patrón de alguien que recarga o se queda
+    // sin internet. Así que antes de registrar se pregunta al servidor si está
+    // (hayConexion): si tampoco responde, era la red de esa persona.
     const abortada = e && (e.name === 'AbortError' || opts.signal?.aborted);
-    const seVa = typeof document !== 'undefined' && (document.hidden || _paginaSeVa);
-    if (!abortada && !seVa) {
-      errRegistrar('sin respuesta del servidor: ' + (e && e.message), 'red ' + String(url).split('?')[0]);
+    const seVa = () => typeof document !== 'undefined' && (document.hidden || _paginaSeVa);
+    if (!abortada && !seVa()) {
+      const donde = 'red ' + String(url).split('?')[0];
+      const mensaje = 'sin respuesta del servidor: ' + (e && e.message);
+      hayConexion().then(hay => { if (hay && !seVa()) errRegistrar(mensaje, donde); });
     }
     throw e;
   }
