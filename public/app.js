@@ -29621,7 +29621,11 @@ async function cmpDuplicar(id) {
   const cuerpo = { name: (c.name || 'Campaña') + ' (copia)' };
   campos.forEach(k => { if (c[k] !== undefined && c[k] !== null) cuerpo[k] = c[k]; });
   try {
-    const r = await fetchAuth('/api/campaigns', { method: 'POST', body: JSON.stringify(cuerpo) });
+    // En el mismo cliente que la lista que se está viendo: sin él la copia se
+    // guardaba a nivel de cuenta y no aparecía en ninguna parte.
+    const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+    const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
+    const r = await fetchAuth('/api/campaigns' + qs, { method: 'POST', body: JSON.stringify(cuerpo) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { showToast(d.error || 'No se pudo duplicar', 'error'); return; }
     showToast('Copia creada como borrador', 'success');
