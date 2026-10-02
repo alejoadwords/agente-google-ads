@@ -40040,8 +40040,9 @@ async function ventasMetaGuardar() {
   try {
     const d = await ventasPost({ accion: 'meta-guardar', dataset, token, test_event_code });
     window._ventasEditandoMeta = false;
-    showToast(d.probado && !d.nombre
+    showToast(test_event_code.trim() && d.probado
       ? 'Listo: Meta recibió una venta de prueba. Mírala en Probar eventos.'
+      : d.probado ? 'Listo: Meta aceptó el pixel y el token. Las ventas empiezan a enviarse.'
       : 'Guardado' + (d.nombre ? ': conjunto «' + d.nombre + '»' : ''), 'success');
     ventasCargar();
   } catch (e) {

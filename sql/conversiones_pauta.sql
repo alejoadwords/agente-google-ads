@@ -97,7 +97,11 @@ begin
   end if;
   if new.stage is distinct from 'ganado' then return new; end if;
   if tg_op = 'UPDATE' and old.stage is not distinct from 'ganado' then return new; end if;
-  cuando := coalesce(new.closed_at, now());
+  -- La ventana de cierre guarda solo el DÍA (a las 12:00) porque deja elegir
+  -- uno anterior. Si ese día es hoy, la venta ocurrió ahora y se informa la
+  -- hora real; si eligieron otro día, se respeta ese día.
+  cuando := case when new.closed_at is null or abs(extract(epoch from now() - new.closed_at)) < 86400
+                 then now() else new.closed_at end;
   foreach v_red in array array['meta', 'google'] loop
     if conversiones_red_activa(new.user_id, new.client_id, v_red) then
       -- event_id con el instante del cierre: si el negocio se reabre y se
