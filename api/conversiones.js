@@ -168,12 +168,31 @@ export default async function handler(req) {
         const d = r ? await r.json().catch(() => ({})) : {};
         if (d?.error?.code === 190) return jsonResp({ error: 'Ese token no es válido o venció. Genera uno nuevo en el Administrador de eventos.' }, 400);
         if (r?.ok && d.id) nombre = d.name || null;
-        else {
-          if (!prueba) {
-            return jsonResp({ error: 'Para comprobar el token hace falta el código de prueba (Administrador de eventos → Probar eventos → el código que empieza por TEST). Pégalo y vuelve a guardar; luego lo quitas.' }, 400);
-          }
+        else if (prueba) {
           const t = await mandarAMeta({ dataset, token: tokenFinal, testCode: prueba, eventos: [eventoDePrueba()] });
           if (!t.ok) return jsonResp({ error: t.motivo }, 400);
+        } else {
+          // Sin código de prueba no se puede mandar nada de verdad sin que
+          // cuente. Se manda un evento técnico con fecha de dentro de diez
+          // días, que Meta rechaza POR LA FECHA — y eso solo pasa después de
+          // aceptar el token y el permiso sobre el conjunto. Token malo (190)
+          // o sin permiso (10/200) fallan antes. Si Meta llegara a aceptarlo,
+          // es un evento personalizado inocuo, no una compra.
+          const t = await mandarAMeta({ dataset, token: tokenFinal, eventos: [{
+            event_name: 'AcuariusVerificacion', event_time: Math.floor(Date.now() / 1000) + 10 * 86400,
+            action_source: 'system_generated', user_data: { external_id: ['acuarius-verificacion'] },
+          }] });
+          const cod = t.respuesta?.error?.code;
+          if (!t.ok && (cod === 190 || cod === 10 || cod === 200 || cod === 803 || !t.respuesta?.error)) {
+            return jsonResp({ error: t.motivo }, 400);
+          }
+          // OJO: el 100 también es «el conjunto no existe o no tienes permiso»
+          // (subcódigo 33, «Unsupported post request»). Ese no es la fecha.
+          const e = t.respuesta?.error || {};
+          const ajeno = e.error_subcode === 33 || /does not exist|Unsupported post request|missing permission/i.test(e.message || '');
+          if (!t.ok && (cod !== 100 || ajeno)) {
+            return jsonResp({ error: ajeno ? 'Meta no encuentra ese conjunto de datos, o el token no tiene permiso sobre él. Revisa que el token sea de ese mismo conjunto.' : t.motivo }, 400);
+          }
         }
       }
       // Un conjunto recién guardado queda ACTIVO: quien pega el token quiere
