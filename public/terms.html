@@ -1,112 +1,567 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<!-- Copia de acuarius.app/terms.html (repo acuarius-landing), SIN la etiqueta de Google:
+     dentro de app.acuarius.app no hay píxeles publicitarios. Si cambia allá, se copia aquí. -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Términos de Servicio — Acuarius</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Outfit',sans-serif;background:#F9FAFB;color:#0A0A0A;line-height:1.7}
-.wrap{max-width:760px;margin:0 auto;padding:60px 24px 80px}
-.logo{display:flex;align-items:center;gap:10px;margin-bottom:48px}
-.logo-icon{width:36px;height:36px;background:#1E2BCC;border-radius:9px;display:flex;align-items:center;justify-content:center}
-.logo-icon svg{width:36px;height:36px;border-radius:9px;display:block}
-.logo-name{font-size:20px;font-weight:700;letter-spacing:-.3px;color:#0A0A0A}
-h1{font-size:28px;font-weight:700;letter-spacing:-.4px;margin-bottom:8px}
-.updated{font-size:13px;color:#6B7280;margin-bottom:40px}
-h2{font-size:16px;font-weight:600;margin:32px 0 10px;color:#0A0A0A}
-p{font-size:14px;color:#374151;margin-bottom:12px}
-ul{padding-left:20px;margin-bottom:12px}
-li{font-size:14px;color:#374151;margin-bottom:6px}
-a{color:#1E2BCC;text-decoration:none}
-a:hover{text-decoration:underline}
-.divider{height:1px;background:#E5E7EB;margin:40px 0}
-.footer{font-size:13px;color:#9CA3AF;text-align:center;margin-top:48px}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --blue: #1E2BCC;
+    --blue-lt: #EEF0FD;
+    --blue-md: #C7CBFB;
+    --text: #0A0A0A;
+    --muted: #6B7280;
+    --muted2: #9CA3AF;
+    --border: #E5E7EB;
+    --bg: #FFFFFF;
+    --sidebar: #F4F5F7;
+    --font: 'Outfit', sans-serif;
+  }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--blue);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .logo-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -.3px;
+  }
+  .header-links {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+  .header-links a {
+    font-size: 13px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color .15s;
+  }
+  .header-links a:hover { color: var(--blue); }
+  .header-links a.active { color: var(--blue); font-weight: 500; }
+
+  /* HERO */
+  .hero {
+    background: var(--blue-lt);
+    border-bottom: 1px solid var(--blue-md);
+    padding: 56px 40px 48px;
+    text-align: center;
+  }
+  .hero-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 12px;
+  }
+  .hero h1 {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -.5px;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+  .hero p {
+    font-size: 14px;
+    color: var(--muted);
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .hero-date {
+    display: inline-block;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--muted2);
+    background: white;
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 20px;
+  }
+
+  /* CONTENT */
+  .content-wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 40px 80px;
+  }
+
+  /* TOC */
+  .toc {
+    background: var(--sidebar);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 48px;
+  }
+  .toc-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted2);
+    margin-bottom: 12px;
+  }
+  .toc ol {
+    list-style: decimal;
+    padding-left: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 20px;
+  }
+  @media (max-width: 540px) { .toc ol { grid-template-columns: 1fr; } }
+  .toc a {
+    font-size: 13px;
+    color: var(--blue);
+    text-decoration: none;
+    transition: opacity .15s;
+  }
+  .toc a:hover { opacity: .7; }
+
+  /* SECTIONS */
+  section {
+    margin-bottom: 44px;
+    scroll-margin-top: 80px;
+  }
+  h2 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -.2px;
+    color: var(--text);
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .sec-num {
+    width: 26px;
+    height: 26px;
+    background: var(--blue-lt);
+    border: 1px solid var(--blue-md);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--blue);
+    flex-shrink: 0;
+  }
+  p {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    line-height: 1.75;
+  }
+  p:last-child { margin-bottom: 0; }
+  ul, ol {
+    padding-left: 20px;
+    margin-bottom: 12px;
+  }
+  li {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    line-height: 1.65;
+  }
+  strong { color: var(--text); font-weight: 600; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* HIGHLIGHT BOX */
+  .highlight-box {
+    background: var(--blue-lt);
+    border: 1px solid var(--blue-md);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+    font-size: 13.5px;
+    color: var(--text);
+    line-height: 1.65;
+  }
+  .highlight-box strong { color: var(--blue); }
+
+  /* WARNING BOX */
+  .warning-box {
+    background: #FEF3C7;
+    border: 1px solid #F59E0B;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+    font-size: 13.5px;
+    color: #92400E;
+  }
+
+  /* CONTACT CARD */
+  .contact-card {
+    background: var(--sidebar);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 48px;
+    text-align: center;
+  }
+  .contact-card h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .contact-card p {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .contact-card a.btn {
+    display: inline-block;
+    background: var(--blue);
+    color: white;
+    padding: 9px 22px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: opacity .15s;
+  }
+  .contact-card a.btn:hover { opacity: .88; }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 28px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .footer-copy { font-size: 12px; color: var(--muted2); }
+  .footer-links { display: flex; gap: 16px; }
+  .footer-links a { font-size: 12px; color: var(--muted2); text-decoration: none; transition: color .15s; }
+  .footer-links a:hover { color: var(--blue); }
+
+  @media (max-width: 600px) {
+    header { padding: 0 20px; }
+    .hero { padding: 40px 20px 36px; }
+    .hero h1 { font-size: 26px; }
+    .content-wrap { padding: 40px 20px 60px; }
+    footer { padding: 24px 20px; flex-direction: column; align-items: flex-start; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-
-  <div class="logo">
+<!-- HEADER -->
+<header>
+  <a href="https://acuarius.app" class="logo">
     <div class="logo-icon">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75">
-        <rect width="75" height="75" fill="#1E2BCC" rx="8"/>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75 75" width="20" height="20">
         <path fill="#fff" d="M67.52 61.99L53.7 38.06l-6.09 10.57 10.76 18.64c.97 1.68 2.75 2.64 4.58 2.64.89 0 1.8-.24 2.63-.72 2.54-1.46 3.4-4.68 1.94-7.2z"/>
         <path fill="#fff" d="M57.82 24.91l-5.86 10.16-6.1 10.56-9.44 16.35c-2.82 4.9-8.1 7.95-13.75 7.95-5.74 0-10.89-2.97-13.77-7.95-2.87-4.97-2.87-10.92 0-15.89L25.41 17.5c1.72-2.97 4.79-4.75 8.21-4.75s6.49 1.78 8.21 4.75l.6 1.04 1.71 2.96-6.1 10.57-4.42-7.65L18.06 51.36c-1.39 2.4-.47 4.53 0 5.33.47.8 1.84 2.67 4.62 2.67 1.89 0 3.67-1.02 4.6-2.67l12.48-21.62 6.11-10.57 2.8-4.86c1.46-2.53 4.69-3.4 7.22-1.93 2.52 1.45 3.39 4.67 1.93 7.2z"/>
         <circle fill="#fff" cx="60.13" cy="10.7" r="5.3"/>
       </svg>
     </div>
     <span class="logo-name">acuarius</span>
+  </a>
+  <div class="header-links">
+    <a href="https://acuarius.app">Inicio</a>
+    <a href="https://acuarius.app/privacy.html">Privacidad</a>
+    <a href="https://acuarius.app/terms.html" class="active">Términos</a>
+    <a href="https://app.acuarius.app">Ingresar</a>
+  </div>
+</header>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-label">Legal</div>
+  <h1>Términos de Servicio</h1>
+  <p>Al usar Acuarius, aceptas los siguientes términos. Léelos con atención antes de comenzar.</p>
+  <span class="hero-date">Última actualización: 2 de octubre de 2026</span>
+</div>
+
+<!-- CONTENT -->
+<div class="content-wrap">
+
+  <!-- TOC -->
+  <div class="toc">
+    <div class="toc-title">Contenido</div>
+    <ol>
+      <li><a href="#aceptacion">Quién presta el servicio y aceptación</a></li>
+      <li><a href="#descripcion">Qué es Acuarius</a></li>
+      <li><a href="#cuentas">Cuentas, equipo y accesos</a></li>
+      <li><a href="#pagos">Planes, prueba gratuita y pagos</a></li>
+      <li><a href="#cupos">Cupos y consumos</a></li>
+      <li><a href="#uso-aceptable">Uso aceptable</a></li>
+      <li><a href="#contactos">Los datos de tus contactos</a></li>
+      <li><a href="#mensajes">Correo y WhatsApp</a></li>
+      <li><a href="#sms">Mensajes de texto (SMS)</a></li>
+      <li><a href="#ia">Inteligencia artificial</a></li>
+      <li><a href="#integraciones">Integraciones de terceros</a></li>
+      <li><a href="#propiedad-intelectual">Propiedad intelectual</a></li>
+      <li><a href="#disponibilidad">Disponibilidad y soporte</a></li>
+      <li><a href="#limitacion">Limitación de responsabilidad</a></li>
+      <li><a href="#terminacion">Suspensión, cancelación y tus datos</a></li>
+      <li><a href="#cambios">Cambios a los términos</a></li>
+      <li><a href="#contacto">Ley aplicable y contacto</a></li>
+    </ol>
   </div>
 
-  <h1>Términos de Servicio</h1>
-  <p class="updated">Última actualización: 21 de mayo de 2025</p>
+  <!-- 1. ACEPTACIÓN -->
+  <section id="aceptacion">
+    <h2><span class="sec-num">1</span>Quién presta el servicio y aceptación</h2>
+    <div class="highlight-box">
+      Al crear una cuenta o usar Acuarius (<strong>app.acuarius.app</strong>) aceptas estos Términos de Servicio y la <a href="https://acuarius.app/privacy.html">Política de Tratamiento de Datos Personales</a>. Si no estás de acuerdo, no uses el servicio.
+    </div>
+    <p>Acuarius es una marca de <strong>AIXION LABS SOLUTIONS LLC</strong>, sociedad de responsabilidad limitada registrada en el estado de Texas, Estados Unidos (File Number 805940283), con dirección en <strong>15723 Chapel Lake Dr, Cypress, TX 77429</strong> («Acuarius», «nosotros»). Estos términos son un acuerdo entre esa sociedad y la persona o empresa que crea la cuenta («tú»).</p>
+    <p>El envío de mensajes de texto (SMS) a Colombia lo presta <strong>Check In Col SAS</strong>, sociedad colombiana vinculada a Acuarius (NIT 900.825.601-2, Carrera 53 #106-280, Centro Empresarial, Barranquilla), como se explica en la sección 9.</p>
+    <p>Acuarius está pensado para empresas, agencias y profesionales. Si usas el servicio en nombre de una empresa, confirmas que tienes facultad para aceptar estos términos por ella.</p>
+  </section>
 
-  <p>Estos Términos de Servicio ("Términos") regulan el acceso y uso de la plataforma Acuarius ("la Plataforma"), operada por Acuarius. Al acceder o utilizar la Plataforma, aceptas quedar vinculado por estos Términos. Si no estás de acuerdo, no uses la Plataforma.</p>
+  <!-- 2. DESCRIPCIÓN -->
+  <section id="descripcion">
+    <h2><span class="sec-num">2</span>Qué es Acuarius</h2>
+    <p>Acuarius es una plataforma en la nube de marketing y ventas con inteligencia artificial. Según tu plan, incluye entre otras cosas:</p>
+    <ul>
+      <li>Un CRM con pipelines de venta, contactos, tareas, agenda, reservas y reportes</li>
+      <li>Una bandeja de entrada que reúne las conversaciones de WhatsApp, Instagram, Messenger, TikTok y el chat de tu sitio web</li>
+      <li>Agentes de inteligencia artificial que responden y califican a tus contactos en esos canales</li>
+      <li>Automatizaciones y campañas de correo, WhatsApp y mensajes de texto (SMS)</li>
+      <li>Propuestas comerciales, páginas de aterrizaje y formularios para captar contactos</li>
+      <li>Conexión con tus cuentas de publicidad (Google Ads, Meta Ads, TikTok Ads, LinkedIn Ads) y asistentes de IA para planearlas y analizarlas</li>
+    </ul>
+    <p>El detalle de lo que incluye cada plan está publicado en <a href="https://acuarius.app">acuarius.app</a>. Podemos mejorar, cambiar o retirar funciones; si retiramos algo esencial de tu plan pagado, te avisaremos con anticipación razonable.</p>
+  </section>
 
-  <h2>1. Descripción del servicio</h2>
-  <p>Acuarius es una plataforma SaaS de marketing con inteligencia artificial que permite a agencias y empresas gestionar campañas publicitarias, analizar datos de rendimiento y generar contenido mediante agentes especializados de Google Ads, Meta Ads, TikTok Ads, SEO y otras plataformas.</p>
+  <!-- 3. CUENTAS -->
+  <section id="cuentas">
+    <h2><span class="sec-num">3</span>Cuentas, equipo y accesos</h2>
+    <ul>
+      <li>Debes dar información veraz y mantenerla actualizada.</li>
+      <li>Eres responsable de la seguridad de tu acceso y de toda la actividad de tu cuenta, incluida la de las personas que invites a tu equipo.</li>
+      <li>Como dueño de la cuenta decides quién entra y con qué perfil (administración, ventas o mercadeo). Los asientos de equipo dependen de tu plan.</li>
+      <li>Si una agencia administra varias marcas desde Acuarius, la agencia responde por el uso que haga de los datos de cada una.</li>
+      <li>Avísanos de inmediato a <a href="mailto:ceo@acuarius.app">ceo@acuarius.app</a> si sospechas un acceso no autorizado.</li>
+    </ul>
+    <p>Para atender un problema que nos reportes, o una falla que detectemos, nuestro equipo de soporte puede entrar a tu cuenta. Cada acceso queda registrado con quién entró y por qué, y lo usamos solo para resolver ese asunto.</p>
+  </section>
 
-  <h2>2. Elegibilidad y registro</h2>
-  <ul>
-    <li>Debes tener al menos 18 años para usar la Plataforma.</li>
-    <li>Eres responsable de mantener la confidencialidad de tus credenciales de acceso.</li>
-    <li>Debes proporcionar información veraz y actualizada durante el registro.</li>
-    <li>Una cuenta es de uso personal o empresarial exclusivo; no puedes transferirla a terceros sin autorización.</li>
-  </ul>
+  <!-- 4. PAGOS -->
+  <section id="pagos">
+    <h2><span class="sec-num">4</span>Planes, prueba gratuita y pagos</h2>
+    <div class="highlight-box">
+      Los pagos se procesan a través de <strong>Stripe</strong> y se cobran en dólares estadounidenses (USD). Al suscribirte autorizas el cobro recurrente del plan que elijas hasta que lo canceles. Nunca vemos ni guardamos los datos de tu tarjeta. Las suscripciones contratadas antes por Hotmart se siguen cobrando por Hotmart hasta que las pasemos a Stripe, y te avisaremos antes.
+    </div>
+    <ul>
+      <li><strong>Prueba gratuita:</strong> las cuentas nuevas pueden tener 14 días de prueba del plan Pro, sin tarjeta de crédito. Al terminar, si no te suscribes, la cuenta pasa al plan gratuito con sus límites; no se te cobra nada automáticamente. Es una prueba por empresa.</li>
+      <li><strong>Planes:</strong> Gratuito, Pro y Agencia, con los precios y límites publicados en <a href="https://acuarius.app">acuarius.app</a>.</li>
+      <li><strong>Pago anual («2 meses gratis»):</strong> si pagas un año por adelantado, pagas 10 meses y recibes 12. El descuento aplica al plan y a sus complementos de suscripción (usuarios, contactos y mensajes del agente de IA), no a los créditos de SMS. Si cancelas, el plan sigue activo hasta el final del año pagado; no se reembolsa la parte no usada, salvo lo previsto en el punto de reembolso.</li>
+      <li><strong>Complementos:</strong> puedes ampliar tu plan con usuarios, contactos, mensajes del agente de IA, correos y créditos de SMS, según los precios publicados. Los créditos de SMS son prepago.</li>
+      <li><strong>Cancelación:</strong> puedes cancelar cuando quieras desde tu cuenta o escribiéndonos a <a href="mailto:ceo@acuarius.app">ceo@acuarius.app</a>. La cancelación aplica al final del periodo ya pagado y no se vuelve a cobrar; no hay reembolsos por periodos ya facturados.</li>
+      <li><strong>Reembolso:</strong> si el servicio no cumple lo descrito, puedes pedir el reembolso completo dentro de los primeros 7 días de tu primera suscripción. El detalle está en la <a href="https://acuarius.app/reembolsos.html">Política de reembolsos, cancelación y disputas</a>.</li>
+      <li><strong>Cobros no reconocidos:</strong> si ves un cobro de Acuarius que no reconoces, escríbenos antes de abrir una disputa con tu banco; lo revisamos y respondemos en máximo 3 días hábiles.</li>
+      <li><strong>Impuestos:</strong> los precios publicados no incluyen impuestos; si la ley de tu país los exige, se suman al cobro.</li>
+      <li><strong>Precios:</strong> si cambiamos el precio de tu plan, te avisaremos al menos 30 días antes de que aplique.</li>
+    </ul>
+  </section>
 
-  <h2>3. Uso aceptable</h2>
-  <p>Al usar Acuarius, te comprometes a:</p>
-  <ul>
-    <li>Usar la Plataforma únicamente para fines legales y de conformidad con las políticas de las plataformas publicitarias conectadas (Google Ads, Meta, TikTok, etc.).</li>
-    <li>No intentar acceder, modificar o dañar sistemas, datos o cuentas de otros usuarios.</li>
-    <li>No usar la Plataforma para generar, distribuir o promocionar contenido ilegal, engañoso o que viole derechos de terceros.</li>
-    <li>No realizar ingeniería inversa, descompilar o intentar extraer el código fuente de la Plataforma.</li>
-  </ul>
+  <!-- 5. CUPOS -->
+  <section id="cupos">
+    <h2><span class="sec-num">5</span>Cupos y consumos</h2>
+    <p>Algunas funciones tienen un cupo según tu plan y lo que hayas comprado aparte: las respuestas del agente de IA, los contactos, los usuarios, los correos y los SMS. En la plataforma ves cuánto llevas.</p>
+    <ul>
+      <li>Al agotar un cupo, la función correspondiente se detiene hasta el siguiente ciclo o hasta que amplíes el cupo. En el agente de IA, además, te avisamos por correo cuando te acercas al límite.</li>
+      <li>Para proteger la plataforma y a los demás clientes aplicamos límites antifraude, por ejemplo un tope de envíos por campaña durante los primeros días de una cuenta. No son límites de tu plan: desaparecen solos o los levantamos si nos escribes.</li>
+    </ul>
+  </section>
 
-  <h2>4. Cuentas de plataformas de terceros</h2>
-  <p>Para usar ciertas funciones, puedes conectar cuentas de plataformas como Google Ads, Meta Ads o TikTok Ads. Al hacerlo:</p>
-  <ul>
-    <li>Autorizas a Acuarius a acceder a los datos de esas cuentas en tu nombre, únicamente para prestar el servicio.</li>
-    <li>Eres el único responsable del cumplimiento de los términos y políticas de dichas plataformas.</li>
-    <li>Puedes revocar el acceso en cualquier momento desde la configuración de tu cuenta o desde la plataforma correspondiente.</li>
-  </ul>
+  <!-- 6. USO ACEPTABLE -->
+  <section id="uso-aceptable">
+    <h2><span class="sec-num">6</span>Uso aceptable</h2>
+    <p>Acuarius es para marketing y ventas legítimos. <strong>Está prohibido:</strong></p>
+    <ul>
+      <li>Enviar spam, mensajes a listas compradas o a personas que no aceptaron recibir comunicaciones de tu negocio</li>
+      <li>Phishing, suplantación de marcas, personas o entidades, y cualquier contenido engañoso, fraudulento o ilegal</li>
+      <li>Contactar a consumidores fuera de los canales y horarios que permite la ley, o insistir a quien pidió no ser contactado</li>
+      <li>Usar el servicio para cobranzas abusivas, apuestas o contenido no permitido por las políticas de WhatsApp, Meta, Google o TikTok</li>
+      <li>Intentar acceder a datos o cuentas de otros, sobrecargar la plataforma o usar bots no autorizados contra ella</li>
+      <li>Revender el servicio sin un acuerdo escrito con nosotros</li>
+    </ul>
+    <p>Si detectamos un uso prohibido podemos detener los envíos o suspender la cuenta de inmediato, sin reembolso, para proteger a los destinatarios y a los demás clientes.</p>
+  </section>
 
-  <h2>5. Planes, pagos y cancelaciones</h2>
-  <ul>
-    <li>Acuarius ofrece planes de suscripción con distintas funcionalidades. Los precios y características de cada plan se detallan en la página de precios.</li>
-    <li>Los pagos son procesados por proveedores externos (Hotmart u otros). Acuarius no almacena datos de tarjetas de crédito.</li>
-    <li>Las suscripciones se renuevan automáticamente salvo que las canceles antes del siguiente período de facturación.</li>
-    <li>No se realizan reembolsos por períodos ya facturados, salvo que la ley aplicable lo requiera.</li>
-  </ul>
+  <!-- 7. CONTACTOS -->
+  <section id="contactos">
+    <h2><span class="sec-num">7</span>Los datos de tus contactos</h2>
+    <div class="highlight-box">
+      Los datos de las personas que cargas o que llegan a tu cuenta (tus contactos, leads y clientes) son tuyos. Frente a ellos <strong>tú eres el responsable del tratamiento</strong> y Acuarius actúa como <strong>encargado</strong>: los procesamos solo para prestarte el servicio y según tus instrucciones.
+    </div>
+    <ul>
+      <li>Garantizas que tienes autorización de esas personas para tratar sus datos y escribirles por cada canal que uses, conforme a la Ley 1581 de 2012 y demás normas aplicables.</li>
+      <li>Atiendes sus solicitudes de consulta, corrección, baja y supresión. En correo y SMS la plataforma marca las bajas y deja de escribirles por ese canal; en los demás canales lo gestionas tú.</li>
+      <li>No vendemos ni usamos los datos de tus contactos para fines propios, ni los compartimos con otros clientes.</li>
+      <li>Puedes exportar tus contactos a CSV y borrarlos cuando quieras. Lo que borras pasa a una papelera por 30 días y luego se elimina.</li>
+    </ul>
+  </section>
 
-  <h2>6. Propiedad intelectual</h2>
-  <p>Todos los derechos sobre la Plataforma, incluyendo su código, diseño, marca y contenidos propios, son propiedad exclusiva de Acuarius. El uso de la Plataforma no te otorga ningún derecho de propiedad sobre ella.</p>
-  <p>El contenido que generes usando la Plataforma (copies, estrategias, reportes) es tuyo. Acuarius no reclama propiedad sobre los outputs generados a partir de tus datos.</p>
+  <!-- 8. CORREO Y WHATSAPP -->
+  <section id="mensajes">
+    <h2><span class="sec-num">8</span>Correo y WhatsApp</h2>
+    <ul>
+      <li><strong>Correo:</strong> las campañas salen desde nuestro dominio verificado y cada correo lleva un enlace para darse de baja. Quien se da de baja, o cuyo correo rebota o marca spam, deja de recibir correos tuyos. Aplicamos topes diarios para cuidar la entrega de todos.</li>
+      <li><strong>WhatsApp:</strong> los mensajes salen por tu propio número conectado y debes cumplir las políticas de WhatsApp Business. Para escribir a quien no te escribió en las últimas 24 horas, Meta exige plantillas aprobadas. Meta puede limitar o bloquear tu número por su cuenta; Acuarius no controla esas decisiones.</li>
+    </ul>
+  </section>
 
-  <h2>7. Limitación de responsabilidad</h2>
-  <p>Acuarius provee la Plataforma "tal como está". No garantizamos resultados específicos en campañas publicitarias. En ningún caso seremos responsables por daños indirectos, pérdida de ingresos o decisiones tomadas con base en los análisis o recomendaciones de la Plataforma.</p>
-  <p>La responsabilidad máxima de Acuarius ante cualquier reclamación estará limitada al monto pagado por el usuario en los últimos 3 meses.</p>
+  <!-- 9. SMS -->
+  <section id="sms">
+    <h2><span class="sec-num">9</span>Mensajes de texto (SMS)</h2>
+    <p>Acuarius te permite enviar SMS a tus contactos en Colombia desde campañas y automatizaciones. Este servicio lo presta <strong>Check In Col SAS</strong> (ver sección 1), y solo llega a celulares de Colombia. Los mensajes salen a través de un proveedor de telecomunicaciones, actualmente <strong>LabsMobile (001TECH SL, España)</strong>, y por eso aplican también a ti las condiciones que ese proveedor exige a quien envía.</p>
+    <div class="highlight-box">
+      <strong>Consentimiento:</strong> solo puedes enviar SMS a personas que te dieron su consentimiento previo, expreso e informado para recibir mensajes de tu negocio. Antes de cada envío lo confirmas en la plataforma, y te comprometes a conservar la prueba y entregarla si Acuarius o el proveedor te la piden.
+    </div>
+    <p>Al usar los SMS, además:</p>
+    <ul>
+      <li>Cumples la ley colombiana aplicable, entre otras la Ley 1581 de 2012 de protección de datos, la Ley 2300 de 2023 y la regulación de la Comisión de Regulación de Comunicaciones (CRC), incluido el Registro de Números Excluidos.</li>
+      <li>Atiendes las solicitudes de baja: quien responda «SALIR» o pida por cualquier medio no recibir más mensajes deja de recibirlos. Los contactos marcados con la etiqueta «no-sms» no vuelven a recibir SMS desde la plataforma.</li>
+      <li>No envías contenido engañoso, fraudulento ni ilegal: suplantación de marcas o entidades, enlaces maliciosos (<em>smishing</em>), cobranzas abusivas o mensajes que el destinatario no espera de tu negocio.</li>
+      <li>Aceptas que la plataforma solo envía en el horario permitido (lunes a viernes de 7:00 a 19:00 y sábados de 8:00 a 15:00, sin domingos ni festivos) y que las cuentas nuevas tienen un límite de mensajes por campaña durante sus primeros días.</li>
+    </ul>
+    <p><strong>Créditos:</strong> los SMS se pagan por adelantado con paquetes de créditos. Un crédito equivale a un SMS de hasta 160 caracteres; un mensaje más largo, o con emojis o símbolos especiales, gasta más de un crédito, y la plataforma te muestra cuántos antes de enviar. Los créditos se suman entre paquetes y no vencen mientras tu cuenta esté activa. Si el proveedor no acepta un mensaje, su crédito se devuelve solo; un mensaje aceptado que luego el operador no entrega sí consume su crédito. Los créditos no son reembolsables en dinero.</p>
+    <p><strong>Entrega:</strong> la entrega depende de los operadores móviles. Acuarius no garantiza que cada mensaje llegue ni el tiempo que tarde, y te muestra en cada campaña los mensajes que el operador no entregó.</p>
+    <div class="warning-box">
+      ⚠️ <strong>Suspensión:</strong> podemos suspender de inmediato el envío de SMS de una cuenta si detectamos un uso que incumpla esta sección, o si el proveedor o una autoridad lo exigen. Los créditos de una cuenta suspendida por abuso no se reembolsan.
+    </div>
+  </section>
 
-  <h2>8. Privacidad</h2>
-  <p>El tratamiento de tus datos personales se rige por nuestra <a href="https://acuarius.app/privacy.html">Política de Privacidad</a>, que forma parte integral de estos Términos.</p>
+  <!-- 10. IA -->
+  <section id="ia">
+    <h2><span class="sec-num">10</span>Inteligencia artificial</h2>
+    <ul>
+      <li>Las respuestas de los agentes y asistentes de IA pueden contener errores. Revísalas antes de usarlas en decisiones importantes, en campañas o en ofertas a tus clientes.</li>
+      <li>Cuando activas un agente para responder a tus contactos, responde en nombre de tu negocio con la información que tú le das (catálogo, horarios, preguntas frecuentes). Eres responsable de que esa información sea correcta y de supervisar sus conversaciones; puedes tomar cualquier conversación en cualquier momento.</li>
+      <li>Para generar respuestas, textos o imágenes enviamos a proveedores de IA solo la información necesaria para esa tarea. Cuáles son y qué reciben está en la Política de Tratamiento de Datos.</li>
+      <li>Lo que la IA genera a partir de tus instrucciones es tuyo para usar en tu negocio, pero no garantizamos que sea exclusivo ni que esté libre de derechos de terceros.</li>
+    </ul>
+  </section>
 
-  <h2>9. Modificaciones</h2>
-  <p>Podemos actualizar estos Términos en cualquier momento. Te notificaremos por correo electrónico o mediante aviso en la Plataforma con al menos 15 días de antelación ante cambios materiales. El uso continuado de la Plataforma tras la notificación implica la aceptación de los nuevos Términos.</p>
+  <!-- 11. INTEGRACIONES -->
+  <section id="integraciones">
+    <h2><span class="sec-num">11</span>Integraciones de terceros</h2>
+    <p>Acuarius se conecta con servicios de terceros que tú decides activar: Google (Ads, Calendar, Drive y Sheets), Meta (WhatsApp, Instagram, Messenger y Ads), TikTok, LinkedIn, Mercado Pago, tu sitio web y otros. Al conectarlos:</p>
+    <ul>
+      <li>Aceptas también los términos de cada servicio y eres responsable de mantener tus cuentas en regla</li>
+      <li>Nos autorizas a acceder solo a lo necesario para la función que activaste; puedes desconectarlos cuando quieras</li>
+      <li>Acuarius no responde por cambios, caídas o decisiones de esos servicios (por ejemplo, la suspensión de una cuenta publicitaria o de un número de WhatsApp)</li>
+    </ul>
+    <div class="warning-box">
+      ⚠️ <strong>Importante:</strong> las decisiones sobre tus campañas publicitarias y tus presupuestos son tuyas. Acuarius no garantiza resultados de ventas ni de publicidad.
+    </div>
+  </section>
 
-  <h2>10. Terminación</h2>
-  <p>Puedes cancelar tu cuenta en cualquier momento desde la configuración de la Plataforma. Acuarius puede suspender o cancelar cuentas que incumplan estos Términos, sin perjuicio de otras acciones legales.</p>
+  <!-- 12. PROPIEDAD INTELECTUAL -->
+  <section id="propiedad-intelectual">
+    <h2><span class="sec-num">12</span>Propiedad intelectual</h2>
+    <p>La plataforma, su código, su diseño, sus agentes, sus instrucciones y su marca son de Acuarius. Te damos una licencia limitada, no exclusiva e intransferible para usarla mientras tu cuenta esté vigente.</p>
+    <p>Tu contenido (tus datos, contactos, textos, imágenes y plantillas) sigue siendo tuyo. Nos das permiso de procesarlo solo para prestarte el servicio.</p>
+  </section>
 
-  <h2>11. Ley aplicable</h2>
-  <p>Estos Términos se rigen por las leyes de la República de Colombia. Cualquier controversia será sometida a los tribunales competentes de Bogotá, Colombia, salvo acuerdo de arbitraje entre las partes.</p>
+  <!-- 13. DISPONIBILIDAD -->
+  <section id="disponibilidad">
+    <h2><span class="sec-num">13</span>Disponibilidad y soporte</h2>
+    <p>Trabajamos para que Acuarius esté disponible siempre, pero puede haber interrupciones por mantenimiento, fallas de nuestros proveedores o causas ajenas a nosotros. No ofrecemos un acuerdo de nivel de servicio (SLA) salvo que lo firmemos por escrito. El soporte se atiende por el chat de la plataforma y en <a href="mailto:ceo@acuarius.app">ceo@acuarius.app</a>.</p>
+    <p>Algunas tareas, como el envío de campañas o automatizaciones, se procesan en ciclos periódicos y no son instantáneas.</p>
+  </section>
 
-  <div class="divider"></div>
+  <!-- 14. LIMITACIÓN -->
+  <section id="limitacion">
+    <h2><span class="sec-num">14</span>Limitación de responsabilidad</h2>
+    <p>En la medida en que la ley lo permita, Acuarius no responde por:</p>
+    <ul>
+      <li>Lucro cesante, pérdida de ventas o daños indirectos derivados del uso del servicio</li>
+      <li>El contenido que tú o tu equipo envían, ni por la falta de autorización de tus contactos</li>
+      <li>Resultados de campañas o respuestas de la IA que no hayas revisado</li>
+      <li>Decisiones o fallas de servicios de terceros conectados</li>
+    </ul>
+    <p>En cualquier caso, nuestra responsabilidad total no superará lo que hayas pagado por el servicio en los 3 meses anteriores al hecho que origine el reclamo. Nada de esta sección limita derechos que la ley no permita limitar.</p>
+  </section>
 
-  <p>Para preguntas sobre estos Términos, contáctanos en <a href="mailto:hola@acuarius.app">hola@acuarius.app</a>.</p>
+  <!-- 15. TERMINACIÓN -->
+  <section id="terminacion">
+    <h2><span class="sec-num">15</span>Suspensión, cancelación y tus datos</h2>
+    <p>Puedes dejar de usar Acuarius y pedir el cierre de tu cuenta cuando quieras. Podemos suspenderla o cerrarla si incumples estos términos, si un pago no se resuelve en 7 días, si tu uso pone en riesgo a otros clientes o a la plataforma, o si la ley lo exige.</p>
+    <p>Antes de cerrar tu cuenta puedes exportar tus datos. Al eliminarla borramos de forma definitiva los datos de la cuenta y los de tus contactos; las copias de seguridad se sobrescriben en los días siguientes. Conservamos lo que la ley nos obligue a guardar, como los registros de facturación.</p>
+  </section>
 
-  <div class="footer">© 2025 Acuarius · <a href="https://acuarius.app/privacy.html">Política de Privacidad</a></div>
+  <!-- 16. CAMBIOS -->
+  <section id="cambios">
+    <h2><span class="sec-num">16</span>Cambios a los términos</h2>
+    <p>Podemos actualizar estos términos. Cambiaremos la fecha de esta página y, si el cambio es importante, te avisaremos por correo o dentro de la plataforma antes de que aplique. Si sigues usando el servicio después, aceptas la nueva versión.</p>
+  </section>
+
+  <!-- 17. CONTACTO -->
+  <section id="contacto">
+    <h2><span class="sec-num">17</span>Ley aplicable y contacto</h2>
+    <p>Estos términos se rigen por las leyes del estado de Texas, Estados Unidos. Lo relativo al servicio de SMS y al tratamiento de datos de personas en Colombia se rige además por la ley colombiana. Las diferencias se intentarán resolver primero de forma directa; si no es posible, serán competentes los jueces del condado de Harris, Texas, sin perjuicio de los derechos que la ley de protección al consumidor de tu país te reconozca.</p>
+    <p>Para cualquier pregunta sobre estos términos:</p>
+  </section>
+
+  <!-- CONTACT CARD -->
+  <div class="contact-card">
+    <h3>¿Tienes preguntas?</h3>
+    <p>AIXION LABS SOLUTIONS LLC · 15723 Chapel Lake Dr, Cypress, TX 77429, Estados Unidos<br>Correo: ceo@acuarius.app · Teléfono y WhatsApp: +57 321 997 2333</p>
+    <a href="mailto:ceo@acuarius.app" class="btn">Escribir a ceo@acuarius.app</a>
+  </div>
 
 </div>
+
+<!-- FOOTER -->
+<footer>
+  <span class="footer-copy">© 2026 Acuarius · AIXION LABS SOLUTIONS LLC · Texas, EE. UU.</span>
+  <div class="footer-links">
+    <a href="https://acuarius.app">Inicio</a>
+    <a href="https://acuarius.app/privacy.html">Política de privacidad</a>
+    <a href="https://acuarius.app/terms.html">Términos de servicio</a>
+    <a href="https://acuarius.app/reembolsos.html">Reembolsos y cancelación</a>
+    <a href="mailto:ceo@acuarius.app">ceo@acuarius.app</a>
+  </div>
+</footer>
+
 </body>
 </html>
