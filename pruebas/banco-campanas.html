@@ -39,12 +39,13 @@ const CAMPANAS = [
   { id: 'c1', name: 'Reactivación de leads fríos', channel: 'email', status: 'sent', subject: '{{nombre}}, ¿seguimos buscando tu apartamento?', body: 'Hola', stats: { total: 1840, sent: 1792, skipped: 41, failed: 7 }, created_at: hace(9), sent_at: hace(8) },
   { id: 'c2', name: 'Lanzamiento Torre Norte', channel: 'whatsapp', status: 'sending', body: 'Hola {{nombre}}, ya abrimos la venta de Torre Norte…', stats: { total: 640, sent: 412, skipped: 18, failed: 2 }, created_at: hace(1), queued_at: hace(0.2) },
   { id: 'c3', name: 'Recordatorio visita sábado', channel: 'sms', status: 'paused', body: 'Hola {{nombre}}, te esperamos el sábado a las 10 a.m. en la sala de ventas.', stats: { total: 300, sent: 100, skipped: 4, failed: 0, motivo_pausa: 'Sin créditos de SMS. Compra un paquete y reanúdala.' }, created_at: hace(2), queued_at: hace(2) },
+  { id: 'c8', name: 'Feria de vivienda', channel: 'sms', status: 'sending', body: 'Hola {{nombre}}, este sábado es la feria de vivienda.', stats: { total: 450, sent: 120, skipped: 6, failed: 1, aviso: 'En espera: no pudimos consultar el Registro de Números Excluidos (RNE) de la CRC. Se reintenta solo cada 10 minutos.' }, created_at: hace(0.3), queued_at: hace(0.2) },
   { id: 'c4', name: 'Boletín de octubre', channel: 'email', status: 'queued', subject: 'Novedades de octubre en Certain', body: 'x', stats: { total: 2200 }, created_at: hace(0.5), scheduled_at: new Date(Date.now() + 2 * 86400000).toISOString() },
   { id: 'c5', name: 'Encuesta post-visita', channel: 'sms', status: 'draft', body: '¿Cómo te fue en la visita? Responde del 1 al 5.', stats: {}, created_at: hace(0.1) },
   { id: 'c6', name: 'Promo fin de mes', channel: 'email', status: 'draft', subject: '', body: '', stats: {}, created_at: hace(3) },
   { id: 'c7', name: 'Bienvenida a nuevos inversionistas', channel: 'whatsapp', status: 'sent', body: 'Hola {{nombre}}…', stats: { total: 85, sent: 80, skipped: 5, failed: 0 }, created_at: hace(20), sent_at: hace(19) },
 ];
-const SMS = { activo: true, proveedor: 'simulado', saldo: 100, mes: { enviados: 0, simulados: 100, creditos: 100 },
+const SMS = { activo: true, proveedor: 'labsmobile', saldo: 100, mes: { enviados: 12, simulados: 0, creditos: 14 }, rne: { modo: 'simulado', exigido: false },
   paquetes: [1000, 3000, 5000].map((c, i) => ({ creditos: c, usd: [8, 22, 35][i], pago: null })), movimientos: [] };
 let MODO = 'lleno';
 

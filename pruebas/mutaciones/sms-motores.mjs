@@ -15,7 +15,7 @@ export const MUTACIONES = [
   { nombre: 'sin beta', archivo: 'sms', romper: cambiar("if (!smsActivo(userId)) return { estado: 'omitido'", "if (false) return { estado: 'omitido'") },
   { nombre: 'sin saldo no pausa', archivo: 'cron', romper: cambiar("if (r.status === 'sin_saldo') { sinSaldo = true; return; }", "if (r.status === 'sin_saldo') return;") },
   { nombre: 'sin saldo se marca fallido', archivo: 'cron', romper: cambiar("if (r.estado === 'sin_saldo') return { status: 'sin_saldo' };", "if (r.estado === 'sin_saldo') return { status: 'failed' };") },
-  { nombre: 'motivo de pausa perdido', archivo: 'cron', romper: cambiar('p_extra: motivoPausa ? { motivo_pausa: motivoPausa } : null,', 'p_extra: null,') },
+  { nombre: 'motivo de pausa perdido', archivo: 'cron', romper: cambiar('...(motivoPausa ? { motivo_pausa: motivoPausa } : {})', '...({})') },
   { nombre: 'audiencia con fijos', archivo: 'camp', romper: cambiar("&& !(channel === 'sms' && !normalizarTelefono(l.phone)));", ');') },
   { nombre: 'audiencia con bajas', archivo: 'camp', romper: cambiar("if (channel === 'sms') q += `&phone=not.is.null&tags=not.cs.{\"${BAJA_SMS}\"}`;", "if (channel === 'sms') q += `&phone=not.is.null`;") },
   { nombre: 'encolar sin saldo', archivo: 'camp', romper: cambiar('if (necesarios > saldo) {', 'if (false) {') },

@@ -1,6 +1,6 @@
 // api/sms.js — saldo y actividad de SMS de la cuenta.
 //
-//   GET  /api/sms[?client_id=]  →  { activo, proveedor, saldo, paquetes, movimientos, mes, remitente }
+//   GET  /api/sms[?client_id=]  →  { activo, proveedor, saldo, paquetes, movimientos, mes, remitente, rne }
 //   POST /api/sms[?client_id=]  { remitente }  →  { remitente } · el nombre del negocio con que firma cada SMS
 //
 // El saldo es de la CUENTA (el dueño), como el cupo del agente: un vendedor y
@@ -13,6 +13,7 @@ export const config = { runtime: 'edge' };
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 import { quienPregunta, alcanceDeCliente } from './_perfiles.js';
 import { saldoSms, smsActivo, paquetesConPago, proveedorSms, leerRemitente, guardarRemitente } from './_sms.js';
+import { estadoRne } from './_rne.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -61,7 +62,7 @@ export default async function handler(req) {
     inicioMes.setUTCDate(1); inicioMes.setUTCHours(5, 0, 0, 0); // 00:00 en Bogotá
     if (inicioMes > new Date()) inicioMes.setUTCMonth(inicioMes.getUTCMonth() - 1);
     const c = encodeURIComponent(cuenta);
-    const [saldo, movimientos, envios, remitente] = await Promise.all([
+    const [saldo, movimientos, envios, remitente, rne] = await Promise.all([
       saldoSms(cuenta),
       leer(`/sms_movimientos?user_id=eq.${c}&motivo=neq.envio&select=cantidad,motivo,referencia,created_at&order=created_at.desc&limit=30`),
       // Resumen del mes: una fila por envío, solo el estado y los créditos.
@@ -76,6 +77,7 @@ export default async function handler(req) {
         return filas;
       })(),
       leerRemitente(cuenta, clientId),
+      estadoRne(),
     ]);
     const mes = { enviados: 0, entregados: 0, fallidos: 0, simulados: 0, creditos: 0 };
     for (const e of envios) {
@@ -85,7 +87,7 @@ export default async function handler(req) {
       if (e.estado === 'simulado') mes.simulados++;
       else { mes.enviados++; if (e.estado === 'entregado') mes.entregados++; }
     }
-    return jsonResp({ activo: true, proveedor: proveedorSms(), saldo, paquetes: paquetesConPago(), movimientos, mes, desde: inicioMes.toISOString(), remitente });
+    return jsonResp({ activo: true, proveedor: proveedorSms(), saldo, paquetes: paquetesConPago(), movimientos, mes, desde: inicioMes.toISOString(), remitente, rne });
   } catch (e) {
     console.error('[sms]', e.message);
     return jsonResp({ error: 'No se pudo leer el saldo de SMS. Intenta de nuevo en un momento.' }, 503);

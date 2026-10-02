@@ -29622,6 +29622,9 @@ function cmpFilaHtml(c) {
         '<div class="cmp-nombre">' + esc(c.name || 'Sin nombre') + '</div>' +
         '<div class="cmp-detalle">' + k.nombre + ' · ' + esc(detalle.replace(/\{\{\s*nombre\s*\}\}/gi, 'Ana')) + '</div>' +
         (c.status === 'paused' && s.motivo_pausa ? '<div class="cmp-aviso">' + icn('alert', 12) + ' ' + esc(s.motivo_pausa) + '</div>' : '') +
+        // Una campaña que sigue «enviando» pero no puede avanzar (el RNE de la
+        // CRC no responde) lo dice aquí; el motor borra el aviso al seguir.
+        (c.status === 'sending' && s.aviso ? '<div class="cmp-aviso">' + icn('alert', 12) + ' ' + esc(s.aviso) + '</div>' : '') +
       '</div>' +
     '</div>' +
     '<div class="cmp-col-prog">' + progreso + '</div>' +
@@ -29836,7 +29839,7 @@ function smsCuentaHtml(texto) {
         : 'Hasta ' + c.porSegmento + ' caracteres por SMS') + '</span>' +
     '</div>' +
     (pasa ? '<div style="font-size:11.5px;color:var(--danger);margin-top:3px">El máximo es ' + SMS_MAX_SEGMENTOS + ' SMS por persona: acórtalo.</div>' : '') +
-    '<div style="font-size:11px;color:var(--muted2);margin-top:3px">Cada SMS empieza con el nombre de tu negocio y termina con un enlace para darse de baja; los dos ya están contados. Las tildes de á, í, ó y ú se envían sin tilde para que el mensaje no cueste el doble. La ñ se conserva.</div>';
+    '<div style="font-size:11px;color:var(--muted2);margin-top:3px">Cada SMS empieza con el nombre de tu negocio y termina con un enlace para darse de baja; los dos ya están contados. Las tildes de á, í, ó y ú se envían sin tilde para que el mensaje no cueste el doble. La ñ se conserva. Los números inscritos en el RNE de la CRC se omiten solos.</div>';
 }
 
 // La tarjeta de SMS del resumen de Campañas: saldo y botón de compra.
@@ -29853,6 +29856,9 @@ function smsTileHtml() {
     '<div class="cmp-kpi-sub">' + (e.proveedor === 'simulado'
       ? '<b class="cmp-txt-aviso">Modo de prueba:</b> no sale ningún SMS real'
       : Number(m.creditos || 0).toLocaleString('es-CO') + ' usados este mes' + (m.fallidos ? ' · ' + m.fallidos + ' no aceptados' : '')) + '</div>' +
+    // Mientras el RNE no esté conectado se filtra con una lista de prueba: que
+    // la beta lo vea y nadie crea que ya se consulta el registro de la CRC.
+    (e.rne && e.rne.modo === 'simulado' ? '<div class="cmp-kpi-sub"><b class="cmp-txt-aviso">RNE simulado:</b> aún no se consulta el registro de la CRC</div>' : '') +
     '<button class="btn-ghost sm" onclick="smsAbrirCompra()">' + icn('plus', 11) + ' Comprar créditos</button></div>';
 }
 
@@ -29873,7 +29879,8 @@ function smsAbrirCompra() {
   confirmarAgua({
     titulo: 'Créditos de SMS',
     texto: 'Tienes <b>' + Number(e.saldo || 0).toLocaleString('es-CO') + '</b> créditos. Un crédito es un SMS de hasta 160 caracteres. ' +
-      'Los paquetes se suman y no vencen: si necesitas 4.000, compra 3.000 + 1.000.' +
+      'Los paquetes se suman y no vencen: si necesitas 4.000, compra 3.000 + 1.000. ' +
+      'Antes de enviar consultamos el Registro de Números Excluidos (RNE) de la CRC: a quien se inscribió para no recibir SMS comerciales no le llega nada y no gasta créditos.' +
       '<div style="margin-top:14px"><div class="cmpw-label">Nombre de tu negocio en los SMS</div>' + smsRemitenteHtml('sms-rem-ayuda-modal') + '</div>' +
       '<div style="margin-top:12px">' + filas + '</div>' +
       '<div style="margin-top:10px;font-size:11.5px">Los créditos llegan solos a tu cuenta unos minutos después del pago. Compra con el mismo correo con el que entras a Acuarius.</div>' +

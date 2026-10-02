@@ -18,6 +18,8 @@
 // Recorre los usuarios de Clerk por páginas (base pequeña; tope de cordura 10 págs).
 import { enviarResend } from './_correo.js';
 import { latir } from './_latido.js';
+import { renovarTokenRne } from './_rne.js';
+import { registrarError } from './_registro-errores.js';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const CRON_SECRET    = process.env.CRON_SECRET;
@@ -185,11 +187,17 @@ export default async function handler(req, res) {
     // Se registra a propósito: una cuenta de pago sin fecha es exactamente el
     // agujero que este cron vino a tapar, y callarlo lo dejaría abierto otra vez.
     if (sinFecha.length) console.error('[cron-trials] planes de pago SIN fecha de fin:', sinFecha.join(', '));
+    // El token del RNE vive aquí porque este cron corre una vez al día y no
+    // envía nada: renovarlo 30 días antes deja un mes de avisos diarios si la
+    // CRC falla. Va aparte para que un fallo suyo no tumbe los planes.
+    let rne = null;
+    try { rne = await renovarTokenRne(); }
+    catch (e) { await registrarError({ origen: 'cron', donde: 'cron-trials/rne', error: e }); rne = { error: e.message }; }
     console.log('[cron-trials] revisadas:', scanned, '· asesores de otra cuenta:', deEquipo,
       '· pruebas vencidas:', expired, '· recordadas:', reminded,
                 '· planes vencidos:', vencidos, '· avisados:', avisados, '· sin fecha:', sinFecha.length);
     await latir('cron-trials', { scanned, expired, reminded, vencidos, avisados, de_equipo: deEquipo }, sinFecha.length ? sinFecha.length + ' plan(es) de pago sin fecha de fin' : null);
-    return res.status(200).json({ ok: true, scanned, expired, reminded, vencidos, avisados, de_equipo: deEquipo, sin_fecha: sinFecha });
+    return res.status(200).json({ ok: true, scanned, expired, reminded, vencidos, avisados, de_equipo: deEquipo, sin_fecha: sinFecha, rne });
   } catch (e) {
     console.error('[cron-trials] error:', e.message);
     return res.status(500).json({ error: e.message });

@@ -43,6 +43,9 @@ async function tokenDe(sub) {
 
 // ── Supabase de mentira ─────────────────────────────────────────────────────
 let T, saldo, llamadas, labs, lecturaVieja = false;
+// El RNE de la CRC de mentira: quién está inscrito, qué responde y qué le piden.
+let crc = { estado: 200, inscritos: [], pedidos: [] };
+let erroresRegistrados = [];
 function cumple(fila, k, v) {
   if (!(k in fila)) return true;
   const x = fila[k];
@@ -50,6 +53,7 @@ function cumple(fila, k, v) {
   if (v === 'not.is.null') return x != null;
   if (v.startsWith('eq.')) return String(x) === v.slice(3);
   if (v.startsWith('neq.')) return String(x) !== v.slice(4);
+  if (v.startsWith('gte.')) return String(x) >= v.slice(4);
   if (v.startsWith('like.')) return x != null && new RegExp('^' + v.slice(5).split('*').map(s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$').test(String(x));
   if (v.startsWith('in.(')) return v.slice(4, -1).split(',').map(s => s.replace(/^"|"$/g, '')).includes(String(x));
   if (v.startsWith('not.cs.{')) { const t = v.slice(8, -1).replace(/"/g, ''); return !(x || []).includes(t); }
@@ -69,6 +73,12 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (u.hostname === 'api.labsmobile.com') { labs.push(JSON.parse(init.body)); return resp({ code: 0, message: 'ok' }); }
   if (u.hostname === 'api.resend.com') return resp({ id: 'r' });
+  if (u.hostname === 'tramitescrcom.gov.co') {
+    const b = JSON.parse(init.body);
+    crc.pedidos.push({ auth: init.headers.Authorization, ...b });
+    if (crc.estado !== 200) return resp({ errorCode: 'SUF-001' }, crc.estado);
+    return resp(crc.inscritos.filter(i => b.keys.includes(i.llave)));
+  }
   if (u.hostname !== 'base.falsa') return resp({});
   const tabla = u.pathname.replace('/rest/v1/', '');
   llamadas.push({ metodo, tabla, url: decodeURIComponent(u.search), cuerpo: init.body });
@@ -98,6 +108,7 @@ globalThis.fetch = async (url, init = {}) => {
       failed: Math.max(0, (st.failed || 0) + (b.p_failed || 0)), ...(b.p_extra || {}) };
     return resp(c.stats);
   }
+  if (tabla === 'rpc/registrar_error') { erroresRegistrados.push(JSON.parse(init.body)); return resp(null, 204); }
   if (tabla === 'cron_latidos' || tabla === 'error_log') return resp([], 201);
   let filas = filtrar(tabla, u.searchParams);
   // Carrera: dos avisos casi a la vez. El primero ya cambió la fila, pero el
@@ -113,6 +124,14 @@ globalThis.fetch = async (url, init = {}) => {
       for (const n of nuevas) {
         const f = T.user_profiles.find(x => x.user_id === n.user_id && x.agent_key === n.agent_key);
         if (f) Object.assign(f, n); else T.user_profiles.push(n);
+      }
+      return resp(null, 201);
+    }
+    if (tabla === 'rne_consultas' && u.searchParams.get('on_conflict') === 'telefono') {
+      T.rne_consultas = T.rne_consultas || [];
+      for (const n of nuevas) {
+        const f = T.rne_consultas.find(x => x.telefono === n.telefono);
+        if (f) Object.assign(f, n); else T.rne_consultas.push({ ...n });
       }
       return resp(null, 201);
     }
@@ -487,6 +506,79 @@ console.log('\nBaja por «SALIR»');
   ok(T.leads[0].tags.includes('no-sms'), '«salir» da de baja al lead de la cuenta que le escribió');
   ok(!T.leads.find(l => l.id === 'X1').tags.includes('no-sms'), 'y no toca el mismo número en otra cuenta');
   ok((T.lead_activities || []).some(a => a.lead_id === 'L1' && /no recibir más SMS/.test(a.content)), 'queda una nota en la ficha');
+}
+
+console.log('\nEl RNE de la CRC');
+{
+  const { actionSendSms } = await import('../api/cron-automations.js');
+  const { enviarSms } = await import('../api/_sms.js');
+  const jwt = (p) => 'x.' + Buffer.from(JSON.stringify(p)).toString('base64url') + '.y';
+  const inscrito = (llave, sms) => ({ llave, opcionesContacto: { sms, aplicacion: true, llamada: false }, tipo: 'Móvil', fechaCreacion: '2026-05-01 10:00:00' });
+  AHORA = bog('2026-10-01T10:00');
+
+  // Sin token: modo simulado, con la lista de prueba.
+  mundo(); saldo.dueno = 10; crc = { estado: 200, inscritos: [], pedidos: [] };
+  process.env.RNE_SIMULADO_EXCLUIDOS = '+57 320 777 8899';
+  await correrCron();
+  ok(rcpt('R4').status === 'skipped' && /RNE/.test(rcpt('R4').detail || ''), 'sin token, los móviles de la lista de prueba se omiten diciendo que es por el RNE', rcpt('R4').detail);
+  ok(T.sms_envios.length === 2 && saldo.dueno === 8 && !crc.pedidos.length, 'los demás salen, el omitido no cobra y no se llama a la CRC', `${T.sms_envios.length} ${saldo.dueno} ${crc.pedidos.length}`);
+  ok(!(T.rne_consultas || []).length, 'y lo simulado no se guarda en la caché');
+  delete process.env.RNE_SIMULADO_EXCLUIDOS;
+
+  // Con token: una sola consulta por tanda, y el inscrito no recibe nada.
+  process.env.RNE_TOKEN = jwt({ iat: 1, exp: 9999999999 });
+  mundo(); saldo.dueno = 10;
+  crc = { estado: 200, pedidos: [], inscritos: [inscrito('3155550000', false), inscrito('3001112233', true)] };
+  await correrCron();
+  ok(crc.pedidos.length === 1 && crc.pedidos[0].type === 'TEL' && crc.pedidos[0].auth === 'Bearer ' + process.env.RNE_TOKEN,
+    'toda la campaña se consulta en UNA petición con el token', JSON.stringify(crc.pedidos));
+  ok(crc.pedidos[0].keys.includes('3001112233') && crc.pedidos[0].keys.includes('3207778899') && crc.pedidos[0].keys.every(k => /^3\d{9}$/.test(k)),
+    'con los móviles en los 10 dígitos que pide la CRC (sin 57 ni fijos)', JSON.stringify(crc.pedidos[0].keys));
+  ok(rcpt('R5').status === 'skipped' && /RNE/.test(rcpt('R5').detail || ''), 'quien no acepta SMS en el RNE se omite', rcpt('R5').detail);
+  ok(rcpt('R1').status === 'sent', 'quien está inscrito pero sí acepta SMS (solo vetó llamadas) lo recibe', rcpt('R1').status);
+  ok(rcpt('R4').status === 'sent' && saldo.dueno === 8 && T.campaigns[0].stats.skipped === 3, 'los demás salen y la campaña cuenta al excluido como omitido', JSON.stringify(T.campaigns[0].stats));
+  ok(llamadas.filter(x => x.tabla === 'rne_consultas' && x.metodo === 'GET').length === 1,
+    'y cada SMS usa esa respuesta: la caché se lee una vez por tanda, no una por mensaje', llamadas.filter(x => x.tabla === 'rne_consultas' && x.metodo === 'GET').length);
+  ok((T.rne_consultas || []).length === 4 && T.rne_consultas.find(f => f.telefono === '3155550000')?.sms === false,
+    'las respuestas quedan en la caché, también las de quien no está inscrito', JSON.stringify(T.rne_consultas));
+
+  // El mismo día no se vuelve a preguntar; al día siguiente (después de las 3:00), sí.
+  const cache = T.rne_consultas;
+  mundo(); saldo.dueno = 10; T.rne_consultas = cache; crc.pedidos = [];
+  await correrCron();
+  ok(!crc.pedidos.length && rcpt('R5').status === 'skipped', 'otra campaña el mismo día usa la caché y no llama a la CRC', crc.pedidos.length);
+  AHORA = bog('2026-10-02T02:30'); // el RNE se actualiza a las 2:00; antes de las 3:00 vale lo de ayer
+  // A esa hora no sale ningún SMS, pero el motor de automatizaciones puede
+  // estar preguntando: la caché de ayer tiene que seguir valiendo.
+  const { consultarRne } = await import('../api/_rne.js');
+  const r0 = await consultarRne(['3155550000']);
+  ok(!crc.pedidos.length && r0.get('3155550000')?.sms === false, 'a las 2:30 todavía vale la consulta de ayer', crc.pedidos.length);
+  AHORA = bog('2026-10-02T10:00');
+  crc.inscritos = []; // se borró del registro
+  const r1 = await enviarSms({ userId: 'dueno', lead: T.leads[4], texto: 'Hola' });
+  ok(crc.pedidos.length === 1 && r1.estado === 'simulado', 'al día siguiente se pregunta otra vez, y quien se borró del RNE vuelve a recibir', `${crc.pedidos.length} ${r1.estado}`);
+
+  // La CRC no responde: no sale nada, nada se pierde y se ve por qué.
+  mundo(); saldo.dueno = 10; crc = { estado: 509, inscritos: [], pedidos: [] }; erroresRegistrados = [];
+  await correrCron();
+  ok(!T.sms_envios.length && saldo.dueno === 10, 'si el RNE no responde no sale ningún SMS ni se cobra', T.sms_envios.length);
+  ok(T.campaign_recipients.every(x => x.status === 'pending') && T.campaigns[0].status === 'sending', 'la campaña sigue enviando con todos pendientes', JSON.stringify(T.campaign_recipients.map(x => x.status)));
+  ok(/RNE/.test(T.campaigns[0].stats.aviso || '') && /10 minutos/.test(T.campaigns[0].stats.aviso) && !/509|token|2:00/.test(T.campaigns[0].stats.aviso), 'y la campaña lo dice en palabras del cliente, sin detalles técnicos', T.campaigns[0].stats.aviso);
+  ok(erroresRegistrados.some(e => e.p_donde === 'cron-campaigns/rne' && /actualizando/.test(e.p_mensaje)), 'el motivo técnico llega al registro de errores', JSON.stringify(erroresRegistrados));
+  crc.estado = 200;
+  await correrCron();
+  ok(T.sms_envios.length === 3 && T.campaigns[0].status === 'sent' && T.campaigns[0].stats.aviso === null, 'cuando vuelve, la campaña sale y el aviso se borra', JSON.stringify(T.campaigns[0].stats));
+
+  crc.estado = 401;
+  mundo(); saldo.dueno = 10;
+  let r = await actionSendSms({ body: 'Hola' }, T.leads[0], { id: 'A1', user_id: 'dueno' });
+  ok(r.result === 'reintentar' && /token del RNE/.test(r.detail) && saldo.dueno === 10, 'en una automatización, con el token vencido el paso espera en vez de fallar', JSON.stringify(r));
+
+  // Abierto a todas las cuentas, el modo simulado no vale.
+  delete process.env.RNE_TOKEN; process.env.SMS_ACTIVO = '1';
+  r = await enviarSms({ userId: 'dueno', lead: T.leads[0], texto: 'Hola' });
+  ok(r.estado === 'rne_no_disponible' && /RNE_TOKEN/.test(r.detalle) && saldo.dueno === 10, 'con el módulo abierto a todos y sin token del RNE no sale nada', JSON.stringify(r));
+  delete process.env.SMS_ACTIVO;
 }
 
 globalThis.Date = RealDate;

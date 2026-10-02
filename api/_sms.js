@@ -12,6 +12,8 @@
 //     viernes de 7:00 a 19:00 y sábados de 8:00 a 15:00, nunca domingos ni
 //     festivos. Fuera de ahí no sale nada; el motor espera al siguiente hueco;
 //   · la baja: quien tiene la etiqueta `no-sms` no recibe más;
+//   · el RNE de la CRC: quien inscribió su móvil para no recibir SMS
+//     comerciales no los recibe de nadie (ver _rne.js);
 //   · el costo: un SMS con á, í, ó o ú pasa a Unicode y cabe en 70 caracteres
 //     en vez de 160. Esas tildes se cambian por su letra sin tilde (la ñ se
 //     queda: sí cabe) para que un mensaje normal no cueste el doble.
@@ -22,6 +24,8 @@
 // proveedor, y nadie cree que se envió algo que no salió.
 //
 // El guion bajo evita que Vercel lo publique como endpoint.
+
+import { consultarRne, aDiezDigitos } from './_rne.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -335,11 +339,12 @@ async function mandarLabsmobile({ telefono, texto, subid }) {
  *   omitido                     no aplica: sin móvil válido, dado de baja, vacío o demasiado largo
  *   sin_saldo                   la cuenta no tiene créditos para este mensaje
  *   fuera_de_horario            no se puede ahora; `siguiente` dice cuándo
+ *   rne_no_disponible           no se pudo consultar el RNE: no sale, se reintenta
  *   fallido                     el proveedor lo rechazó; los créditos se devolvieron
  * Lanza solo si la base no responde: ese envío no se sabe cobrado o no, y
  * quien llama debe dejarlo pendiente para reintentar, no darlo por hecho.
  */
-export async function enviarSms({ userId, lead, texto, campaignId = null, automationId = null, ahora = new Date(), remitente }) {
+export async function enviarSms({ userId, lead, texto, campaignId = null, automationId = null, ahora = new Date(), remitente, rne }) {
   if (!smsActivo(userId)) return { estado: 'omitido', detalle: 'El módulo de SMS no está activo en esta cuenta' };
   const telefono = normalizarTelefono(lead?.phone);
   if (!telefono) return { estado: 'omitido', detalle: 'Sin móvil colombiano válido' };
@@ -350,6 +355,18 @@ export async function enviarSms({ userId, lead, texto, campaignId = null, automa
   // código compartido parece spam y nadie sabe a quién decirle «SALIR».
   if (remitente === undefined) remitente = await leerRemitente(userId, lead.client_id || null);
   if (!remitente) return { estado: 'omitido', detalle: 'Falta el nombre del negocio para los SMS: configúralo en Créditos de SMS' };
+  // El RNE. Una campaña lo consulta de una vez para toda la tanda y pasa el
+  // Map en `rne`; un envío suelto (automatización) pregunta por su número.
+  const diez = aDiezDigitos(telefono);
+  let enRne = rne?.get(diez);
+  if (!enRne) {
+    try { enRne = (await consultarRne([telefono], { ahora })).get(diez); }
+    catch (e) {
+      if (e.rneNoDisponible) return { estado: 'rne_no_disponible', detalle: e.message };
+      throw e;
+    }
+  }
+  if (enRne && enRne.sms === false) return { estado: 'omitido', detalle: 'Inscrito en el RNE de la CRC: no acepta SMS comerciales' };
   const token = await rpc('sms_token_baja', { p_user: userId, p_lead: lead.id || null, p_tel: telefono });
   const mensaje = prepararTexto(componerSms(remitente, texto, token));
   const { segmentos } = contarSegmentos(mensaje);

@@ -12,6 +12,7 @@ import { leerNps } from './_nps.js';
 import { emailHtml } from './_email-layout.js';
 import { latir } from './_latido.js';
 import { enviarSms, enHorarioPermitido, siguienteHorario } from './_sms.js';
+import { registrarError } from './_registro-errores.js';
 
 // Los textos de la encuesta los escribe el cliente y acaban dentro del HTML
 // de un correo: sin escapar, un `<` suelto ya rompe la maqueta.
@@ -406,6 +407,8 @@ export async function actionSendSms(step, lead, auto) {
   if (r.estado === 'simulado') return { result: 'sent', detail: 'SMS simulado (sin proveedor conectado)' };
   if (r.estado === 'sin_saldo') return { result: 'failed', detail: 'Sin créditos de SMS: compra un paquete para que este paso vuelva a enviar' };
   if (r.estado === 'omitido') return { result: 'skipped', detail: r.detalle };
+  // Sin RNE no sale, pero tampoco se pierde: el paso espera y se reintenta.
+  if (r.estado === 'rne_no_disponible') return { result: 'reintentar', detail: r.detalle };
   return { result: 'failed', detail: r.detalle || r.estado };
 }
 
@@ -827,6 +830,14 @@ async function ejecutarTrabajo(job, auto, lead) {
             const runAt = new Date(Date.now() + 10 * 60000).toISOString();
             await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { step_index: i, run_at: runAt }, 'return=minimal');
             await log(auto.id, job.user_id, lead.id, i, 'send_sms', 'scheduled', 'No se pudo confirmar el SMS, se reintenta: ' + String(e.message).slice(0, 120));
+            jobDone = false;
+            break;
+          }
+          if (r.result === 'reintentar') {
+            const runAt = new Date(Date.now() + 30 * 60000).toISOString();
+            await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { step_index: i, run_at: runAt }, 'return=minimal');
+            await log(auto.id, job.user_id, lead.id, i, 'send_sms', 'scheduled', 'En espera: no se pudo consultar el Registro de Números Excluidos (RNE) de la CRC — se reintenta ' + runAt);
+            await registrarError({ origen: 'cron', donde: 'cron-automations/rne', error: r.detail, usuario: job.user_id });
             jobDone = false;
             break;
           }

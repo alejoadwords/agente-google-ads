@@ -14,6 +14,8 @@ import { abrirConexion, cifrar } from './_cifrado.js';
 import { enviarResendLote, huecoParaCampana } from './_correo.js';
 import { latir } from './_latido.js';
 import { enviarSms, enHorarioPermitido, leerRemitente } from './_sms.js';
+import { consultarRne } from './_rne.js';
+import { registrarError } from './_registro-errores.js';
 
 const SUPABASE_URL   = process.env.SUPABASE_URL;
 const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY;
@@ -123,9 +125,10 @@ export function traducirSms(r) {
   if (r.estado === 'omitido') return { status: 'skipped', detail: r.detalle };
   if (r.estado === 'fallido') return { status: 'failed', detail: r.detalle };
   if (r.estado === 'sin_saldo') return { status: 'sin_saldo' };
-  return { status: 'reintentar' }; // fuera de horario: sigue pendiente
+  return { status: 'reintentar' }; // fuera de horario o sin RNE: sigue pendiente
 }
 const LOTE_SMS = 10;
+export const AVISO_RNE = 'En espera: no pudimos consultar el Registro de Números Excluidos (RNE) de la CRC. Se reintenta solo cada 10 minutos.';
 
 function renderVars(text, lead) {
   const vars = {
@@ -452,6 +455,7 @@ export default async function handler(req, res) {
       const resueltos = new Map();  // id de la fila → resultado
       const eventos = [];           // email_events a insertar de una vez
       let motivoPausa = null;
+      let avisoSms;                 // undefined = no se toca; null = se borra
 
       if (c.channel === 'sms') {
         // De diez en diez: cada SMS es una reserva en la base y una llamada al
@@ -463,6 +467,23 @@ export default async function handler(req, res) {
         let remitente;
         try { remitente = await leerRemitente(c.user_id, c.client_id || null); }
         catch (e) { console.error('[cron-campaigns] sin remitente de SMS, se reintenta:', e.message); continue; }
+        // El RNE de la CRC, una sola consulta para toda la tanda. Si no
+        // responde, no sale nada: la campaña sigue «enviando» con el motivo a
+        // la vista y se reintenta en la próxima vuelta (10 min).
+        let rne;
+        try {
+          rne = await consultarRne(pending.map(p => byId[p.lead_id]?.phone).filter(Boolean));
+          avisoSms = null;
+        } catch (e) {
+          if (!e.rneNoDisponible) throw e;
+          console.error('[cron-campaigns] RNE no disponible, campaña', c.id, 'espera:', e.message);
+          await registrarError({ origen: 'cron', donde: 'cron-campaigns/rne', error: e, usuario: c.user_id });
+          // El cliente ve un aviso que entiende y que no le pide nada: el
+          // motivo técnico (token, caída, carga nocturna) es nuestro y va al
+          // registro de errores.
+          await sb('/rpc/campana_sumar_stats', 'POST', { p_id: c.id, p_extra: { aviso: AVISO_RNE } });
+          continue;
+        }
         for (let i = 0; i < pending.length && !sinSaldo; i += LOTE_SMS) {
           if (Date.now() - T0 > LIMITE_MS) break;
           const tanda = pending.slice(i, i + LOTE_SMS);
@@ -470,7 +491,7 @@ export default async function handler(req, res) {
             const lead = byId[rcpt.lead_id];
             if (!lead || lead.deleted_at) return { status: 'skipped', detail: 'lead eliminado' };
             try {
-              const r = await enviarSms({ userId: c.user_id, lead, texto: renderVars(c.body || '', lead), campaignId: c.id, remitente });
+              const r = await enviarSms({ userId: c.user_id, lead, texto: renderVars(c.body || '', lead), campaignId: c.id, remitente, rne });
               return traducirSms(r);
             } catch (e) {
               // La base no respondió: no se sabe si se cobró. Queda pendiente.
@@ -634,7 +655,9 @@ export default async function handler(req, res) {
       // la campaña decía «enviado» a quien nunca le llegó nada.
       await sb('/rpc/campana_sumar_stats', 'POST', {
         p_id: c.id, p_sent: counts.sent, p_skipped: counts.skipped, p_failed: counts.failed,
-        p_extra: motivoPausa ? { motivo_pausa: motivoPausa } : null,
+        p_extra: (motivoPausa || avisoSms !== undefined)
+          ? { ...(motivoPausa ? { motivo_pausa: motivoPausa } : {}), ...(avisoSms !== undefined ? { aviso: avisoSms } : {}) }
+          : null,
       });
       // ¿Quedó vacía la cola? Cerrar de una vez
       const left = await sb(`/campaign_recipients?campaign_id=eq.${c.id}&status=eq.pending&select=id&limit=1`);
