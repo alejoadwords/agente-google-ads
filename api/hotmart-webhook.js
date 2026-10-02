@@ -20,7 +20,8 @@ const META_CAPI_TOKEN = process.env.META_CAPI_TOKEN;
 //
 // El correo viaja cifrado (SHA-256 sobre el correo en minúsculas y sin
 // espacios): Meta solo puede comprobar si coincide con alguien que ya conoce.
-// Declarado en la sección 6 de la política de privacidad.
+// Declarado en la sección 5 («Medición de compras») de la Política de
+// Tratamiento de Datos, publicada el 01-10-2026 en acuarius.app/privacy.html.
 //
 // `event_id` = la transacción de Hotmart. Si algún día se añade también el
 // píxel en el navegador, Meta usará ese id para no contar la compra dos veces.
