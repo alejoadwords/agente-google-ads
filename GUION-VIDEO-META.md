@@ -28,6 +28,13 @@ activa, 5 días seguidos entregando; en 30 días 5.845 impresiones, 487 clics,
 
 ### Preparación
 
+- [ ] **Facebook abierto con la sesión de Johana** en el navegador donde grabas.
+      Es la única cuenta con rol en la app: con cualquier otra, Meta muestra
+      «Función no disponible» en el paso 3 (le pasó a Alejo el 02-10-2026).
+- [ ] **Permisos de Instagram listos** (ver `REVISION-META.md`): añadidos en el
+      panel y «Permitir acceso a los mensajes» activado en la cuenta de
+      Instagram. Si no están, la escena 11 bis falla: grabar igual sin ella y
+      pedir esos dos permisos en una segunda solicitud.
 - [ ] **La cuenta de prueba sin conexión de Meta.** `acuarius.review@gmail.com`
       no debe tener ninguna cuenta de Meta conectada: el revisor tiene que verte
       hacer la conexión desde cero. Si ya la tiene, entra y pulsa *Desconectar
@@ -94,7 +101,8 @@ Seleccionar el portafolio en la lista y continuar.
 
 ### 5 · Elegir cuenta publicitaria (1:05 – 1:20)
 
-Seleccionar la cuenta publicitaria.
+Seleccionar la cuenta publicitaria **Acuarius** (`1678079940003223`): es la que
+tiene la campaña con datos.
 
 > **Justifica `ads_read`.** Igual: que se vea la lista.
 
@@ -179,7 +187,7 @@ página** conectada.
 > **Justifica `pages_read_engagement`.** Es un permiso pequeño y se demuestra en
 > cinco segundos, pero si no aparece en el video te lo pueden negar suelto.
 
-### 13 · Desconectar (5:00 – 5:30)
+### 13 · Desconectar (5:30 – 6:00)
 
 Ajustes → Integraciones → Meta Ads → **Desconectar cuenta**. Que se vea la
 tarjeta volviendo a **«sin conectar»**.
@@ -227,4 +235,6 @@ de revisión y multiplicas la espera por nueve.
    adjúntalo directamente en el formulario si pesa menos del límite.
 3. Los textos de justificación y las Instrucciones de prueba ya están escritos en
    `REVISION-META.md`, sección 3 y 5. **Rellena la contraseña** antes de enviar.
-4. Envía los siete permisos juntos.
+4. Envía los **nueve** permisos juntos, **antes del 28-10-2026** (ese día vencen
+   las llamadas de prueba del 28-09).
+5. Reactiva la campaña de App Review en el Administrador de anuncios.
