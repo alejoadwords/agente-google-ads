@@ -82,6 +82,14 @@ globalThis.fetch = async (url, init = {}) => {
     return resp(id);
   }
   if (tabla === 'rpc/sms_devolver') return resp(true);
+  // Igual que sms_token_baja: un token por contacto y cuenta, siempre el mismo.
+  if (tabla === 'rpc/sms_token_baja') {
+    const b = JSON.parse(init.body);
+    T.sms_bajas = T.sms_bajas || [];
+    let f = b.p_lead ? T.sms_bajas.find(x => x.user_id === b.p_user && x.lead_id === b.p_lead) : null;
+    if (!f) { f = { token: (0x10000000 + T.sms_bajas.length).toString(16).slice(-8), user_id: b.p_user, lead_id: b.p_lead, telefono: b.p_tel, usado_at: null }; T.sms_bajas.push(f); }
+    return resp(f.token);
+  }
   if (tabla === 'rpc/campana_sumar_stats') {
     const b = JSON.parse(init.body); const c = T.campaigns.find(x => x.id === b.p_id);
     if (!c) return resp(null);
@@ -169,7 +177,7 @@ console.log('\nCampaña de SMS');
   ok(rcpt('R1').status === 'sent' && rcpt('R4').status === 'sent' && rcpt('R5').status === 'sent', 'los tres móviles válidos reciben el SMS');
   ok(rcpt('R2').status === 'skipped' && /móvil/.test(rcpt('R2').detail), 'un teléfono fijo se salta con el motivo', rcpt('R2').detail);
   ok(rcpt('R3').status === 'skipped' && /baja/.test(rcpt('R3').detail), 'quien pidió no recibir SMS se salta', rcpt('R3').detail);
-  ok(T.sms_envios.length === 3 && T.sms_envios.some(e => e.mensaje === 'Inmobiliaria Sol: Hola Ana, tenemos una promocion para ti.'), 'el texto sale personalizado y sin la tilde que lo haría Unicode',
+  ok(T.sms_envios.length === 3 && T.sms_envios.some(e => /^Inmobiliaria Sol: Hola Ana, tenemos una promocion para ti\. Baja: app\.acuarius\.app\/b\/[0-9a-f]{8}$/.test(e.mensaje)), 'el texto sale personalizado y sin la tilde que lo haría Unicode',
     T.sms_envios.map(e => e.mensaje).join(' | '));
   ok(T.campaigns[0].status === 'sent' && T.campaigns[0].stats.sent === 3 && T.campaigns[0].stats.skipped === 2, 'la campaña se cierra con sus cifras', JSON.stringify(T.campaigns[0].stats));
   ok(saldo.dueno === 7, 'se cobraron 3 créditos', saldo.dueno);
@@ -278,6 +286,47 @@ console.log('\nEl nombre del negocio (remitente)');
   ok(!T.sms_envios.length && saldo.dueno === 10 && T.campaign_recipients.filter(x => x.status === 'skipped').every(x => /nombre del negocio|móvil|baja/.test(x.detail || '')) &&
     T.campaign_recipients.some(x => /nombre del negocio/.test(x.detail || '')), 'sin remitente el motor no envía ni cobra, y dice por qué',
     JSON.stringify(T.campaign_recipients.map(x => x.detail)));
+}
+
+console.log('\nEl enlace de baja');
+{
+  const h = (await import('../api/sms-baja.js')).default;
+  const { enviarSms } = await import('../api/_sms.js');
+  mundo(); saldo.dueno = 10;
+  T.lead_activities = [];
+  // El mismo móvil en dos fichas de la cuenta, y en otra cuenta.
+  T.leads.push({ id: 'L1b', user_id: 'dueno', client_id: null, name: 'Ana (repetida)', phone: '+57 300-111-2233', tags: [], deleted_at: null });
+  T.leads.push({ id: 'X1', user_id: 'otra', client_id: null, name: 'Ana en otra cuenta', phone: '3001112233', tags: [], deleted_at: null });
+  await enviarSms({ userId: 'dueno', lead: T.leads[0], texto: 'Hola' });
+  await enviarSms({ userId: 'dueno', lead: T.leads[0], texto: 'Hola otra vez' });
+  const tok = T.sms_bajas[0].token;
+  ok(T.sms_bajas.length === 1 && T.sms_envios.every(e => e.mensaje.endsWith('Baja: app.acuarius.app/b/' + tok)), 'el contacto lleva el mismo enlace en todos sus SMS', JSON.stringify(T.sms_envios.map(e => e.mensaje)));
+
+  const abrir = (metodo, t = tok) => h(new Request('https://app.acuarius.app/api/sms-baja?t=' + t, { method: metodo }));
+  let r = await abrir('GET');
+  let html = await r.text();
+  ok(r.status === 200 && /Inmobiliaria Sol/.test(html) && /<form method="post"/.test(html), 'al abrir el enlace pregunta, con el nombre del negocio');
+  ok(!T.leads[0].tags.includes('no-sms'), 'abrirlo NO da de baja: los teléfonos abren los enlaces solos para la vista previa');
+  r = await abrir('POST');
+  html = await r.text();
+  ok(r.status === 200 && /quedaste fuera/.test(html), 'al confirmar, lo dice');
+  ok(T.leads[0].tags.includes('no-sms') && T.leads.find(l => l.id === 'L1b').tags.includes('no-sms'), 'da de baja el número en todas sus fichas de la cuenta');
+  ok(!T.leads.find(l => l.id === 'X1').tags.includes('no-sms'), 'y no toca el mismo número en otra cuenta');
+  ok(T.lead_activities.filter(a => /no recibir más SMS/.test(a.content)).length === 2, 'queda una nota en cada ficha');
+  ok(!!T.sms_bajas[0].usado_at, 'y se marca el enlace como usado');
+  r = await abrir('POST');
+  ok(r.status === 200 && T.lead_activities.length === 2 && T.leads[0].tags.filter(t => t === 'no-sms').length === 1, 'confirmar otra vez no duplica nada');
+  r = await abrir('GET');
+  ok(/Ya estás fuera/.test(await r.text()), 'y al volver a abrirlo dice que ya está fuera');
+  const env = await enviarSms({ userId: 'dueno', lead: T.leads[0], texto: 'Hola' });
+  ok(env.estado === 'omitido' && /baja/.test(env.detalle), 'después de la baja no le vuelve a salir ningún SMS', JSON.stringify(env));
+  const antes = llamadas.length;
+  r = await abrir('GET', encodeURIComponent('3fa9c2d1&usado_at=is.null'));
+  ok(r.status === 404 && llamadas.length === antes, 'un enlace mal formado ni siquiera llega a la base', `${r.status} ${llamadas.length - antes}`);
+  r = await abrir('GET', 'zzzzzzzz');
+  ok(r.status === 404, 'un enlace inventado no sirve', r.status);
+  r = await abrir('GET', 'abcdef12');
+  ok(r.status === 404, 'ni uno con forma válida que no existe', r.status);
 }
 
 console.log('\nAutomatizaciones con SMS: consentimiento');

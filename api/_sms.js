@@ -132,7 +132,7 @@ export function creditosEstimados(plantilla, leads, remitente = '') {
   let total = 0;
   for (const l of leads) {
     const t = String(plantilla || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_, v) => v === 'nombre' ? String(l.name || '') : 'x'.repeat(15));
-    total += contarSegmentos(prepararTexto(remitente ? conRemitente(remitente, t) : t)).segmentos;
+    total += contarSegmentos(prepararTexto(remitente ? componerSms(remitente, t, TOKEN_EJEMPLO) : t)).segmentos;
   }
   return total;
 }
@@ -162,9 +162,23 @@ export function validarRemitente(v) {
   return null;
 }
 
-/** El texto completo de un SMS: «Remitente: mensaje». */
+/** El texto con la firma: «Remitente: mensaje». */
 export function conRemitente(remitente, texto) {
   return normalizarRemitente(remitente) + ': ' + String(texto || '').trim();
+}
+
+// ── La baja ──────────────────────────────────────────────────────────────────
+// En Colombia LabsMobile no puede recibir respuestas (no hay números de
+// recepción), así que un «Responde SALIR» no le llegaría a nadie y la persona
+// creería que se dio de baja. Cada SMS termina con un enlace corto que la da
+// de baja de verdad (api/sms-baja.js). El token es de 8 caracteres y es el
+// mismo para el contacto en todos sus SMS (sms_token_baja).
+export const BAJA_URL = 'app.acuarius.app/b/';
+export const TOKEN_EJEMPLO = '3fa9c2d1';
+
+/** El SMS entero, tal como sale: «Remitente: mensaje Baja: app.acuarius.app/b/xxxxxxxx». */
+export function componerSms(remitente, texto, token) {
+  return conRemitente(remitente, texto) + ' Baja: ' + BAJA_URL + token;
 }
 
 /**
@@ -336,7 +350,8 @@ export async function enviarSms({ userId, lead, texto, campaignId = null, automa
   // código compartido parece spam y nadie sabe a quién decirle «SALIR».
   if (remitente === undefined) remitente = await leerRemitente(userId, lead.client_id || null);
   if (!remitente) return { estado: 'omitido', detalle: 'Falta el nombre del negocio para los SMS: configúralo en Créditos de SMS' };
-  const mensaje = prepararTexto(conRemitente(remitente, texto));
+  const token = await rpc('sms_token_baja', { p_user: userId, p_lead: lead.id || null, p_tel: telefono });
+  const mensaje = prepararTexto(componerSms(remitente, texto, token));
   const { segmentos } = contarSegmentos(mensaje);
   if (segmentos > MAX_SEGMENTOS) return { estado: 'omitido', detalle: `El mensaje ocupa ${segmentos} SMS; el máximo es ${MAX_SEGMENTOS}` };
   if (!enHorarioPermitido(ahora)) return { estado: 'fuera_de_horario', siguiente: siguienteHorario(ahora).toISOString(), detalle: 'Fuera del horario permitido' };

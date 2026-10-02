@@ -75,6 +75,7 @@ try {
   globalThis.fetch = fetchReal;
   await fetchReal(`${SB}/rest/v1/sms_envios?user_id=eq.${U}`, { method: 'DELETE', headers: H });
   await fetchReal(`${SB}/rest/v1/sms_movimientos?user_id=eq.${U}`, { method: 'DELETE', headers: H });
+  await fetchReal(`${SB}/rest/v1/sms_bajas?user_id=eq.${U}`, { method: 'DELETE', headers: H });
 }
 
 console.log(mal ? `\n${mal} fallos` : '\nTodo en verde');

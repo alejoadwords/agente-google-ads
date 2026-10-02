@@ -29795,6 +29795,14 @@ const SMS_MAX_SEGMENTOS = 6;
 function smsConRemitente(remitente, texto) {
   return smsPreparar(String(remitente || '')).replace(/[\s:]+$/, '').replace(/\s+/g, ' ').trim() + ': ' + String(texto || '').trim();
 }
+// Cada SMS termina con el enlace de baja (en Colombia no se pueden recibir
+// respuestas, así que «SALIR» no llegaría). El token real lo pone el servidor;
+// aquí se cuenta con uno de ejemplo del mismo largo.
+const SMS_BAJA_URL = 'app.acuarius.app/b/';
+const SMS_TOKEN_EJEMPLO = '3fa9c2d1';
+function smsComponer(remitente, texto, token) {
+  return smsConRemitente(remitente, texto) + ' Baja: ' + SMS_BAJA_URL + (token || SMS_TOKEN_EJEMPLO);
+}
 function smsPreparar(texto) {
   return Array.from(String(texto || '')).map(c => SMS_EQUIV[c] ?? c).join('').trim();
 }
@@ -29818,7 +29826,7 @@ function smsSegmentos(texto) {
 function smsCuentaHtml(texto) {
   const cuerpo = String(texto || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, v) => v === 'nombre' ? 'Ana' : 'x'.repeat(15));
   // Se cuenta con la firma del negocio, que también ocupa caracteres.
-  const ejemplo = smsPreparar(smsRemitente() ? smsConRemitente(smsRemitente(), cuerpo) : cuerpo);
+  const ejemplo = smsPreparar(smsRemitente() ? smsComponer(smsRemitente(), cuerpo) : cuerpo);
   const c = smsSegmentos(ejemplo);
   const pasa = c.segmentos > SMS_MAX_SEGMENTOS;
   return '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11.5px;margin-top:6px;color:' + (pasa ? 'var(--danger)' : 'var(--muted)') + '">' +
@@ -29828,7 +29836,7 @@ function smsCuentaHtml(texto) {
         : 'Hasta ' + c.porSegmento + ' caracteres por SMS') + '</span>' +
     '</div>' +
     (pasa ? '<div style="font-size:11.5px;color:var(--danger);margin-top:3px">El máximo es ' + SMS_MAX_SEGMENTOS + ' SMS por persona: acórtalo.</div>' : '') +
-    '<div style="font-size:11px;color:var(--muted2);margin-top:3px">Las tildes de á, í, ó y ú se envían sin tilde para que el mensaje no cueste el doble. La ñ se conserva.</div>';
+    '<div style="font-size:11px;color:var(--muted2);margin-top:3px">Cada SMS empieza con el nombre de tu negocio y termina con un enlace para darse de baja; los dos ya están contados. Las tildes de á, í, ó y ú se envían sin tilde para que el mensaje no cueste el doble. La ñ se conserva.</div>';
 }
 
 // La tarjeta de SMS del resumen de Campañas: saldo y botón de compra.
@@ -30762,7 +30770,7 @@ function cmpWSyncEmail() {
   const bodyTxt = render(val('cmpw-msg', 'body'));
   if (_cmpW.channel === 'sms') {
     // Se enseña el texto tal como sale: sin las tildes que se cambian.
-    const conFirma = bodyTxt.trim() ? smsPreparar(smsConRemitente(smsRemitente() || 'Tu negocio', bodyTxt)) : '';
+    const conFirma = bodyTxt.trim() ? smsPreparar(smsComponer(smsRemitente() || 'Tu negocio', bodyTxt)) : '';
     box.innerHTML = '<div style="background:#E9E9EB;border-radius:14px 14px 14px 4px;padding:10px 13px;font-size:13px;line-height:1.5;max-width:85%;white-space:pre-wrap">' + (esc(conFirma) || '<span style="opacity:.5">Tu mensaje…</span>') + '</div>';
     const cuenta = document.getElementById('cmpw-sms-cuenta');
     if (cuenta) cuenta.innerHTML = smsCuentaHtml(val('cmpw-msg', 'body'));
@@ -31269,7 +31277,7 @@ async function cmpWPintarDestinatarios() {
 // comprobarlo al encolar: esto es para enterarse antes de darle a Enviar.
 function cmpWCostoSms(personas) {
   const cuerpo = String(_cmpW.body || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, v) => v === 'nombre' ? 'Ana' : 'x'.repeat(15));
-  const porPersona = smsSegmentos(smsPreparar(smsRemitente() ? smsConRemitente(smsRemitente(), cuerpo) : cuerpo)).segmentos;
+  const porPersona = smsSegmentos(smsPreparar(smsRemitente() ? smsComponer(smsRemitente(), cuerpo) : cuerpo)).segmentos;
   const total = (personas || 0) * porPersona;
   const saldo = _smsEstado && !_smsEstado.error ? Number(_smsEstado.saldo || 0) : null;
   const falta = saldo !== null && total > saldo;

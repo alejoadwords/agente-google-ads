@@ -85,6 +85,10 @@
       "destination": "/api/l?slug=:slug"
     },
     {
+      "source": "/b/:token",
+      "destination": "/api/sms-baja?t=:token"
+    },
+    {
       "source": "/agente/inmobiliarias",
       "destination": "/agente/inmobiliarias.html"
     },

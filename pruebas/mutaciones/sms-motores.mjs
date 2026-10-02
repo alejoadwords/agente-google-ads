@@ -3,7 +3,7 @@
 export const SUITE = 'pruebas/sms-motores.mjs';
 export const ARCHIVOS = {
   sms: 'api/_sms.js', cron: 'api/cron-campaigns.js', camp: 'api/campaigns.js', auto: 'api/cron-automations.js', autos: 'api/automations.js',
-  hot: 'api/hotmart-webhook.js', ack: 'api/sms-ack.js', ent: 'api/sms-entrante.js',
+  hot: 'api/hotmart-webhook.js', ack: 'api/sms-ack.js', ent: 'api/sms-entrante.js', baja: 'api/sms-baja.js',
 };
 const cambiar = (de, a) => (s) => s.replace(de, a);
 
@@ -11,7 +11,7 @@ export const MUTACIONES = [
   { nombre: 'sin horario en el motor', archivo: 'cron', romper: cambiar("if (c.channel === 'sms' && !enHorarioPermitido()) continue;", '') },
   { nombre: 'sin horario en enviarSms', archivo: 'sms', romper: cambiar("if (!enHorarioPermitido(ahora)) return", "if (false) return") },
   { nombre: 'baja ignorada', archivo: 'sms', romper: cambiar("if ((lead.tags || []).includes(ETIQUETA_BAJA)) return", "if (false) return") },
-  { nombre: 'sin quitar tildes', archivo: 'sms', romper: cambiar('const mensaje = prepararTexto(conRemitente(remitente, texto));', 'const mensaje = conRemitente(remitente, texto);') },
+  { nombre: 'sin quitar tildes', archivo: 'sms', romper: cambiar('const mensaje = prepararTexto(componerSms(remitente, texto, token));', 'const mensaje = componerSms(remitente, texto, token);') },
   { nombre: 'sin beta', archivo: 'sms', romper: cambiar("if (!smsActivo(userId)) return { estado: 'omitido'", "if (false) return { estado: 'omitido'") },
   { nombre: 'sin saldo no pausa', archivo: 'cron', romper: cambiar("if (r.status === 'sin_saldo') { sinSaldo = true; return; }", "if (r.status === 'sin_saldo') return;") },
   { nombre: 'sin saldo se marca fallido', archivo: 'cron', romper: cambiar("if (r.estado === 'sin_saldo') return { status: 'sin_saldo' };", "if (r.estado === 'sin_saldo') return { status: 'failed' };") },
@@ -37,11 +37,17 @@ export const MUTACIONES = [
   { nombre: 'edición sin consentimiento', archivo: 'autos', romper: cambiar("if (body.consentimiento_sms !== true) return jsonResp(FALTA_CONSENTIMIENTO_SMS, 400);", '') },
   { nombre: 'no ve SMS dentro de ramas', archivo: 'autos', romper: cambiar("(s.type === 'send_sms' || tienePasoSms(s.yes) || tienePasoSms(s.no))", "s.type === 'send_sms'") },
   { nombre: 'sale sin remitente', archivo: 'sms', romper: cambiar("if (!remitente) return { estado: 'omitido', detalle: 'Falta el nombre del negocio", "if (false) return { estado: 'omitido', detalle: 'Falta el nombre del negocio") },
-  { nombre: 'sin firma en el texto', archivo: 'sms', romper: cambiar('const mensaje = prepararTexto(conRemitente(remitente, texto));', 'const mensaje = prepararTexto(texto);') },
+  { nombre: 'sin firma en el texto', archivo: 'sms', romper: cambiar('const mensaje = prepararTexto(componerSms(remitente, texto, token));', "const mensaje = prepararTexto(texto + ' Baja: ' + BAJA_URL + token);") },
   { nombre: 'remitente con emojis', archivo: 'sms', romper: cambiar("if (contarSegmentos(r).codificacion !== 'gsm') return", 'if (false) return') },
   { nombre: 'remitente pisa a los demás clientes', archivo: 'sms', romper: cambiar("todo[clientId || '_cuenta'] = remitente;", "todo['_cuenta'] = remitente;") },
   { nombre: 'encola sin remitente', archivo: 'camp', romper: cambiar('if (!remitenteSms) {', 'if (false) {') },
   { nombre: 'automatización sin remitente', archivo: 'autos', romper: cambiar('if (conSms && !(await leerRemitente(userId, clientId))) return', 'if (false) return') },
+  { nombre: 'SMS sin enlace de baja', archivo: 'sms', romper: cambiar("return conRemitente(remitente, texto) + ' Baja: ' + BAJA_URL + token;", 'return conRemitente(remitente, texto);') },
+  { nombre: 'abrir el enlace da de baja', archivo: 'baja', romper: cambiar("if (req.method !== 'POST') {", 'if (false) {') },
+  { nombre: 'baja en todas las cuentas', archivo: 'baja', romper: cambiar('/leads?user_id=eq.${encodeURIComponent(baja.user_id)}&phone=', '/leads?phone=') },
+  { nombre: 'baja solo de la ficha', archivo: 'baja', romper: cambiar("l.id === baja.lead_id || String(l.phone || '').replace(/\\D/g, '').endsWith(diez)", 'l.id === baja.lead_id') },
+  { nombre: 'baja duplica la nota', archivo: 'baja', romper: cambiar('if ((l.tags || []).includes(ETIQUETA_BAJA)) continue;', '') },
+  { nombre: 'token sin validar', archivo: 'baja', romper: cambiar("if (!/^[0-9a-f]{8}$/.test(token)) {", 'if (false) {') },
   { nombre: 'ack sin firma', archivo: 'ack', romper: cambiar("|| q('k') !== await firmaAck(subid)", '') },
   { nombre: 'baja a todas las cuentas', archivo: 'ent', romper: cambiar('/leads?user_id=eq.${encodeURIComponent(ultimo.user_id)}&phone', '/leads?phone') },
   { nombre: 'baja con cualquier texto', archivo: 'ent', romper: cambiar('!PIDE_BAJA.test(texto)', 'false') },
