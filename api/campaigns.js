@@ -88,6 +88,12 @@ function topeDiario(plan, leadsExtra) {
 const HORAS_DE_GRACIA  = 24;
 const TOPE_CUENTA_NUEVA = 300;
 
+// En SMS el freno es más largo y más bajo. Un correo de phishing quema el
+// dominio; un SMS de phishing hace que LabsMobile suspenda SIN AVISO la cuenta
+// por la que salen los SMS de todos los clientes (cláusula 12 de sus términos).
+const SMS_HORAS_DE_GRACIA  = 72;
+const SMS_TOPE_CUENTA_NUEVA = 100;
+
 // Hasta dónde llega una audiencia antes de que prefiramos parar y decirlo. Son
 // 100 viajes a la base: por encima de esto el envío hay que repensarlo, no
 // resolverlo trayendo más filas a una función que dura segundos.
@@ -449,6 +455,9 @@ export default async function handler(req) {
   const sesion = await verificarSesion(req);
   let userId = sesion.id;
   if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'campaigns'), 401);
+  // La persona que actúa, antes de pasar a la cuenta del dueño: es quien queda
+  // registrada al confirmar el consentimiento de una campaña de SMS.
+  const actorId = sesion.id;
 
   // Miembros del equipo: se opera sobre la cuenta del DUEÑO. Sin esto, un
   // miembro veía esta sección VACÍA —su propia cuenta, que no tiene nada— y el
@@ -717,6 +726,15 @@ export default async function handler(req) {
       if (!smsActivo(userId)) return jsonResp({ error: 'Los SMS todavía no están disponibles en esta cuenta.' }, 403);
       const seg = contarSegmentos(prepararTexto(c.body)).segmentos;
       if (seg > MAX_SEGMENTOS) return jsonResp({ error: `El mensaje ocupa ${seg} SMS por persona; el máximo es ${MAX_SEGMENTOS}. Acórtalo.` }, 400);
+      // LabsMobile exige consentimiento previo, expreso e informado de cada
+      // destinatario (cláusula 8e) y puede pedir la prueba. Quien envía lo
+      // confirma aquí, en cada campaña, y queda registrado quién y cuándo.
+      if (body.consentimiento !== true) {
+        return jsonResp({
+          error: 'Para enviar SMS confirma que estos contactos aceptaron recibir mensajes de tu negocio.',
+          falta_consentimiento: true,
+        }, 400);
+      }
     }
 
     const { leads, truncado } = await resolveAudience(userId, clientId, c.audience, c.channel);
@@ -771,6 +789,17 @@ export default async function handler(req) {
 
     // SMS: el saldo tiene que alcanzar para toda la audiencia. Encolar media
     // campaña y pausarla a mitad deja a unos con el mensaje y a otros sin él.
+    if (c.channel === 'sms' && !adminUser) {
+      const horasDeVida = cuentaMeta._creada ? (Date.now() - Number(cuentaMeta._creada)) / 3600000 : 999;
+      if (horasDeVida < SMS_HORAS_DE_GRACIA && leads.length > SMS_TOPE_CUENTA_NUEVA) {
+        return jsonResp({
+          error: `Durante los primeros ${SMS_HORAS_DE_GRACIA / 24} días, las cuentas nuevas pueden enviar hasta ${SMS_TOPE_CUENTA_NUEVA} SMS por campaña. ` +
+                 'Es una medida antifraude, no un límite de tu plan: después desaparece sola. ' +
+                 'Si necesitas enviar más antes, escríbenos a soporte@acuarius.app y lo habilitamos.',
+          cuenta_nueva: true, tope: SMS_TOPE_CUENTA_NUEVA,
+        }, 403);
+      }
+    }
     if (c.channel === 'sms') {
       const [necesarios, saldo] = [creditosEstimados(c.body, leads), await saldoSms(userId)];
       if (necesarios > saldo) {
@@ -796,7 +825,10 @@ export default async function handler(req) {
     }
     await fetch(`${SUPABASE_URL}/rest/v1/campaigns?id=eq.${c.id}`, {
       method: 'PATCH', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ status: 'queued', stats: { total: leads.length, sent: 0, skipped: 0, failed: 0 }, queued_at: new Date().toISOString(), scheduled_at: scheduledAt }),
+      body: JSON.stringify({
+        status: 'queued', stats: { total: leads.length, sent: 0, skipped: 0, failed: 0 }, queued_at: new Date().toISOString(), scheduled_at: scheduledAt,
+        ...(c.channel === 'sms' ? { consentimiento_at: new Date().toISOString(), consentimiento_por: actorId } : {}),
+      }),
     });
     return jsonResp({ ok: true, total: leads.length, scheduled_at: scheduledAt });
   }

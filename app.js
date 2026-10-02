@@ -27977,9 +27977,26 @@ async function autoToggle(id, active) {
 }
 
 // Duplica una automatización: copia con "(copia)" y en borrador para revisarla antes de activar
-async function autoDuplicate(id) {
+// LabsMobile exige que cada destinatario de un SMS haya aceptado recibir
+// mensajes (cláusula 8e de sus términos). Una automatización con un paso de
+// SMS se guarda solo si quien la arma lo confirma; el servidor lo exige igual.
+function autoTienePasoSms(steps) {
+  return (steps || []).some(s => s && (s.type === 'send_sms' || autoTienePasoSms(s.yes) || autoTienePasoSms(s.no)));
+}
+function autoConfirmarConsentimientoSms(alConfirmar) {
+  confirmarAgua({
+    titulo: 'Esta automatización envía SMS',
+    texto: 'Confirma que los contactos que la activen <b>aceptaron recibir mensajes de tu negocio</b> y que puedes demostrarlo si te lo piden. ' +
+      'Enviar SMS a quien no lo autorizó está prohibido en Colombia y puede suspender el envío de SMS de tu cuenta.',
+    confirmar: 'Lo confirmo',
+    onOk: alConfirmar,
+  });
+}
+
+async function autoDuplicate(id, consentido) {
   const a = crmAutomations.find(x => x.id === id);
   if (!a) return;
+  if (!consentido && autoTienePasoSms(a.steps)) { autoConfirmarConsentimientoSms(() => autoDuplicate(id, true)); return; }
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
@@ -27988,6 +28005,7 @@ async function autoDuplicate(id) {
       trigger: JSON.parse(JSON.stringify(a.trigger)),
       steps: JSON.parse(JSON.stringify(a.steps)),
       active: false,
+      ...(consentido ? { consentimiento_sms: true } : {}),
     };
     const data = await fetchAuth(`/api/automations${qs}`, { method: 'POST', body: JSON.stringify(body) }).then(r => r.json());
     if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads son parte del plan Pro.'); return; }
@@ -28481,15 +28499,18 @@ function autoStepMove(path, dir) {
   autoBuilderRender();
 }
 
-async function autoBuilderSave() {
+async function autoBuilderSave(consentido) {
   const d = _autoDraft;
   if (!d.name || !d.name.trim()) { alert('Ponle un nombre a la automatización.'); return; }
   if (!d.steps.length) { alert('Añade al menos un paso desde la paleta.'); return; }
+  const conSms = autoTienePasoSms(d.steps);
+  if (conSms && !consentido) { autoConfirmarConsentimientoSms(() => autoBuilderSave(true)); return; }
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
     const method = _autoEditingId ? 'PUT' : 'POST';
-    const body = _autoEditingId ? { id: _autoEditingId, name: d.name, trigger: d.trigger, steps: d.steps, active: d.active } : d;
+    const body = { ...(_autoEditingId ? { id: _autoEditingId, name: d.name, trigger: d.trigger, steps: d.steps, active: d.active } : d),
+      ...(conSms ? { consentimiento_sms: true } : {}) };
     const res = await fetchAuth(`/api/automations${qs}`, { method, body: JSON.stringify(body) });
     const data = await res.json();
     if (data.upgrade) { openUpgradeFlow('Las automatizaciones de leads (flujos con email, WhatsApp y condiciones) son parte del plan Pro.'); return; }
@@ -31014,6 +31035,16 @@ function cmpWStep4() {
         '<div style="font-size:12px;color:var(--muted)">Calculando destinatarios…</div>' +
       '</div>' +
 
+      (w.channel === 'sms'
+        ? '<div class="cmpw-card" id="cmpw-consent-box">' +
+            '<label class="cmpw-check" style="align-items:flex-start;font-size:13px;line-height:1.5">' +
+              '<input type="checkbox" id="cmpw-consent" style="margin-top:3px"' + (w.consentimiento ? ' checked' : '') + ' onchange="_cmpW.consentimiento=this.checked;document.getElementById(\'cmpw-consent-box\').classList.remove(\'cmpw-falta\')">' +
+              '<span><b>Confirmo que estos contactos aceptaron recibir mensajes de mi negocio</b> y que puedo demostrarlo si me lo piden.' +
+              '<span class="cmpw-ayuda" style="display:block">Enviar SMS a quien no lo autorizó está prohibido en Colombia y puede suspender el envío de SMS de tu cuenta.</span></span>' +
+            '</label>' +
+          '</div>'
+        : '') +
+
       '<div class="cmpw-card">' +
         '<label class="cmpw-check" style="font-weight:700;font-size:13px">' +
           '<input type="checkbox" id="cmpw-sched-on"' + (w.schedule ? ' checked' : '') + ' onchange="cmpWSchedToggle()"> ' + icn('calendar', 13) + ' Programar el envío</label>' +
@@ -31209,6 +31240,7 @@ function cmpWCollect() {
     }
   } else if (w.step === 4) {
     if (g('cmpw-sched-on')) w.schedule = g('cmpw-sched-on').checked ? (g('cmpw-sched')?.value || '') : '';
+    if (g('cmpw-consent')) w.consentimiento = g('cmpw-consent').checked;
   }
 }
 
@@ -31326,6 +31358,13 @@ async function cmpWSend() {
     return;
   }
 
+  if (w.channel === 'sms' && !w.consentimiento) {
+    showToast('Confirma que tus contactos aceptaron recibir SMS', 'error');
+    const caja = document.getElementById('cmpw-consent-box');
+    if (caja) { caja.classList.add('cmpw-falta'); caja.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    return;
+  }
+
   const when = w.schedule ? new Date(w.schedule) : null;
   if (when && (isNaN(when.getTime()) || when.getTime() <= Date.now())) { showToast('La fecha de programación debe ser futura', 'error'); return; }
 
@@ -31355,7 +31394,7 @@ async function cmpWSendConfirmado() {
     const qs = '?action=queue' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
     const d = await fetchAuth('/api/campaigns' + qs, {
       method: 'POST',
-      body: JSON.stringify({ id: _cmpW.id, scheduled_at: when ? when.toISOString() : null }),
+      body: JSON.stringify({ id: _cmpW.id, scheduled_at: when ? when.toISOString() : null, ...(w.channel === 'sms' ? { consentimiento: !!w.consentimiento } : {}) }),
     }).then(r => r.json());
     if (d.upgrade) { openUpgradeFlow('Las campañas masivas son parte del plan Pro.'); return; }
     if (d.error) { showToast('⚠️ ' + d.error, 'error'); return; }
@@ -31371,6 +31410,9 @@ async function cmpWSendConfirmado() {
 async function cmpQueue(id) {
   const c = cmpList.find(x => x.id === id);
   if (!c) return;
+  // Un SMS no sale sin confirmar el consentimiento de la audiencia: se manda a
+  // la revisión del asistente, que es donde se confirma.
+  if (c.channel === 'sms') { cmpBuilderOpen(id); _cmpW.step = 4; cmpWRender(); return; }
   if (!confirm('¿Enviar "' + c.name + '" ahora? El envío arranca en el próximo ciclo (máx. 10 min) y no se puede deshacer.')) return;
   try {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;

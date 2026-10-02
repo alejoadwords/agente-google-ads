@@ -113,6 +113,15 @@ function validateSteps(steps, depth) {
   return { error: null, count };
 }
 
+// ¿Algún paso (también dentro de las ramas) manda SMS?
+export function tienePasoSms(steps) {
+  return (steps || []).some(s => s && (s.type === 'send_sms' || tienePasoSms(s.yes) || tienePasoSms(s.no)));
+}
+const FALTA_CONSENTIMIENTO_SMS = {
+  error: 'Esta automatización envía SMS: confirma que los contactos que la activen aceptaron recibir mensajes de tu negocio.',
+  falta_consentimiento: true,
+};
+
 function validateAutomation(body) {
   if (!body.name || !String(body.name).trim()) return 'El nombre es requerido';
   if (!body.trigger || !VALID_TRIGGERS.includes(body.trigger.type)) return 'Trigger inválido';
@@ -295,6 +304,9 @@ export default async function handler(req) {
 
   const sesion = await verificarSesion(req);
   let userId = sesion.id;
+  // La persona que actúa (no la cuenta del dueño): queda registrada al confirmar
+  // el consentimiento de una automatización con SMS.
+  const actorId = sesion.id;
   if (!userId) return jsonResp(await cuerpoSinSesion(sesion, 'automations'), 401);
 
   // Miembros del equipo: se opera sobre la cuenta del DUEÑO. Sin esto, un
@@ -387,6 +399,10 @@ export default async function handler(req) {
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
     const err = validateAutomation(body);
     if (err) return jsonResp({ error: err }, 400);
+    // LabsMobile exige consentimiento de cada destinatario (cláusula 8e). Igual
+    // que en las campañas: se confirma al guardar y queda quién y cuándo.
+    const conSms = tienePasoSms(body.steps);
+    if (conSms && body.consentimiento_sms !== true) return jsonResp(FALTA_CONSENTIMIENTO_SMS, 400);
     // El trigger webhook recibe su token secreto aquí (nunca lo elige el cliente)
     if (body.trigger.type === 'webhook') {
       body.trigger = { type: 'webhook', token: crypto.randomUUID().replace(/-/g, ''), ...(body.trigger.window ? { window: body.trigger.window } : {}) };
@@ -401,6 +417,7 @@ export default async function handler(req) {
         active: body.active !== false,
         trigger: body.trigger,
         steps: body.steps,
+        ...(conSms ? { consentimiento_sms_at: new Date().toISOString(), consentimiento_sms_por: actorId } : {}),
       }),
     });
     if (!res.ok) return jsonResp({ error: await res.text() }, 500);
@@ -422,6 +439,11 @@ export default async function handler(req) {
     if (body.trigger !== undefined || body.steps !== undefined) {
       const err = validateAutomation({ name: body.name || 'x', trigger: body.trigger, steps: body.steps });
       if (err) return jsonResp({ error: err }, 400);
+      if (tienePasoSms(body.steps)) {
+        if (body.consentimiento_sms !== true) return jsonResp(FALTA_CONSENTIMIENTO_SMS, 400);
+        update.consentimiento_sms_at = new Date().toISOString();
+        update.consentimiento_sms_por = actorId;
+      }
       // El token del webhook lo controla el servidor: se conserva el existente
       // o se genera uno nuevo si el trigger cambió a webhook
       if (body.trigger.type === 'webhook') {

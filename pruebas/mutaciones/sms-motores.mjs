@@ -2,7 +2,7 @@
 
 export const SUITE = 'pruebas/sms-motores.mjs';
 export const ARCHIVOS = {
-  sms: 'api/_sms.js', cron: 'api/cron-campaigns.js', camp: 'api/campaigns.js', auto: 'api/cron-automations.js',
+  sms: 'api/_sms.js', cron: 'api/cron-campaigns.js', camp: 'api/campaigns.js', auto: 'api/cron-automations.js', autos: 'api/automations.js',
   hot: 'api/hotmart-webhook.js', ack: 'api/sms-ack.js', ent: 'api/sms-entrante.js',
 };
 const cambiar = (de, a) => (s) => s.replace(de, a);
@@ -29,6 +29,13 @@ export const MUTACIONES = [
   { nombre: 'ack no deshace un fallo', archivo: 'ack', romper: cambiar("p_sent: deFallo ? 1 : -1, p_failed: deFallo ? -1 : 1", 'p_sent: -1, p_failed: 1') },
   { nombre: 'ack sin cambio condicional', archivo: 'ack', romper: cambiar("if (!(await r2.json()).length) return new Response('ok');", '') },
   { nombre: 'ack marca a todos los destinatarios', archivo: 'ack', romper: cambiar("campaign_recipients?campaign_id=eq.${envio.campaign_id}&lead_id=eq.${envio.lead_id}&", 'campaign_recipients?campaign_id=eq.${envio.campaign_id}&') },
+  { nombre: 'campaña sin consentimiento', archivo: 'camp', romper: cambiar('if (body.consentimiento !== true) {', 'if (false) {') },
+  { nombre: 'consentimiento con cualquier valor', archivo: 'camp', romper: cambiar('if (body.consentimiento !== true) {', 'if (!body.consentimiento) {') },
+  { nombre: 'consentimiento sin registrar', archivo: 'camp', romper: cambiar("...(c.channel === 'sms' ? { consentimiento_at: new Date().toISOString(), consentimiento_por: actorId } : {}),", '') },
+  { nombre: 'sin freno de cuenta nueva', archivo: 'camp', romper: cambiar('if (horasDeVida < SMS_HORAS_DE_GRACIA && leads.length > SMS_TOPE_CUENTA_NUEVA) {', 'if (false) {') },
+  { nombre: 'automatización sin consentimiento', archivo: 'autos', romper: cambiar("if (conSms && body.consentimiento_sms !== true) return", "if (false) return") },
+  { nombre: 'edición sin consentimiento', archivo: 'autos', romper: cambiar("if (body.consentimiento_sms !== true) return jsonResp(FALTA_CONSENTIMIENTO_SMS, 400);", '') },
+  { nombre: 'no ve SMS dentro de ramas', archivo: 'autos', romper: cambiar("(s.type === 'send_sms' || tienePasoSms(s.yes) || tienePasoSms(s.no))", "s.type === 'send_sms'") },
   { nombre: 'ack sin firma', archivo: 'ack', romper: cambiar("|| q('k') !== await firmaAck(subid)", '') },
   { nombre: 'baja a todas las cuentas', archivo: 'ent', romper: cambiar('/leads?user_id=eq.${encodeURIComponent(ultimo.user_id)}&phone', '/leads?phone') },
   { nombre: 'baja con cualquier texto', archivo: 'ent', romper: cambiar('!PIDE_BAJA.test(texto)', 'false') },

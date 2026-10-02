@@ -63,6 +63,8 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.pathname.includes('jwks.json')) return resp(JWKS);
   if (u.hostname === 'api.clerk.com') {
     if (u.searchParams.get('email_address')) return resp(u.searchParams.get('email_address') === 'dueno@x.co' ? [{ id: 'dueno' }] : []);
+    // «nuevo» es una cuenta creada hace una hora: la del freno antifraude.
+    if (u.pathname.endsWith('/nuevo')) return resp({ id: 'nuevo', created_at: AHORA - 3600e3, public_metadata: { plan: 'pro' } });
     return resp({ id: 'dueno', public_metadata: { plan: 'pro' } });
   }
   if (u.hostname === 'api.labsmobile.com') { labs.push(JSON.parse(init.body)); return resp({ code: 0, message: 'ok' }); }
@@ -181,11 +183,38 @@ console.log('\nAPI de campañas');
   ok(d.breakdown?.missing === 1 && d.breakdown?.unsubscribed === 1, 'y explica cuántos quedan fuera: 1 sin móvil, 1 de baja', JSON.stringify(d.breakdown));
 
   T.campaigns[0].status = 'draft'; T.campaign_recipients = [];
-  saldo.dueno = 2;
+  saldo.dueno = 1000;
   r = await pedir('/api/campaigns?action=queue', 'POST', { id: 'C1' });
+  d = await r.json();
+  ok(r.status === 400 && d.falta_consentimiento && !T.campaign_recipients.length, 'sin confirmar el consentimiento de la audiencia no se encola', `${r.status} ${JSON.stringify(d)}`);
+  r = await pedir('/api/campaigns?action=queue', 'POST', { id: 'C1', consentimiento: 'si' });
+  ok(r.status === 400, 'el consentimiento tiene que ser un sí explícito, no cualquier valor', r.status);
+
+  saldo.dueno = 2;
+  r = await pedir('/api/campaigns?action=queue', 'POST', { id: 'C1', consentimiento: true });
   d = await r.json();
   ok(r.status === 402 && d.necesarios === 3 && d.saldo === 2, 'sin saldo para toda la audiencia no se encola', `${r.status} ${JSON.stringify(d)}`);
   ok(!T.campaign_recipients.length, 'y no quedó nadie en la cola');
+
+  saldo.dueno = 1000;
+  r = await pedir('/api/campaigns?action=queue', 'POST', { id: 'C1', consentimiento: true });
+  ok(r.status === 200 && T.campaigns[0].status === 'queued' && T.campaign_recipients.length === 3, 'con consentimiento y saldo se encola', r.status);
+  ok(T.campaigns[0].consentimiento_por === 'dueno' && !!T.campaigns[0].consentimiento_at, 'y queda registrado quién confirmó el consentimiento y cuándo', JSON.stringify(T.campaigns[0]));
+
+  // Cuenta creada hace una hora: máximo 100 SMS por campaña.
+  const tokNuevo = await tokenDe('nuevo');
+  process.env.SMS_BETA = 'dueno,nuevo';
+  T.leads.push(...Array.from({ length: 150 }, (_, i) => ({ id: 'N' + i, user_id: 'nuevo', client_id: null, name: 'N' + i, phone: '300' + String(1000000 + i), tags: [], deleted_at: null })));
+  T.campaigns.push({ id: 'C9', user_id: 'nuevo', client_id: null, name: 'Grande', channel: 'sms', status: 'draft', body: 'Hola', stats: {}, audience: {} });
+  saldo.nuevo = 1000;
+  const pedirNuevo = (cuerpo) => h(new Request('https://app.acuarius.app/api/campaigns?action=queue', { method: 'POST', headers: { Authorization: 'Bearer ' + tokNuevo, 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) }));
+  r = await pedirNuevo({ id: 'C9', consentimiento: true });
+  d = await r.json();
+  ok(r.status === 403 && d.cuenta_nueva && d.tope === 100, 'una cuenta de una hora no envía 150 SMS en una campaña', `${r.status} ${JSON.stringify(d)}`);
+  T.leads = T.leads.filter(l => !/^N(1[0-4]\d|[5-9]\d)$/.test(l.id)); // quedan 50
+  r = await pedirNuevo({ id: 'C9', consentimiento: true });
+  ok(r.status === 200, 'pero sí 50', r.status);
+  process.env.SMS_BETA = 'dueno';
 
   T.campaigns[0].status = 'paused'; T.campaigns[0].stats = { total: 3, sent: 1, motivo_pausa: 'Sin créditos de SMS.' };
   saldo.dueno = 0;
@@ -199,6 +228,30 @@ console.log('\nAPI de campañas');
   r = await pedir('/api/campaigns', 'POST', { name: 'x', body: 'hola', channel: 'sms' });
   ok(r.status === 403, 'una cuenta fuera de la beta no puede crear campañas de SMS', r.status);
   process.env.SMS_BETA = 'dueno';
+}
+
+console.log('\nAutomatizaciones con SMS: consentimiento');
+{
+  const h = (await import('../api/automations.js')).default;
+  const { tienePasoSms } = await import('../api/automations.js');
+  ok(tienePasoSms([{ type: 'wait', hours: 1 }, { type: 'branch', field: 'stage', op: 'eq', value: 'x', yes: [{ type: 'send_sms', body: 'hola' }], no: [] }]), 'detecta un SMS escondido dentro de una rama');
+  ok(!tienePasoSms([{ type: 'send_email', subject: 'a', body: 'b' }]), 'y no ve SMS donde no hay');
+  const tok = await tokenDe('dueno');
+  mundo(); T.automations = [];
+  const guardar = (metodo, cuerpo) => h(new Request('https://app.acuarius.app/api/automations', { method: metodo, headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) }));
+  const flujo = { name: 'Recordatorio', trigger: { type: 'lead_created' }, steps: [{ type: 'send_sms', body: 'Hola {{nombre}}' }] };
+  let r = await guardar('POST', flujo);
+  let d = await r.json();
+  ok(r.status === 400 && d.falta_consentimiento && !T.automations.length, 'una automatización con SMS no se guarda sin confirmar el consentimiento', `${r.status} ${JSON.stringify(d)}`);
+  r = await guardar('POST', { ...flujo, consentimiento_sms: true });
+  ok(r.status === 201 && T.automations[0]?.consentimiento_sms_por === 'dueno' && !!T.automations[0]?.consentimiento_sms_at, 'con la confirmación se guarda y queda registrada', `${r.status} ${JSON.stringify(T.automations[0])}`);
+  T.automations[0].id = 'A1';
+  r = await guardar('PUT', { id: 'A1', ...flujo });
+  ok(r.status === 400, 'cambiar sus pasos también pide confirmar', r.status);
+  r = await guardar('PUT', { id: 'A1', active: false });
+  ok(r.status === 200, 'pero pausarla o activarla, sin tocar los pasos, no', r.status);
+  r = await guardar('POST', { name: 'Correo', trigger: { type: 'lead_created' }, steps: [{ type: 'send_email', subject: 'a', body: 'b' }] });
+  ok(r.status === 201, 'y una sin SMS no pide nada', r.status);
 }
 
 console.log('\nAutomatización');
