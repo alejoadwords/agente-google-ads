@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-02-reintento-de-red",
+      "fecha": "2026-10-02",
+      "tipo": "arreglo",
+      "titulo": "Menos pantallas a medio cargar",
+      "texto": "Si una sección no carga por un corte de conexión de un segundo, Acuarius ahora la vuelve a pedir sola en vez de dejarla vacía hasta que recargues la página. Los guardados no se repiten solos, para que nada quede duplicado."
+    },
+    {
       "id": "2026-10-02-pausar-campanas",
       "fecha": "2026-10-02",
       "tipo": "mejora",

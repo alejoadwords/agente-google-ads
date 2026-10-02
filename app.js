@@ -969,12 +969,25 @@ async function _fetchAuthRaw(url, opts = {}) {
     // (hayConexion): si tampoco responde, era la red de esa persona.
     const abortada = e && (e.name === 'AbortError' || opts.signal?.aborted);
     const seVa = () => typeof document !== 'undefined' && (document.hidden || _paginaSeVa);
-    if (!abortada && !seVa()) {
-      const donde = 'red ' + String(url).split('?')[0];
-      const mensaje = 'sin respuesta del servidor: ' + (e && e.message);
-      hayConexion().then(hay => { if (hay && !seVa()) errRegistrar(mensaje, donde); });
+    // Una LECTURA que se cae se reintenta una vez, segundo y medio después.
+    // El 02-10-2026 hubo cortes de un segundo (Supabase con latencia en su
+    // región) que dejaban secciones vacías hasta recargar y llenaban el aviso
+    // de errores. Los guardados y envíos NO se reintentan: si el primero sí
+    // llegó al servidor, el segundo lo duplicaría.
+    if (!abortada && !seVa() && (opts.method || 'GET').toUpperCase() === 'GET') {
+      await new Promise(r => setTimeout(r, 1500));
+      if (!seVa() && !opts.signal?.aborted) {
+        try { res = await fetch(url, opciones); } catch (e2) { e = e2; }
+      }
     }
-    throw e;
+    if (!res) {
+      if (!abortada && !seVa() && !opts.signal?.aborted) {
+        const donde = 'red ' + String(url).split('?')[0];
+        const mensaje = 'sin respuesta del servidor: ' + (e && e.message);
+        hayConexion().then(hay => { if (hay && !seVa()) errRegistrar(mensaje, donde); });
+      }
+      throw e;
+    }
   }
   // El reintento del 401.
   //

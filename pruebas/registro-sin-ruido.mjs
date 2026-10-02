@@ -14,30 +14,58 @@ const ok = (c, m, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c &&
 
 const i = src.indexOf('  } catch (e) {\n    // La red se cayó');
 ok(i > 0, 'el catch de _fetchAuthRaw está donde se espera');
-const bloque = src.slice(i, src.indexOf('    throw e;\n  }', i)).replace('  } catch (e) {', '');
+const FIN = '      throw e;\n    }\n';
+const bloque = src.slice(i, src.indexOf(FIN, i) + FIN.length).replace('  } catch (e) {', '');
+const AsyncFunction = (async () => {}).constructor;
 
-async function corre({ nombre = 'TypeError', oculto = false, seVa = false, abortada = false, hay = true, seVaDespues = false }) {
+// Corre el catch tal cual. `segundo` es lo que pasa en el reintento:
+// 'ok' (responde), 'cae' (vuelve a fallar) o null (no debería reintentarse).
+async function corre({ nombre = 'TypeError', oculto = false, seVa = false, abortada = false, hay = true, seVaDespues = false, metodo, segundo = 'cae', seVaEnLaEspera = false }) {
   const registrados = [];
+  const reintentos = [];
   let preguntas = 0;
   const ctx = {
     e: { name: nombre, message: 'Failed to fetch' },
-    opts: { signal: abortada ? { aborted: true } : undefined },
+    opts: { signal: abortada ? { aborted: true } : undefined, ...(metodo ? { method: metodo } : {}) },
     document: { hidden: oculto },
     _paginaSeVa: seVa,
     url: '/api/lead-activities?id=1',
+    opciones: { headers: { Authorization: 'Bearer t' } },
     errRegistrar: (m, d) => registrados.push(d),
     hayConexion: () => { preguntas++; return Promise.resolve(hay); },
+    fetch: (u, o) => { reintentos.push({ u, o }); return segundo === 'ok' ? Promise.resolve({ ok: true, status: 200 }) : Promise.reject(new TypeError('Failed to fetch otra vez')); },
+    // La espera de segundo y medio, sin esperar; y si toca, la pestaña se
+    // oculta justo durante ella.
+    setTimeout: (fn) => { if (seVaEnLaEspera) ctx.document.hidden = true; fn(); },
   };
-  // Si la página empieza a irse MIENTRAS se comprueba, tampoco se registra.
   if (seVaDespues) ctx.hayConexion = () => { preguntas++; ctx.document.hidden = true; return Promise.resolve(true); };
-  new Function(...Object.keys(ctx), bloque)(...Object.values(ctx));
+  const f = new AsyncFunction(...Object.keys(ctx), 'let res;\n' + bloque + '\nreturn { res };');
+  let salida, lanzo = null;
+  try { salida = await f(...Object.values(ctx)); } catch (x) { lanzo = x; }
   await new Promise(r => setTimeout(r, 0));
-  return { registrados, preguntas };
+  return { registrados, preguntas, reintentos, res: salida?.res, lanzo };
 }
 
-console.log('\nQué se registra');
-let r = await corre({});
-ok(r.registrados.length === 1 && r.registrados[0] === 'red /api/lead-activities', 'un fallo con el servidor alcanzable SÍ se registra (es nuestro)', JSON.stringify(r));
+console.log('\nEl reintento');
+let r = await corre({ segundo: 'ok' });
+ok(r.reintentos.length === 1 && r.res?.ok && !r.lanzo && !r.registrados.length, 'una lectura que se cae y responde al reintento sigue como si nada, sin registrar', JSON.stringify(r));
+ok(r.reintentos[0]?.o?.headers?.Authorization === 'Bearer t' && r.reintentos[0].u === '/api/lead-activities?id=1', 'el reintento lleva la misma URL y el mismo token');
+r = await corre({ metodo: 'POST', segundo: 'ok' });
+ok(r.reintentos.length === 0 && r.lanzo, 'un guardado (POST) NO se reintenta: podría duplicarse');
+r = await corre({ metodo: 'patch', segundo: 'ok' });
+ok(r.reintentos.length === 0, 'tampoco un PATCH, aunque venga en minúsculas');
+r = await corre({ nombre: 'AbortError', segundo: 'ok' });
+ok(r.reintentos.length === 0 && r.lanzo, 'una petición abortada no se reintenta');
+r = await corre({ oculto: true, segundo: 'ok' });
+ok(r.reintentos.length === 0, 'con la pestaña oculta no se reintenta');
+r = await corre({ seVaEnLaEspera: true, segundo: 'ok' });
+ok(r.reintentos.length === 0 && r.lanzo && !r.registrados.length, 'si la pestaña se oculta durante la espera, ni se reintenta ni se registra');
+r = await corre({ segundo: 'cae' });
+ok(r.reintentos.length === 1 && /otra vez/.test(r.lanzo?.message || ''), 'si el reintento también falla, lanza el error del reintento', r.lanzo?.message);
+
+console.log('\nQué se registra (después del reintento)');
+r = await corre({});
+ok(r.registrados.length === 1 && r.registrados[0] === 'red /api/lead-activities', 'un fallo que se repite con el servidor alcanzable SÍ se registra (es nuestro)', JSON.stringify(r));
 r = await corre({ hay: false });
 ok(r.registrados.length === 0 && r.preguntas === 1, 'si el servidor tampoco responde, era la conexión de la persona: no se registra');
 r = await corre({ nombre: 'AbortError' });
@@ -50,6 +78,8 @@ r = await corre({ seVa: true });
 ok(r.registrados.length === 0, 'ni cuando la página se está cerrando');
 r = await corre({ seVaDespues: true });
 ok(r.registrados.length === 0, 'ni si empieza a cerrarse mientras se comprueba');
+r = await corre({ metodo: 'POST' });
+ok(r.registrados.length === 1, 'un guardado que falla se registra sin reintento');
 
 console.log('\nLa comprobación de conexión');
 const j = src.search(/^let _pingEnVuelo = null;/m);
