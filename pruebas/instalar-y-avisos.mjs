@@ -31,7 +31,7 @@ const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) mal++
 const src = app.slice(app.indexOf('async function pwaYaEstaInstalada()'),
                       app.indexOf('async function pwaInstalar() {'));
 
-async function correr({ acepta, permiso, yaSuscrito = false }) {
+async function correr({ acepta, permiso, yaSuscrito = false, soporte = false }) {
   const pasos = [];
   const ctx = {
     _pwaPrompt: {
@@ -39,6 +39,11 @@ async function correr({ acepta, permiso, yaSuscrito = false }) {
       userChoice: Promise.resolve({ outcome: acepta ? 'accepted' : 'dismissed' }),
     },
     pwaInstalada: () => false,
+    // Desde el 30-09-2026 pushSuscribirSilencioso mira si es una sesión de
+    // soporte (alguien del equipo dentro de la cuenta de un cliente). Sin
+    // pasarla aquí, la función revienta antes de suscribir y la prueba se
+    // queda en rojo sin que la app tenga nada roto.
+    enSoporte: () => soporte,
     pushSoportado: () => true,
     track: (e) => pasos.push('track:' + e),
     showToast: (t) => pasos.push('toast:' + t),
@@ -81,6 +86,11 @@ ok(!p.includes('permiso') && p.includes('suscribe'),
 // ── Ya estaba suscrito: nada que hacer ─────────────────────────────────
 p = await correr({ acepta: true, permiso: 'granted', yaSuscrito: true });
 ok(!p.includes('suscribe'), 'y si ya estaba suscrito, no se duplica');
+
+// ── Sesión de soporte: el dispositivo del equipo no se suscribe ────────
+p = await correr({ acepta: true, permiso: 'granted', soporte: true });
+ok(!p.includes('suscribe') && !p.includes('track:push_activado'),
+   'en una sesión de soporte no se suscribe el dispositivo del equipo a los avisos del cliente');
 
 // ── Nada entre aceptar y pedir ─────────────────────────────────────────
 const fn = src.slice(src.indexOf('async function pwaInstalarYAvisos'));
