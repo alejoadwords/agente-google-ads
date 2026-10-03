@@ -10,6 +10,20 @@ process.env.SUPABASE_SERVICE_KEY = 'clave-falsa';
 process.env.RESEND_API_KEY = 'resend-falsa';
 process.env.CRON_SECRET = 'secreto';
 
+// ── Reloj ────────────────────────────────────────────────────────────────────
+// Desde el 02-10-2026 el motor solo envía en el horario de la Ley 2300, así
+// que la prueba no puede depender de la hora a la que se corra. El reloj
+// avanza de verdad (el motor mide sus 85 s con él) pero arranca un jueves
+// hábil a las 10:00 de Bogotá; DESFASE lo mueve a otro día cuando hace falta.
+const RealDate = Date;
+const aBogota = (s) => RealDate.parse(s + '-05:00');
+let DESFASE = aBogota('2026-10-01T10:00') - RealDate.now();
+const ponerReloj = (s) => { DESFASE = aBogota(s) - RealDate.now(); };
+globalThis.Date = class extends RealDate {
+  constructor(...a) { super(...(a.length ? a : [RealDate.now() + DESFASE])); }
+  static now() { return RealDate.now() + DESFASE; }
+};
+
 import { readFileSync } from 'node:fs';
 import { huecosDe } from '../api/_whatsapp.js';
 

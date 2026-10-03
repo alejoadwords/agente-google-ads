@@ -973,8 +973,10 @@ async function _fetchAuthRaw(url, opts = {}) {
     // El 02-10-2026 hubo cortes de un segundo (Supabase con latencia en su
     // región) que dejaban secciones vacías hasta recargar y llenaban el aviso
     // de errores. Los guardados y envíos NO se reintentan: si el primero sí
-    // llegó al servidor, el segundo lo duplicaría.
-    if (!abortada && !seVa() && (opts.method || 'GET').toUpperCase() === 'GET') {
+    // llegó al servidor, el segundo lo duplicaría. La excepción la marca quien
+    // llama con `reintentable: true`, solo en un POST que repetido no crea
+    // nada (pedir un token nuevo de Google, por ejemplo).
+    if (!abortada && !seVa() && ((opts.method || 'GET').toUpperCase() === 'GET' || opts.reintentable === true)) {
       await new Promise(r => setTimeout(r, 1500));
       if (!seVa() && !opts.signal?.aborted) {
         try { res = await fetch(url, opciones); } catch (e2) { e = e2; }
@@ -5710,7 +5712,7 @@ let replyFinalProcessed=replyFinal||'error al procesar la respuesta. intenta de 
           if(uid){
             try{
               // Renueva en el servidor; el token no vuelve al navegador.
-              const rr = await fetchAuth('/api/refresh-google-token',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+              const rr = await fetchAuth('/api/refresh-google-token',{method:'POST',reintentable:true,headers:{'Content-Type':'application/json'},body:'{}'});
               if(rr.ok){
                 const rd = await rr.json();
                 if(rd.ok && !rd.needsReconnect) refreshed = true;
@@ -15471,7 +15473,7 @@ function marcarAds(si) {
       for (let i = 0; i < 20 && !clerkInstance?.user?.id; i++) await new Promise(r => setTimeout(r, 400));
       if (!clerkInstance?.user?.id) return;
       try {
-        const r = await fetchAuth('/api/refresh-google-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const r = await fetchAuth('/api/refresh-google-token', { method: 'POST', reintentable: true, headers: { 'Content-Type': 'application/json' }, body: '{}' });
         const data = await r.json().catch(() => ({}));
         // 404 = ya no hay conexión guardada; needsReconnect = Google ya no deja
         // renovarla. En los dos casos se deja de pintar «conectado».
@@ -27102,6 +27104,7 @@ async function ensureFreshTokens() {
     // Renueva en el servidor; el token no vuelve al navegador.
     const g = await fetchAuth('/api/refresh-google-token', {
       method: 'POST',
+      reintentable: true, // pedir un token nuevo dos veces no crea nada
       headers: { 'Content-Type': 'application/json' },
       body: '{}',
     }).then(r => r.json());
@@ -29398,6 +29401,7 @@ async function prpDelete(id) {
 // que se distingan de un vistazo; antes eran todas iguales.
 let cmpList = [];
 let cmpQuota = null;
+let cmpHorario = null;   // { abierto, siguiente } — lo dice el servidor
 let cmpError = null;
 let _cmpAudTags = [];
 let _cmpFiltro = 'todas';
@@ -29433,6 +29437,7 @@ async function cmpLoad() {
     if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
     cmpList = d.campaigns || [];
     cmpQuota = d.quota || null;
+    cmpHorario = d.horario || null;
     cmpError = null;
   } catch (e) {
     cmpList = [];
@@ -29592,6 +29597,10 @@ function cmpCuando(c) {
   const f = (d, conHora) => new Date(d).toLocaleString('es-CO', conHora
     ? { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' } : { day: 'numeric', month: 'short' });
   if (cmpProgramada(c)) return 'Sale el ' + f(c.scheduled_at, true);
+  // En cola fuera del horario de la Ley 2300: que no parezca trabada.
+  if ((c.status === 'queued' || c.status === 'sending') && cmpHorario && !cmpHorario.abierto && cmpHorario.siguiente) {
+    return 'Sigue el ' + new Date(cmpHorario.siguiente).toLocaleString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) + ' (horario legal)';
+  }
   if (c.status === 'sent' && c.sent_at) return 'Enviada el ' + f(c.sent_at);
   if (c.status === 'draft') return 'Creada el ' + f(c.created_at);
   return 'Desde el ' + f(c.queued_at || c.created_at);
@@ -30684,9 +30693,7 @@ function cmpWStep2() {
       (w.channel === 'sms'
         ? '<div class="cmpw-card"><div class="cmpw-label">Nombre de tu negocio en los SMS *</div>' + smsRemitenteHtml('sms-rem-ayuda') + '</div>'
         : '') +
-      (w.channel === 'sms'
-        ? '<div class="cmpw-nota">' + icn('calendar', 14) + '<span>Por ley los SMS solo salen de lunes a viernes de 7:00 a 19:00 y sábados de 8:00 a 15:00, nunca domingos ni festivos. Fuera de ese horario la campaña espera sola.</span></div>'
-        : '') +
+      '<div class="cmpw-nota">' + icn('calendar', 14) + '<span>Por la Ley 2300 las campañas solo salen de lunes a viernes de 7:00 a 19:00 y sábados de 8:00 a 15:00 (hora de Colombia), nunca domingos ni festivos. Fuera de ese horario la campaña espera sola y sigue donde iba.</span></div>' +
 
       (w.channel === 'whatsapp' ? cmpWTarjetaPlantillaWA() : '') +
 
@@ -31170,7 +31177,7 @@ function cmpWStep4() {
         '<div id="cmpw-sched-box" style="display:' + (w.schedule ? 'block' : 'none') + ';margin-top:10px">' +
           '<input type="datetime-local" class="auto-input cmpw-input" id="cmpw-sched" value="' + esc(w.schedule || '') + '" onchange="cmpWSchedChange()">' +
           '<div class="cmpw-ayuda">Arranca en el ciclo siguiente a la hora elegida (máx. 10 min después).' +
-            (w.channel === 'sms' ? ' Si cae fuera del horario legal de los SMS, espera al siguiente hueco permitido.' : '') + '</div>' +
+            ' Si cae fuera del horario legal, espera al siguiente hueco permitido.</div>' +
         '</div>' +
       '</div>' +
     '</div>' +

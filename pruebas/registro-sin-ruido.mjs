@@ -20,13 +20,13 @@ const AsyncFunction = (async () => {}).constructor;
 
 // Corre el catch tal cual. `segundo` es lo que pasa en el reintento:
 // 'ok' (responde), 'cae' (vuelve a fallar) o null (no debería reintentarse).
-async function corre({ nombre = 'TypeError', oculto = false, seVa = false, abortada = false, hay = true, seVaDespues = false, metodo, segundo = 'cae', seVaEnLaEspera = false }) {
+async function corre({ nombre = 'TypeError', oculto = false, seVa = false, abortada = false, hay = true, seVaDespues = false, metodo, segundo = 'cae', seVaEnLaEspera = false, reintentable }) {
   const registrados = [];
   const reintentos = [];
   let preguntas = 0;
   const ctx = {
     e: { name: nombre, message: 'Failed to fetch' },
-    opts: { signal: abortada ? { aborted: true } : undefined, ...(metodo ? { method: metodo } : {}) },
+    opts: { signal: abortada ? { aborted: true } : undefined, ...(metodo ? { method: metodo } : {}), ...(reintentable !== undefined ? { reintentable } : {}) },
     document: { hidden: oculto },
     _paginaSeVa: seVa,
     url: '/api/lead-activities?id=1',
@@ -52,6 +52,10 @@ ok(r.reintentos.length === 1 && r.res?.ok && !r.lanzo && !r.registrados.length, 
 ok(r.reintentos[0]?.o?.headers?.Authorization === 'Bearer t' && r.reintentos[0].u === '/api/lead-activities?id=1', 'el reintento lleva la misma URL y el mismo token');
 r = await corre({ metodo: 'POST', segundo: 'ok' });
 ok(r.reintentos.length === 0 && r.lanzo, 'un guardado (POST) NO se reintenta: podría duplicarse');
+r = await corre({ metodo: 'POST', reintentable: true, segundo: 'ok' });
+ok(r.reintentos.length === 1 && r.res?.ok && !r.registrados.length, 'un POST marcado como reintentable (pedir un token) sí se reintenta');
+r = await corre({ metodo: 'POST', reintentable: 'si', segundo: 'ok' });
+ok(r.reintentos.length === 0, 'la marca tiene que ser true, no cualquier valor');
 r = await corre({ metodo: 'patch', segundo: 'ok' });
 ok(r.reintentos.length === 0, 'tampoco un PATCH, aunque venga en minúsculas');
 r = await corre({ nombre: 'AbortError', segundo: 'ok' });

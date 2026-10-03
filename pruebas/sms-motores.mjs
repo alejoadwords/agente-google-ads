@@ -216,8 +216,18 @@ console.log('\nAPI de campañas');
   const tok = await tokenDe('dueno');
   const pedir = (ruta, metodo = 'GET', cuerpo) => h(new Request('https://app.acuarius.app' + ruta, { method: metodo, headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined }));
   mundo();
-  let r = await pedir('/api/campaigns?preview=1&channel=sms&audience=' + encodeURIComponent('{}'));
+  // La lista dice si ahora se puede enviar y, si no, cuándo arrancan.
+  AHORA = bog('2026-10-04T10:00'); // domingo
+  // Con un token emitido el domingo: el de arriba ya venció a esa hora.
+  const tokDomingo = await tokenDe('dueno');
+  let r = await h(new Request('https://app.acuarius.app/api/campaigns', { headers: { Authorization: 'Bearer ' + tokDomingo } }));
   let d = await r.json();
+  ok(d.horario?.abierto === false && d.horario.siguiente === new Date(bog('2026-10-05T07:00')).toISOString(), 'un domingo la lista dice que las campañas siguen el lunes a las 7:00', JSON.stringify(d.horario));
+  AHORA = bog('2026-10-01T10:00');
+  d = await (await pedir('/api/campaigns')).json();
+  ok(d.horario?.abierto === true && d.horario.siguiente === null, 'en horario, que está abierto', JSON.stringify(d.horario));
+  r = await pedir('/api/campaigns?preview=1&channel=sms&audience=' + encodeURIComponent('{}'));
+  d = await r.json();
   ok(r.status === 200 && d.count === 3, 'la audiencia de SMS cuenta solo los móviles válidos sin baja', JSON.stringify(d));
   ok(d.breakdown?.missing === 1 && d.breakdown?.unsubscribed === 1, 'y explica cuántos quedan fuera: 1 sin móvil, 1 de baja', JSON.stringify(d.breakdown));
 

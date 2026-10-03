@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-02-campanas-horario-legal",
+      "fecha": "2026-10-02",
+      "tipo": "mejora",
+      "titulo": "Tus campañas respetan el horario de la ley",
+      "texto": "Las campañas de correo, WhatsApp y SMS salen solo de lunes a viernes de 7:00 a 19:00 y los sábados de 8:00 a 15:00 (hora de Colombia), nunca domingos ni festivos, como pide la Ley 2300. Si una campaña queda en cola fuera de ese horario, espera sola, sigue donde iba y la lista te dice cuándo continúa."
+    },
+    {
       "id": "2026-10-02-reintento-de-red",
       "fecha": "2026-10-02",
       "tipo": "arreglo",

@@ -8,7 +8,7 @@ export const ARCHIVOS = {
 const cambiar = (de, a) => (s) => s.replace(de, a);
 
 export const MUTACIONES = [
-  { nombre: 'sin horario en el motor', archivo: 'cron', romper: cambiar("if (c.channel === 'sms' && !enHorarioPermitido()) continue;", '') },
+  { nombre: 'sin horario en el motor', archivo: 'cron', romper: cambiar("import { enviarSms, enHorarioPermitido, leerRemitente } from './_sms.js';", "import { enviarSms, leerRemitente } from './_sms.js';\nconst enHorarioPermitido = () => true;") },
   { nombre: 'sin horario en enviarSms', archivo: 'sms', romper: cambiar("if (!enHorarioPermitido(ahora)) return", "if (false) return") },
   { nombre: 'baja ignorada', archivo: 'sms', romper: cambiar("if ((lead.tags || []).includes(ETIQUETA_BAJA)) return", "if (false) return") },
   { nombre: 'sin quitar tildes', archivo: 'sms', romper: cambiar('const mensaje = prepararTexto(componerSms(remitente, texto, token));', 'const mensaje = componerSms(remitente, texto, token);') },
@@ -54,4 +54,5 @@ export const MUTACIONES = [
   { nombre: 'sin tope de segmentos', archivo: 'sms', romper: cambiar('if (segmentos > MAX_SEGMENTOS) return', 'if (false) return') },
   { nombre: 'rechazo sin devolver', archivo: 'sms', romper: cambiar("await rpc('sms_devolver', { p_envio: envioId, p_detalle: resultado.detalle });", '') },
   { nombre: 'rechazo como enviado', archivo: 'sms', romper: cambiar("if (r.ok && String(d.code) === '0') return { ok: true };", 'return { ok: true };') },
+  { nombre: 'la lista no dice el horario', archivo: 'camp', romper: cambiar("siguiente: abierto ? null : siguienteHorario().toISOString()", "siguiente: null") },
 ];

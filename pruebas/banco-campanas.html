@@ -82,7 +82,7 @@ function conDatos(m) { MODO = m; _smsEstado = null; cmpRender(); }
     '  if (MODO === "error") return new Response(JSON.stringify({ error: "caída" }), { status: 503 });' +
     '  if (url.startsWith("/api/sms")) return new Response(JSON.stringify(MODO === "sinsms" ? { activo: false } : SMS));' +
     '  if (url.includes("stats=1")) return new Response(JSON.stringify({ sent: 1792, opened: 731 }));' +
-    '  return new Response(JSON.stringify({ campaigns: MODO === "vacio" ? [] : CAMPANAS, quota: { unlimited: true, used: 1792 } }));' +
+    '  return new Response(JSON.stringify({ campaigns: MODO === "vacio" ? [] : CAMPANAS, quota: { unlimited: true, used: 1792 }, horario: { abierto: false, siguiente: "2026-10-05T12:00:00.000Z" } }));' +
     '};',
   ].join('\n');
   const s = document.createElement('script');

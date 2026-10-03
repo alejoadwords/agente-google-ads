@@ -13,6 +13,7 @@ import { campaignHtml } from './_campaign-email.js';
 // PostgREST corta en 1.000 filas aunque se le pida más. Aquí eso significaba
 // que una audiencia de 4.000 salía a mil personas sin decirlo. Ver _paginado.js.
 import { traerTodo } from './_paginado.js';
+import { enHorarioPermitido, siguienteHorario } from './_sms.js';
 import { smsActivo, saldoSms, normalizarTelefono, prepararTexto, contarSegmentos, creditosEstimados, MAX_SEGMENTOS, ETIQUETA_BAJA as BAJA_SMS, leerRemitente, componerSms, TOKEN_EJEMPLO } from './_sms.js';
 
 // La conexión de WhatsApp del cliente: de ahí salen el waba_id y el token con
@@ -579,7 +580,11 @@ export default async function handler(req) {
     const quota = (EMAIL_QUOTAS[planCuenta] ?? 0) + emailsExtra * 2000;
     const used = await monthlySent(userId);
     const unlimited = quota === Infinity;
-    return jsonResp({ campaigns: rows || [], quota: { plan: planCuenta, limit: unlimited ? null : quota, unlimited, used, extra_packs: emailsExtra } });
+    // Si ahora no se puede enviar, la lista dice cuándo arrancan las campañas
+    // en cola: si no, una campaña «en cola» un domingo parece trabada.
+    const abierto = enHorarioPermitido();
+    return jsonResp({ campaigns: rows || [], quota: { plan: planCuenta, limit: unlimited ? null : quota, unlimited, used, extra_packs: emailsExtra },
+      horario: { abierto, siguiente: abierto ? null : siguienteHorario().toISOString() } });
   }
 
   // POST ?action=ai — redactar la campaña con IA. Devuelve JSON con asunto,

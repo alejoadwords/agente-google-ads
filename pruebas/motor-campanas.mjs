@@ -10,6 +10,20 @@ process.env.SUPABASE_SERVICE_KEY = 'clave-falsa';
 process.env.RESEND_API_KEY = 'resend-falsa';
 process.env.CRON_SECRET = 'secreto';
 
+// ── Reloj ────────────────────────────────────────────────────────────────────
+// Desde el 02-10-2026 el motor solo envía en el horario de la Ley 2300, así
+// que la prueba no puede depender de la hora a la que se corra. El reloj
+// avanza de verdad (el motor mide sus 85 s con él) pero arranca un jueves
+// hábil a las 10:00 de Bogotá; DESFASE lo mueve a otro día cuando hace falta.
+const RealDate = Date;
+const aBogota = (s) => RealDate.parse(s + '-05:00');
+let DESFASE = aBogota('2026-10-01T10:00') - RealDate.now();
+const ponerReloj = (s) => { DESFASE = aBogota(s) - RealDate.now(); };
+globalThis.Date = class extends RealDate {
+  constructor(...a) { super(...(a.length ? a : [RealDate.now() + DESFASE])); }
+  static now() { return RealDate.now() + DESFASE; }
+};
+
 import { readFileSync } from 'node:fs';
 
 let fallos = 0;
@@ -287,6 +301,30 @@ console.log('\nEl sobre que se le entrega a Resend\n');
       visto?.headers?.['List-Unsubscribe-Post'] === 'List-Unsubscribe=One-Click');
   chk('las variables se resolvieron', /Persona 0/.test(visto?.subject || ''));
   chk('el remitente conserva el nombre de la campaña', /^Acme </.test(visto?.from || ''));
+}
+
+console.log('\nEl horario de la Ley 2300 (todas las campañas, no solo SMS)\n');
+{
+  const intento = async (cuando) => {
+    ponerReloj(cuando);
+    const m = montar(10);
+    const r = respuesta();
+    await cron(peticion, r);
+    return { m, r };
+  };
+  for (const [cuando, que] of [['2026-10-04T10:00', 'un domingo'], ['2026-10-03T15:30', 'un sábado después de las 15:00'],
+                               ['2026-10-01T19:00', 'entre semana a las 19:00'], ['2026-10-01T06:59', 'antes de las 7:00'],
+                               ['2026-10-12T10:00', 'el lunes festivo del 12 de octubre']]) {
+    const { m, r } = await intento(cuando);
+    chk(`${que} no sale ningún correo y la campaña sigue en cola`,
+      m.cuenta.resend === 0 && m.campana.status === 'queued' && m.cola.every(x => x.status === 'pending') && r.cuerpo?.fuera_de_horario === true,
+      `resend=${m.cuenta.resend} estado=${m.campana.status} ${JSON.stringify(r.cuerpo)}`);
+  }
+  let { m } = await intento('2026-10-03T08:00');
+  chk('un sábado a las 8:00 sí sale', m.campana.status === 'sent' && m.cuenta.resend > 0, m.campana.status);
+  ({ m } = await intento('2026-10-05T07:00'));
+  chk('y el lunes a las 7:00 en punto también', m.campana.status === 'sent', m.campana.status);
+  ponerReloj('2026-10-01T10:00');
 }
 
 console.log('\nY lo que dice el código fuente\n');

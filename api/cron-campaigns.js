@@ -1,5 +1,8 @@
 // api/cron-campaigns.js
-// Motor de envío de campañas masivas (email + WhatsApp) por lotes.
+// Motor de envío de campañas masivas (email, WhatsApp y SMS) por lotes.
+// Solo envía en el horario de la Ley 2300 de 2023 (lun–vie 7:00–19:00, sáb
+// 8:00–15:00, sin domingos ni festivos de Colombia), para TODOS los canales:
+// la ley limita el contacto comercial por cualquier medio, no solo por SMS.
 // Corre cada 10 min (vercel.json). Procesa campaign_recipients pendientes:
 // - email: Resend con personalización {{...}}, footer de baja (HMAC) y
 //   List-Unsubscribe; registra el envío en email_events con campaign_id
@@ -396,6 +399,15 @@ export default async function handler(req, res) {
   await latir('cron-campaigns', { empezo: new Date().toISOString() });
 
 
+  // Fuera del horario legal no sale ninguna campaña. Se corta aquí, antes de
+  // leer nada: las campañas siguen en cola, intactas, y arrancan solas en la
+  // primera vuelta dentro del horario. Antes solo esperaban las de SMS y un
+  // boletín de correo podía salir un domingo a las 6 de la mañana.
+  if (!enHorarioPermitido()) {
+    await latir('cron-campaigns', { fuera_de_horario: true });
+    return res.status(200).json({ ok: true, fuera_de_horario: true, processed: 0, closed: 0 });
+  }
+
   let processed = 0, closed = 0, tandas = 0;
   // Resend ha dicho que no acepta más. Corta la corrida ENTERA, no solo el lote.
   //
@@ -424,11 +436,9 @@ export default async function handler(req, res) {
         console.warn('[campaigns] campaña', c.id, 'detenida: la cuenta tiene el envío bloqueado');
         continue;
       }
-      // Un SMS comercial solo sale en el horario de la Ley 2300. Fuera de él la
-      // campaña ni se toca: sigue en cola y arranca sola cuando se abra el
-      // horario. Sin `continue` antes de marcarla, quedaría «enviando» toda la
-      // noche sin enviar nada.
-      if (c.channel === 'sms' && !enHorarioPermitido()) continue;
+      // El horario puede cerrarse a mitad de la corrida (19:00 en punto): lo
+      // que falte espera, en vez de seguir saliendo los 85 s de la función.
+      if (!enHorarioPermitido()) break;
       if (c.status === 'queued') {
         await sb(`/campaigns?id=eq.${c.id}`, 'PATCH', { status: 'sending' }, 'return=minimal');
       }
