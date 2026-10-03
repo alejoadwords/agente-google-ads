@@ -594,6 +594,10 @@ function evalCondition(step, lead) {
 // job para la próxima apertura; el resto de pasos corre a cualquier hora.
 const TZ_OFFSET = -5; // America/Bogota
 
+// Los pasos que le escriben al lead. Son los que respetan la ventana de la
+// automatización y el horario de la Ley 2300.
+const PASOS_DE_CONTACTO = new Set(['send_email', 'send_whatsapp', 'send_sms', 'send_nps', 'pedir_resena']);
+
 function inSendWindow(win) {
   if (!win || win.start === undefined || win.end === undefined) return true;
   const localH = (new Date().getUTCHours() + TZ_OFFSET + 24) % 24;
@@ -732,10 +736,23 @@ async function ejecutarTrabajo(job, auto, lead) {
         const step = steps[i];
 
         // Ventana horaria: los mensajes al lead esperan la próxima hora hábil
-        if ((step.type === 'send_email' || step.type === 'send_whatsapp' || step.type === 'send_sms' || step.type === 'send_nps' || step.type === 'pedir_resena') && !inSendWindow(auto.trigger?.window)) {
+        const contactaAlLead = PASOS_DE_CONTACTO.has(step.type);
+        if (contactaAlLead && !inSendWindow(auto.trigger?.window)) {
           const runAt = nextWindowStart(auto.trigger.window);
           await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { step_index: i, run_at: runAt }, 'return=minimal');
           await log(auto.id, job.user_id, lead.id, i, 'window', 'scheduled', 'Fuera del horario de envío (' + auto.trigger.window.start + ':00–' + auto.trigger.window.end + ':00) — continúa a las ' + auto.trigger.window.start + ':00');
+          jobDone = false;
+          break;
+        }
+        // Y el horario de la Ley 2300, que no es opcional como la ventana de
+        // arriba: ningún mensaje comercial al lead sale de noche, en domingo o
+        // en festivo, por ningún canal. El paso espera al siguiente hueco
+        // legal y sigue donde iba. Los pasos internos (notas, etiquetas,
+        // avisos al asesor) corren a cualquier hora: no contactan a nadie.
+        if (contactaAlLead && !enHorarioPermitido()) {
+          const runAt = siguienteHorario().toISOString();
+          await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { step_index: i, run_at: runAt }, 'return=minimal');
+          await log(auto.id, job.user_id, lead.id, i, 'window', 'scheduled', 'Por la Ley 2300 los mensajes solo salen lun–vie 7:00–19:00 y sáb 8:00–15:00, sin festivos — continúa ' + runAt);
           jobDone = false;
           break;
         }
@@ -812,15 +829,7 @@ async function ejecutarTrabajo(job, auto, lead) {
         }
 
         if (step.type === 'send_sms') {
-          // El horario de la Ley 2300 no es opcional como la ventana de arriba:
-          // fuera de él, el paso espera al siguiente hueco legal.
-          if (!enHorarioPermitido()) {
-            const runAt = siguienteHorario().toISOString();
-            await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { step_index: i, run_at: runAt }, 'return=minimal');
-            await log(auto.id, job.user_id, lead.id, i, 'window', 'scheduled', 'Los SMS solo salen lun–vie 7:00–19:00 y sáb 8:00–15:00, sin festivos — continúa ' + runAt);
-            jobDone = false;
-            break;
-          }
+          // El horario legal ya se comprobó arriba, para todos los canales.
           let r;
           try {
             r = await actionSendSms(step, lead, auto);

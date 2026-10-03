@@ -13,6 +13,15 @@ process.env.CLERK_SECRET_KEY = 'sk';
 process.env.CRON_SECRET = 'c';
 process.env.EMAIL_TOPE_DIARIO = '100';
 process.env.EMAIL_RESERVA = '40';          // 60 para correo masivo → 30 por cuenta
+
+// El horario de la Ley 2300 frena campañas y automatizaciones de noche y en
+// domingo: el reloj avanza de verdad pero arranca un jueves hábil a las 10:00.
+const RealDate = Date;
+const DESFASE = RealDate.parse('2026-10-01T10:00:00-05:00') - RealDate.now();
+globalThis.Date = class extends RealDate {
+  constructor(...a) { super(...(a.length ? a : [RealDate.now() + DESFASE])); }
+  static now() { return RealDate.now() + DESFASE; }
+};
 let mal = 0;
 const ok = (c, m, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c && extra ? ' → ' + extra : '')); if (!c) mal++; };
 const resp = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json' } });

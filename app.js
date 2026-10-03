@@ -28405,12 +28405,15 @@ function autoBuilderRender() {
       ) : '') +
       (() => {
         const cur = t.window ? t.window.start + '-' + t.window.end : '';
-        const opts = [['', 'Cualquier hora'], ['8-18', 'Solo de 8:00 a 18:00'], ['9-17', 'Solo de 9:00 a 17:00'], ['7-20', 'Solo de 7:00 a 20:00']];
+        // «7-20» ya no se ofrece: la ley corta a las 19:00. Si una automatización
+        // vieja lo tiene, se sigue mostrando para no cambiársela sin avisar.
+        const opts = [['', 'Todo el horario legal'], ['8-18', 'Solo de 8:00 a 18:00'], ['9-17', 'Solo de 9:00 a 17:00']];
+        if (cur && !opts.some(o => o[0] === cur)) opts.push([cur, 'Solo de ' + t.window.start + ':00 a ' + t.window.end + ':00']);
         return '<div class="auto-field"><label class="auto-label">Horario de envío</label>' +
           '<select class="auto-input" onchange="autoWindowChange(this.value)">' +
           opts.map(o => '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
           '</select>' +
-          '<div class="auto-vars-hint">Los emails y WhatsApp fuera del horario esperan hasta la próxima hora hábil (hora de Colombia). Los demás pasos corren a cualquier hora.</div></div>';
+          '<div class="auto-vars-hint">Por la Ley 2300, los correos, WhatsApp, SMS, encuestas y pedidos de reseña solo salen de lunes a viernes de 7:00 a 19:00 y sábados de 8:00 a 15:00 (hora de Colombia), sin domingos ni festivos. Fuera de ese horario el paso espera y sigue solo. Las notas, etiquetas y avisos a tu equipo corren a cualquier hora.</div></div>';
       })() +
       '<button class="btn-pri" style="width:100%" onclick="autoSelectNode(undefined)">Listo</button>';
   } else if (_autoSelNode !== null && _autoSelNode !== 'trigger' && autoStepByPath(_autoSelNode)) {

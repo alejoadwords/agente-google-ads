@@ -9,6 +9,18 @@ process.env.SUPABASE_SERVICE_KEY = 'clave-falsa';
 process.env.CRON_SECRET = 'secreto';
 process.env.CLERK_SECRET_KEY = 'clerk-falsa';
 
+// Reloj: avanza de verdad, pero arranca un jueves hábil a las 10:00 de Bogotá.
+// Los mensajes al lead esperan el horario de la Ley 2300, así que la prueba no
+// puede depender de la hora a la que se corra. ponerReloj lo mueve.
+const RealDate = Date;
+const aBogota = (t) => RealDate.parse(t + '-05:00');
+let DESFASE = aBogota('2026-10-01T10:00') - RealDate.now();
+const ponerReloj = (t) => { DESFASE = aBogota(t) - RealDate.now(); };
+globalThis.Date = class extends RealDate {
+  constructor(...a) { super(...(a.length ? a : [RealDate.now() + DESFASE])); }
+  static now() { return RealDate.now() + DESFASE; }
+};
+
 import { readFileSync } from 'node:fs';
 
 let fallos = 0;
@@ -19,11 +31,11 @@ const chk = (nombre, ok, extra) => {
 
 const TOPE_POSTGREST = 1000;
 
-function montar(nTrabajos, { trabajosPorLead = 1, romperLead = null } = {}) {
+function montar(nTrabajos, { trabajosPorLead = 1, romperLead = null, pasos = null, ventana = null } = {}) {
   const auto = {
     id: 'auto-1', user_id: 'user-1', active: true,
-    trigger: { type: 'lead_created' },
-    steps: [{ type: 'add_note', text: 'Hola {{nombre}}' }, { type: 'change_stage', stage: 'contactado' }],
+    trigger: { type: 'lead_created', ...(ventana ? { window: ventana } : {}) },
+    steps: pasos || [{ type: 'add_note', text: 'Hola {{nombre}}' }, { type: 'change_stage', stage: 'contactado' }],
   };
   const nLeads = Math.ceil(nTrabajos / trabajosPorLead);
   const leads = {};
@@ -35,7 +47,8 @@ function montar(nTrabajos, { trabajosPorLead = 1, romperLead = null } = {}) {
     lead_id: `l-${i % nLeads}`, step_index: 0, status: 'pending', run_at: '2020-01-01T00:00:00Z',
   }));
 
-  const cuenta = { automations: 0, leadsGet: 0, logs: 0, filasLog: 0, colaGet: 0 };
+  const cuenta = { automations: 0, leadsGet: 0, logs: 0, filasLog: 0, colaGet: 0, envios: 0 };
+  const bitacora = [];
   const enVuelo = { ahora: 0, max: 0 };
   const porLeadSolapado = new Set();
   const activosPorLead = {};
@@ -55,6 +68,9 @@ function montar(nTrabajos, { trabajosPorLead = 1, romperLead = null } = {}) {
     await new Promise(r => setTimeout(r, 1));
     enVuelo.ahora--;
 
+    // Cualquier proveedor de mensajes (Resend, Meta, LabsMobile): no debería
+    // llamarse nunca fuera del horario legal.
+    if (/api\.resend\.com|graph\.facebook\.com|labsmobile/.test(u)) { cuenta.envios++; return ok({ id: 'x', messages: [{ id: 'm' }] }); }
     if (u.includes('/automations?') && u.includes('lead_inactive')) return ok([]);
     if (u.includes('/automations?')) { cuenta.automations++; return ok([auto]); }
 
@@ -73,6 +89,7 @@ function montar(nTrabajos, { trabajosPorLead = 1, romperLead = null } = {}) {
     }
     if (u.includes('/automation_logs')) {
       cuenta.logs++;
+      if (Array.isArray(cuerpo)) bitacora.push(...cuerpo);
       cuenta.filasLog += Array.isArray(cuerpo) ? cuerpo.length : 1;
       if (!Array.isArray(cuerpo)) throw new Error('la bitacora deberia escribirse por tandas');
       return ok([]);
@@ -95,7 +112,7 @@ function montar(nTrabajos, { trabajosPorLead = 1, romperLead = null } = {}) {
     }
     return ok([]);
   };
-  return { auto, trabajos, leads, cuenta, enVuelo, porLeadSolapado };
+  return { auto, trabajos, leads, cuenta, enVuelo, porLeadSolapado, bitacora };
 }
 
 const peticion = { headers: { authorization: 'Bearer secreto' } };
@@ -159,6 +176,50 @@ console.log('\nCuando un trabajo revienta a mitad\n');
       m.trabajos.filter(t => t.status === 'done').length === 19);
   chk('y la bitácora se escribió pese al fallo', m.cuenta.filasLog > 0, `filas=${m.cuenta.filasLog}`);
   chk('el fallo quedó registrado con su motivo', m.cuenta.filasLog >= 20);
+}
+
+console.log('\nEl horario de la Ley 2300\n');
+{
+  const PASOS = [
+    { type: 'add_note', text: 'Nota de {{nombre}}' },
+    { type: 'send_email', subject: 'Hola', body: 'Hola {{nombre}}' },
+    { type: 'change_stage', stage: 'contactado' },
+  ];
+  const lunes7 = new RealDate(aBogota('2026-10-05T07:00')).toISOString();
+  for (const [cuando, que] of [['2026-10-04T10:00', 'un domingo'], ['2026-10-01T20:30', 'entre semana de noche'],
+                               ['2026-10-03T16:00', 'un sábado por la tarde']]) {
+    ponerReloj(cuando);
+    const m = montar(3, { pasos: PASOS });
+    await cron(peticion, respuesta());
+    const t = m.trabajos[0];
+    chk(`${que}: los pasos internos corren y el correo espera`,
+      /Nota de Persona 0/.test(m.leads['l-0'].notes || '') && t.step_index === 1 && t.status === 'pending' && m.leads['l-0'].stage === 'nuevo',
+      JSON.stringify({ t, notas: m.leads['l-0'].notes, etapa: m.leads['l-0'].stage }));
+    chk(`${que}: no se llama a ningún proveedor`, m.cuenta.envios === 0, `envíos=${m.cuenta.envios}`);
+    chk(`${que}: queda dicho en la bitácora`, m.bitacora.some(l => /Ley 2300/.test(l.detail || l.message || JSON.stringify(l))), JSON.stringify(m.bitacora.slice(-2)));
+  }
+  ponerReloj('2026-10-04T10:00');
+  let m = montar(1, { pasos: PASOS });
+  await cron(peticion, respuesta());
+  chk('el domingo reprograma para el lunes a las 7:00', m.trabajos[0].run_at === lunes7, m.trabajos[0].run_at);
+
+  for (const tipo of ['send_whatsapp', 'send_sms', 'send_nps', 'pedir_resena']) {
+    m = montar(1, { pasos: [{ type: tipo, body: 'Hola' }] });
+    await cron(peticion, respuesta());
+    chk(`${tipo} también espera`, m.trabajos[0].status === 'pending' && m.trabajos[0].run_at === lunes7, JSON.stringify(m.trabajos[0]));
+  }
+
+  // Una ventana propia más estrecha sigue mandando dentro del horario legal.
+  ponerReloj('2026-10-01T08:30');
+  m = montar(1, { pasos: PASOS, ventana: { start: 9, end: 17 } });
+  await cron(peticion, respuesta());
+  chk('un jueves a las 8:30 con ventana 9–17, el correo espera a las 9:00', m.trabajos[0].step_index === 1 && m.trabajos[0].status === 'pending',
+    JSON.stringify(m.trabajos[0]));
+
+  ponerReloj('2026-10-01T10:00');
+  m = montar(1, { pasos: PASOS });
+  await cron(peticion, respuesta());
+  chk('en horario, el flujo entero corre', m.trabajos[0].status === 'done' && m.leads['l-0'].stage === 'contactado', JSON.stringify(m.trabajos[0]));
 }
 
 console.log('\nY lo que dice el código fuente\n');
