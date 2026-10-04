@@ -14,7 +14,8 @@ const ok = (c, t, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + t + (!c &&
 let respuestaMeta = () => ({ status: 200, body: { events_received: 1 } });
 let respuestaGoogle = () => ({ status: 200, body: { results: [{}] } });
 const enviadoA = { meta: [], google: [], metaUrl: [], datasetsPedidos: [], canalParcheado: [] };
-let canalWA = null;   // la fila de channel_connections que devuelve la base simulada
+let canalWA = null;
+const accionesCreadas = [];   // la fila de channel_connections que devuelve la base simulada
 const parches = [];
 const J = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json' } });
 globalThis.fetch = async (url, init = {}) => {
@@ -28,6 +29,10 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (u.includes('googleads.googleapis.com')) {
     if (u.includes('googleAds:search')) return J({ results: [] });
+    if (u.includes('conversionActions:mutate')) {
+      accionesCreadas.push(JSON.parse(init.body).operations[0].create);
+      return J({ results: [{ resourceName: 'customers/1234567890/conversionActions/' + (100 + accionesCreadas.length) }] });
+    }
     enviadoA.google.push(JSON.parse(init.body));
     const r = respuestaGoogle(); return J(r.body, r.status);
   }
@@ -138,6 +143,38 @@ c = await m.procesarFila(fila('meta', { evento: 'Lead', event_id: 'acu-lead-1' }
 const el = enviadoA.meta[0]?.data?.[0] || {};
 ok(c.estado === 'enviado' && el.event_name === 'Lead' && el.custom_data.value === undefined && c.valor === undefined,
    'el «Lead» de entrada sale aunque el lead no esté ganado, y SIN el valor del negocio');
+
+console.log('Etapas del embudo');
+{
+  enviadoA.meta.length = 0;
+  const filaEt = fila('meta', { evento: 'Cita de inmueble', etapa: 'cita', valor_etapa: 50000, event_id: 'acu-et-1-cita' });
+  c = await m.procesarFila(filaEt, { lead: lead({ stage: 'cita', custom_fields: { 'ID de lead de Meta': '9' } }), conexiones: [META], moneda: 'COP' });
+  const e1 = enviadoA.meta[0]?.data?.[0] || {};
+  ok(c.estado === 'enviado' && e1.event_name === 'Cita de inmueble', 'una etapa sale aunque el lead NO esté ganado, con el nombre de la etapa', JSON.stringify(c));
+  ok(e1.custom_data.value === 50000 && e1.custom_data.currency === 'COP' && c.valor === 50000,
+     'con el valor de la ETAPA, no el del negocio (2.500.000)');
+  ok(e1.action_source === 'system_generated' && e1.custom_data.event_source === 'crm' && e1.user_data.lead_id === '9',
+     'como evento de CRM con el lead de Meta: es lo que pide Conversion Leads');
+  enviadoA.meta.length = 0;
+  await m.procesarFila(fila('meta', { evento: 'Calificado', etapa: 'calificado', valor_etapa: null }), { lead: lead({ stage: 'calificado' }), conexiones: [META], moneda: 'COP' });
+  ok(enviadoA.meta[0]?.data?.[0]?.custom_data.value === undefined, 'una etapa sin valor va sin valor (no con 0 ni con el del negocio)');
+
+  enviadoA.google.length = 0; accionesCreadas.length = 0;
+  const G2 = JSON.parse(JSON.stringify(GOOGLE));
+  const filaG = fila('google', { evento: 'Cita de inmueble', etapa: 'cita', valor_etapa: 50000 });
+  const leadG = lead({ stage: 'cita', custom_fields: { 'Clic de anuncio': 'GCL9', 'Plataforma': 'Google' } });
+  c = await m.procesarFila(filaG, { lead: leadG, conexiones: [G2], moneda: 'COP' });
+  const cr = accionesCreadas[0] || {};
+  ok(c.estado === 'enviado' && cr.name === 'Acuarius — Cita de inmueble' && cr.category === 'QUALIFIED_LEAD', 'Google: la etapa tiene su propia acción de conversión', JSON.stringify(c));
+  ok(cr.primaryForGoal === false, 'creada SECUNDARIA: no cambia las pujas sin que el cliente lo decida');
+  const gv2 = enviadoA.google.at(-1)?.conversions?.[0] || {};
+  ok(gv2.conversionAction.endsWith('/101') && gv2.conversionValue === 50000 && gv2.gclid === 'GCL9', 'y la etapa sube a ESA acción, con el valor de la etapa');
+  ok(G2.extra_data.conversiones.etapas?.cita?.endsWith('/101'), 'la acción queda guardada en la conexión');
+  await m.procesarFila(filaG, { lead: leadG, conexiones: [G2], moneda: 'COP' });
+  ok(accionesCreadas.length === 1, 'la segunda vez se reutiliza: no se crea otra acción');
+  c = await m.procesarFila(fila('google'), { lead: lead({ custom_fields: { 'Clic de anuncio': 'G1', 'Plataforma': 'Google' } }), conexiones: [G2], moneda: 'COP' });
+  ok(enviadoA.google.at(-1).conversions[0].conversionAction.endsWith('/9'), 'la venta sigue yendo a «Venta en Acuarius»');
+}
 
 console.log('Cada cliente con su conjunto de datos');
 const deCliente = { ...META, id: 'm2', client_id: 'cli_1', account_id: '111' };

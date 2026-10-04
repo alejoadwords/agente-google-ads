@@ -55,6 +55,16 @@ alter table conversiones_conexion enable row level security;
 create unique index if not exists conversiones_conexion_ambito
   on conversiones_conexion (user_id, red, coalesce(client_id, ''));
 
+-- Etapas del embudo que se reportan a la pauta (03-10-2026). Meta optimiza
+-- hacia «Conversion Leads» cuando recibe las etapas intermedias, no solo el
+-- lead y la venta; Google puede pujar por valor si cada etapa trae el suyo.
+alter table pipeline_stages add column if not exists pauta_reportar boolean not null default false;
+alter table pipeline_stages add column if not exists pauta_valor numeric;
+-- En la cola: de qué etapa es el evento y con qué valor (el de la etapa, no
+-- el del negocio: llegar a «cita» no vale lo que vale la venta).
+alter table conversiones_pauta add column if not exists etapa text;
+alter table conversiones_pauta add column if not exists valor_etapa numeric;
+
 -- ¿Esta cuenta (o este cliente) manda sus ventas a esta red?
 --   meta:   una fila activa en conversiones_conexion.
 --   google: la conexión `google_ads` con extra_data.conversiones.activo.
@@ -81,6 +91,9 @@ declare
   cuando timestamptz;
   v_red  text;   -- NO «red»: chocaría con la columna en el ON CONFLICT y el
                  -- error quedaba tapado por el `exception` de abajo
+  v_etapa  text;
+  v_nombre text;
+  v_valor  numeric;
 begin
   if new.deleted_at is not null then return new; end if;
   -- El lead que llega de un anuncio de Meta se le reporta también al ENTRAR
@@ -95,6 +108,40 @@ begin
     values (new.user_id, new.client_id, new.id, 'meta', 'Lead', 'acu-lead-' || new.id, coalesce(new.created_at, now()))
     on conflict (red, event_id) do nothing;
   end if;
+  -- Etapas intermedias marcadas para la pauta. Solo de leads que vinieron de
+  -- un anuncio de ESA red: a Meta no le sirve saber que un lead de un portal
+  -- llegó a «cita», y mandárselo sería sacar datos de más. Una vez por lead y
+  -- etapa: ir y volver no la cuenta dos veces.
+  if new.stage not in ('ganado', 'perdido')
+     and (tg_op = 'INSERT' or old.stage is distinct from new.stage) then
+    select s.key, left(s.label, 40), s.pauta_valor into v_etapa, v_nombre, v_valor
+      from pipeline_stages s
+     where s.key = new.stage and s.pauta_reportar
+       and s.pipeline_id = coalesce(new.pipeline_id, (
+             select p.id from pipelines p
+              where p.user_id = new.user_id and p.is_default
+                and (p.client_id is not distinct from new.client_id or p.client_id is null)
+              order by (p.client_id is not distinct from new.client_id) desc limit 1))
+     limit 1;
+    if v_etapa is not null then
+      if (new.custom_fields ? 'ID de lead de Meta' or coalesce(new.custom_fields->>'Plataforma', '') like 'Meta%')
+         and coalesce(new.custom_fields->>'Plataforma', '') <> 'Meta orgánico'
+         and conversiones_red_activa(new.user_id, new.client_id, 'meta') then
+        insert into conversiones_pauta (user_id, client_id, lead_id, red, evento, etapa, valor_etapa, event_id, ocurrio_at)
+        values (new.user_id, new.client_id, new.id, 'meta', v_nombre, v_etapa, v_valor,
+                'acu-et-' || new.id || '-' || v_etapa, now())
+        on conflict (red, event_id) do nothing;
+      end if;
+      if coalesce(new.custom_fields->>'Plataforma', '') like 'Google%' and new.custom_fields ? 'Clic de anuncio'
+         and conversiones_red_activa(new.user_id, new.client_id, 'google') then
+        insert into conversiones_pauta (user_id, client_id, lead_id, red, evento, etapa, valor_etapa, event_id, ocurrio_at)
+        values (new.user_id, new.client_id, new.id, 'google', v_nombre, v_etapa, v_valor,
+                'acu-et-' || new.id || '-' || v_etapa, now())
+        on conflict (red, event_id) do nothing;
+      end if;
+    end if;
+  end if;
+
   if new.stage is distinct from 'ganado' then return new; end if;
   if tg_op = 'UPDATE' and old.stage is not distinct from 'ganado' then return new; end if;
   -- La ventana de cierre guarda solo el DÍA (a las 12:00) porque deja elegir

@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-03-etapas-a-la-pauta",
+      "fecha": "2026-10-03",
+      "tipo": "nuevo",
+      "titulo": "Meta y Google aprenden de tu embudo, no solo de la venta",
+      "texto": "En Marketing → Plataformas de pauta → Ventas a la pauta puedes marcar etapas de tus procesos (por ejemplo «Presentación de propuesta» o «Cita») para que se le reporten a Meta y a Google cuando un lead que vino de su anuncio llega ahí, con un valor si quieres. Meta usa esas etapas para buscar leads que avanzan, no solo que llenan el formulario; en Google cada etapa entra como conversión secundaria, sin cambiar tus pujas hasta que tú lo decidas.",
+      "accion": {
+        "texto": "Configurar",
+        "ir": "pauta-ventas"
+      }
+    },
+    {
       "id": "2026-10-02-campanas-horario-legal",
       "fecha": "2026-10-02",
       "tipo": "mejora",

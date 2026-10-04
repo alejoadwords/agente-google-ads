@@ -40102,6 +40102,7 @@ function ventasPintar() {
       '<div style="flex:1">Esto lo configura el dueño de la cuenta o un administrador. Aquí puedes ver qué se envió.</div></div>';
   }
   html += '<div class="pauta-conxs">' + ventasTarjetaMeta(d.meta, puede) + ventasTarjetaGoogle(d.google, puede) + '</div>';
+  html += ventasEtapas(d.etapas || [], puede, d.meta.activo || d.google.activo);
   html += ventasRegistro(d.envios || [], puede);
   c.innerHTML = html;
 }
@@ -40183,8 +40184,60 @@ function ventasTarjetaGoogle(g, puede) {
   '</div>';
 }
 
+// Etapas del embudo que se reportan (03-10-2026). Con ellas Meta optimiza
+// hacia «Conversion Leads» —leads que avanzan, no formularios llenos— y
+// Google puede pujar por valor. Solo viajan los leads que vinieron de un
+// anuncio de esa red.
+function ventasEtapas(procesos, puede, algunaActiva) {
+  if (!procesos.length) return '';
+  let html = '<div class="pauta-pasos-t" style="margin:22px 0 6px">Etapas del embudo que se reportan</div>' +
+    '<div class="pauta-conx-nota" style="margin-bottom:10px"><span>Además de la venta, puedes avisarle a la red cuando un lead que vino de su anuncio avanza. ' +
+    '<b>Marca una o dos etapas que alcancen entre el 10 % y el 30 % de tus leads</b>: con ellas Meta busca personas que avanzan, no solo que llenan el formulario. ' +
+    'En Google cada etapa se crea como conversión <b>secundaria</b> («Acuarius — nombre de la etapa»): se mide sin cambiar tus pujas hasta que tú lo decidas. ' +
+    'El valor es opcional: lo que vale para ti que un lead llegue ahí.</span></div>' +
+    (algunaActiva ? '' : '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) +
+      '<div style="flex:1">Activa Meta o Google arriba para que las etapas marcadas empiecen a enviarse.</div></div>');
+  procesos.forEach(p => {
+    html += '<div class="pauta-tabla-caja" style="margin-bottom:10px"><table class="pauta-tabla"><thead><tr>' +
+      '<th class="pauta-th">' + esc(p.nombre) + (p.principal ? ' <span style="color:var(--muted2);font-weight:500">· principal</span>' : '') + '</th>' +
+      '<th class="pauta-th" style="width:110px">Reportar</th><th class="pauta-th" style="width:180px">Valor (opcional)</th></tr></thead><tbody>' +
+      p.etapas.map(e =>
+        '<tr><td class="pauta-td">' + esc(e.label) + '</td>' +
+        '<td class="pauta-td"><div class="toggle' + (e.reportar ? ' on' : '') + '"' +
+          (puede ? ' role="switch" aria-checked="' + e.reportar + '" onclick="ventasEtapaAlternar(\'' + esc(e.id) + '\', this)"' : ' style="opacity:.6;cursor:default"') + '></div></td>' +
+        '<td class="pauta-td"><input class="auto-input" inputmode="numeric" style="padding:6px 10px;max-width:160px" placeholder="Sin valor"' +
+          ' value="' + (e.valor === null ? '' : esc(String(e.valor))) + '"' + (puede ? ' onchange="ventasEtapaValor(\'' + esc(e.id) + '\', this)"' : ' disabled') + '></td></tr>'
+      ).join('') + '</tbody></table></div>';
+  });
+  return html;
+}
+
+async function ventasEtapaAlternar(id, el) {
+  const nuevo = !el.classList.contains('on');
+  el.classList.toggle('on', nuevo);
+  el.setAttribute('aria-checked', String(nuevo));
+  try {
+    await ventasPost({ accion: 'etapa', stage_id: id, reportar: nuevo });
+    showToast(nuevo ? 'Esta etapa se reportará desde ahora' : 'Esta etapa ya no se reporta', 'success');
+  } catch (e) {
+    // Si no se guardó, el interruptor vuelve: lo que se ve tiene que ser lo que hay.
+    el.classList.toggle('on', !nuevo);
+    el.setAttribute('aria-checked', String(!nuevo));
+    showToast('No se pudo guardar: ' + e.message, 'error');
+  }
+}
+
+async function ventasEtapaValor(id, input) {
+  const v = String(input.value || '').replace(/[^\d]/g, '');
+  input.value = v;
+  try {
+    await ventasPost({ accion: 'etapa', stage_id: id, valor: v === '' ? null : Number(v) });
+    showToast('Valor guardado', 'success');
+  } catch (e) { showToast('No se pudo guardar el valor: ' + e.message, 'error'); }
+}
+
 function ventasRegistro(envios, puede) {
-  let html = '<div class="pauta-pasos-t" style="margin:22px 0 8px">Últimas ventas reportadas</div>';
+  let html = '<div class="pauta-pasos-t" style="margin:22px 0 8px">Últimos envíos a la pauta</div>';
   if (!envios.length) {
     return html + '<div class="pauta-vacio">Todavía no hay ventas en la cola. Aparecen aquí en cuanto ganes un lead con el envío activado.</div>';
   }
@@ -40195,7 +40248,8 @@ function ventasRegistro(envios, puede) {
     envios.map(e => {
       const st = VENTAS_ESTADO[e.estado] || [e.estado, 'pauta-pill-off'];
       const cuando = e.ocurrio_at ? new Date(e.ocurrio_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '—';
-      const detalle = e.motivo || (e.llave ? 'Identificada por ' + e.llave : '');
+      const detalle = (e.evento && e.evento !== 'Purchase' ? (e.evento === 'Lead' ? 'Entrada del lead' : 'Etapa «' + e.evento + '»') + ' · ' : '') +
+        (e.motivo || (e.llave ? 'Identificada por ' + e.llave : ''));
       const reintentable = puede && ['rechazado', 'sin_datos', 'pendiente'].includes(e.estado);
       return '<tr>' +
         '<td class="pauta-td" style="white-space:nowrap">' + esc(cuando) + '</td>' +
