@@ -193,6 +193,10 @@
     {
       "path": "/api/cron-conversiones",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron-alertas-pauta",
+      "schedule": "0 13 * * *"
     }
   ]
 }

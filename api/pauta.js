@@ -72,12 +72,12 @@ async function sb(ruta) {
 // El id manda sobre el nombre: el nombre se puede cambiar en la red en
 // cualquier momento y entonces los leads viejos quedarían colgando de un
 // nombre que ya no existe, partiendo en dos una campaña que es una sola.
-function normNombre(s) {
+export function normNombre(s) {
   return String(s || '').trim().toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, ' ');
 }
-function claveDeLead(l) {
+export function claveDeLead(l) {
   const cf = l.custom_fields || {};
   const id = String(cf['ID de campaña'] || '').trim();
   if (id) return 'id:' + id;
@@ -88,7 +88,7 @@ function claveDeLead(l) {
 // ── conexiones ──────────────────────────────────────────────────────────────
 // `client_id` es texto en la base (ver el esquema de pipelines): comparar con
 // eq. y el valor tal cual, sin castear.
-async function conexionesDe(userId, clientId, sueltasTambien = true) {
+export async function conexionesDe(userId, clientId, sueltasTambien = true) {
   let ruta = `/platform_connections?user_id=eq.${encodeURIComponent(userId)}` +
     `&platform=in.(google_ads,meta_ads)` +
     `&select=id,platform,account_id,account_name,client_id,label,access_token,refresh_token,token_expires_at,updated_at,extra_data`;
@@ -262,7 +262,7 @@ async function campanasMeta(fila, desde, hasta) {
 }
 
 // ── el lado del CRM ─────────────────────────────────────────────────────────
-async function leadsDelPeriodo(userId, clientId, desde, hasta, soloDe) {
+export async function leadsDelPeriodo(userId, clientId, desde, hasta, soloDe) {
   let ruta = `/leads?user_id=eq.${encodeURIComponent(userId)}&deleted_at=is.null` +
     `&created_at=gte.${desde}T00:00:00&created_at=lte.${hasta}T23:59:59` +
     `&select=id,name,stage,value,closed_at,close_reason,created_at,updated_at,assigned_name,custom_fields,pipeline_id,source` +
@@ -289,7 +289,7 @@ function resumenCrm(leads) {
 }
 
 // ── unir los dos mundos ─────────────────────────────────────────────────────
-function unir(campanas, leads) {
+export function unir(campanas, leads) {
   // Índice de leads por clave. Un lead con id casa por id; uno viejo, que solo
   // trae el nombre, casa por nombre normalizado.
   const porId = new Map(), porNombre = new Map(), huerfanos = [];
@@ -338,7 +338,7 @@ function rangoPorDefecto(url) {
 
 // Trae las campañas de todas las conexiones en paralelo. Una conexión que
 // falla NO tumba la pantalla: se devuelve su error y las demás se pintan.
-async function traerCampanas(conexiones, desde, hasta) {
+export async function traerCampanas(conexiones, desde, hasta) {
   const resultados = await Promise.all(conexiones.map(async c => {
     try {
       const filas = c.platform === 'google_ads'
@@ -897,6 +897,15 @@ async function diagnostico(quien, url) {
     }
   }
 
+  // Las alertas diarias de los últimos días (api/_alertas-pauta.js): lo que
+  // cambió de un día para otro, que el diagnóstico de 30 días no ve.
+  let alertas = [];
+  try {
+    const desdeAl = new Date(Date.now() - 3 * 86400000).toISOString();
+    alertas = await sb(`/alertas_pauta?user_id=eq.${encodeURIComponent(quien.userId)}&created_at=gte.${encodeURIComponent(desdeAl)}` +
+      `&select=tipo,gravedad,red,campana,titulo,detalle,created_at&order=created_at.desc&limit=30`) || [];
+  } catch { alertas = null; }
+
   const hallazgos = diagnosticar({
     cuentas: extras.filter(x => x.cuenta).map(x => x.cuenta),
     campanas: todas,
@@ -907,6 +916,7 @@ async function diagnostico(quien, url) {
   return jsonResp({
     desde, hasta,
     hallazgos,
+    alertas,
     revisadas: todas.length,
     cuentas: extras.map(x => ({
       id: x.conexion.id, red: x.conexion.platform === 'google_ads' ? 'google' : 'meta',

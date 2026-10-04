@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-03-alertas-pauta",
+      "fecha": "2026-10-03",
+      "tipo": "nuevo",
+      "titulo": "Alertas de tu pauta cada mañana",
+      "texto": "Si tienes Google Ads o Meta conectado, cada mañana revisamos lo que pasó ayer en tus campañas y te escribimos solo si hay algo: una campaña que dejó de entregar, un gasto que se disparó, un costo por lead que se duplicó o dos días gastando sin que entre un lead a tu CRM. Lo ves también en Plataformas de pauta → Diagnóstico. Acuarius solo te avisa: no cambia nada en tus cuentas.",
+      "accion": {
+        "texto": "Ver el diagnóstico",
+        "ir": "pauta-diagnostico"
+      }
+    },
+    {
       "id": "2026-10-03-whatsapp-calificado",
       "fecha": "2026-10-03",
       "tipo": "mejora",

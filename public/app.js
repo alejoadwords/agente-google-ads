@@ -5138,6 +5138,8 @@ window.onload = async () => {
   }
   // Cargar recientes al iniciar
   setTimeout(function(){ loadRecentConversations(); }, 1000);
+  // Enlaces de los correos: «?ir=pauta-diagnostico» abre esa pantalla.
+  setTimeout(function(){ irDeLaUrl(); }, 1200);
   // Mostrar tour si es la primera vez
   setTimeout(function(){ if (tourShouldShow()) tourStart(); }, 1500);
   // Usuarios que ya hicieron el tour pero nunca conectaron una plataforma:
@@ -10541,7 +10543,12 @@ async function novCerrar() {
 // Destinos que puede pedir una novedad desde su botón de acción.
 function novIr(destino) {
   novCerrar();
-  setTimeout(() => {
+  setTimeout(() => irA(destino), 220);
+}
+
+// Ir a una sección por su nombre corto. Lo usan las novedades y los enlaces
+// de los correos («?ir=…»); estos no deben marcar ninguna novedad como vista.
+function irA(destino) {
     try {
       switch (destino) {
         case 'academia':      openAcademia(); break;
@@ -10555,6 +10562,7 @@ function novIr(destino) {
         case 'paginas':       navGo('marketing'); setTimeout(() => crmSetView('paginas'), 150); break;
         case 'pauta':         navGo('marketing'); setTimeout(() => crmSetView('pauta'), 150); break;
         case 'pauta-ventas':  navGo('marketing'); setTimeout(() => { pautaVista = 'ventas'; crmSetView('pauta'); }, 150); break;
+        case 'pauta-diagnostico': navGo('marketing'); setTimeout(() => { pautaVista = 'diagnostico'; crmSetView('pauta'); }, 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'campanas':      navGo('marketing'); setTimeout(() => crmSetView('campaigns'), 150); break;
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
@@ -10567,7 +10575,6 @@ function novIr(destino) {
           else { console.warn('[novedades] destino desconocido:', destino); showToast('No pudimos abrir esa sección', 'error'); }
       }
     } catch (e) { console.warn('[novedades] destino no válido:', destino, e); }
-  }, 220);
 }
 
 // Abrir a mano las últimas novedades (⌘K → "Novedades")
@@ -18059,6 +18066,16 @@ async function crmLoadStages() {
     crmFallo('etapas');
     return false;
   }
+}
+
+// Los correos (por ejemplo, las alertas de la pauta) enlazan a «?ir=<destino>»,
+// con los mismos destinos que las novedades. Se lee y se limpia al cargar.
+const _irPorUrl = (() => { try { return new URLSearchParams(location.search).get('ir'); } catch { return null; } })();
+function irDeLaUrl() {
+  if (!_irPorUrl) return;
+  try { window.history.replaceState({}, '', location.pathname + location.hash); } catch {}
+  // Solo nombres cortos: un «/ruta» en la URL no se sigue desde un enlace.
+  if (/^[a-z-]{2,40}$/.test(_irPorUrl)) irA(_irPorUrl);
 }
 
 // El correo del aviso enlaza a /crm?lead=<id>. Sin esto el enlace dejaría al
@@ -39761,9 +39778,22 @@ function pautaPintarDiagnostico(d) {
   const grupo = (titulo, lista) => lista.length
     ? '<div class="pauta-diag-grupo">' + titulo + '</div><div class="pauta-diag-lista">' + lista.map(tarjeta).join('') + '</div>' : '';
 
+  // Alertas de los últimos días: lo que cambió de un día para otro (llegan
+  // también por correo cada mañana). null = no se pudieron leer, y se dice.
+  const al = d.alertas;
+  const bloqueAlertas = al === null
+    ? '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) + '<div style="flex:1">No se pudieron leer las alertas de los últimos días.</div></div>'
+    : (al && al.length
+      ? '<div class="pauta-diag-grupo">Alertas de los últimos días · también te llegan por correo cada mañana</div><div class="pauta-diag-lista">' +
+        al.map(a => tarjeta({ tipo: a.gravedad === 'alta' ? 'error' : 'oportunidad', red: a.red,
+          titulo: a.titulo, detalle: a.detalle + ' · ' + new Date(a.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) })).join('') +
+        '</div>'
+      : '');
+
   c.innerHTML =
     caidas.map(x => '<div class="pauta-aviso pauta-aviso-mal">' + icn('alert', 16) +
       '<div style="flex:1"><b>No se pudo revisar ' + esc(x.nombre || 'una cuenta') + '.</b> ' + esc(x.error) + '</div></div>').join('') +
+    bloqueAlertas +
     '<div class="pauta-diag-res">' +
       '<div class="pauta-diag-cifra mal"><b>' + errores.length + '</b><span>' + (errores.length === 1 ? 'error' : 'errores') + '</span></div>' +
       '<div class="pauta-diag-cifra ojo"><b>' + oport.length + '</b><span>' + (oport.length === 1 ? 'oportunidad' : 'oportunidades') + '</span></div>' +
