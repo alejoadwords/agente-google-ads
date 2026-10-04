@@ -13,10 +13,14 @@
 //     siguiente corrida, hasta 2 días: después sale igual, con el aviso dentro;
 //   · si el correo falla, el calendario no avanza y se reintenta; a los 3 días
 //     de atraso se salta al siguiente envío, para no quedar reintentando siempre;
-//   · una cuenta que ya no tiene plan para esto no envía.
+//   · una cuenta que ya no tiene plan para esto no envía;
+//   · si el programa pide revisión (revisar_antes, lo normal), NO le llega al
+//     cliente: queda 'por_revisar', se le avisa al dueño, y sale cuando alguien
+//     lo aprueba en la app. Una revisión pendiente anterior del mismo programa
+//     se descarta: la nueva tiene los números al día.
 export const config = { runtime: 'edge' };
 
-import { armarReporte, enviarReporte, proximoEnvio, hoyColombia, TOPE_PROGRAMAS } from './_reportes.js';
+import { armarReporte, enviarReporte, avisarParaRevisar, proximoEnvio, hoyColombia, TOPE_PROGRAMAS } from './_reportes.js';
 import { planDeCuenta } from './_cupo-agente.js';
 import { latir } from './_latido.js';
 
@@ -33,7 +37,7 @@ async function patch(id, cambio) {
 async function correr() {
   const hoy = hoyColombia();
   const fin = Date.now() + TOPE_MS;
-  const res = { revisados: 0, enviados: 0, reintentar: 0, fallidos: 0, sin_plan: 0, pendientes: 0 };
+  const res = { revisados: 0, enviados: 0, para_revisar: 0, reintentar: 0, fallidos: 0, sin_plan: 0, pendientes: 0 };
   const r = await fetch(`${SUPABASE_URL}/rest/v1/reportes_programados?activo=eq.true&proximo_envio=lte.${hoy}&select=*&order=proximo_envio.asc&limit=200`, { headers: H });
   if (!r.ok) throw new Error('Supabase ' + r.status + ' al listar los reportes');
   const programas = await r.json();
@@ -53,6 +57,16 @@ async function correr() {
         res.reintentar++;
         await fetch(`${SUPABASE_URL}/rest/v1/reportes_enviados?id=eq.${fila.id}`, { method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' },
           body: JSON.stringify({ estado: 'fallido', error: 'No se pudo leer ' + fila.datos.cuentas_sin_leer.join(', ') + '; se reintenta.' }) });
+        continue;
+      }
+      if (prog.revisar_antes !== false) {
+        await fetch(`${SUPABASE_URL}/rest/v1/reportes_enviados?programa_id=eq.${prog.id}&estado=eq.por_revisar&id=neq.${fila.id}`, {
+          method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' }, body: JSON.stringify({ estado: 'vista', error: 'Reemplazado por una versión más nueva' }) });
+        await fetch(`${SUPABASE_URL}/rest/v1/reportes_enviados?id=eq.${fila.id}`, { method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' }, body: JSON.stringify({ estado: 'por_revisar' }) });
+        const av = await avisarParaRevisar(fila, prog);
+        if (av.error) console.error('[cron-reportes] aviso', prog.id, av.error);
+        res.para_revisar++;
+        await patch(prog.id, { proximo_envio: proximoEnvio(prog.frecuencia, hoy) });
         continue;
       }
       const e = await enviarReporte(fila, prog, prog.destinatarios);

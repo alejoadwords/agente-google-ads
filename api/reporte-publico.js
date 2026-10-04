@@ -22,8 +22,9 @@ export default async function handler(req) {
     if (!r.ok) throw new Error('Supabase ' + r.status);
     const [f] = await r.json();
     if (!f) return resp({ error: 'Este reporte no existe o ya no está disponible.' }, 404);
-    // Contar la vista no puede tumbar la página.
-    fetch(`${SUPABASE_URL}/rest/v1/reportes_enviados?id=eq.${f.id}`, { method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' }, body: JSON.stringify({ vistas: (f.vistas || 0) + 1 }) }).catch(() => {});
+    // Contar la vista no puede tumbar la página. La revisión de la agencia
+    // (?previa=1, dentro de la app) no cuenta como vista del cliente.
+    if (new URL(req.url).searchParams.get('previa') !== '1') fetch(`${SUPABASE_URL}/rest/v1/reportes_enviados?id=eq.${f.id}`, { method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' }, body: JSON.stringify({ vistas: (f.vistas || 0) + 1 }) }).catch(() => {});
     return resp({ desde: f.desde, hasta: f.hasta, datos: f.datos, resumen: f.resumen, creado: f.created_at });
   } catch (e) {
     console.error('[reporte-publico]', e?.message);

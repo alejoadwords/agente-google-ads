@@ -40120,6 +40120,10 @@ function pautaPintarConexiones(d) {
 // página pública es /r/<token> (public/reporte.html).
 let rptDatos = null;
 let rptForm = null;
+// El reporte armado que se está revisando: { reporte:{id,token,resumen,etiqueta}, programaId, origen:'form'|'programa' }.
+// Nada le llega al cliente sin pasar por aquí: desde la app solo se envía
+// una versión ya vista.
+let rptRevision = null;
 
 const RPT_FRECUENCIA = [
   { id: 'semanal', name: 'Semanal — cada lunes, la semana anterior' },
@@ -40127,7 +40131,11 @@ const RPT_FRECUENCIA = [
   { id: 'mensual', name: 'Mensual — el día 1, el mes anterior' },
 ];
 const RPT_IA = [{ id: 'si', name: 'Sí, con un resumen escrito por IA' }, { id: 'no', name: 'No, solo las cifras' }];
-const RPT_ESTADO = { enviado: ['Enviado', 'pauta-pill-ok'], fallido: ['No salió', 'pauta-pill-mal'] };
+const RPT_REVISAR = [
+  { id: 'si', name: 'Revisarlo yo antes de que salga (recomendado)' },
+  { id: 'no', name: 'Enviarlo solo, sin revisión' },
+];
+const RPT_ESTADO = { enviado: ['Enviado', 'pauta-pill-ok'], fallido: ['No salió', 'pauta-pill-mal'], por_revisar: ['Por revisar', 'pauta-pill-ojo'] };
 
 async function rptCargar() {
   const c = document.getElementById('pauta-cuerpo');
@@ -40161,7 +40169,7 @@ function rptPintar() {
   }
   let html = '<div class="pauta-aviso">' + icn('mail', 15) + '<div style="flex:1">' +
     '<b>Un reporte que se arma solo y le llega a tu cliente con tu marca.</b> Inversión, leads que llegaron al CRM, ventas y lo que hiciste en el período, ' +
-    'comparado con el período anterior. Sale a las 7:00 de la mañana con tu nombre, y si el cliente responde, te llega a ti.' +
+    'comparado con el período anterior. Lo ves y lo ajustas antes de que salga; si el cliente responde, te llega a ti.' +
     (crmAmbitoCliente() ? ' Estos son los reportes de este cliente.' : '') + '</div>' +
     (puede && !rptForm && (d.tope == null || d.programas.length < d.tope) ? '<button class="btn-pri" onclick="rptNuevo()">' + icn('plus', 13) + ' Nuevo reporte</button>' : '') +
   '</div>';
@@ -40170,27 +40178,34 @@ function rptPintar() {
       '<div style="flex:1">Los reportes los programa el dueño de la cuenta, un administrador o Mercadeo. Aquí puedes ver qué se envió.</div></div>';
   }
   if (rptForm) html += rptFormulario();
+  if (rptRevision && rptRevision.origen === 'form') html += rptPanel();
 
   if (!d.programas.length && !rptForm) {
     html += '<div class="pauta-vacio">' + (puede ? 'Todavía no hay reportes programados. Crea el primero: puedes ver cómo queda antes de que salga.' : 'Todavía no hay reportes programados.') + '</div>';
   }
+  const pendientes = new Map((d.enviados || []).filter(e => e.estado === 'por_revisar').map(e => [e.programa_id, e]));
   html += '<div class="pauta-diag-lista">' + d.programas.map(p => {
     const frec = { semanal: 'Semanal', quincenal: 'Quincenal', mensual: 'Mensual' }[p.frecuencia];
+    const pend = pendientes.get(p.id);
     return '<div class="pauta-diag' + (p.activo ? ' oportunidad' : '') + '" style="' + (p.activo ? '' : 'opacity:.65') + '">' +
       '<div class="pauta-diag-ico">' + icn('mail', 16) + '</div>' +
       '<div class="pauta-diag-cuerpo">' +
-        '<div class="pauta-diag-tit"><span>' + esc(p.nombre) + '</span>' + (p.activo ? '' : ' <span class="pauta-pill pauta-pill-off">Apagado</span>') + '</div>' +
+        '<div class="pauta-diag-tit"><span>' + esc(p.nombre) + '</span>' + (p.activo ? '' : ' <span class="pauta-pill pauta-pill-off">Apagado</span>') +
+          (pend ? ' <span class="pauta-pill pauta-pill-ojo">Listo para revisar</span>' : '') + '</div>' +
         '<div class="pauta-diag-det">' + esc(frec) + ' · a ' + esc((p.destinatarios || []).join(', ')) +
+          ' · ' + (p.revisar_antes !== false ? 'lo revisas antes de que salga' : 'sale solo') +
           '<br><span style="color:var(--muted2)">' + (p.activo ? 'Próximo envío: ' + esc(rptFecha(p.proximo_envio)) : 'No se enviará mientras esté apagado') +
           (p.ultimo_envio ? ' · Último: ' + esc(rptFecha(p.ultimo_envio)) : '') + (p.firma ? ' · Firma: ' + esc(p.firma) : '') + '</span></div>' +
       '</div>' +
       '<div class="pauta-diag-acc" style="display:flex;gap:6px;flex-wrap:wrap">' +
-        '<button class="btn-ghost sm" onclick="rptVista(\'' + esc(p.id) + '\', this)">Ver cómo queda</button>' +
-        (puede ? '<button class="btn-ghost sm" onclick="rptEnviar(\'' + esc(p.id) + '\', this)">Enviar ahora</button>' +
-          '<button class="btn-ghost sm" onclick="rptEditar(\'' + esc(p.id) + '\')">Editar</button>' +
+        (pend
+          ? '<button class="btn-pri sm" onclick="rptAbrirPendiente(\'' + esc(p.id) + '\')">Revisar y enviar</button>'
+          : '<button class="' + (puede ? 'btn-ghost' : 'btn-ghost') + ' sm" onclick="rptRevisarPrograma(\'' + esc(p.id) + '\', this)">' + (puede ? 'Revisar y enviar' : 'Ver cómo queda') + '</button>') +
+        (puede ? '<button class="btn-ghost sm" onclick="rptEditar(\'' + esc(p.id) + '\')">Editar</button>' +
           '<button class="btn-ghost sm" onclick="rptActivar(\'' + esc(p.id) + '\', ' + !p.activo + ', this)">' + (p.activo ? 'Apagar' : 'Encender') + '</button>' +
           '<button class="btn-ghost sm" onclick="rptBorrar(\'' + esc(p.id) + '\', this)">Borrar</button>' : '') +
-      '</div></div>';
+      '</div></div>' +
+      (rptRevision && rptRevision.origen === 'programa' && rptRevision.programaId === p.id ? rptPanel() : '');
   }).join('') + '</div>';
 
   const env = d.enviados || [];
@@ -40224,12 +40239,121 @@ function rptDdBoton(campo, lista, valor) {
 }
 
 function rptDd(btn, campo) {
-  const lista = campo === 'frecuencia' ? RPT_FRECUENCIA : RPT_IA;
-  const valor = campo === 'frecuencia' ? rptForm.frecuencia : (rptForm.incluir_ia ? 'si' : 'no');
+  const lista = campo === 'frecuencia' ? RPT_FRECUENCIA : campo === 'revisar_antes' ? RPT_REVISAR : RPT_IA;
+  const valor = campo === 'frecuencia' ? rptForm.frecuencia : ((campo === 'revisar_antes' ? rptForm.revisar_antes !== false : rptForm.incluir_ia) ? 'si' : 'no');
   ddAbrir(btn, lista, valor, id => {
-    if (campo === 'frecuencia') rptForm.frecuencia = id; else rptForm.incluir_ia = id === 'si';
+    if (campo === 'frecuencia') rptForm.frecuencia = id; else rptForm[campo] = id === 'si';
     rptPintar();
   });
+}
+
+// ── Revisión: el reporte armado, dentro de la app ──
+function rptPanel() {
+  const r = rptRevision.reporte;
+  const deForm = rptRevision.origen === 'form';
+  const prog = deForm ? rptForm : (rptDatos?.programas || []).find(x => x.id === rptRevision.programaId);
+  const para = (prog?.destinatarios || []).join(', ');
+  return '<div class="pauta-conx viva" id="rp-panel" style="margin:4px 0 14px">' +
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">' +
+      '<div class="pauta-conx-t" style="flex:1">Vista previa · ' + esc(r.etiqueta || '') + '</div>' +
+      '<a class="pauta-link" href="/r/' + esc(r.token) + '?previa=1" target="_blank" rel="noopener">Abrir en otra pestaña</a>' +
+    '</div>' +
+    '<div style="font-size:var(--fs-xs);color:var(--muted);font-weight:600;margin-bottom:4px">Resumen para el cliente <span style="font-weight:400;color:var(--muted2)">— edítalo si quieres; vacío, el reporte sale sin resumen</span></div>' +
+    '<textarea class="auto-input" id="rp-resumen" rows="5" style="resize:vertical;line-height:1.5">' + esc(r.resumen || '') + '</textarea>' +
+    '<div style="margin:6px 0 12px"><button class="btn-ghost sm" onclick="rptGuardarResumen(this)">Guardar resumen y actualizar la vista</button></div>' +
+    '<iframe id="rp-marco" src="/r/' + esc(r.token) + '?previa=1" title="Vista previa del reporte" style="width:100%;height:760px;border:1px solid var(--border);border-radius:12px;background:var(--bg)"></iframe>' +
+    (deForm ? '<div style="margin-top:8px;font-size:12px;color:var(--muted2)">Si cambias algo del formulario (firma, color, logo), vuelve a generar la vista previa para verlo.</div>' : '') +
+    '<div class="pauta-conx-btns" style="margin-top:12px">' +
+      (rptDatos?.puede_editar && para
+        ? '<button class="btn-pri" id="rp-enviar" onclick="rptEnviarRevision(this)">' + (deForm ? 'Programar y enviar esta versión' : 'Enviar esta versión') + ' a ' + esc(para) + '</button>' : '') +
+      (deForm && rptDatos?.puede_editar ? '<button class="btn-ghost" onclick="rptGuardar()">Solo programar</button>' : '') +
+      (!deForm ? '<button class="btn-ghost" onclick="rptRevisarPrograma(\'' + esc(rptRevision.programaId) + '\', this, true)">Volver a generar</button>' : '') +
+      '<button class="btn-ghost" onclick="rptRevision=null;rptPintar()">Cerrar</button>' +
+    '</div></div>';
+}
+
+async function rptPreviaForm(btn) {
+  const err = document.getElementById('rp-err');
+  if (err) err.style.display = 'none';
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Armando el reporte…'; }
+  try {
+    const d = await rptPost({ accion: 'vista_previa', programa: { ...rptForm, client_id: crmAmbitoCliente() || null } });
+    rptRevision = { reporte: d.reporte, programaId: rptForm.id || null, origen: 'form' };
+    rptPintar();
+    setTimeout(() => document.getElementById('rp-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  } catch (e) {
+    if (err) { err.textContent = e.message; err.style.display = 'block'; } else showToast(e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+async function rptRevisarPrograma(id, btn, regenerar) {
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Armando el reporte…'; }
+  try {
+    const d = await rptPost({ accion: 'vista_previa', id });
+    rptRevision = { reporte: d.reporte, programaId: id, origen: 'programa' };
+    rptPintar();
+    setTimeout(() => document.getElementById('rp-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  } catch (e) {
+    showToast('No se pudo armar el reporte: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+// El que dejó armado el envío programado: se revisa ESE, sin volver a generarlo.
+function rptAbrirPendiente(id) {
+  const e = (rptDatos?.enviados || []).find(x => x.programa_id === id && x.estado === 'por_revisar');
+  if (!e) return;
+  rptRevision = { reporte: { id: e.id, token: e.token, resumen: e.resumen, etiqueta: rptFecha(e.desde) + ' al ' + rptFecha(e.hasta) }, programaId: id, origen: 'programa' };
+  rptPintar();
+  setTimeout(() => document.getElementById('rp-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+}
+
+async function rptGuardarResumen(btn) {
+  const t = document.getElementById('rp-resumen')?.value ?? '';
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const d = await rptPost({ accion: 'editar_resumen', reporte_id: rptRevision.reporte.id, resumen: t });
+    rptRevision.reporte.resumen = d.resumen;
+    const m = document.getElementById('rp-marco');
+    if (m) m.src = m.src;
+    showToast('Resumen guardado', 'success');
+  } catch (e) {
+    showToast('No se pudo guardar el resumen: ' + e.message, 'error');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = texto; }
+}
+
+async function rptEnviarRevision(btn) {
+  const deForm = rptRevision.origen === 'form';
+  const prog = deForm ? rptForm : (rptDatos?.programas || []).find(x => x.id === rptRevision.programaId);
+  const para = (prog?.destinatarios || []).join(', ');
+  if (!await confirmarAguaP({ titulo: '¿Enviar esta versión?', confirmar: 'Enviar',
+    texto: 'Le llega ahora a ' + para + ', tal como la ves.' + (deForm ? '\n\nAdemás queda programado: los siguientes salen según la frecuencia que elegiste.' : '') })) return;
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    // Si el resumen cambió y no se guardó, se guarda antes: se envía lo que se ve.
+    const t = document.getElementById('rp-resumen')?.value ?? '';
+    if (t.trim() !== String(rptRevision.reporte.resumen || '').trim()) {
+      await rptPost({ accion: 'editar_resumen', reporte_id: rptRevision.reporte.id, resumen: t });
+    }
+    let programaId = rptRevision.programaId;
+    if (deForm) {
+      const g = await rptPost({ accion: 'guardar', programa: { ...rptForm, client_id: crmAmbitoCliente() || null } });
+      programaId = g.programa?.id;
+    }
+    await rptPost({ accion: 'enviar_reporte', reporte_id: rptRevision.reporte.id, programa_id: programaId });
+    showToast('Reporte enviado a ' + para, 'success');
+    rptRevision = null; rptForm = null;
+    rptCargar();
+  } catch (e) {
+    showToast('No se pudo enviar: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
 }
 
 function rptFormulario() {
@@ -40248,11 +40372,14 @@ function rptFormulario() {
       etq('Color (opcional)', '<div style="display:flex;gap:8px;align-items:center"><span id="rp-muestra" style="width:34px;height:34px;flex:none;border-radius:8px;border:1px solid var(--border);background:' + (colorOk ? esc(f.color) : 'var(--bg)') + '"></span>' +
         '<input class="auto-input" id="rp-color" maxlength="7" placeholder="#1E2BCC" value="' + esc(f.color || '') + '" oninput="rptForm.color=this.value;rptMuestra(this.value)"></div>') +
       etq('Resumen', rptDdBoton('incluir_ia', RPT_IA, f.incluir_ia ? 'si' : 'no')) +
+      etq('Antes de cada envío', rptDdBoton('revisar_antes', RPT_REVISAR, f.revisar_antes !== false ? 'si' : 'no'),
+        f.revisar_antes !== false ? 'El día del envío te avisamos por correo y sale cuando lo apruebes.' : 'Sale a las 7:00 sin que lo veas.') +
     '</div>' +
     '<div id="rp-err" style="display:none;color:var(--danger);font-size:var(--fs-sm);margin-top:10px"></div>' +
     '<div class="pauta-conx-btns" style="margin-top:14px">' +
-      '<button class="btn-pri" id="rp-guardar" onclick="rptGuardar()">' + (f.id ? 'Guardar cambios' : 'Programar reporte') + '</button>' +
-      '<button class="btn-ghost" onclick="rptForm=null;rptPintar()">Cancelar</button>' +
+      '<button class="btn-pri" id="rp-previa" onclick="rptPreviaForm(this)">' + (rptRevision?.origen === 'form' ? 'Volver a generar la vista previa' : 'Generar vista previa') + '</button>' +
+      '<button class="btn-ghost" id="rp-guardar" onclick="rptGuardar()">' + (f.id ? 'Guardar cambios' : 'Programar sin ver') + '</button>' +
+      '<button class="btn-ghost" onclick="rptForm=null;rptRevision=null;rptPintar()">Cancelar</button>' +
     '</div></div>';
 }
 
@@ -40265,7 +40392,8 @@ function rptMuestra(v) {
 
 function rptNuevo() {
   const s = rptDatos?.sugerencias || {};
-  rptForm = { nombre: s.nombre || '', frecuencia: 'mensual', destinatarios: s.destinatario ? [s.destinatario] : [], firma: s.firma || '', logo_url: '', color: '', incluir_ia: true };
+  rptForm = { nombre: s.nombre || '', frecuencia: 'mensual', destinatarios: s.destinatario ? [s.destinatario] : [], firma: s.firma || '', logo_url: '', color: '', incluir_ia: true, revisar_antes: true };
+  rptRevision = null;
   rptPintar();
   setTimeout(() => document.getElementById(s.nombre ? 'rp-para' : 'rp-nombre')?.focus(), 30);
 }
@@ -40293,43 +40421,13 @@ async function rptGuardar() {
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
   try {
     const d = await rptPost({ accion: 'guardar', programa: { ...rptForm, client_id: crmAmbitoCliente() || null } });
-    showToast(rptForm.id ? 'Reporte actualizado' : 'Reporte programado: el primero sale el ' + rptFecha(d.programa?.proximo_envio), 'success');
-    rptForm = null;
+    const revisa = d.programa?.revisar_antes !== false;
+    showToast(rptForm.id ? 'Reporte actualizado' : 'Reporte programado. El ' + rptFecha(d.programa?.proximo_envio) +
+      (revisa ? ' te avisamos para que lo revises antes de que salga.' : ' sale solo.'), 'success');
+    rptForm = null; rptRevision = null;
     rptCargar();
   } catch (e) {
     if (err) { err.textContent = e.message; err.style.display = 'block'; } else showToast(e.message, 'error');
-    if (btn) { btn.disabled = false; btn.textContent = texto; }
-  }
-}
-
-async function rptVista(id, btn) {
-  // La ventana se abre YA, dentro del clic: abierta después de esperar al
-  // servidor, el navegador la toma por una ventana emergente y la bloquea.
-  const w = window.open('', '_blank');
-  const texto = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Armando…'; }
-  try {
-    const d = await rptPost({ accion: 'vista_previa', id });
-    if (w) w.location = d.url; else window.location.href = d.url;
-  } catch (e) {
-    if (w) w.close();
-    showToast('No se pudo armar la vista previa: ' + e.message, 'error');
-  }
-  if (btn) { btn.disabled = false; btn.textContent = texto; }
-}
-
-async function rptEnviar(id, btn) {
-  const p = (rptDatos?.programas || []).find(x => x.id === id);
-  if (!await confirmarAguaP({ titulo: '¿Enviar el reporte ahora?', confirmar: 'Enviar',
-    texto: 'Se arma con los números de hoy y sale ya a ' + (p?.destinatarios || []).join(', ') + '.\n\nNo cambia el calendario: el siguiente sigue saliendo el ' + rptFecha(p?.proximo_envio) + '.' })) return;
-  const texto = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
-  try {
-    await rptPost({ accion: 'enviar_ahora', id });
-    showToast('Reporte enviado a ' + (p?.destinatarios || []).join(', '), 'success');
-    rptCargar();
-  } catch (e) {
-    showToast('No se pudo enviar: ' + e.message, 'error');
     if (btn) { btn.disabled = false; btn.textContent = texto; }
   }
 }

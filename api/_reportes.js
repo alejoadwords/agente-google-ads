@@ -344,3 +344,31 @@ export async function enviarReporte(fila, programa, destinatarios) {
   await marcar({ estado: 'enviado', enviado_a: para, error: null });
   return { ok: true };
 }
+
+/**
+ * El reporte quedó armado y espera que la agencia lo revise: se le avisa al
+ * dueño (con la marca de Acuarius: es un aviso nuestro, no del cliente).
+ */
+export async function avisarParaRevisar(fila, programa) {
+  const dueno = await correoDelDueno(fila.user_id);
+  if (!dueno) return { error: 'sin correo del dueño' };
+  const d = fila.datos;
+  const r = await enviarResend('reportes-revisar', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'Acuarius <crm@app.acuarius.app>',
+      to: dueno.correo,
+      subject: 'Revisa el reporte de ' + programa.nombre + ' antes de enviarlo',
+      html: emailHtml({
+        titulo: 'El reporte de ' + esc(programa.nombre) + ' está listo',
+        intro: 'Ya armamos el reporte de ' + esc(d.etiqueta) + '. No le llega a tu cliente hasta que lo revises y lo apruebes.',
+        cuerpo: cuerpoDelCorreo(fila),
+        cta: { texto: 'Revisar y enviar', url: 'https://app.acuarius.app/?ir=pauta-reportes' },
+        pie: 'Lo pediste así en el reporte programado. Si prefieres que salga solo, cámbialo en Plataformas de pauta → Reportes.',
+        preheader: 'Para ' + (programa.destinatarios || []).join(', '),
+      }),
+    }),
+  }, fila.user_id);
+  return r.ok ? { ok: true } : { error: 'Resend ' + r.status };
+}

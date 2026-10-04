@@ -4,8 +4,14 @@
 //   POST {accion:'guardar', programa:{…}}     crear o editar (con id)
 //   POST {accion:'activar', id, activo}
 //   POST {accion:'borrar', id}                los reportes ya enviados siguen abiertos
-//   POST {accion:'vista_previa', id}          lo arma sin enviarlo; devuelve el enlace
-//   POST {accion:'enviar_ahora', id}          lo arma y lo envía ya (no mueve el calendario)
+//   POST {accion:'vista_previa', id | programa}  lo arma sin enviarlo (también con el
+//                                             formulario sin guardar) y devuelve el reporte
+//   POST {accion:'editar_resumen', reporte_id, resumen}   antes de enviarlo
+//   POST {accion:'enviar_reporte', reporte_id, programa_id}  manda ESA versión, la revisada
+//
+// Nada sale al cliente sin haberse visto: desde la app solo se envía un
+// reporte ya armado y revisado. El envío programado, si `revisar_antes`, también
+// espera aprobación (ver api/cron-reportes.js).
 //
 // Armar un reporte lee Google, Meta, el CRM y llama a la IA: puede pasar de
 // los 25 s que una función edge tiene para empezar a responder. Vista previa y
@@ -54,6 +60,7 @@ export function validarPrograma(p) {
     nombre, frecuencia: p.frecuencia, destinatarios,
     firma: String(p.firma || '').replace(/[<>"\\]/g, '').trim().slice(0, 60) || null,
     logo_url: logo || null, color: color || null, incluir_ia: p.incluir_ia !== false,
+    revisar_antes: p.revisar_antes !== false,
   } };
 }
 
@@ -105,7 +112,7 @@ export default async function handler(req) {
       const fc = cliente ? `&client_id=eq.${encodeURIComponent(cliente)}` : '';
       const [programas, enviados, sug] = await Promise.all([
         sb(`/reportes_programados?user_id=eq.${uid}${fc}&select=*&order=created_at.asc`),
-        sb(`/reportes_enviados?user_id=eq.${uid}${fc}&estado=neq.vista&select=id,token,programa_id,desde,hasta,estado,error,enviado_a,vistas,created_at&order=created_at.desc&limit=30`),
+        sb(`/reportes_enviados?user_id=eq.${uid}${fc}&estado=neq.vista&select=id,token,programa_id,desde,hasta,estado,error,enviado_a,vistas,resumen,created_at&order=created_at.desc&limit=30`),
         sugerencias(quien.userId, cliente),
       ]);
       return jsonResp({ programas, enviados, sugerencias: sug, puede_editar: puede, plan: p.ok ? (p.plan || 'free') : null, tope });
@@ -120,12 +127,39 @@ export default async function handler(req) {
     };
 
     if (body.accion === 'vista_previa') {
-      const prog = await programaDe(body.id);
+      // Con id: el programa guardado. Sin id: lo que está en el formulario,
+      // para verlo ANTES de programar nada.
+      let prog;
+      if (body.id) prog = await programaDe(body.id);
+      else {
+        const v = validarPrograma(body.programa);
+        if (v.error) return jsonResp({ error: v.error }, 400);
+        prog = { ...v.programa, id: null, user_id: quien.userId, client_id: alcanceDeCliente(quien, body.programa?.client_id) };
+      }
       if (!prog) return jsonResp({ error: 'Ese reporte no existe.' }, 404);
       return enStreaming(async () => {
         const fila = await armarReporte(prog, { vista: true });
-        return { ok: true, url: 'https://app.acuarius.app/r/' + fila.token };
+        return { ok: true, reporte: { id: fila.id, token: fila.token, resumen: fila.resumen, etiqueta: fila.datos.etiqueta } };
       });
+    }
+
+    // Un reporte armado que todavía no salió: el de una vista previa o el que
+    // dejó el cron esperando revisión. Solo esos se editan o se envían.
+    const reporteDe = async (id) => {
+      const [f] = await sb(`/reportes_enviados?id=eq.${encodeURIComponent(id)}&user_id=eq.${uid}&select=*`) || [];
+      if (!f || ajeno(f)) return { error: 'Ese reporte no existe.', status: 404 };
+      if (!['vista', 'por_revisar'].includes(f.estado)) return { error: 'Ese reporte ya se envió.', status: 409 };
+      // Una vista previa vieja tiene números viejos: mejor generarla de nuevo.
+      if (Date.now() - Date.parse(f.created_at) > 3 * 86400000) return { error: 'Esta versión tiene más de 3 días. Genera una nueva para enviar números al día.', status: 409 };
+      return { fila: f };
+    };
+
+    if (body.accion === 'editar_resumen') {
+      const r = await reporteDe(body.reporte_id);
+      if (r.error) return jsonResp({ error: r.error }, r.status);
+      const resumen = String(body.resumen || '').trim().slice(0, 1500) || null;
+      await sb(`/reportes_enviados?id=eq.${r.fila.id}`, { method: 'PATCH', headers: sbH({ Prefer: 'return=minimal' }), body: JSON.stringify({ resumen }) });
+      return jsonResp({ ok: true, resumen });
     }
 
     // Lo demás programa o manda correos a nombre del cliente: no desde soporte.
@@ -156,6 +190,22 @@ export default async function handler(req) {
       return jsonResp({ ok: true, programa: f });
     }
 
+    if (body.accion === 'enviar_reporte') {
+      const r = await reporteDe(body.reporte_id);
+      if (r.error) return jsonResp({ error: r.error }, r.status);
+      const prog = await programaDe(body.programa_id);
+      if (!prog) return jsonResp({ error: 'Guarda el reporte programado antes de enviarlo.' }, 404);
+      // Se toma la fila: si dos clics llegan a la vez, solo uno la encuentra en su estado.
+      const tomadas = await sb(`/reportes_enviados?id=eq.${r.fila.id}&estado=in.(vista,por_revisar)`, {
+        method: 'PATCH', headers: sbH({ Prefer: 'return=representation' }), body: JSON.stringify({ estado: 'fallido', error: 'Enviando…', programa_id: prog.id }),
+      }) || [];
+      if (!tomadas.length) return jsonResp({ error: 'Ese reporte ya se está enviando.' }, 409);
+      const e = await enviarReporte({ ...r.fila, programa_id: prog.id }, prog, prog.destinatarios);
+      if (e.error) return jsonResp({ error: e.error }, 502);
+      await sb(`/reportes_programados?id=eq.${prog.id}`, { method: 'PATCH', headers: sbH({ Prefer: 'return=minimal' }), body: JSON.stringify({ ultimo_envio: new Date().toISOString() }) });
+      return jsonResp({ ok: true, enviado_a: prog.destinatarios });
+    }
+
     const prog = await programaDe(body.id);
     if (!prog) return jsonResp({ error: 'Ese reporte no existe.' }, 404);
 
@@ -169,19 +219,6 @@ export default async function handler(req) {
     if (body.accion === 'borrar') {
       await sb(`/reportes_programados?id=eq.${prog.id}`, { method: 'DELETE' });
       return jsonResp({ ok: true });
-    }
-    if (body.accion === 'enviar_ahora') {
-      // Un doble clic no manda dos correos al cliente.
-      const hace = encodeURIComponent(new Date(Date.now() - 5 * 60000).toISOString());
-      const reciente = await sb(`/reportes_enviados?programa_id=eq.${prog.id}&estado=eq.enviado&created_at=gte.${hace}&select=id&limit=1`) || [];
-      if (reciente.length) return jsonResp({ error: 'Este reporte se acaba de enviar. Espera unos minutos antes de mandarlo otra vez.' }, 409);
-      return enStreaming(async () => {
-        const fila = await armarReporte(prog);
-        const r = await enviarReporte(fila, prog, prog.destinatarios);
-        if (r.error) return { error: r.error };
-        await sb(`/reportes_programados?id=eq.${prog.id}`, { method: 'PATCH', headers: sbH({ Prefer: 'return=minimal' }), body: JSON.stringify({ ultimo_envio: new Date().toISOString() }) });
-        return { ok: true, url: 'https://app.acuarius.app/r/' + fila.token, enviado_a: prog.destinatarios };
-      });
     }
     return jsonResp({ error: 'Acción desconocida' }, 400);
   } catch (e) {

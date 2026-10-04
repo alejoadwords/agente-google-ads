@@ -68,7 +68,8 @@
   const falla = (msg) => { doc.innerHTML = '<div class="estado">' + esc(msg) + '</div>'; };
   if (!/^[a-f0-9]{32}$/.test(token)) return falla('Este enlace no es válido.');
 
-  fetch('/api/reporte-publico?t=' + token).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
+  const previa = new URLSearchParams(location.search).get('previa') === '1';
+  fetch('/api/reporte-publico?t=' + token + (previa ? '&previa=1' : '')).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
     if (!ok || d.error) return falla(d.error || 'No pudimos abrir el reporte.');
     pintar(d);
   }).catch(() => falla('No pudimos abrir el reporte. Revisa tu conexión y vuelve a intentarlo.'));

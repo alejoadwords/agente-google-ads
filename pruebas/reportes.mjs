@@ -73,6 +73,7 @@ ok(v.programa?.destinatarios.join() === 'ana@cliente.com,pedro@cliente.co', 'cor
 ok(/no es válido: juan@/.test(validarPrograma({ ...B, destinatarios: 'juan@' }).error || ''), 'un correo malo se nombra');
 ok(/Máximo 5/.test(validarPrograma({ ...B, destinatarios: 'a@a.co b@a.co c@a.co d@a.co e@a.co f@a.co' }).error || ''), 'máximo 5 destinatarios');
 ok(!!validarPrograma({ ...B, destinatarios: '' }).error, 'sin destinatarios no');
+ok(validarPrograma(B).programa.revisar_antes === true && validarPrograma({ ...B, revisar_antes: false }).programa.revisar_antes === false, 'revisar antes de enviar viene activado; se puede apagar');
 ok(!!validarPrograma({ ...B, frecuencia: 'diaria' }).error, 'frecuencia que no existe');
 ok(!!validarPrograma({ ...B, logo_url: 'http://x.com/l.png' }).error && !!validarPrograma({ ...B, logo_url: 'javascript:alert(1)' }).error, 'el logo solo por https');
 ok(!!validarPrograma({ ...B, color: 'red' }).error && validarPrograma({ ...B, color: '#0f766e' }).programa.color === '#0f766e', 'color #RRGGBB');

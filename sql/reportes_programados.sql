@@ -44,3 +44,10 @@ create table if not exists reportes_enviados (
 );
 create index if not exists reportes_enviados_cuenta on reportes_enviados (user_id, created_at desc);
 alter table reportes_enviados enable row level security;
+
+-- 04-10-2026: nada sale al cliente sin que la agencia lo vea, si así lo pide.
+-- Con revisar_antes, el cron arma el reporte en 'por_revisar' y avisa al dueño;
+-- sale cuando alguien lo aprueba en la app.
+alter table reportes_programados add column if not exists revisar_antes boolean not null default true;
+alter table reportes_enviados drop constraint if exists reportes_enviados_estado_check;
+alter table reportes_enviados add constraint reportes_enviados_estado_check check (estado in ('enviado', 'fallido', 'vista', 'por_revisar'));
