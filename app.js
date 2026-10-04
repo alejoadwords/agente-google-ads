@@ -1064,6 +1064,7 @@ async function loadRecentConversations() {
   const sectionEl = document.getElementById('recientes-section');
   const listEl = document.getElementById('recientes-list');
   if (!listEl || !sectionEl) return;
+  if (!AGENTES_ACTIVOS) { sectionEl.style.display = 'none'; return; }   // ver la de abajo
   try {
     const res = await fetchAuth('/api/profile?type=conversations&action=list&limit=20');
     if (!res.ok) return;
@@ -1156,6 +1157,10 @@ async function loadRecentConversations() {
   var panel = document.getElementById('sb-recents-panel');
   var listEl = document.getElementById('sb-recents-list');
   if (!panel || !listEl) return;
+  // «Recientes» son los chats con los agentes de marketing (Google Ads, SEO…),
+  // apagados desde el 17-09-2026. Con ellos apagados, la lista llevaba a una
+  // pantalla que ya no existe: se esconde hasta que se vuelvan a encender.
+  if (!AGENTES_ACTIVOS) { panel.style.display = 'none'; listEl.innerHTML = ''; return; }
   try {
     var res = await fetchAuth('/api/profile?type=conversations&action=list&limit=10');
     if (!res.ok) return;
