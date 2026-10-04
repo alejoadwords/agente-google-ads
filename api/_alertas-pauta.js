@@ -164,7 +164,7 @@ export async function registrarNuevas(userId, clientId, alertas) {
   return nuevas;
 }
 
-async function correoDelDueno(userId) {
+export async function correoDelDueno(userId) {
   const r = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(userId)}`, {
     headers: { Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`, 'User-Agent': 'Acuarius/1.0' },
   }).catch(() => null);

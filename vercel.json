@@ -89,6 +89,10 @@
       "destination": "/api/sms-baja?t=:token"
     },
     {
+      "source": "/r/:token",
+      "destination": "/reporte.html"
+    },
+    {
       "source": "/agente/inmobiliarias",
       "destination": "/agente/inmobiliarias.html"
     },
@@ -197,6 +201,10 @@
     {
       "path": "/api/cron-alertas-pauta",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron-reportes",
+      "schedule": "*/15 12-14 * * *"
     }
   ]
 }

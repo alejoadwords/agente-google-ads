@@ -10566,6 +10566,7 @@ function irA(destino) {
         case 'pauta-reglas':  navGo('marketing'); setTimeout(() => { pautaVista = 'reglas'; crmSetView('pauta'); }, 150); break;
         case 'pauta-busquedas': navGo('marketing'); setTimeout(() => { pautaVista = 'busquedas'; crmSetView('pauta'); }, 150); break;
         case 'pauta-analista': navGo('marketing'); setTimeout(() => { pautaVista = 'analista'; crmSetView('pauta'); }, 150); break;
+        case 'pauta-reportes': navGo('marketing'); setTimeout(() => { pautaVista = 'reportes'; crmSetView('pauta'); }, 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'campanas':      navGo('marketing'); setTimeout(() => crmSetView('campaigns'), 150); break;
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
@@ -39638,7 +39639,7 @@ function lpCerrarEditor() {
 // nunca ve los tokens de Google ni de Meta.
 
 let pautaDatos = null;
-let pautaVista = 'campanas';       // campanas | diagnostico | analista | reglas | busquedas | conexiones | cartera | ventas
+let pautaVista = 'campanas';       // campanas | diagnostico | analista | reglas | busquedas | reportes | conexiones | cartera | ventas
 let pautaDias = 30;
 let pautaCargando = false;
 
@@ -39693,6 +39694,7 @@ function pautaRender() {
         '<button class="pauta-tab' + (pautaVista === 'analista' ? ' active' : '') + '" onclick="pautaIr(\'analista\')">Analista IA</button>' +
         '<button class="pauta-tab' + (pautaVista === 'reglas' ? ' active' : '') + '" onclick="pautaIr(\'reglas\')">Reglas</button>' +
         '<button class="pauta-tab' + (pautaVista === 'busquedas' ? ' active' : '') + '" onclick="pautaIr(\'busquedas\')">Búsquedas</button>' +
+        '<button class="pauta-tab' + (pautaVista === 'reportes' ? ' active' : '') + '" onclick="pautaIr(\'reportes\')">Reportes</button>' +
         (hayCartera ? '<button class="pauta-tab' + (pautaVista === 'cartera' ? ' active' : '') + '" onclick="pautaIr(\'cartera\')">Cartera</button>' : '') +
         '<button class="pauta-tab' + (pautaVista === 'conexiones' ? ' active' : '') + '" onclick="pautaIr(\'conexiones\')">Conexiones</button>' +
         '<button class="pauta-tab' + (pautaVista === 'ventas' ? ' active' : '') + '" onclick="pautaIr(\'ventas\')">Ventas a la pauta</button>' +
@@ -39734,6 +39736,7 @@ async function pautaCargar() {
   if (pautaVista === 'reglas') { reglasCargar(); return; }
   if (pautaVista === 'busquedas') { busqCargar(); return; }
   if (pautaVista === 'analista') { analistaCargar(); return; }
+  if (pautaVista === 'reportes') { rptCargar(); return; }
   pautaCargando = true;
   c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + (pautaVista === 'diagnostico' ? ' Revisando tus campañas…' : ' Leyendo tus campañas…') + '</div>';
 
@@ -40108,6 +40111,242 @@ function pautaPintarConexiones(d) {
     '</div></div>';
 
   c.innerHTML = html;
+}
+
+// ── Reportes programados para clientes ──────────────────────────────────────
+// Cada semana, quincena o mes, un reporte con la pauta y el CRM sale solo a
+// los correos del cliente, con la firma, el logo y el color de la agencia.
+// Servidor: api/reportes.js, api/_reportes.js y api/cron-reportes.js; la
+// página pública es /r/<token> (public/reporte.html).
+let rptDatos = null;
+let rptForm = null;
+
+const RPT_FRECUENCIA = [
+  { id: 'semanal', name: 'Semanal — cada lunes, la semana anterior' },
+  { id: 'quincenal', name: 'Quincenal — los días 1 y 16' },
+  { id: 'mensual', name: 'Mensual — el día 1, el mes anterior' },
+];
+const RPT_IA = [{ id: 'si', name: 'Sí, con un resumen escrito por IA' }, { id: 'no', name: 'No, solo las cifras' }];
+const RPT_ESTADO = { enviado: ['Enviado', 'pauta-pill-ok'], fallido: ['No salió', 'pauta-pill-mal'] };
+
+async function rptCargar() {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo tus reportes…</div>';
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/reportes' + (cliente ? '?client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok || d.error) { pautaError(d.error || 'No pudimos leer tus reportes.'); return; }
+    rptDatos = d;
+    rptPintar();
+  } catch (e) {
+    pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+function rptFecha(iso) {
+  return iso ? pautaFecha(String(iso).slice(0, 10)) : '—';
+}
+
+function rptPintar() {
+  const c = document.getElementById('pauta-cuerpo');
+  const d = rptDatos;
+  if (!c || !d) return;
+  const puede = !!d.puede_editar;
+  if (d.tope === 0 && !d.programas.length) {
+    c.innerHTML = emptyAgua('mail', 'Reportes automáticos para tus clientes',
+      'Cada semana, quincena o mes, un reporte con la pauta y los leads del CRM le llega solo a tu cliente, con tu marca. Está en los planes Pro y Agencia.', '');
+    return;
+  }
+  let html = '<div class="pauta-aviso">' + icn('mail', 15) + '<div style="flex:1">' +
+    '<b>Un reporte que se arma solo y le llega a tu cliente con tu marca.</b> Inversión, leads que llegaron al CRM, ventas y lo que hiciste en el período, ' +
+    'comparado con el período anterior. Sale a las 7:00 de la mañana con tu nombre, y si el cliente responde, te llega a ti.' +
+    (crmAmbitoCliente() ? ' Estos son los reportes de este cliente.' : '') + '</div>' +
+    (puede && !rptForm && (d.tope == null || d.programas.length < d.tope) ? '<button class="btn-pri" onclick="rptNuevo()">' + icn('plus', 13) + ' Nuevo reporte</button>' : '') +
+  '</div>';
+  if (!puede) {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) +
+      '<div style="flex:1">Los reportes los programa el dueño de la cuenta, un administrador o Mercadeo. Aquí puedes ver qué se envió.</div></div>';
+  }
+  if (rptForm) html += rptFormulario();
+
+  if (!d.programas.length && !rptForm) {
+    html += '<div class="pauta-vacio">' + (puede ? 'Todavía no hay reportes programados. Crea el primero: puedes ver cómo queda antes de que salga.' : 'Todavía no hay reportes programados.') + '</div>';
+  }
+  html += '<div class="pauta-diag-lista">' + d.programas.map(p => {
+    const frec = { semanal: 'Semanal', quincenal: 'Quincenal', mensual: 'Mensual' }[p.frecuencia];
+    return '<div class="pauta-diag' + (p.activo ? ' oportunidad' : '') + '" style="' + (p.activo ? '' : 'opacity:.65') + '">' +
+      '<div class="pauta-diag-ico">' + icn('mail', 16) + '</div>' +
+      '<div class="pauta-diag-cuerpo">' +
+        '<div class="pauta-diag-tit"><span>' + esc(p.nombre) + '</span>' + (p.activo ? '' : ' <span class="pauta-pill pauta-pill-off">Apagado</span>') + '</div>' +
+        '<div class="pauta-diag-det">' + esc(frec) + ' · a ' + esc((p.destinatarios || []).join(', ')) +
+          '<br><span style="color:var(--muted2)">' + (p.activo ? 'Próximo envío: ' + esc(rptFecha(p.proximo_envio)) : 'No se enviará mientras esté apagado') +
+          (p.ultimo_envio ? ' · Último: ' + esc(rptFecha(p.ultimo_envio)) : '') + (p.firma ? ' · Firma: ' + esc(p.firma) : '') + '</span></div>' +
+      '</div>' +
+      '<div class="pauta-diag-acc" style="display:flex;gap:6px;flex-wrap:wrap">' +
+        '<button class="btn-ghost sm" onclick="rptVista(\'' + esc(p.id) + '\', this)">Ver cómo queda</button>' +
+        (puede ? '<button class="btn-ghost sm" onclick="rptEnviar(\'' + esc(p.id) + '\', this)">Enviar ahora</button>' +
+          '<button class="btn-ghost sm" onclick="rptEditar(\'' + esc(p.id) + '\')">Editar</button>' +
+          '<button class="btn-ghost sm" onclick="rptActivar(\'' + esc(p.id) + '\', ' + !p.activo + ', this)">' + (p.activo ? 'Apagar' : 'Encender') + '</button>' +
+          '<button class="btn-ghost sm" onclick="rptBorrar(\'' + esc(p.id) + '\', this)">Borrar</button>' : '') +
+      '</div></div>';
+  }).join('') + '</div>';
+
+  const env = d.enviados || [];
+  if (env.length) {
+    const nombres = new Map(d.programas.map(p => [p.id, p.nombre]));
+    html += '<div class="pauta-pasos-t" style="margin:22px 0 8px">Reportes enviados</div>' +
+      '<div class="pauta-tabla-caja"><table class="pauta-tabla"><thead><tr>' +
+      '<th class="pauta-th">Cuándo</th><th class="pauta-th">Reporte</th><th class="pauta-th">Período</th><th class="pauta-th">Estado</th>' +
+      '<th class="pauta-th num">Vistas</th><th class="pauta-th"></th></tr></thead><tbody>' +
+      env.map(e => {
+        const st = RPT_ESTADO[e.estado] || [e.estado, 'pauta-pill-off'];
+        return '<tr>' +
+          '<td class="pauta-td" style="white-space:nowrap">' + esc(new Date(e.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })) + '</td>' +
+          '<td class="pauta-td">' + esc(nombres.get(e.programa_id) || 'Reporte borrado') +
+            (e.enviado_a?.length ? '<div style="font-size:11px;color:var(--muted2)">' + esc(e.enviado_a.join(', ')) + '</div>' : '') + '</td>' +
+          '<td class="pauta-td" style="white-space:nowrap">' + esc(rptFecha(e.desde)) + ' al ' + esc(rptFecha(e.hasta)) + '</td>' +
+          '<td class="pauta-td"><span class="pauta-pill ' + st[1] + '">' + esc(st[0]) + '</span>' +
+            (e.error ? '<div style="font-size:11px;color:var(--muted2);max-width:240px">' + esc(e.error) + '</div>' : '') + '</td>' +
+          '<td class="pauta-td num">' + pautaNum(e.vistas) + '</td>' +
+          '<td class="pauta-td"><a class="pauta-link" href="/r/' + esc(e.token) + '" target="_blank" rel="noopener">Abrir</a></td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  c.innerHTML = html;
+}
+
+function rptDdBoton(campo, lista, valor) {
+  return '<button type="button" class="dd-btn" style="max-width:none;width:100%;justify-content:space-between" onclick="rptDd(this, \'' + campo + '\')">' +
+    '<span class="dd-btn-txt">' + esc(reglasNombreDe(lista, valor) || 'Elegir') + '</span>' +
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>';
+}
+
+function rptDd(btn, campo) {
+  const lista = campo === 'frecuencia' ? RPT_FRECUENCIA : RPT_IA;
+  const valor = campo === 'frecuencia' ? rptForm.frecuencia : (rptForm.incluir_ia ? 'si' : 'no');
+  ddAbrir(btn, lista, valor, id => {
+    if (campo === 'frecuencia') rptForm.frecuencia = id; else rptForm.incluir_ia = id === 'si';
+    rptPintar();
+  });
+}
+
+function rptFormulario() {
+  const f = rptForm;
+  const etq = (t, campo, ayuda) => '<label style="display:flex;flex-direction:column;gap:4px;font-size:var(--fs-xs);color:var(--muted);font-weight:600">' + t + campo +
+    (ayuda ? '<span style="font-weight:400;color:var(--muted2)">' + ayuda + '</span>' : '') + '</label>';
+  const colorOk = /^#[0-9a-f]{6}$/i.test(f.color || '');
+  return '<div class="pauta-conx viva" style="margin-bottom:14px">' +
+    '<div class="pauta-conx-t" style="margin-bottom:12px">' + (f.id ? 'Editar reporte' : 'Nuevo reporte') + '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">' +
+      etq('Nombre (normalmente, el del cliente)', '<input class="auto-input" id="rp-nombre" maxlength="80" value="' + esc(f.nombre || '') + '" oninput="rptForm.nombre=this.value">') +
+      etq('Cada cuánto', rptDdBoton('frecuencia', RPT_FRECUENCIA, f.frecuencia)) +
+      etq('Para', '<input class="auto-input" id="rp-para" placeholder="cliente@empresa.com, otro@empresa.com" value="' + esc((f.destinatarios || []).join(', ')) + '" oninput="rptForm.destinatarios=this.value.split(/[\\s,;]+/).filter(Boolean)">', 'Hasta 5 correos, separados por comas.') +
+      etq('Firma', '<input class="auto-input" id="rp-firma" maxlength="60" placeholder="El nombre de tu agencia" value="' + esc(f.firma || '') + '" oninput="rptForm.firma=this.value">', 'Así aparece quién lo envía.') +
+      etq('Logo (opcional)', '<input class="auto-input" id="rp-logo" placeholder="https://tuagencia.com/logo.png" value="' + esc(f.logo_url || '') + '" oninput="rptForm.logo_url=this.value">', 'Un enlace https a la imagen. Sin logo, va tu firma.') +
+      etq('Color (opcional)', '<div style="display:flex;gap:8px;align-items:center"><span id="rp-muestra" style="width:34px;height:34px;flex:none;border-radius:8px;border:1px solid var(--border);background:' + (colorOk ? esc(f.color) : 'var(--bg)') + '"></span>' +
+        '<input class="auto-input" id="rp-color" maxlength="7" placeholder="#1E2BCC" value="' + esc(f.color || '') + '" oninput="rptForm.color=this.value;rptMuestra(this.value)"></div>') +
+      etq('Resumen', rptDdBoton('incluir_ia', RPT_IA, f.incluir_ia ? 'si' : 'no')) +
+    '</div>' +
+    '<div id="rp-err" style="display:none;color:var(--danger);font-size:var(--fs-sm);margin-top:10px"></div>' +
+    '<div class="pauta-conx-btns" style="margin-top:14px">' +
+      '<button class="btn-pri" id="rp-guardar" onclick="rptGuardar()">' + (f.id ? 'Guardar cambios' : 'Programar reporte') + '</button>' +
+      '<button class="btn-ghost" onclick="rptForm=null;rptPintar()">Cancelar</button>' +
+    '</div></div>';
+}
+
+// La muestra del color se pinta a mano: repintar todo el formulario por cada
+// tecla le quitaría el foco al campo.
+function rptMuestra(v) {
+  const m = document.getElementById('rp-muestra');
+  if (m) m.style.background = /^#[0-9a-f]{6}$/i.test(v) ? v : 'var(--bg)';
+}
+
+function rptNuevo() {
+  const s = rptDatos?.sugerencias || {};
+  rptForm = { nombre: s.nombre || '', frecuencia: 'mensual', destinatarios: s.destinatario ? [s.destinatario] : [], firma: s.firma || '', logo_url: '', color: '', incluir_ia: true };
+  rptPintar();
+  setTimeout(() => document.getElementById(s.nombre ? 'rp-para' : 'rp-nombre')?.focus(), 30);
+}
+
+function rptEditar(id) {
+  const p = (rptDatos?.programas || []).find(x => x.id === id);
+  if (!p) return;
+  rptForm = { ...p };
+  rptPintar();
+}
+
+async function rptPost(cuerpo) {
+  const r = await fetchAuth('/api/reportes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+  // Vista previa y envío llegan en streaming: el error viene en el cuerpo aunque el estado sea 200.
+  const d = await leerRespuesta(r);
+  if (!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+
+async function rptGuardar() {
+  const btn = document.getElementById('rp-guardar');
+  const err = document.getElementById('rp-err');
+  if (err) err.style.display = 'none';
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const d = await rptPost({ accion: 'guardar', programa: { ...rptForm, client_id: crmAmbitoCliente() || null } });
+    showToast(rptForm.id ? 'Reporte actualizado' : 'Reporte programado: el primero sale el ' + rptFecha(d.programa?.proximo_envio), 'success');
+    rptForm = null;
+    rptCargar();
+  } catch (e) {
+    if (err) { err.textContent = e.message; err.style.display = 'block'; } else showToast(e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+async function rptVista(id, btn) {
+  // La ventana se abre YA, dentro del clic: abierta después de esperar al
+  // servidor, el navegador la toma por una ventana emergente y la bloquea.
+  const w = window.open('', '_blank');
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Armando…'; }
+  try {
+    const d = await rptPost({ accion: 'vista_previa', id });
+    if (w) w.location = d.url; else window.location.href = d.url;
+  } catch (e) {
+    if (w) w.close();
+    showToast('No se pudo armar la vista previa: ' + e.message, 'error');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = texto; }
+}
+
+async function rptEnviar(id, btn) {
+  const p = (rptDatos?.programas || []).find(x => x.id === id);
+  if (!await confirmarAguaP({ titulo: '¿Enviar el reporte ahora?', confirmar: 'Enviar',
+    texto: 'Se arma con los números de hoy y sale ya a ' + (p?.destinatarios || []).join(', ') + '.\n\nNo cambia el calendario: el siguiente sigue saliendo el ' + rptFecha(p?.proximo_envio) + '.' })) return;
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    await rptPost({ accion: 'enviar_ahora', id });
+    showToast('Reporte enviado a ' + (p?.destinatarios || []).join(', '), 'success');
+    rptCargar();
+  } catch (e) {
+    showToast('No se pudo enviar: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+async function rptActivar(id, activo, btn) {
+  if (btn) btn.disabled = true;
+  try { await rptPost({ accion: 'activar', id, activo }); showToast(activo ? 'Reporte encendido' : 'Reporte apagado', 'success'); rptCargar(); }
+  catch (e) { showToast('No se pudo: ' + e.message, 'error'); if (btn) btn.disabled = false; }
+}
+
+async function rptBorrar(id, btn) {
+  const p = (rptDatos?.programas || []).find(x => x.id === id);
+  if (!await confirmarAguaP({ titulo: '¿Borrar este reporte?', confirmar: 'Borrar', peligro: true,
+    texto: '«' + (p?.nombre || '') + '» deja de enviarse.\n\nLos reportes que ya se enviaron siguen abiertos para quien tenga el enlace.' })) return;
+  if (btn) btn.disabled = true;
+  try { await rptPost({ accion: 'borrar', id }); showToast('Reporte borrado', 'success'); rptCargar(); }
+  catch (e) { showToast('No se pudo borrar: ' + e.message, 'error'); if (btn) btn.disabled = false; }
 }
 
 // ── Analista IA ─────────────────────────────────────────────────────────────

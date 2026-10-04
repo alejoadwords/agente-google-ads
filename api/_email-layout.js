@@ -62,8 +62,11 @@ ${items.map((t, i) => `  <tr>
  */
 /**
  * `marca` deja a un cliente poner SU logo y SU color en los correos que salen
- * en su nombre —hoy solo la encuesta de satisfacción—. Es opcional: sin ella
- * sale el logo y el azul de Acuarius, que es lo que quiere el resto de avisos.
+ * en su nombre —la encuesta de satisfacción y los reportes de agencia—. Es
+ * opcional: sin ella sale el logo y el azul de Acuarius, que es lo que quiere
+ * el resto de avisos.
+ *   marca.texto  — sin logo, su nombre en la cabecera en vez del de Acuarius
+ *   marca.blanca — el pie dice solo «Hecho con Acuarius»: el correo es de él
  */
 export function emailHtml({ titulo, intro, cuerpo, cta, pie, preheader, marca }) {
   const AZUL = marca?.color || AZUL_BASE;
@@ -79,7 +82,9 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid ${BORDE};border-radius:16px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
 
       <tr><td style="background:${AZUL};padding:18px 26px">
-        <img src="${LOGO}" alt="" width="${ANCHO_LOGO}" style="display:block;border:0;height:auto;max-width:${ANCHO_LOGO}px">
+        ${!marca?.logo && marca?.texto
+          ? `<div style="font-size:19px;font-weight:800;color:#FFFFFF;letter-spacing:-.01em">${marca.texto}</div>`
+          : `<img src="${LOGO}" alt="" width="${ANCHO_LOGO}" style="display:block;border:0;height:auto;max-width:${ANCHO_LOGO}px">`}
       </td></tr>
 
       <tr><td style="padding:26px 26px 8px">
@@ -101,12 +106,14 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">
 
       <tr><td style="border-top:1px solid ${BORDE};padding:16px 26px;background:#FBFBFE">
         <p style="margin:0;font-size:12px;line-height:1.6;color:${SUAVE}">
-          Te llega desde <a href="https://app.acuarius.app" style="color:${AZUL};text-decoration:none;font-weight:700">Acuarius</a>, tu CRM con agentes de IA.
+          ${marca?.blanca
+            ? `Hecho con <a href="https://acuarius.app" style="color:${SUAVE};text-decoration:none;font-weight:700">Acuarius</a>.`
+            : `Te llega desde <a href="https://app.acuarius.app" style="color:${AZUL};text-decoration:none;font-weight:700">Acuarius</a>, tu CRM con agentes de IA.`}
         </p>
       </td></tr>
 
     </table>
-    <p style="margin:14px 0 0;font-size:11.5px;color:${SUAVE};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">Acuarius · marketing con inteligencia artificial</p>
+    ${marca?.blanca ? '' : `<p style="margin:14px 0 0;font-size:11.5px;color:${SUAVE};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">Acuarius · marketing con inteligencia artificial</p>`}
   </td></tr>
 </table>
 </body></html>`;
