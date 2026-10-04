@@ -12,6 +12,7 @@
 //
 // SOLO desde funciones edge (regla 2 de CLAUDE.md).
 
+import { ponerNegativaEnRed } from './_busquedas.js';
 import { conexionesDe, traerCampanas, leadsDelPeriodo, unir, atribuirPorClic, pausarEnRed, bajarPresupuestoEnRed, conexionDePauta } from './pauta.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -84,7 +85,7 @@ function rango(dias, ahora = new Date()) {
 }
 
 /** Las campañas de la cuenta en una ventana, con sus leads, ventas y conexión. */
-async function campanasDeVentana(userId, conexiones, dias) {
+export async function campanasDeVentana(userId, conexiones, dias) {
   const { desde, hasta } = rango(dias);
   const [res, leads] = await Promise.all([
     traerCampanas(conexiones, desde, hasta),
@@ -102,6 +103,8 @@ async function campanasDeVentana(userId, conexiones, dias) {
     const con = deConexion.get(f.red + ':' + f.id);
     return { red: f.red, id: f.id, nombre: f.nombre, estado: f.estado, objetivo: f.objetivo, moneda: f.moneda,
       inv: f.inversion || 0, leads: f.crm?.leads || 0, ganados: f.crm?.ganados || 0,
+      perdidos: f.crm?.perdidos || 0, en_proceso: f.crm?.en_proceso || 0, ingresos: f.crm?.ingresos || 0,
+      clics: f.clics || 0, impresiones: f.impresiones || 0, conv_red: f.conv || 0,
       dudoso: f.red === 'google' && googleDudoso, huerfanos: huerfanos.length,
       conexion_id: con?.id || null, client_id: con?.client_id || null };
   });
@@ -138,13 +141,22 @@ export async function ejecutarAccion(a, decididaPor) {
     if (!fila) r = { error: 'La conexión de esta cuenta publicitaria ya no existe.' };
     else if (a.accion === 'pausar') r = await pausarEnRed(fila, a.campana_id);
     else if (a.accion === 'bajar_presupuesto') r = await bajarPresupuestoEnRed(fila, a.campana_id, a.porcentaje);
+    else if (a.accion === 'negativa') {
+      const n = await ponerNegativaEnRed(fila, [a.campana_id], a.detalle?.texto, a.detalle?.tipo);
+      const x = n.resultados?.[0];
+      r = n.error ? { error: n.error } : x?.ok ? { ok: true, recurso: x.recurso, dup: x.dup, texto: n.texto, tipo: n.tipo } : { error: x?.error || 'Google no la aceptó.' };
+    }
     else r = { error: 'Acción desconocida' };
   } catch (e) { r = { error: String(e?.message || e).slice(0, 200) }; }
   const cambio = {
     estado: r.ok ? 'ejecutada' : 'fallida',
     resultado: r.ok
-      ? (a.accion === 'pausar' ? 'Campaña pausada.' : 'Presupuesto diario de ' + r.antes.toLocaleString('es-CO') + ' a ' + r.despues.toLocaleString('es-CO') + '.')
+      ? (a.accion === 'pausar' ? 'Campaña pausada.'
+        : a.accion === 'negativa' ? (r.dup ? '«' + r.texto + '» ya era negativa en esta campaña.' : 'Negativa «' + r.texto + '» (' + (r.tipo === 'PHRASE' ? 'frase' : 'exacta') + ') agregada.')
+        : 'Presupuesto diario de ' + r.antes.toLocaleString('es-CO') + ' a ' + r.despues.toLocaleString('es-CO') + '.')
       : r.error,
+    // Con el recurso, una negativa se puede deshacer desde Búsquedas.
+    ...(r.ok && r.recurso ? { recurso: r.recurso } : {}),
     decidida_por: decididaPor, decidida_at: new Date().toISOString(),
   };
   await sb(`/acciones_pauta?id=eq.${encodeURIComponent(a.id)}`, { method: 'PATCH', headers: sbH({ Prefer: 'return=minimal' }), body: JSON.stringify(cambio) });
@@ -156,8 +168,6 @@ export async function ejecutarAccion(a, decididaPor) {
  * las automáticas) y devuelve lo nuevo, para el correo de la mañana.
  */
 export async function evaluarCuenta(userId) {
-  const reglas = await sb(`/reglas_pauta?user_id=eq.${encodeURIComponent(userId)}&activa=eq.true&select=*`) || [];
-  if (!reglas.length) return [];
   // Las propuestas que nadie atendió caducan: describen una cuenta que ya cambió.
   const corte = new Date(Date.now() - DIAS_CADUCA * 86400000).toISOString();
   await sb(`/acciones_pauta?user_id=eq.${encodeURIComponent(userId)}&estado=eq.propuesta&created_at=lt.${encodeURIComponent(corte)}`, {
@@ -170,6 +180,10 @@ export async function evaluarCuenta(userId) {
     method: 'PATCH', headers: sbH({ Prefer: 'return=minimal' }),
     body: JSON.stringify({ estado: 'fallida', resultado: 'Se cortó a mitad del cambio: revisa la campaña en el administrador de anuncios.' }),
   });
+  // Lo de arriba corre en todas las cuentas, tengan reglas o no: las
+  // propuestas del Analista IA (api/_analista.js) caducan igual.
+  const reglas = await sb(`/reglas_pauta?user_id=eq.${encodeURIComponent(userId)}&activa=eq.true&select=*`) || [];
+  if (!reglas.length) return [];
   const conexiones = (await conexionesDe(userId, null, true)).filter(c => c.account_id);
   if (!conexiones.length) return [];
   const porDias = new Map();

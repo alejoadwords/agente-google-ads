@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-03-analista-ia",
+      "fecha": "2026-10-03",
+      "tipo": "nuevo",
+      "titulo": "Analista IA: una revisión de tu pauta con los datos de tu CRM",
+      "texto": "En Plataformas de pauta → Analista IA pides una revisión y en medio minuto tienes qué haría un experto esta semana con tu cuenta, en orden y con los números que lo sostienen: campañas, lo que pasó con sus leads en el CRM, búsquedas que se cuelan y motivos de pérdida. Lo que se puede hacer —pausar, bajar un presupuesto o excluir una búsqueda— te queda listo para aprobar con un clic. Nada se cambia sin tu aprobación.",
+      "accion": {
+        "texto": "Pedir una revisión",
+        "ir": "pauta-analista"
+      }
+    },
+    {
       "id": "2026-10-03-busquedas-negativas",
       "fecha": "2026-10-03",
       "tipo": "nuevo",

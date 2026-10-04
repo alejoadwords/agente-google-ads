@@ -22,7 +22,7 @@
 //
 // SOLO desde funciones edge (regla 2 de CLAUDE.md).
 
-import { gaql, accesoGoogleDeFila } from './pauta.js';
+import { gaql, accesoGoogleDeFila, mutarGoogle } from './pauta.js';
 
 const VACIAS = new Set(('de la el en y a los las del para por con un una que es se al lo como mas más sin sobre ' +
   'mi tu su sus mis cerca near me cuanto cuánto cuanta cuesta vale precio precios valor costo ' +
@@ -268,4 +268,44 @@ export async function leerBusquedas(fila, desde, hasta) {
     ].filter(x => x.texto),
     crmActivo, avisoCrm, moneda: cli[0]?.customer?.currencyCode || null,
   };
+}
+
+/** Lo que Google acepta como palabra negativa: hasta 80 caracteres y 10 palabras. */
+export function limpiarNegativa(texto) {
+  const t = String(texto || '').replace(/[^\p{L}\p{N} &'.-]+/gu, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!t) return { error: 'Falta el texto a excluir.' };
+  if (t.length > 80 || t.split(' ').length > 10) return { error: 'Google acepta negativas de hasta 80 caracteres y 10 palabras.' };
+  return { texto: t };
+}
+
+/**
+ * Pone una negativa en una o varias campañas de la cuenta de `fila`. Solo
+ * campañas de ESA cuenta: un id ajeno no se toca. La usan la pestaña
+ * Búsquedas y la aprobación de una propuesta (reglas y Analista IA).
+ * @returns {{ error } | { texto, resultados: [{ campana_id, campana, ok, dup, recurso, error }] }}
+ */
+export async function ponerNegativaEnRed(fila, campanaIds, texto, tipo) {
+  const limpio = limpiarNegativa(texto);
+  if (limpio.error) return { error: limpio.error };
+  const match = tipo === 'PHRASE' ? 'PHRASE' : 'EXACT';
+  const ids = [...new Set((campanaIds || []).map(x => String(x).replace(/\D/g, '')).filter(Boolean))].slice(0, 20);
+  if (!ids.length) return { error: 'Falta la campaña.' };
+  if (!fila || fila.platform !== 'google_ads') return { error: 'Las negativas son solo de Google Ads.' };
+  const g = await accesoGoogleDeFila(fila);
+  if (g.error) return { error: g.error };
+  const propias = await gaql(g.cid, g.token, `SELECT campaign.id, campaign.name FROM campaign WHERE campaign.id IN (${ids.join(',')})`, g.login);
+  const nombres = new Map(propias.map(r => [String(r.campaign.id), r.campaign.name]));
+  const resultados = [];
+  for (const id of ids) {
+    if (!nombres.has(id)) { resultados.push({ campana_id: id, ok: false, error: 'Esa campaña no es de la cuenta conectada.' }); continue; }
+    const r = await mutarGoogle(g.cid, g.h, 'campaignCriteria', {
+      operations: [{ create: { campaign: `customers/${g.cid}/campaigns/${id}`, negative: true, keyword: { text: limpio.texto, matchType: match } } }],
+    });
+    const dup = !r.ok && /DUPLICATE|already exists|ya existe/i.test(r.error || '');
+    resultados.push({
+      campana_id: id, campana: nombres.get(id), ok: r.ok || dup, dup, recurso: r.datos?.results?.[0]?.resourceName || null,
+      error: r.ok || dup ? null : 'Google no la aceptó: ' + String(r.error || '').slice(0, 160),
+    });
+  }
+  return { texto: limpio.texto, tipo: match, resultados };
 }

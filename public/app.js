@@ -10565,6 +10565,7 @@ function irA(destino) {
         case 'pauta-diagnostico': navGo('marketing'); setTimeout(() => { pautaVista = 'diagnostico'; crmSetView('pauta'); }, 150); break;
         case 'pauta-reglas':  navGo('marketing'); setTimeout(() => { pautaVista = 'reglas'; crmSetView('pauta'); }, 150); break;
         case 'pauta-busquedas': navGo('marketing'); setTimeout(() => { pautaVista = 'busquedas'; crmSetView('pauta'); }, 150); break;
+        case 'pauta-analista': navGo('marketing'); setTimeout(() => { pautaVista = 'analista'; crmSetView('pauta'); }, 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'campanas':      navGo('marketing'); setTimeout(() => crmSetView('campaigns'), 150); break;
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
@@ -39622,7 +39623,7 @@ function lpCerrarEditor() {
 // nunca ve los tokens de Google ni de Meta.
 
 let pautaDatos = null;
-let pautaVista = 'campanas';       // campanas | diagnostico | reglas | busquedas | conexiones | cartera | ventas
+let pautaVista = 'campanas';       // campanas | diagnostico | analista | reglas | busquedas | conexiones | cartera | ventas
 let pautaDias = 30;
 let pautaCargando = false;
 
@@ -39674,6 +39675,7 @@ function pautaRender() {
       '<div class="pauta-tabs">' +
         '<button class="pauta-tab' + (pautaVista === 'campanas' ? ' active' : '') + '" onclick="pautaIr(\'campanas\')">Campañas</button>' +
         '<button class="pauta-tab' + (pautaVista === 'diagnostico' ? ' active' : '') + '" onclick="pautaIr(\'diagnostico\')">Diagnóstico</button>' +
+        '<button class="pauta-tab' + (pautaVista === 'analista' ? ' active' : '') + '" onclick="pautaIr(\'analista\')">Analista IA</button>' +
         '<button class="pauta-tab' + (pautaVista === 'reglas' ? ' active' : '') + '" onclick="pautaIr(\'reglas\')">Reglas</button>' +
         '<button class="pauta-tab' + (pautaVista === 'busquedas' ? ' active' : '') + '" onclick="pautaIr(\'busquedas\')">Búsquedas</button>' +
         (hayCartera ? '<button class="pauta-tab' + (pautaVista === 'cartera' ? ' active' : '') + '" onclick="pautaIr(\'cartera\')">Cartera</button>' : '') +
@@ -39716,6 +39718,7 @@ async function pautaCargar() {
   if (pautaVista === 'ventas') { ventasCargar(); return; }
   if (pautaVista === 'reglas') { reglasCargar(); return; }
   if (pautaVista === 'busquedas') { busqCargar(); return; }
+  if (pautaVista === 'analista') { analistaCargar(); return; }
   pautaCargando = true;
   c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + (pautaVista === 'diagnostico' ? ' Revisando tus campañas…' : ' Leyendo tus campañas…') + '</div>';
 
@@ -40092,6 +40095,146 @@ function pautaPintarConexiones(d) {
   c.innerHTML = html;
 }
 
+// ── Analista IA ─────────────────────────────────────────────────────────────
+// Una revisión de la cuenta entera hecha por la IA, a pedido. Lo que se puede
+// ejecutar entra como propuesta (mismo Aprobar/Descartar que las reglas); el
+// resto son consejos. El servidor decide qué puede ser un botón, no el modelo:
+// ver api/_analista.js.
+let analistaDatos = null;
+let analistaPensando = false;
+
+async function analistaCargar() {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  if (!analistaPensando) c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo tus revisiones…</div>';
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/analista' + (cliente ? '?client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok || d.error) { pautaError(d.error || 'No pudimos leer tus revisiones.'); return; }
+    analistaDatos = d;
+    analistaPintar();
+  } catch (e) {
+    pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+function analistaPintar() {
+  const c = document.getElementById('pauta-cuerpo');
+  const d = analistaDatos;
+  if (!c || !d) return;
+  const cu = d.cupo || {};
+  const sinCupo = cu.quedan === 0;
+  const puede = !!d.puede_editar;
+  const cupoTxt = cu.tope == null ? '' : cu.usadas == null ? 'No pudimos contar tus revisiones de este mes.'
+    : 'Te quedan ' + cu.quedan + ' de ' + cu.tope + ' revisiones este mes.';
+  let html = '<div class="pauta-aviso">' + icn('sparkles', 15) + '<div style="flex:1">' +
+    '<b>Un analista que mira tu cuenta entera</b> —campañas, lo que pasó con sus leads en el CRM, búsquedas y motivos de pérdida— y te dice qué haría esta semana, en orden. ' +
+    'Lo que se puede hacer (pausar, bajar un presupuesto, excluir una búsqueda) te lo deja listo para aprobar; <b>nada se cambia sin tu clic</b>. ' +
+    '<span style="color:var(--muted2)">' + esc(cupoTxt) + '</span></div>' +
+    (puede ? '<button class="btn-pri" id="an-pedir" onclick="analistaPedir()"' + (sinCupo || analistaPensando ? ' disabled' : '') + '>' +
+      (analistaPensando ? 'Revisando…' : icn('sparkles', 13) + ' Pedir revisión') + '</button>' : '') +
+  '</div>';
+  if (analistaPensando) {
+    html += '<div class="pauta-cargando">' + icn('refresh', 15) + ' Revisando tu cuenta: leyendo campañas, búsquedas y tu CRM. Tarda cerca de medio minuto…</div>';
+  }
+  const revs = d.revisiones || [];
+  if (!revs.length && !analistaPensando) {
+    html += emptyAgua('sparkles', 'Todavía no hay revisiones',
+      puede ? 'Pide la primera: tarda medio minuto y no cambia nada en tus campañas.' : 'Las pide el dueño de la cuenta, un administrador o Mercadeo.', '');
+  } else if (revs.length) {
+    html += analistaRevision(revs[0], d, puede, true);
+    if (revs.length > 1) {
+      html += '<div class="pauta-pasos-t" style="margin:22px 0 8px">Revisiones anteriores</div>' +
+        revs.slice(1).map(rv => '<details style="margin-bottom:8px"><summary style="cursor:pointer;font-weight:600;font-size:var(--fs-sm)">' +
+          esc(analistaFecha(rv.created_at)) + '</summary><div style="margin-top:8px">' + analistaRevision(rv, d, puede, false) + '</div></details>').join('');
+    }
+  }
+  c.innerHTML = html;
+}
+
+function analistaFecha(iso) {
+  return new Date(iso).toLocaleString('es-CO', { day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' });
+}
+
+function analistaRevision(rv, d, puede, principal) {
+  const acc = new Map((d.acciones || []).map(a => [a.id, a]));
+  const tono = { alta: 'error', media: 'oportunidad', baja: 'bien' };
+  const estados = { propuesta: ['Esperando', 'pauta-pill-ojo'], en_curso: ['En curso', 'pauta-pill-off'], ejecutada: ['Hecha', 'pauta-pill-ok'],
+    descartada: ['Descartada', 'pauta-pill-off'], fallida: ['No se pudo', 'pauta-pill-mal'], caducada: ['Caducó', 'pauta-pill-off'], deshecha: ['Deshecha', 'pauta-pill-off'] };
+  let html = principal ? '<div class="pauta-pasos-t" style="margin:18px 0 6px">Revisión del ' + esc(analistaFecha(rv.created_at)) + '</div>' : '';
+  html += '<div class="pauta-conx-nota" style="display:block;margin-bottom:12px;line-height:1.55">' + esc(rv.resumen || '') + '</div>';
+  html += '<div class="pauta-diag-lista">' + (rv.recomendaciones || []).map((r, i) => {
+    const ids = r.accion_ids || [];
+    const filas = ids.map(id => acc.get(id)).filter(Boolean);
+    const botones = filas.map(a => {
+      const st = estados[a.estado] || [a.estado, 'pauta-pill-off'];
+      const que = analistaQue(a);
+      if (a.estado === 'propuesta' && puede) {
+        return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">' +
+          '<span style="font-size:12px;color:var(--muted)">' + esc(que) + '</span>' +
+          '<button class="btn-pri sm" onclick="analistaDecidir(\'' + esc(a.id) + '\', \'aprobar\', this)">Aprobar</button>' +
+          '<button class="btn-ghost sm" onclick="analistaDecidir(\'' + esc(a.id) + '\', \'descartar\', this)">Descartar</button></div>';
+      }
+      return '<div style="margin-top:6px;font-size:12px;color:var(--muted)"><span class="pauta-pill ' + st[1] + '">' + esc(st[0]) + '</span> ' +
+        esc(que) + (a.resultado ? ' — ' + esc(a.resultado) : '') + '</div>';
+    }).join('');
+    return '<div class="pauta-diag ' + (tono[r.prioridad] || 'oportunidad') + '">' +
+      '<div class="pauta-diag-ico">' + icn(r.acciones && r.acciones.length ? 'alert' : 'chat', 16) + '</div>' +
+      '<div class="pauta-diag-cuerpo">' +
+        '<div class="pauta-diag-tit"><span>' + (i + 1) + '. ' + esc(r.titulo) + '</span></div>' +
+        '<div class="pauta-diag-det">' + esc(r.por_que) + '</div>' +
+        (r.nota ? '<div style="margin-top:6px;font-size:12px;color:var(--muted2)">' + esc(r.nota) + '</div>' : '') +
+        botones +
+      '</div></div>';
+  }).join('') + '</div>';
+  return html;
+}
+
+function analistaQue(a) {
+  if (a.accion === 'pausar') return 'Pausar «' + (a.campana || '') + '»';
+  if (a.accion === 'bajar_presupuesto') return 'Bajar un ' + a.porcentaje + ' % el presupuesto de «' + (a.campana || '') + '»';
+  if (a.accion === 'negativa') return 'Excluir «' + (a.detalle?.texto || '') + '» (' + (a.detalle?.tipo === 'PHRASE' ? 'frase' : 'exacta') + ') en «' + (a.campana || '') + '»';
+  return a.accion;
+}
+
+async function analistaPedir() {
+  if (analistaPensando) return;
+  analistaPensando = true;
+  analistaPintar();
+  try {
+    const r = await fetchAuth('/api/analista', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'revisar', client_id: crmAmbitoCliente() || null }) });
+    // Llega en streaming: espacios mientras piensa y el JSON al final. El error
+    // viene en el cuerpo aunque el estado sea 200.
+    const d = await leerRespuesta(r);
+    if (d.error) showToast(d.error, 'error');
+    else showToast('Revisión lista', 'success');
+  } catch (e) {
+    showToast('Se cortó la conexión mientras revisábamos. Si en un minuto no aparece la revisión, vuelve a pedirla.', 'error');
+  }
+  analistaPensando = false;
+  if (pautaVista === 'analista') analistaCargar();
+}
+
+async function analistaDecidir(id, accion, btn) {
+  const a = (analistaDatos?.acciones || []).find(x => x.id === id);
+  if (accion === 'aprobar' && !confirm(analistaQue(a || {}) + '?\n\nSe hace ya mismo en ' + (a?.red === 'meta' ? 'Meta' : 'Google Ads') +
+    '. Lo puedes deshacer desde el administrador de anuncios' + (a?.accion === 'negativa' ? ' o desde la pestaña Búsquedas' : '') + '.')) return;
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = accion === 'aprobar' ? 'Haciendo el cambio…' : 'Descartando…'; }
+  try {
+    const r = await fetchAuth('/api/reglas-pauta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion, id }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast(accion === 'aprobar' ? (d.accion?.resultado || 'Hecho') : 'Descartada', 'success');
+  } catch (e) {
+    showToast((accion === 'aprobar' ? 'No se pudo hacer el cambio: ' : 'No se pudo: ') + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+  analistaCargar();
+}
+
 // ── Búsquedas de Google y palabras negativas ────────────────────────────────
 // Por qué búsquedas salen los anuncios y cuáles conviene excluir. El juez es la
 // conversión —y, si Ventas a la pauta está activo, lo que avanzó en el CRM—.
@@ -40441,7 +40584,7 @@ function reglasPintar() {
 }
 
 function reglasTextoAccion(a) {
-  if (a.accion === 'negativa') return 'Palabra negativa';
+  if (a.accion === 'negativa') return 'Excluir «' + (a.detalle?.texto || '') + '»';
   return a.accion === 'bajar_presupuesto' ? 'Bajar el presupuesto un ' + a.porcentaje + ' %' : a.accion === 'pausar' ? 'Pausar' : 'Aviso';
 }
 

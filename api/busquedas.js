@@ -15,7 +15,8 @@ import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 import { quienPregunta, exigeModulo, soloSusLeads, alcanceDeCliente } from './_perfiles.js';
 import { soporteDe } from './_soporte-sesion.js';
 import { conexionesDe, leadsDelPeriodo, gaql, accesoGoogleDeFila, mutarGoogle, conexionDePauta } from './pauta.js';
-import { leerBusquedas, analizarTerminos, calidadPorPalabra } from './_busquedas.js';
+export { limpiarNegativa } from './_busquedas.js';
+import { leerBusquedas, analizarTerminos, calidadPorPalabra, ponerNegativaEnRed } from './_busquedas.js';
 import { completarPalabras, consultaDelDia, filasAClics } from './_gclid.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -28,14 +29,6 @@ async function sb(ruta, init) {
 }
 const jsonResp = (d, status = 200) => new Response(JSON.stringify(d), { status, headers: { 'Content-Type': 'application/json' } });
 const dia = (ms) => new Date(ms - 5 * 3600000).toISOString().slice(0, 10);   // hora de Colombia
-
-/** Lo que Google acepta como palabra negativa: hasta 80 caracteres y 10 palabras. */
-export function limpiarNegativa(texto) {
-  const t = String(texto || '').replace(/[^\p{L}\p{N} &'.-]+/gu, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-  if (!t) return { error: 'Falta el texto a excluir.' };
-  if (t.length > 80 || t.split(' ').length > 10) return { error: 'Google acepta negativas de hasta 80 caracteres y 10 palabras.' };
-  return { texto: t };
-}
 
 async function analisis(quien, url) {
   const cliente = alcanceDeCliente(quien, url.searchParams.get('client_id'));
@@ -88,45 +81,28 @@ async function analisis(quien, url) {
 }
 
 async function ponerNegativa(quien, body) {
-  const limpio = limpiarNegativa(body.texto);
-  if (limpio.error) return jsonResp({ error: limpio.error }, 400);
-  const tipo = body.tipo === 'PHRASE' ? 'PHRASE' : 'EXACT';
-  const ids = [...new Set((Array.isArray(body.campanas) ? body.campanas : []).map(x => String(x).replace(/\D/g, '')).filter(Boolean))].slice(0, 20);
-  if (!ids.length || !body.conexion_id) return jsonResp({ error: 'Falta la campaña.' }, 400);
+  if (!body.conexion_id) return jsonResp({ error: 'Falta la cuenta.' }, 400);
   const fila = await conexionDePauta(quien.userId, body.conexion_id);
   if (!fila || fila.platform !== 'google_ads') return jsonResp({ error: 'Esa conexión no es de tu cuenta.' }, 404);
   if (quien.cliente && fila.client_id && fila.client_id !== quien.cliente) return jsonResp({ error: 'Esa cuenta publicitaria es de otro cliente.' }, 403);
-  const g = await accesoGoogleDeFila(fila);
-  if (g.error) return jsonResp({ error: g.error }, 502);
-
-  // Solo campañas de ESTA cuenta: un id ajeno no se toca.
-  const propias = await gaql(g.cid, g.token, `SELECT campaign.id, campaign.name FROM campaign WHERE campaign.id IN (${ids.join(',')})`, g.login);
-  const nombres = new Map(propias.map(r => [String(r.campaign.id), r.campaign.name]));
+  const r = await ponerNegativaEnRed(fila, Array.isArray(body.campanas) ? body.campanas : [], body.texto, body.tipo);
+  if (r.error) return jsonResp({ error: r.error }, 400);
   const quienDecide = quien.actorId || quien.userId;
-  const etiqueta = tipo === 'PHRASE' ? 'frase' : 'exacta';
-  const resultados = [];
-  for (const id of ids) {
-    if (!nombres.has(id)) { resultados.push({ campana_id: id, error: 'Esa campaña no es de la cuenta conectada.' }); continue; }
-    const r = await mutarGoogle(g.cid, g.h, 'campaignCriteria', {
-      operations: [{ create: { campaign: `customers/${g.cid}/campaigns/${id}`, negative: true, keyword: { text: limpio.texto, matchType: tipo } } }],
-    });
-    const recurso = r.datos?.results?.[0]?.resourceName || null;
-    const dup = !r.ok && /DUPLICATE|already exists|ya existe/i.test(r.error || '');
+  const etiqueta = r.tipo === 'PHRASE' ? 'frase' : 'exacta';
+  // Cada campaña queda en el historial, también las que fallaron: con su motivo.
+  for (const x of r.resultados.filter(x => x.campana)) {
     const fila_ = {
       user_id: quien.userId, client_id: fila.client_id || null, regla: 'Búsquedas', red: 'google', conexion_id: fila.id,
-      campana_id: id, campana: nombres.get(id), accion: 'negativa', motivo: String(body.motivo || '').slice(0, 300) || null,
-      estado: r.ok ? 'ejecutada' : 'fallida', recurso,
-      resultado: r.ok ? 'Negativa «' + limpio.texto + '» (' + etiqueta + ') agregada.'
-        : dup ? '«' + limpio.texto + '» ya era negativa en esta campaña.' : 'Google no la aceptó: ' + String(r.error || '').slice(0, 160),
+      campana_id: x.campana_id, campana: x.campana, accion: 'negativa', motivo: String(body.motivo || '').slice(0, 300) || null,
+      estado: x.ok && !x.dup ? 'ejecutada' : x.dup ? 'descartada' : 'fallida', recurso: x.recurso, detalle: { texto: r.texto, tipo: r.tipo },
+      resultado: x.ok && !x.dup ? 'Negativa «' + r.texto + '» (' + etiqueta + ') agregada.' : x.dup ? '«' + r.texto + '» ya era negativa en esta campaña.' : x.error,
       decidida_por: quienDecide, decidida_at: new Date().toISOString(),
     };
     await sb('/acciones_pauta', { method: 'POST', headers: sbH({ Prefer: 'return=minimal' }), body: JSON.stringify(fila_) }).catch(e => console.error('[busquedas] historial', e.message));
-    resultados.push({ campana_id: id, campana: nombres.get(id), ok: r.ok || dup, error: r.ok || dup ? null : fila_.resultado });
   }
-  const bien = resultados.filter(x => x.ok).length;
-  return bien
-    ? jsonResp({ ok: true, texto: limpio.texto, resultados })
-    : jsonResp({ error: resultados[0]?.error || 'No se pudo agregar la negativa.', resultados }, 502);
+  return r.resultados.some(x => x.ok)
+    ? jsonResp({ ok: true, texto: r.texto, resultados: r.resultados })
+    : jsonResp({ error: r.resultados[0]?.error || 'No se pudo agregar la negativa.', resultados: r.resultados }, 502);
 }
 
 async function deshacer(quien, body) {
