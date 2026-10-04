@@ -6,7 +6,7 @@
       "fecha": "2026-10-04",
       "tipo": "mejora",
       "titulo": "Al crear un lead a mano, eliges la campaña por la que llegó",
-      "texto": "Cuando creas un lead que llegó por WhatsApp o por una llamada, ahora puedes elegir de qué campaña de Google o Meta vino. Si la fuente es Meta Ads o Google Ads, es obligatorio (o eliges «Vino de un anuncio, no sé cuál»). Así esos leads cuentan en Plataformas de pauta, en el Analista IA y en los reportes para tus clientes.",
+      "texto": "Cuando creas un lead que llegó por WhatsApp o por una llamada, ahora eliges de qué campaña de Google o Meta vino. Con fuente Meta Ads, Google Ads o Web es obligatorio responder: la campaña, «Vino de un anuncio, no sé cuál» o, con Web, «No vino de un anuncio». Así esos leads cuentan en Plataformas de pauta, en el Analista IA y en los reportes para tus clientes.",
       "accion": {
         "texto": "Crear un lead",
         "ir": "crm"

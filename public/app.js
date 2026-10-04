@@ -21305,6 +21305,13 @@ function crmFuenteEsPauta(key) {
   if (['meta_ads', 'google_ads', 'tiktok_ads'].includes(k)) return true;
   return /(meta|facebook|instagram|google|tiktok|pauta|anuncio|\bads?\b)/i.test(k + ' ' + fuenteLabel(k));
 }
+// Con «Web» también se exige respuesta: en Certain casi todo lo que llega por
+// el WhatsApp de la página se crea con esa fuente (52 de 56 en septiembre de
+// 2026). Pero «Web» puede ser alguien sin anuncio, así que ahí se puede
+// contestar «No vino de un anuncio».
+function crmFuenteObligaCampana(key) {
+  return crmFuenteEsPauta(key) || String(key || '') === 'web' || /^web$/i.test(fuenteLabel(key));
+}
 function crmRedDeFuente(key) {
   const t = (String(key || '') + ' ' + fuenteLabel(key)).toLowerCase();
   if (/google/.test(t)) return 'google';
@@ -21340,7 +21347,8 @@ function crmCampInit(lead) {
   crmCampAntes = cf['Atribución'] || null;
   const red = /google/i.test(cf['Plataforma'] || '') ? 'google' : /meta/i.test(cf['Plataforma'] || '') ? 'meta' : null;
   crmCampSel = cf['ID de campaña'] ? { id: String(cf['ID de campaña']), nombre: cf['Campaña'] || String(cf['ID de campaña']), red }
-    : crmCampAntes === 'Manual, campaña desconocida' ? { nose: true } : null;
+    : crmCampAntes === 'Manual, campaña desconocida' ? { nose: true }
+    : crmCampAntes === 'Sin anuncio' ? { no: true } : null;
   const sel = document.getElementById('crm-f-source');
   if (sel && !sel._campEscucha) { sel.addEventListener('change', crmCampPintar); sel._campEscucha = true; }
   crmCampPintar();
@@ -21351,13 +21359,14 @@ function crmCampPintar() {
   const btn = document.getElementById('crm-f-camp');
   if (!btn) return;
   const pauta = crmFuenteEsPauta(document.getElementById('crm-f-source')?.value);
+  const obliga = crmFuenteObligaCampana(document.getElementById('crm-f-source')?.value);
   const lbl = document.getElementById('crm-f-camp-label');
-  if (lbl) lbl.innerHTML = pauta ? 'Campaña por la que llegó <span style="color:var(--danger)">*</span>'
+  if (lbl) lbl.innerHTML = obliga ? (pauta ? 'Campaña por la que llegó' : '¿Llegó por un anuncio?') + ' <span style="color:var(--danger)">*</span>'
     : 'Campaña <span style="font-weight:400;color:var(--muted2)">(si llegó por un anuncio)</span>';
   const s = crmCampSel;
   document.getElementById('crm-f-camp-txt').textContent = s
     ? (s.id ? s.nombre + (s.red ? ' · ' + (s.red === 'google' ? 'Google' : 'Meta') : '') : s.nose ? 'Vino de un anuncio, no sé cuál' : 'No vino de un anuncio')
-    : (pauta ? 'Elige la campaña' : 'Ninguna');
+    : (pauta ? 'Elige la campaña' : obliga ? 'Elige una opción' : 'Ninguna');
   btn.disabled = crmCampAuto;
   btn.classList.toggle('activo', !!(s && s.id));
   const nota = document.getElementById('crm-f-camp-nota');
@@ -21401,9 +21410,14 @@ function crmCampCampos() {
     const red = crmRedDeFuente(fuente);
     return { 'Atribución': 'Manual, campaña desconocida', 'Campaña': null, 'ID de campaña': null, ...(red ? { 'Plataforma': red === 'google' ? 'Google' : 'Meta' } : {}) };
   }
-  // «No vino de un anuncio»: solo se borra lo que se había puesto a mano.
-  if (s && s.no && /^(Elegida a mano|Manual, campaña desconocida)$/.test(crmCampAntes || '')) {
-    return { 'Atribución': null, 'Campaña': null, 'ID de campaña': null, 'Plataforma': null };
+  // «No vino de un anuncio»: queda dicho, para no volver a preguntarlo en cada
+  // edición. Si antes se había puesto una campaña a mano, se borra; lo que vino
+  // de otra fuente (webhook, importación) no se toca.
+  if (s && s.no) {
+    if (/^(Elegida a mano|Manual, campaña desconocida)$/.test(crmCampAntes || '')) {
+      return { 'Atribución': 'Sin anuncio', 'Campaña': null, 'ID de campaña': null, 'Plataforma': null };
+    }
+    return crmCampAntes === 'Sin anuncio' ? {} : { 'Atribución': 'Sin anuncio' };
   }
   return {};
 }
@@ -21790,9 +21804,18 @@ async function crmSaveLead() {
     aviso.style.display = texto ? 'block' : 'none';
   };
   decir('');
-  // Fuente de pauta sin campaña: no se guarda así, o se pierde la atribución.
-  if (crmFuenteEsPauta(document.getElementById('crm-f-source').value) && !crmCampAuto && !(crmCampSel && (crmCampSel.id || crmCampSel.nose))) {
-    decir('Elige la campaña por la que llegó este lead. Si no sabes cuál, elige «Vino de un anuncio, no sé cuál».');
+  // Fuente de pauta (o Web) sin respuesta: no se guarda así, o se pierde la atribución.
+  const fuenteF = document.getElementById('crm-f-source').value;
+  if (crmFuenteObligaCampana(fuenteF) && !crmCampAuto && !crmCampSel) {
+    decir(crmFuenteEsPauta(fuenteF)
+      ? 'Elige la campaña por la que llegó este lead. Si no sabes cuál, elige «Vino de un anuncio, no sé cuál».'
+      : '¿Este lead llegó por un anuncio? Elige la campaña, «Vino de un anuncio, no sé cuál» o «No vino de un anuncio».');
+    document.getElementById('crm-f-camp')?.focus();
+    return;
+  }
+  // Con fuente de pauta, «No vino de un anuncio» no es una respuesta válida.
+  if (crmFuenteEsPauta(fuenteF) && !crmCampAuto && crmCampSel && crmCampSel.no) {
+    decir('Con fuente ' + fuenteLabel(fuenteF) + ' el lead vino de un anuncio: elige la campaña o «Vino de un anuncio, no sé cuál».');
     document.getElementById('crm-f-camp')?.focus();
     return;
   }
