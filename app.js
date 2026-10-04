@@ -40195,6 +40195,9 @@ function ventasEtapas(procesos, puede, algunaActiva) {
     '<b>Marca una o dos etapas que alcancen entre el 10 % y el 30 % de tus leads</b>: con ellas Meta busca personas que avanzan, no solo que llenan el formulario. ' +
     'En Google cada etapa se crea como conversión <b>secundaria</b> («Acuarius — nombre de la etapa»): se mide sin cambiar tus pujas hasta que tú lo decidas. ' +
     'El valor es opcional: lo que vale para ti que un lead llegue ahí.</span></div>' +
+    '<div class="pauta-conx-nota" style="margin-bottom:10px"><span><b>Anuncios a WhatsApp:</b> Meta solo acepta sus eventos estándar. La entrada sale como «lead enviado», ' +
+    'la <b>primera</b> etapa marcada que alcance el lead como «lead calificado» (una sola vez) y la venta como «compra», unidos al clic del anuncio durante los 7 días ' +
+    'siguientes. Necesita tu WhatsApp conectado a Acuarius; después de 7 días, o sin WhatsApp conectado, se usan teléfono y correo.</span></div>' +
     (algunaActiva ? '' : '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) +
       '<div style="flex:1">Activa Meta o Google arriba para que las etapas marcadas empiecen a enviarse.</div></div>');
   procesos.forEach(p => {

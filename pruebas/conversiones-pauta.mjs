@@ -15,6 +15,7 @@ let respuestaMeta = () => ({ status: 200, body: { events_received: 1 } });
 let respuestaGoogle = () => ({ status: 200, body: { results: [{}] } });
 const enviadoA = { meta: [], google: [], metaUrl: [], datasetsPedidos: [], canalParcheado: [] };
 let canalWA = null;
+let calificadoYa = false;   // ¿la base dice que otra etapa ya salió como calificado?
 const accionesCreadas = [];   // la fila de channel_connections que devuelve la base simulada
 const parches = [];
 const J = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json' } });
@@ -35,6 +36,9 @@ globalThis.fetch = async (url, init = {}) => {
     }
     enviadoA.google.push(JSON.parse(init.body));
     const r = respuestaGoogle(); return J(r.body, r.status);
+  }
+  if (u.startsWith('https://base.falsa/rest/v1/conversiones_pauta') && (init.method || 'GET') === 'GET') {
+    return J(calificadoYa ? [{ id: 'otra' }] : []);
   }
   if (u.startsWith('https://base.falsa/rest/v1/conversiones_pauta') && init.method === 'PATCH') {
     parches.push(JSON.parse(init.body)); return new Response(null, { status: 204 });
@@ -91,7 +95,7 @@ ok(ev.event_id === 'acu-x-1', 'el mismo event_id en cada reintento: Meta no la c
 ok(c.llave.startsWith('lead de Meta'), 'la fila dice con qué se identificó · ' + c.llave);
 
 console.log('Clic a WhatsApp');
-const deWhatsapp = lead({ custom_fields: { 'Clic de anuncio': 'CTWA9', 'Plataforma': 'Meta', 'ID de anuncio': '1', 'Tipo de clic': 'ctwa_clid' } });
+const deWhatsapp = lead({ created_at: hace(1), custom_fields: { 'Clic de anuncio': 'CTWA9', 'Plataforma': 'Meta', 'ID de anuncio': '1', 'Tipo de clic': 'ctwa_clid' } });
 canalWA = { id: 'cc1', waba_id: 'WABA1', access_token: 'token-wa', conversiones_dataset: null, client_id: null };
 enviadoA.meta.length = 0; enviadoA.metaUrl.length = 0;
 c = await m.procesarFila(fila('meta'), { lead: deWhatsapp, conexiones: [META], moneda: 'COP' });
@@ -143,6 +147,28 @@ c = await m.procesarFila(fila('meta', { evento: 'Lead', event_id: 'acu-lead-1' }
 const el = enviadoA.meta[0]?.data?.[0] || {};
 ok(c.estado === 'enviado' && el.event_name === 'Lead' && el.custom_data.value === undefined && c.valor === undefined,
    'el «Lead» de entrada sale aunque el lead no esté ganado, y SIN el valor del negocio');
+
+console.log('Clic a WhatsApp: los eventos estándar de Meta');
+{
+  canalWA = { id: 'cc1', waba_id: 'WABA1', access_token: 'token-wa', conversiones_dataset: 'DS_WABA', client_id: null };
+  enviadoA.meta.length = 0;
+  await m.procesarFila(fila('meta', { evento: 'Lead', event_id: 'acu-lead-w' }), { lead: { ...deWhatsapp, stage: 'nuevo' }, conexiones: [META], moneda: 'COP' });
+  ok(enviadoA.meta[0]?.data?.[0]?.event_name === 'LeadSubmitted', 'la entrada sale como «LeadSubmitted», no como «Lead»');
+  enviadoA.meta.length = 0; calificadoYa = false;
+  c = await m.procesarFila(fila('meta', { id: 'f-q1', evento: 'Cita de inmueble', etapa: 'cita', valor_etapa: 30000 }), { lead: { ...deWhatsapp, stage: 'cita' }, conexiones: [META], moneda: 'COP' });
+  const q = enviadoA.meta[0]?.data?.[0] || {};
+  ok(c.estado === 'enviado' && q.event_name === 'QualifiedLead' && q.custom_data.value === 30000 && q.user_data.ctwa_clid === 'CTWA9',
+     'la etapa marcada sale como «QualifiedLead» con el valor de la etapa', JSON.stringify(c));
+  calificadoYa = true; enviadoA.meta.length = 0;
+  c = await m.procesarFila(fila('meta', { id: 'f-q2', evento: 'Propuesta', etapa: 'propuesta' }), { lead: { ...deWhatsapp, stage: 'propuesta' }, conexiones: [META], moneda: 'COP' });
+  ok(c.estado === 'cancelado' && !enviadoA.meta.length && /un calificado por clic/.test(c.motivo), 'una segunda etapa no suma otro calificado: Meta cuenta uno por clic');
+  calificadoYa = false; enviadoA.meta.length = 0;
+  c = await m.procesarFila(fila('meta'), { lead: { ...deWhatsapp, created_at: hace(9) }, conexiones: [META], moneda: 'COP' });
+  const v = enviadoA.meta[0]?.data?.[0] || {};
+  ok(c.estado === 'enviado' && v.action_source === 'system_generated' && v.event_name === 'Purchase' && !v.user_data.ctwa_clid && /más de 7 días/.test(c.motivo),
+     'pasados 7 días del clic sale por el pixel, sin el ctwa_clid, y la fila lo dice');
+  canalWA = null;
+}
 
 console.log('Etapas del embudo');
 {
