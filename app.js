@@ -37702,10 +37702,17 @@ async function plnGuardar(datos, id) {
 // Confirmación con nuestra propia cara. El confirm() del navegador rompe el
 // diseño —ya lo sufrimos con las respuestas rápidas— y encima no deja explicar
 // las consecuencias, que es justo lo que hace falta antes de borrar algo.
-function confirmarAgua({ titulo, texto, confirmar, peligro, onOk }) {
+function confirmarAgua({ titulo, texto, confirmar, peligro, onOk, onNo }) {
   const ov = document.createElement('div');
   ov.className = 'auto-modal-overlay';
-  const cerrar = () => ov.remove();
+  let resuelto = false;
+  const tecla = e => { if (e.key === 'Escape') cerrar(); };
+  const cerrar = () => {
+    document.removeEventListener('keydown', tecla, true);
+    ov.remove();
+    if (!resuelto && onNo) { resuelto = true; onNo(); }
+  };
+  document.addEventListener('keydown', tecla, true);
   ov.addEventListener('mousedown', e => { if (e.target === ov) cerrar(); });
   ov.innerHTML = '<div class="auto-modal" style="max-width:420px">' +
     '<div class="auto-modal-head">' +
@@ -37718,8 +37725,16 @@ function confirmarAgua({ titulo, texto, confirmar, peligro, onOk }) {
       '<button class="' + (peligro ? 'btn-dgr' : 'btn-pri') + ' sm" data-ok>' + esc(confirmar || 'Confirmar') + '</button>' +
     '</div></div>';
   ov.querySelectorAll('[data-x]').forEach(b => b.onclick = cerrar);
-  ov.querySelector('[data-ok]').onclick = async () => { cerrar(); await onOk(); };
+  ov.querySelector('[data-ok]').onclick = async () => { resuelto = true; cerrar(); await onOk(); };
   document.body.appendChild(ov);
+  ov.querySelector('[data-ok]').focus();
+}
+
+// La misma, para esperarla: `if (!await confirmarAguaP({...})) return;`.
+// `texto` va en texto plano (se escapa aquí); un salto de línea doble es un párrafo.
+function confirmarAguaP({ titulo, texto, confirmar, peligro }) {
+  const html = String(texto || '').split('\n\n').map(p => esc(p).replace(/\n/g, '<br>')).join('<br><br>');
+  return new Promise(res => confirmarAgua({ titulo, texto: html, confirmar, peligro, onOk: () => res(true), onNo: () => res(false) }));
 }
 
 // ── Editor de plantilla (formato simple) ──────────────────────────────────────
@@ -39831,8 +39846,8 @@ function pautaBotonPausar(x, d) {
 }
 
 async function pautaPausar(p, btn) {
-  if (!confirm('¿Pausar «' + (p.nombre || 'esta campaña') + '»?\n\nDeja de gastar desde ya. La puedes volver a activar cuando quieras desde ' +
-    'el administrador de anuncios.')) return;
+  if (!await confirmarAguaP({ titulo: '¿Pausar esta campaña?', confirmar: 'Pausar', peligro: true,
+    texto: '«' + (p.nombre || 'Esta campaña') + '» deja de gastar desde ya.\n\nLa puedes volver a activar cuando quieras desde el administrador de anuncios.' })) return;
   const textoBtn = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Pausando…'; }
   try {
@@ -40219,8 +40234,9 @@ async function analistaPedir() {
 
 async function analistaDecidir(id, accion, btn) {
   const a = (analistaDatos?.acciones || []).find(x => x.id === id);
-  if (accion === 'aprobar' && !confirm(analistaQue(a || {}) + '?\n\nSe hace ya mismo en ' + (a?.red === 'meta' ? 'Meta' : 'Google Ads') +
-    '. Lo puedes deshacer desde el administrador de anuncios' + (a?.accion === 'negativa' ? ' o desde la pestaña Búsquedas' : '') + '.')) return;
+  if (accion === 'aprobar' && !await confirmarAguaP({ titulo: '¿Aprobar este cambio?', confirmar: 'Aprobar',
+    texto: analistaQue(a || {}) + '.\n\nSe hace ya mismo en ' + (a?.red === 'meta' ? 'Meta' : 'Google Ads') +
+      '. Lo puedes deshacer desde el administrador de anuncios' + (a?.accion === 'negativa' ? ' o desde la pestaña Búsquedas' : '') + '.' })) return;
   const texto = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = accion === 'aprobar' ? 'Haciendo el cambio…' : 'Descartando…'; }
   try {
@@ -40400,7 +40416,8 @@ async function busqExcluir(p, btn) {
   const como = p.tipo === 'PHRASE'
     ? 'Tu anuncio dejará de salir en CUALQUIER búsqueda que contenga «' + p.texto + '»'
     : 'Tu anuncio dejará de salir cuando alguien busque exactamente «' + p.texto + '»';
-  if (!confirm('¿Excluir «' + p.texto + '»?\n\n' + como + (cuantas > 1 ? ', en ' + cuantas + ' campañas' : '') + '.\n\nLo puedes deshacer desde esta misma pantalla.')) return;
+  if (!await confirmarAguaP({ titulo: '¿Excluir «' + p.texto + '»?', confirmar: 'Excluir',
+    texto: como + (cuantas > 1 ? ', en ' + cuantas + ' campañas' : '') + '.\n\nLo puedes deshacer desde esta misma pantalla.' })) return;
   const texto = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Excluyendo…'; }
   try {
@@ -40418,7 +40435,8 @@ async function busqExcluir(p, btn) {
 }
 
 async function busqDeshacer(id, btn) {
-  if (!confirm('¿Quitar esta negativa?\n\nTu anuncio volverá a poder salir en esas búsquedas.')) return;
+  if (!await confirmarAguaP({ titulo: '¿Quitar esta negativa?', confirmar: 'Quitar',
+    texto: 'Tu anuncio volverá a poder salir en esas búsquedas.' })) return;
   if (btn) { btn.disabled = true; btn.textContent = 'Quitando…'; }
   try {
     const r = await fetchAuth('/api/busquedas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'deshacer', id }) });
@@ -40749,7 +40767,8 @@ async function reglasActivar(id, activa, btn) {
 
 async function reglasBorrar(id, btn) {
   const r = (reglasDatos?.reglas || []).find(x => x.id === id);
-  if (!confirm('¿Borrar la regla «' + (r?.nombre || '') + '»?\n\nLo que ya hizo queda en el historial.')) return;
+  if (!await confirmarAguaP({ titulo: '¿Borrar esta regla?', confirmar: 'Borrar', peligro: true,
+    texto: '«' + (r?.nombre || '') + '» deja de revisarse.\n\nLo que ya hizo queda en el historial.' })) return;
   if (btn) btn.disabled = true;
   try { await reglasPost({ accion: 'borrar', id }); showToast('Regla borrada', 'success'); reglasCargar(); }
   catch (e) { showToast('No se pudo borrar: ' + e.message, 'error'); if (btn) btn.disabled = false; }
@@ -40757,8 +40776,9 @@ async function reglasBorrar(id, btn) {
 
 async function reglasDecidir(id, accion, btn) {
   const a = (reglasDatos?.acciones || []).find(x => x.id === id);
-  if (accion === 'aprobar' && !confirm(reglasTextoAccion(a || {}) + ' «' + (a?.campana || '') + '»?\n\nSe hace ya mismo en ' +
-    (a?.red === 'google' ? 'Google Ads' : 'Meta') + '. Si quieres deshacerlo, se hace desde el administrador de anuncios.')) return;
+  if (accion === 'aprobar' && !await confirmarAguaP({ titulo: '¿Aprobar este cambio?', confirmar: 'Aprobar',
+    texto: reglasTextoAccion(a || {}) + ' en «' + (a?.campana || '') + '».\n\nSe hace ya mismo en ' +
+      (a?.red === 'google' ? 'Google Ads' : 'Meta') + '. Si quieres deshacerlo, se hace desde el administrador de anuncios.' })) return;
   const texto = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = accion === 'aprobar' ? 'Haciendo el cambio…' : 'Descartando…'; }
   try {
