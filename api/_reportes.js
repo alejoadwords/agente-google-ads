@@ -17,6 +17,8 @@ import { emailHtml, esc } from './_email-layout.js';
 import { enviarResend } from './_correo.js';
 import { correoDelDueno } from './_alertas-pauta.js';
 import { registrarUso } from './_uso-ia.js';
+import { leerBusquedas, analizarTerminos, calidadPorPalabra } from './_busquedas.js';
+import { metaDelPeriodo } from './_meta-reporte.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -119,7 +121,7 @@ export function resumirPeriodo(campanas, leads) {
     por_red: red,
     campanas: unidas.filter(c => c.inversion > 0 || c.crm?.leads)
       .sort((a, b) => b.inversion - a.inversion).slice(0, 10)
-      .map(c => ({ red: c.red, nombre: c.nombre, inversion: c.inversion, clics: c.clics || 0, conv_red: c.conv || 0, leads: c.crm?.leads || 0, ganados: c.crm?.ganados || 0,
+      .map(c => ({ red: c.red, id: String(c.id || ''), nombre: c.nombre, inversion: c.inversion, clics: c.clics || 0, conv_red: c.conv || 0, leads: c.crm?.leads || 0, ganados: c.crm?.ganados || 0,
         ingresos: c.crm?.ingresos || 0, cpl_real: c.crm?.leads ? c.inversion / c.crm.leads : null })),
     fuentes: Object.entries(fuentes).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([fuente, n]) => ({ fuente, n })),
   };
@@ -154,7 +156,24 @@ export async function datosDelReporte(userId, clientId, per) {
   ]);
   const actual = resumirPeriodo(resA.flatMap(r => r.filas), leadsA);
   const anterior = resumirPeriodo(resB.flatMap(r => r.filas), leadsB);
+
+  // ── Versión 2: el reporte de agencia completo (ver el de Certain de agosto
+  // 2026, hecho a mano). Cada pieza que falla se omite; el reporte sale igual.
+  const google = await googleDelPeriodo(conexiones, resA, resB, per).catch(e => { console.error('[reportes] google', e?.message); return null; });
+  const meta = [];
+  for (const c of conexiones.filter(c => c.platform === 'meta_ads')) {
+    try { meta.push(await metaDelPeriodo(c, per)); }
+    catch (e) { console.error('[reportes] meta', e?.message); }
+  }
+  // «Contactos según las plataformas»: lo que cuentan Google y Meta con su
+  // propia medición. NO son leads del CRM y nunca se suman a ellos.
+  const contactos = (g, m) => ({ google: g, meta_conversaciones: m.conversaciones, meta_leads: m.leads, total: g + m.conversaciones + m.leads });
+  const sumaMeta = (k) => meta.reduce((acc, x) => ({ conversaciones: acc.conversaciones + (x[k].conversaciones || 0), leads: acc.leads + (x[k].leads || 0) }), { conversaciones: 0, leads: 0 });
   return {
+    version: 2,
+    google, meta: meta.length ? meta : null,
+    contactos: { actual: contactos(google?.totales.conv || 0, sumaMeta('totales')), anterior: contactos(google?.totales_anterior.conv || 0, sumaMeta('totales_anterior')) },
+    palabras_clave_crm: calidadPorPalabra(leadsA).slice(0, 10),
     desde: per.desde, hasta: per.hasta, etiqueta: per.etiqueta, anterior_desde: per.anterior.desde, anterior_hasta: per.anterior.hasta,
     moneda: resA.flatMap(r => r.filas).find(f => f.moneda)?.moneda || null,
     actual, anterior: { totales: anterior.totales },
@@ -190,56 +209,121 @@ const plata = (n, m) => {
   catch { return '$' + Math.round(n).toLocaleString('es-CO'); }
 };
 
-/** Tres o cuatro frases para el cliente, con Haiku. null si no se pudo: el reporte sale igual. */
-export async function resumenIA({ datos, firma, nombre, userId }) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
+/** Lo que el modelo ve: los números redondeados, sin imágenes. Pura. */
+export function compactarParaIA(datos, nombre) {
+  const r = (n) => n == null ? null : Math.round(n);
+  const r1 = (n) => n == null ? null : Math.round(n * 10) / 10;
   const t = datos.actual.totales, a = datos.anterior.totales;
-  const compacto = {
-    periodo: datos.etiqueta, moneda: datos.moneda,
-    este_periodo: { inversion: Math.round(t.inversion), conversiones_que_cuenta_la_red: Math.round(t.conv_red * 10) / 10, leads_crm: t.leads, leads_de_pauta: t.leads_pauta, ventas: t.ganados, ventas_de_pauta: t.ganados_pauta,
-      ingresos_de_pauta: Math.round(t.ingresos_pauta), costo_por_lead: t.cpl_real && Math.round(t.cpl_real), en_proceso: t.en_proceso, perdidos: t.perdidos },
-    periodo_anterior: { inversion: Math.round(a.inversion), leads_crm: a.leads, leads_de_pauta: a.leads_pauta, ventas: a.ganados, costo_por_lead: a.cpl_real && Math.round(a.cpl_real) },
-    campanas: datos.actual.campanas.slice(0, 6).map(c => ({ nombre: c.nombre, red: c.red, inversion: Math.round(c.inversion), conversiones_red: Math.round((c.conv_red || 0) * 10) / 10, leads: c.leads, ventas: c.ganados })),
+  const out = {
+    cliente: nombre || null, periodo: datos.etiqueta, moneda: datos.moneda,
+    contactos_segun_plataformas: datos.contactos ? { este_periodo: datos.contactos.actual, anterior: datos.contactos.anterior } : null,
+    crm: {
+      este_periodo: { leads: t.leads, leads_con_campana_de_pauta: t.leads_pauta, ventas: t.ganados, ventas_de_pauta: t.ganados_pauta, ingresos: r(t.ingresos), en_proceso: t.en_proceso, perdidos: t.perdidos },
+      anterior: { leads: a.leads, ventas: a.ganados, ingresos: r(a.ingresos) },
+      fuentes: datos.actual.fuentes,
+      casi_ningun_lead_trae_campana: !!datos.aviso_atribucion,
+      palabras_clave: (datos.palabras_clave_crm || []).slice(0, 6).map(p => ({ palabra: p.palabra, leads: p.leads, ganados: p.ganados, perdidos: p.perdidos, motivos: p.motivos })),
+    },
+    inversion_total: { este_periodo: r(t.inversion), anterior: r(a.inversion) },
     lo_que_hicimos: datos.hicimos.map(h => h.que),
     cuentas_sin_leer: datos.cuentas_sin_leer,
-    casi_ningun_lead_trae_campana: datos.aviso_atribucion,
   };
-  // Sin el dato de campaña en los leads, «1 lead de pauta» es falso, y la
-  // instrucción de no usarlo no bastó: Haiku lo citaba igual. No se le da.
-  if (datos.aviso_atribucion) {
-    for (const k of ['leads_de_pauta', 'ventas_de_pauta', 'ingresos_de_pauta', 'costo_por_lead']) { delete compacto.este_periodo[k]; delete compacto.periodo_anterior[k]; }
-    compacto.campanas = compacto.campanas.map(({ nombre, red, inversion, conversiones_red }) => ({ nombre, red, inversion, conversiones_red }));
+  if (datos.google) {
+    const g = datos.google;
+    out.google = {
+      totales: { ...g.totales, inversion: r(g.totales.inversion), ctr: g.totales.ctr && r1(g.totales.ctr * 100), cpc: r(g.totales.cpc), cpa: r(g.totales.cpa), conv: r1(g.totales.conv) },
+      anterior: { inversion: r(g.totales_anterior.inversion), conv: r1(g.totales_anterior.conv), cpa: r(g.totales_anterior.cpa) },
+      // Los leads que llegaron al CRM con esta campaña, al lado de las
+      // conversiones que cuenta Google: si no se parecen, la campaña no es «lo
+      // que funciona» sino algo a verificar (Certain: PMax 232 contra 1).
+      campanas: g.campanas.slice(0, 8).map(c => ({ nombre: c.nombre, inversion: r(c.inversion), clics: c.clics, ctr_pct: c.ctr && r1(c.ctr * 100), conversiones: r1(c.conv), costo_por_conversion: r(c.cpa),
+        leads_crm_con_esta_campana: (datos.actual.campanas.find(x => x.id === c.id) || {}).leads ?? 0,
+        anterior: c.anterior ? { inversion: r(c.anterior.inversion), conversiones: r1(c.anterior.conv), costo_por_conversion: r(c.anterior.cpa) } : null })),
+      busquedas: g.busquedas ? { modo: g.busquedas.modo, gasto_en_busquedas: r(g.busquedas.costo_busqueda), gastado_sin_resultado: r(g.busquedas.desperdicio),
+        pct_sin_resultado: g.busquedas.pct && r1(g.busquedas.pct * 100),
+        terminos: g.busquedas.terminos.slice(0, 8).map(x => ({ texto: x.texto, costo: r(x.costo), clics: x.clics, conv: r1(x.conv) })),
+        palabras: g.busquedas.palabras.slice(0, 6).map(x => ({ texto: x.texto, costo: r(x.costo), ejemplos: x.ejemplos })) } : null,
+    };
   }
+  if (datos.meta) {
+    out.meta = datos.meta.map(m => ({
+      cuenta: m.cuenta, totales: m.totales, anterior: m.totales_anterior,
+      capas: { marca: { ...m.capas.marca, cpm: r(m.capas.marca.cpm) }, captacion: { ...m.capas.captacion, cpm: r(m.capas.captacion.cpm) } },
+      campanas: m.campanas.slice(0, 8).map(c => ({ nombre: c.nombre, capa: c.capa, inversion: r(c.inversion), alcance: c.alcance, conversaciones: c.conversaciones, leads: c.leads,
+        costo_por_contacto: (c.conversaciones + c.leads) ? r(c.inversion / (c.conversaciones + c.leads)) : null, anterior: c.anterior ? { inversion: r(c.anterior.inversion), conversaciones: c.anterior.conversaciones } : null })),
+      publicos: m.conjuntos.slice(0, 8).map(c => ({ nombre: c.nombre, inversion: r(c.inversion), conversaciones: c.conversaciones, leads: c.leads })),
+      anuncios: m.anuncios.slice(0, 10).map(x => ({ nombre: x.nombre, inversion: r(x.inversion), conversaciones: x.conversaciones, leads: x.leads, ctr: r1(x.ctr), texto: x.texto })),
+    }));
+  }
+  return out;
+}
+
+const HERRAMIENTA_REPORTE = {
+  name: 'entregar_textos',
+  description: 'Entrega los textos del reporte.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      titular: { type: 'string', description: 'Una frase que resume el período, sin cifras inventadas.' },
+      resumen: { type: 'string', description: 'Párrafo de 2 a 4 frases que abre el reporte. Puede usar **negritas**.' },
+      conclusion: { type: 'string', description: 'Una o dos frases bajo la tabla comparativa: la lectura del período.' },
+      conclusion_tono: { type: 'string', enum: ['bien', 'neutro', 'atencion'] },
+      hallazgo: { type: 'object', properties: { titulo: { type: 'string' }, texto: { type: 'string' } }, description: 'El hallazgo más útil del período, si lo hay.' },
+      destacados: { type: 'array', maxItems: 3, items: { type: 'object', properties: { titulo: { type: 'string' }, texto: { type: 'string' } }, required: ['titulo', 'texto'] } },
+      google: { type: 'object', properties: { titular: { type: 'string' }, texto: { type: 'string' }, alerta: { type: 'string' }, busquedas: { type: 'string' } } },
+      meta: { type: 'object', properties: { titular: { type: 'string' }, texto: { type: 'string' }, alerta: { type: 'string' } } },
+      marca: { type: 'object', properties: { titular: { type: 'string' }, texto: { type: 'string' } } },
+      anuncios: { type: 'object', properties: { titular: { type: 'string' }, texto: { type: 'string' } } },
+      crm: { type: 'object', properties: { titular: { type: 'string' }, texto: { type: 'string' } } },
+      funciona: { type: 'string', description: 'Lo que ya funciona, en una o dos frases.' },
+      palanca: { type: 'string', description: 'La palanca más clara para el próximo período.' },
+      falta: { type: 'string', description: 'El dato o la medición que falta.' },
+      plan: { type: 'array', maxItems: 5, items: { type: 'object', properties: { titulo: { type: 'string' }, texto: { type: 'string' }, red: { type: 'string', enum: ['google', 'meta', 'crm', 'general'] } }, required: ['titulo', 'texto'] } },
+    },
+    required: ['titular', 'resumen', 'conclusion', 'plan'],
+  },
+};
+
+/**
+ * Los textos del reporte, con Sonnet. Los números y tablas los pinta la página
+ * con los datos; el modelo solo escribe la lectura. null si no se pudo: el
+ * reporte sale igual, con cifras y sin prosa.
+ */
+export async function narrativaIA({ datos, firma, nombre, userId }) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return null;
+  const compacto = compactarParaIA(datos, nombre);
+  // Sin el dato de campaña en los leads, «1 lead de pauta» es falso: no se le da.
+  if (datos.aviso_atribucion) { delete compacto.crm.este_periodo.leads_con_campana_de_pauta; delete compacto.crm.este_periodo.ventas_de_pauta; }
+  const sistema = 'Eres el estratega de cuenta de ' + (firma || 'una agencia de marketing') + ' y escribes los textos del reporte mensual de pauta para el cliente ' + (nombre || '') + '. ' +
+    'Español de Latinoamérica, claro y concreto, para el dueño del negocio. Números al estilo de Colombia: punto para los miles y coma para los decimales (3.007.487 COP, 11,2 %). ' +
+    'Reglas: ' +
+    '1) Usa SOLO las cifras de los datos; nunca inventes una cifra, una causa ni una referencia del sector (no tienes datos del sector: no cites promedios de la industria). ' +
+    '2) "contactos_segun_plataformas" es lo que cuentan Google y Meta con su propia medición; "crm" son los leads que de verdad entraron. No son lo mismo y nunca los sumes ni los presentes como lo mismo. ' +
+    '3) Primera persona del plural solo para lo que hizo la agencia (la inversión y lo_que_hicimos). Si lo_que_hicimos está vacío, no digas que se ajustó u optimizó nada. Lo del CRM va en tercera persona. ' +
+    '4) Si casi_ningun_lead_trae_campana es true, no juzgues la pauta por leads del CRM: dilo como algo que falta medir. ' +
+    '5) Si busquedas.modo es "gasto", Google no está midiendo conversiones: es el problema prioritario. Si hay términos gastando sin resultado, el hallazgo es ese, con los términos y el monto. ' +
+    '5b) Si una campaña tiene muchas conversiones de la plataforma y casi ningún lead en el CRM (leads_crm_con_esta_campana), NO la presentes como lo que funciona ni como la más eficiente: di que hay que verificar qué cuenta su etiqueta de conversión (puede estar contando clics a WhatsApp u otras acciones que no son contactos) y que parte de sus leads puede llegar sin el dato de campaña. ' +
+    '6) El plan: 3 a 5 acciones concretas que salen de estos datos (excluir búsquedas listadas, mover presupuesto entre campañas que muestran resultados distintos, corregir la medición, conectar la captura de leads). Nada genérico. ' +
+    '7) Omite las secciones sin datos (por ejemplo meta si no hay Meta). Frases cortas; puedes usar **negritas** en 1 o 2 cifras clave por párrafo.';
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        // Sonnet razona antes de escribir y eso gasta del mismo max_tokens: con
-        // 700 el texto no llegaba (ver la memoria del chat y max_tokens).
-        model: MODELO_RESUMEN, max_tokens: 2000,
-        system: 'Eres el ejecutivo de cuenta de ' + (firma || 'una agencia de marketing') + '. Escribes el párrafo con el que abre el reporte de resultados para el cliente ' +
-          (nombre || '') + '. Tres o cuatro frases, en español de Latinoamérica, claras y directas. ' +
-          'Primera persona del plural ("invertimos", "ajustamos", "excluimos") SOLO para lo que hizo la agencia: la inversión y lo_que_hicimos. ' +
-          'Lo que pasó en el CRM va en tercera persona ("llegaron 456 leads", "se cerraron 11 ventas"): no es mérito ni culpa de la pauta salvo lo que viene de ella. ' +
-          'Usa solo los números que te doy: compara con el período anterior, destaca lo mejor y lo que hay que vigilar, y si hubo acciones, menciónalas. ' +
-          'Distingue lo que viene de la pauta (leads_de_pauta, ventas_de_pauta) del total del CRM, que incluye referidos, portales y otras fuentes: ' +
-          'no te atribuyas ("logramos") cambios del total que no vienen de la pauta; preséntalos como lo que pasó en el CRM. Si no hubo inversión en pauta, dilo. ' +
-          'Las únicas acciones de la agencia que existen son las de lo_que_hicimos: si está vacío, no digas que se ajustó, optimizó, redistribuyó ni cambió nada; di solo cuánto se invirtió. ' +
-          'Las conversiones que cuenta la red (Google o Meta) NO son leads del CRM: si son muchas más que los leads, dilo con esas palabras, sin presentarlas como leads ni como un resultado logrado. ' +
-          'Si casi_ningun_lead_trae_campana es true, NO concluyas que la pauta no funciona ni cites su costo por lead: di que los leads están llegando sin el dato de la campaña de origen y que eso se está corrigiendo para medirla bien. ' +
-          'Nunca inventes cifras ni causas. Números al estilo de Colombia: punto para los miles y coma para los decimales (3.007.487 COP, 231,8). Sin saludo, sin despedida, sin títulos, sin viñetas ni markdown.',
-        messages: [{ role: 'user', content: JSON.stringify(compacto) }],
+        model: MODELO_RESUMEN, max_tokens: 6000, system: sistema,
+        tools: [HERRAMIENTA_REPORTE], tool_choice: { type: 'tool', name: HERRAMIENTA_REPORTE.name },
+        messages: [{ role: 'user', content: 'Datos del período (JSON):\n' + JSON.stringify(compacto) }],
       }),
     });
-    if (!r.ok) { console.error('[reportes] resumen', r.status); return null; }
+    if (!r.ok) { console.error('[reportes] narrativa', r.status, (await r.text()).slice(0, 200)); return null; }
     const d = await r.json();
     if (d.usage) await registrarUso({ userId, actorId: null, origen: 'reporte', agente: 'Reporte', modelo: d.model, uso: d.usage });
-    const texto = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
-    return d.stop_reason === 'max_tokens' || !texto ? null : texto.slice(0, 1200);
+    const b = (d.content || []).find(x => x.type === 'tool_use');
+    if (!b || d.stop_reason === 'max_tokens') return null;
+    return b.input;
   } catch (e) {
-    console.error('[reportes] resumen', e?.message);
+    console.error('[reportes] narrativa', e?.message);
     return null;
   }
 }
@@ -256,8 +340,12 @@ export async function armarReporte(programa, { hoy = hoyColombia(), vista = fals
   const per = periodoDe(programa.frecuencia, hoy);
   const datos = await datosDelReporte(programa.user_id, programa.client_id, per);
   datos.marca = { firma: programa.firma || null, logo_url: programa.logo_url || null, color: programa.color || null, nombre: programa.nombre };
-  const resumen = programa.incluir_ia && !datos.sin_conexiones
-    ? await resumenIA({ datos, firma: programa.firma, nombre: programa.nombre, userId: programa.user_id }) : null;
+  // La prosa del reporte (titular, resumen, hallazgo, plan…). El resumen va
+  // también en su propia columna: es lo que se edita antes de enviar.
+  const narrativa = programa.incluir_ia && !datos.sin_conexiones
+    ? await narrativaIA({ datos, firma: programa.firma, nombre: programa.nombre, userId: programa.user_id }) : null;
+  if (narrativa) datos.narrativa = narrativa;
+  const resumen = narrativa?.resumen ? String(narrativa.resumen).slice(0, 1500) : null;
   const [fila] = await sb('/reportes_enviados', {
     method: 'POST', headers: sbH({ Prefer: 'return=representation' }),
     body: JSON.stringify({ token: token(), user_id: programa.user_id, client_id: programa.client_id || null, programa_id: programa.id || null,
@@ -292,15 +380,19 @@ export function cuerpoDelCorreo(fila) {
   const celda = (etq, val, var_) => '<td style="padding:10px 8px;border:1px solid #E4E6F2;border-radius:10px;text-align:center;width:50%">' +
     '<div style="font-size:11px;color:#5B6072">' + etq + '</div><div style="font-size:18px;font-weight:800;margin:4px 0">' + val + '</div>' +
     '<div style="font-size:11px">' + var_ + '</div></td>';
+  const c = d.contactos;
   let html = '<table role="presentation" width="100%" cellpadding="0" cellspacing="6" style="margin:6px 0 14px"><tr>' +
     celda('Inversión', esc(plata(t.inversion, m)), flecha(t.inversion, a.inversion, false).replace(/#0E8A4F|#B4231F/, '#5B6072')) +
+    // Versión 2: los contactos que cuentan las plataformas, aparte de los leads.
+    (c ? celda('Contactos según Google y Meta', String(Math.round(c.actual.total)), flecha(c.actual.total, c.anterior.total)) + '</tr><tr>' : '') +
     celda('Leads en el CRM', String(t.leads), flecha(t.leads, a.leads)) +
-    '</tr><tr>' +
+    (c ? '' : '</tr><tr>') +
     celda('Ventas', String(t.ganados), flecha(t.ganados, a.ganados)) +
-    (d.aviso_atribucion ? celda('Ingresos', esc(plata(t.ingresos, m)), flecha(t.ingresos, a.ingresos))
-      : celda('Costo por lead', esc(plata(t.cpl_real, m)), flecha(t.cpl_real, a.cpl_real, true))) +
+    (c ? '' : (d.aviso_atribucion ? celda('Ingresos', esc(plata(t.ingresos, m)), flecha(t.ingresos, a.ingresos))
+      : celda('Costo por lead', esc(plata(t.cpl_real, m)), flecha(t.cpl_real, a.cpl_real, true)))) +
     '</tr></table>';
-  if (fila.resumen) html += '<p style="margin:0 0 14px;line-height:1.6">' + esc(fila.resumen) + '</p>';
+  // **negrita** de la IA → <b>, después de escapar.
+  if (fila.resumen) html += '<p style="margin:0 0 14px;line-height:1.6">' + esc(fila.resumen).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>') + '</p>';
   if (d.hicimos.length) {
     html += '<p style="margin:14px 0 6px;font-weight:700">Lo que hicimos en el período</p><ul style="margin:0;padding-left:18px;line-height:1.6">' +
       d.hicimos.slice(0, 8).map(h => '<li>' + esc(h.que) + '</li>').join('') + '</ul>';
@@ -382,4 +474,37 @@ export async function avisarParaRevisar(fila, programa) {
     }),
   }, fila.user_id);
   return r.ok ? { ok: true } : { error: 'Resend ' + r.status };
+}
+
+/** Google en el período: campañas con su comparación y el hallazgo de búsquedas. */
+async function googleDelPeriodo(conexiones, resA, resB, per) {
+  const cons = conexiones.filter(c => c.platform === 'google_ads');
+  if (!cons.length) return null;
+  const filasA = resA.filter(r => r.conexion.platform === 'google_ads').flatMap(r => r.filas);
+  const filasB = new Map(resB.filter(r => r.conexion.platform === 'google_ads').flatMap(r => r.filas).map(f => [String(f.id), f]));
+  const cuenta = (f) => ({ inversion: f.inversion || 0, impresiones: f.impresiones || 0, clics: f.clics || 0, conv: f.conv || 0 });
+  const derivadas = (x) => ({ ...x, ctr: x.impresiones ? x.clics / x.impresiones : null, cpc: x.clics ? x.inversion / x.clics : null, cpa: x.conv >= 0.5 ? x.inversion / x.conv : null });
+  const campanas = filasA.filter(f => f.inversion > 0).sort((a, b) => b.inversion - a.inversion).map(f => {
+    const b = filasB.get(String(f.id));
+    return { id: String(f.id), nombre: f.nombre, estado: f.estado, ...derivadas(cuenta(f)), anterior: b ? derivadas(cuenta(b)) : null };
+  });
+  const tot = (ls) => derivadas(ls.reduce((s, x) => ({ inversion: s.inversion + x.inversion, impresiones: s.impresiones + x.impresiones, clics: s.clics + x.clics, conv: s.conv + x.conv }),
+    { inversion: 0, impresiones: 0, clics: 0, conv: 0 }));
+  // Las búsquedas que gastaron sin resultado: el hallazgo que una agencia
+  // busca a mano en el informe de términos (punto 6, api/_busquedas.js).
+  let busquedas = null;
+  try {
+    const partes = await Promise.all(cons.map(async c => ({ c, d: await leerBusquedas(c, per.desde, per.hasta) })));
+    const terminos = partes.flatMap(p => p.d.terminos), claves = partes.flatMap(p => p.d.claves), negativas = partes.flatMap(p => p.d.negativas);
+    const a = analizarTerminos({ terminos, claves, negativas, marca: cons.map(c => c.account_name).filter(Boolean), crmActivo: partes.some(p => p.d.crmActivo) });
+    const costoBusqueda = terminos.reduce((s, t) => s + t.costo, 0);
+    const sinResultado = a.terminos.filter(t => !t.propia);
+    const desperdicio = sinResultado.reduce((s, t) => s + t.costo, 0);
+    busquedas = {
+      modo: a.modo, costo_busqueda: costoBusqueda, desperdicio, pct: costoBusqueda ? desperdicio / costoBusqueda : null,
+      terminos: sinResultado.slice(0, 10).map(t => ({ texto: t.texto, campana: t.campana, costo: t.costo, clics: t.clics, conv: t.conv, motivo: t.motivo })),
+      palabras: a.palabras.slice(0, 8).map(p => ({ texto: p.texto, costo: p.costo, clics: p.clics, conv: p.conv, busquedas: p.busquedas, ejemplos: p.ejemplos, motivo: p.motivo })),
+    };
+  } catch (e) { console.error('[reportes] busquedas', e?.message); }
+  return { campanas, totales: tot(campanas), totales_anterior: tot([...filasB.values()].map(cuenta)), busquedas };
 }

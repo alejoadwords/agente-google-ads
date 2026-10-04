@@ -67,6 +67,25 @@ ok(/No pudimos leer Meta Cliente/.test(h), 'una cuenta que no se pudo leer se di
 const h2 = cuerpoDelCorreo({ ...fila, datos: { ...fila.datos, aviso_atribucion: true } });
 ok(/Casi ningún lead/.test(h2) && !/Costo por lead/.test(h2) && /Ingresos/.test(h2), 'con aviso de atribución: se dice, y el costo por lead se cambia por ingresos');
 
+console.log('Versión 2: Meta y lo que ve el modelo');
+const { accionesDe, capaDe } = await import('../api/_meta-reporte.js');
+const { compactarParaIA } = await import('../api/_reportes.js');
+const ac = accionesDe([{ action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '156' }, { action_type: 'video_view', value: '567395' }, { action_type: 'lead', value: '4' }]);
+ok(ac.conversaciones === 156 && ac.video === 567395 && ac.leads === 4, 'lee conversaciones de WhatsApp, video y formularios de los insights de Meta');
+ok(capaDe('OUTCOME_AWARENESS', {}) === 'marca' && capaDe('OUTCOME_ENGAGEMENT', { conversaciones: 3 }) === 'captacion' && capaDe('OUTCOME_LEADS', {}) === 'captacion',
+  'capa de marca o de captación: una campaña que abre conversaciones es captación aunque su objetivo sea interacción');
+const dv2 = { etiqueta: 'septiembre de 2026', moneda: 'COP', hicimos: [], cuentas_sin_leer: [], aviso_atribucion: true,
+  actual: { totales: { ...t, inversion: 3007487 }, fuentes: [], campanas: [{ id: '22', nombre: 'PMax', leads: 1 }] }, anterior: { totales: t },
+  contactos: { actual: { total: 232 }, anterior: { total: 221 } },
+  google: { totales: { inversion: 636322, conv: 231.78, ctr: 0.088, cpc: 68, cpa: 2745 }, totales_anterior: { inversion: 600000, conv: 221, cpa: 2700 },
+    campanas: [{ id: '22', nombre: 'PMax', inversion: 636322, clics: 9318, ctr: 0.088, conv: 231.78, cpa: 2745, anterior: null }], busquedas: null },
+  meta: [{ cuenta: 'X', totales: {}, totales_anterior: {}, capas: { marca: { cpm: 601 }, captacion: { cpm: 1300 } }, campanas: [], conjuntos: [],
+    anuncios: [{ nombre: 'Alameda', inversion: 227786, conversaciones: 71, leads: 0, ctr: 0.86, texto: 'x', imagen: 'data:image/jpeg;base64,AAAA' }] }] };
+const cp = compactarParaIA(dv2, 'Certain');
+ok(cp.google.campanas[0].leads_crm_con_esta_campana === 1 && cp.google.campanas[0].conversiones === 231.8, 'el modelo ve, por campaña, las conversiones de Google y los leads del CRM (232 contra 1)');
+ok(!JSON.stringify(cp).includes('base64'), 'las imágenes de los anuncios no van al modelo');
+ok(cp.contactos_segun_plataformas.este_periodo.total === 232 && cp.crm.este_periodo.leads === 5, 'contactos de las plataformas y leads del CRM van separados');
+
 console.log('Lo que manda el navegador');
 const { validarPrograma } = await import('../api/reportes.js');
 const B = { nombre: 'Certain', frecuencia: 'mensual', destinatarios: 'Ana@Cliente.com, ana@cliente.com; pedro@cliente.co' };

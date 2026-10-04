@@ -9,6 +9,11 @@
 <!-- Reporte público de una agencia para su cliente (/r/<token>). Ver api/_reportes.js.
      Marca blanca: sin el GTM de Acuarius y con el color y el logo de la agencia.
      Los números vienen congelados del día en que se armó el reporte. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/reporte-v2.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer onload="window.dispatchEvent(new Event('chartjs-listo'))"></script>
+<script src="/reporte-v2.js"></script>
 <style>
   :root{
     --marca:#1E2BCC; --marca-suave:#EEF0FD;
@@ -61,7 +66,7 @@
 <div class="wrap"><div class="doc" id="doc"><div class="estado">Cargando el reporte…</div></div></div>
 <script>
 (function () {
-  const doc = document.getElementById('doc');
+  let doc = document.getElementById('doc');
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // /r/<token> llega aquí por la reescritura de vercel.json; ?t= sirve para probar.
   const token = (location.pathname.match(/\/r\/([a-f0-9]{32})/) || [])[1] || new URLSearchParams(location.search).get('t') || '';
@@ -71,6 +76,16 @@
   const previa = new URLSearchParams(location.search).get('previa') === '1';
   fetch('/api/reporte-publico?t=' + token + (previa ? '&previa=1' : '')).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
     if (!ok || d.error) return falla(d.error || 'No pudimos abrir el reporte.');
+    // Versión 2: el reporte de agencia completo, con pestañas (reporte-v2.js).
+    // Los reportes de antes se siguen viendo como se enviaron.
+    if (d.datos && d.datos.version === 2 && window.pintarReporteV2) {
+      const raiz = document.createElement('div');
+      document.body.innerHTML = '';
+      document.body.appendChild(raiz);
+      try { return window.pintarReporteV2(d, raiz); }
+      // Si la versión 2 falla, se ve con el diseño anterior: nunca una página en blanco.
+      catch (e) { console.error(e); document.body.classList.remove('v2'); document.body.innerHTML = '<div class="wrap"><div class="doc" id="doc"></div></div>'; doc = document.getElementById('doc'); }
+    }
     pintar(d);
   }).catch(() => falla('No pudimos abrir el reporte. Revisa tu conexión y vuelve a intentarlo.'));
 

@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-04-reporte-agencia-v2",
+      "fecha": "2026-10-04",
+      "tipo": "nuevo",
+      "titulo": "El reporte para tus clientes, ahora completo y con pestañas",
+      "texto": "El reporte programado ahora se arma como el de una agencia: resumen ejecutivo con período contra período, Google Ads con sus campañas y las búsquedas que gastan sin resultado, Meta Ads con sus capas de marca y captación y los mejores anuncios con su imagen, y una pestaña que solo Acuarius puede tener: «Del clic a la venta», con lo que pasó con esos contactos en tu CRM. Los textos y el plan de acción los escribe la IA con tus números.",
+      "accion": {
+        "texto": "Ver reportes",
+        "ir": "pauta-reportes"
+      }
+    },
+    {
       "id": "2026-10-04-reportes-conversiones",
       "fecha": "2026-10-04",
       "tipo": "mejora",
