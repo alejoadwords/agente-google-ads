@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-03-busquedas-negativas",
+      "fecha": "2026-10-03",
+      "tipo": "nuevo",
+      "titulo": "Excluye las búsquedas que te hacen gastar sin vender",
+      "texto": "En Plataformas de pauta → Búsquedas ves por qué búsquedas salen tus anuncios de Google, cuáles gastan sin traer resultados y qué palabras ajenas a tu negocio se cuelan (como «gratis», «empleo» o el nombre de un competidor). Las excluyes con un clic y lo puedes deshacer. Además, cada lead de Google ahora guarda su palabra clave, y ves cuáles traen leads que nunca avanzan en tu CRM. Nunca te proponemos tu marca ni lo que ya es palabra clave.",
+      "accion": {
+        "texto": "Ver mis búsquedas",
+        "ir": "pauta-busquedas"
+      }
+    },
+    {
       "id": "2026-10-03-reglas-pauta",
       "fecha": "2026-10-03",
       "tipo": "nuevo",

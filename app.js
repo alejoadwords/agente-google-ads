@@ -10564,6 +10564,7 @@ function irA(destino) {
         case 'pauta-ventas':  navGo('marketing'); setTimeout(() => { pautaVista = 'ventas'; crmSetView('pauta'); }, 150); break;
         case 'pauta-diagnostico': navGo('marketing'); setTimeout(() => { pautaVista = 'diagnostico'; crmSetView('pauta'); }, 150); break;
         case 'pauta-reglas':  navGo('marketing'); setTimeout(() => { pautaVista = 'reglas'; crmSetView('pauta'); }, 150); break;
+        case 'pauta-busquedas': navGo('marketing'); setTimeout(() => { pautaVista = 'busquedas'; crmSetView('pauta'); }, 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'campanas':      navGo('marketing'); setTimeout(() => crmSetView('campaigns'), 150); break;
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
@@ -39621,7 +39622,7 @@ function lpCerrarEditor() {
 // nunca ve los tokens de Google ni de Meta.
 
 let pautaDatos = null;
-let pautaVista = 'campanas';       // campanas | diagnostico | reglas | conexiones | cartera | ventas
+let pautaVista = 'campanas';       // campanas | diagnostico | reglas | busquedas | conexiones | cartera | ventas
 let pautaDias = 30;
 let pautaCargando = false;
 
@@ -39674,6 +39675,7 @@ function pautaRender() {
         '<button class="pauta-tab' + (pautaVista === 'campanas' ? ' active' : '') + '" onclick="pautaIr(\'campanas\')">Campañas</button>' +
         '<button class="pauta-tab' + (pautaVista === 'diagnostico' ? ' active' : '') + '" onclick="pautaIr(\'diagnostico\')">Diagnóstico</button>' +
         '<button class="pauta-tab' + (pautaVista === 'reglas' ? ' active' : '') + '" onclick="pautaIr(\'reglas\')">Reglas</button>' +
+        '<button class="pauta-tab' + (pautaVista === 'busquedas' ? ' active' : '') + '" onclick="pautaIr(\'busquedas\')">Búsquedas</button>' +
         (hayCartera ? '<button class="pauta-tab' + (pautaVista === 'cartera' ? ' active' : '') + '" onclick="pautaIr(\'cartera\')">Cartera</button>' : '') +
         '<button class="pauta-tab' + (pautaVista === 'conexiones' ? ' active' : '') + '" onclick="pautaIr(\'conexiones\')">Conexiones</button>' +
         '<button class="pauta-tab' + (pautaVista === 'ventas' ? ' active' : '') + '" onclick="pautaIr(\'ventas\')">Ventas a la pauta</button>' +
@@ -39713,6 +39715,7 @@ async function pautaCargar() {
   // propia carga (api/conversiones.js).
   if (pautaVista === 'ventas') { ventasCargar(); return; }
   if (pautaVista === 'reglas') { reglasCargar(); return; }
+  if (pautaVista === 'busquedas') { busqCargar(); return; }
   pautaCargando = true;
   c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + (pautaVista === 'diagnostico' ? ' Revisando tus campañas…' : ' Leyendo tus campañas…') + '</div>';
 
@@ -40089,6 +40092,203 @@ function pautaPintarConexiones(d) {
   c.innerHTML = html;
 }
 
+// ── Búsquedas de Google y palabras negativas ────────────────────────────────
+// Por qué búsquedas salen los anuncios y cuáles conviene excluir. El juez es la
+// conversión —y, si Ventas a la pauta está activo, lo que avanzó en el CRM—.
+// Excluir lo decide siempre una persona, y cada negativa se puede deshacer.
+// Servidor: api/busquedas.js y api/_busquedas.js.
+let busqDatos = null;
+let busqDias = 30;
+
+async function busqCargar() {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo tus búsquedas en Google…</div>';
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/busquedas?dias=' + busqDias + (cliente ? '&client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok) { pautaError(d.error || 'No pudimos leer tus búsquedas.'); return; }
+    busqDatos = d;
+    busqPintar();
+  } catch (e) {
+    pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+function busqPintar() {
+  const c = document.getElementById('pauta-cuerpo');
+  const d = busqDatos;
+  if (!c || !d) return;
+  if (!d.cuentas.length) {
+    c.innerHTML = emptyAgua('search', 'Conecta Google Ads para ver tus búsquedas',
+      'Aquí verás por qué búsquedas salen tus anuncios, cuáles gastan sin traer nada y cuáles conviene excluir. Meta no tiene búsquedas: esto es solo de Google.',
+      '<button class="btn-pri" onclick="pautaIr(\'conexiones\')">Conectar Google Ads</button>');
+    return;
+  }
+  const puede = !!d.puede_editar;
+  let html = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">' +
+    '<div class="pauta-aviso" style="flex:1;margin:0;min-width:260px">' + icn('search', 15) + '<div style="flex:1">' +
+      '<b>Excluir una búsqueda solo resta:</b> tu anuncio deja de salir para ella. Lo decides tú, una por una, y cualquier negativa puesta desde aquí se puede deshacer. ' +
+      'Nunca te proponemos tu marca ni lo que ya es palabra clave.</div></div>' +
+    '<button class="dd-btn" onclick="busqDdDias(this)"><span class="dd-btn-txt">Últimos ' + busqDias + ' días</span>' +
+      '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>' +
+  '</div>';
+  if (!puede) {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) +
+      '<div style="flex:1">Las negativas las pone el dueño de la cuenta, un administrador o Mercadeo. Aquí puedes ver el análisis.</div></div>';
+  }
+  for (const cu of d.cuentas) html += busqCuenta(cu, puede, d.cuentas.length > 1);
+  html += busqCalidad(d);
+  html += busqHechas(d.hechas || [], puede);
+  c.innerHTML = html;
+}
+
+function busqDdDias(btn) {
+  ddAbrir(btn, [{ id: '30', name: 'Últimos 30 días' }, { id: '90', name: 'Últimos 90 días' }], String(busqDias), id => { busqDias = Number(id); busqCargar(); });
+}
+
+function busqCuenta(cu, puede, varias) {
+  let html = varias ? '<div class="pauta-pasos-t" style="margin:22px 0 8px">' + esc(cu.nombre) + '</div>' : '';
+  if (cu.error) {
+    return html + '<div class="pauta-aviso pauta-aviso-mal">' + icn('alert', 16) + '<div style="flex:1"><b>No se pudo revisar ' + esc(cu.nombre) + '.</b> ' + esc(cu.error) + '</div></div>';
+  }
+  const m = cu.moneda;
+  if (cu.modo === 'gasto') {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) + '<div style="flex:1">' +
+      '<b>Google no está contando conversiones en esta cuenta</b> (' + pautaPlata(cu.costoTotal, m) + ' en búsquedas y 0 conversiones). ' +
+      'Sin eso no se puede saber qué búsqueda funciona, así que no te recomendamos excluir ninguna: te enseñamos las palabras que más gastan para que las revises tú. ' +
+      'Para arreglarlo, revisa tus conversiones en Google Ads o activa <b>Ventas a la pauta</b>, que le cuenta a Google qué leads avanzaron en tu CRM.</div>' +
+      '<button class="btn-ghost sm" onclick="pautaIr(\'ventas\')">Ventas a la pauta</button></div>';
+  } else if (!cu.crm_activo) {
+    html += '<div class="pauta-conx-nota" style="margin-bottom:10px"><span>Juzgamos con las conversiones de Google (costo por conversión de la cuenta: <b>' + pautaPlata(cu.cpl, m) + '</b>). ' +
+      'Si activas las etapas en <button class="pauta-link" onclick="pautaIr(\'ventas\')">Ventas a la pauta</button>, también verás qué búsquedas traen leads que nunca avanzan.</span></div>';
+  }
+  if (cu.aviso_crm) html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) + '<div style="flex:1">' + esc(cu.aviso_crm) + '</div></div>';
+
+  const boton = (texto, tipo, campanas, motivo) => puede
+    ? '<button class="btn-ghost sm" onclick="busqExcluir(' + esc(JSON.stringify({ conexion_id: cu.conexion_id, texto, tipo, campanas, motivo })) + ', this)">Excluir</button>' : '';
+
+  // Palabras que se cuelan en varias búsquedas
+  html += '<div class="pauta-diag-grupo">' + (cu.modo === 'gasto' ? 'Palabras que más gastan sin conversiones · para revisar' : 'Palabras que se cuelan en tus búsquedas') + '</div>';
+  if (!cu.palabras.length) {
+    html += '<div class="pauta-vacio">' + (cu.modo === 'gasto' ? 'No hay palabras ajenas a tus palabras clave con gasto en este período.' : 'Ninguna palabra ajena a tu negocio está gastando sin resultado. Bien.') + '</div>';
+  } else {
+    html += '<div class="pauta-diag-lista">' + cu.palabras.map(p => {
+      const camp = p.campanas.map(x => x.nombre).join(', ');
+      const motivo = p.motivo ? 'Gastó ' + pautaPlata(p.costo, m) + ' en ' + p.clics + ' clics: ' + p.motivo + '.' : 'Gastó ' + pautaPlata(p.costo, m) + ' en ' + p.clics + ' clics, en ' + p.busquedas + (p.busquedas === 1 ? ' búsqueda' : ' búsquedas') + '.';
+      return '<div class="pauta-diag ' + (p.motivo ? 'error' : 'oportunidad') + '">' +
+        '<div class="pauta-diag-ico">' + icn(p.motivo ? 'alert' : 'search', 16) + '</div>' +
+        '<div class="pauta-diag-cuerpo">' +
+          '<div class="pauta-diag-tit"><span>«' + esc(p.texto) + '»</span></div>' +
+          '<div class="pauta-diag-det">' + esc(motivo) + '<br><span style="color:var(--muted2)">Ej.: ' + esc(p.ejemplos.join(' · ')) + ' · ' + esc(camp) + '</span></div>' +
+        '</div>' +
+        (puede ? '<div class="pauta-diag-acc">' + boton(p.texto, 'PHRASE', p.campanas.map(x => x.id), motivo) + '</div>' : '') +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  // Búsquedas concretas
+  if (cu.modo !== 'gasto') {
+    html += '<div class="pauta-diag-grupo">Búsquedas que gastaron sin resultado</div>';
+    if (!cu.terminos.length) {
+      html += '<div class="pauta-vacio">Ninguna búsqueda gastó más de lo que te cuesta una conversión sin traerla.</div>';
+    } else {
+      html += '<div class="pauta-tabla-caja"><table class="pauta-tabla"><thead><tr>' +
+        '<th class="pauta-th">Búsqueda</th><th class="pauta-th">Campaña</th><th class="pauta-th num">Gasto</th><th class="pauta-th num">Clics</th>' +
+        '<th class="pauta-th num">Conv.</th><th class="pauta-th">Por qué</th><th class="pauta-th"></th></tr></thead><tbody>' +
+        cu.terminos.map(t => {
+          const motivo = 'Gastó ' + pautaPlata(t.costo, m) + ' en ' + t.clics + ' clics: ' + t.motivo + '.';
+          return '<tr>' +
+            '<td class="pauta-td"><b>' + esc(t.texto) + '</b>' +
+              (t.propia ? '<div style="font-size:11px;color:var(--muted2)">Es de tu negocio: quizá convenga mejorar el anuncio o la página antes que excluirla.</div>' : '') + '</td>' +
+            '<td class="pauta-td" style="font-size:12px">' + esc(t.campana) + '</td>' +
+            '<td class="pauta-td num">' + pautaPlata(t.costo, m) + '</td>' +
+            '<td class="pauta-td num">' + pautaNum(t.clics) + '</td>' +
+            '<td class="pauta-td num">' + pautaNum(Math.round(t.conv * 10) / 10) + '</td>' +
+            '<td class="pauta-td" style="font-size:12px;color:var(--muted);max-width:260px">' + esc(t.motivo) + '</td>' +
+            '<td class="pauta-td">' + boton(t.texto, 'EXACT', [t.campanaId], motivo) + '</td>' +
+          '</tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+  }
+  return html;
+}
+
+// Lo que el CRM sabe y Google no: qué pasó con los leads de cada palabra clave.
+function busqCalidad(d) {
+  let html = '<div class="pauta-pasos-t" style="margin:22px 0 8px">Tus palabras clave según tu CRM · últimos 90 días</div>';
+  if (d.aviso_calidad) return html + '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) + '<div style="flex:1">' + esc(d.aviso_calidad) + '</div></div>';
+  const cal = d.calidad || [];
+  if (!cal.length) {
+    return html + '<div class="pauta-vacio">Todavía no hay leads de Google con su palabra clave. Se completan solos: cada lead que llega con el clic de un anuncio de Google trae la suya.</div>';
+  }
+  return html + '<div class="pauta-tabla-caja"><table class="pauta-tabla"><thead><tr>' +
+    '<th class="pauta-th">Palabra clave</th><th class="pauta-th num">Leads</th><th class="pauta-th num">Ganados</th><th class="pauta-th num">Perdidos</th>' +
+    '<th class="pauta-th num">En proceso</th><th class="pauta-th">Por qué se pierden</th></tr></thead><tbody>' +
+    cal.map(x => '<tr>' +
+      '<td class="pauta-td"><b>' + esc(x.palabra) + '</b>' + (x.flojo ? ' <span class="pauta-pill pauta-pill-ojo">Leads que no avanzan</span>' : '') + '</td>' +
+      '<td class="pauta-td num">' + x.leads + '</td><td class="pauta-td num">' + x.ganados + '</td>' +
+      '<td class="pauta-td num">' + x.perdidos + '</td><td class="pauta-td num">' + x.en_proceso + '</td>' +
+      '<td class="pauta-td" style="font-size:12px;color:var(--muted)">' + (x.motivos.length ? x.motivos.map(mo => esc(mo.motivo) + ' (' + mo.n + ')').join(' · ') : '—') + '</td>' +
+    '</tr>').join('') + '</tbody></table></div>';
+}
+
+function busqHechas(hechas, puede) {
+  if (!hechas.length) return '';
+  const est = { ejecutada: ['Activa', 'pauta-pill-ok'], fallida: ['No se pudo', 'pauta-pill-mal'], deshecha: ['Quitada', 'pauta-pill-off'] };
+  return '<div class="pauta-pasos-t" style="margin:22px 0 8px">Negativas puestas desde Acuarius</div>' +
+    '<div class="pauta-tabla-caja"><table class="pauta-tabla"><thead><tr>' +
+    '<th class="pauta-th">Cuándo</th><th class="pauta-th">Qué</th><th class="pauta-th">Campaña</th><th class="pauta-th">Estado</th><th class="pauta-th"></th></tr></thead><tbody>' +
+    hechas.map(h => {
+      const st = est[h.estado] || [h.estado, 'pauta-pill-off'];
+      return '<tr>' +
+        '<td class="pauta-td" style="white-space:nowrap">' + esc(new Date(h.decidida_at || h.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })) + '</td>' +
+        '<td class="pauta-td" style="font-size:12px;max-width:360px">' + esc(h.resultado || '') + (h.motivo ? '<div style="color:var(--muted2)">' + esc(h.motivo) + '</div>' : '') + '</td>' +
+        '<td class="pauta-td" style="font-size:12px">' + esc(h.campana || h.campana_id) + '</td>' +
+        '<td class="pauta-td"><span class="pauta-pill ' + st[1] + '">' + esc(st[0]) + '</span></td>' +
+        '<td class="pauta-td">' + (puede && h.estado === 'ejecutada' ? '<button class="btn-ghost sm" onclick="busqDeshacer(\'' + esc(h.id) + '\', this)">Deshacer</button>' : '') + '</td>' +
+      '</tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+async function busqExcluir(p, btn) {
+  const cuantas = (p.campanas || []).length;
+  const como = p.tipo === 'PHRASE'
+    ? 'Tu anuncio dejará de salir en CUALQUIER búsqueda que contenga «' + p.texto + '»'
+    : 'Tu anuncio dejará de salir cuando alguien busque exactamente «' + p.texto + '»';
+  if (!confirm('¿Excluir «' + p.texto + '»?\n\n' + como + (cuantas > 1 ? ', en ' + cuantas + ' campañas' : '') + '.\n\nLo puedes deshacer desde esta misma pantalla.')) return;
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Excluyendo…'; }
+  try {
+    const r = await fetchAuth('/api/busquedas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'negativa', ...p }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    const fallos = (d.resultados || []).filter(x => !x.ok);
+    showToast(fallos.length ? '«' + d.texto + '» excluida, salvo en ' + fallos.length + (fallos.length === 1 ? ' campaña' : ' campañas') + ': ' + fallos[0].error
+      : '«' + d.texto + '» excluida', fallos.length ? 'error' : 'success');
+    busqCargar();
+  } catch (e) {
+    showToast('No se pudo excluir: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+async function busqDeshacer(id, btn) {
+  if (!confirm('¿Quitar esta negativa?\n\nTu anuncio volverá a poder salir en esas búsquedas.')) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Quitando…'; }
+  try {
+    const r = await fetchAuth('/api/busquedas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'deshacer', id }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast('Negativa quitada', 'success');
+    busqCargar();
+  } catch (e) {
+    showToast('No se pudo quitar: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Deshacer'; }
+  }
+}
+
 // ── Reglas automáticas ──────────────────────────────────────────────────────
 // Condiciones con los números del CRM (costo por lead real, costo por venta,
 // gasto sin leads) y una acción que solo RESTA: avisar, pausar o bajar el
@@ -40241,6 +40441,7 @@ function reglasPintar() {
 }
 
 function reglasTextoAccion(a) {
+  if (a.accion === 'negativa') return 'Palabra negativa';
   return a.accion === 'bajar_presupuesto' ? 'Bajar el presupuesto un ' + a.porcentaje + ' %' : a.accion === 'pausar' ? 'Pausar' : 'Aviso';
 }
 

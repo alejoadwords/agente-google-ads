@@ -40,7 +40,7 @@ create table if not exists acciones_pauta (
   porcentaje   int,
   motivo       text not null,                -- la cifra que la disparó, en palabras
   estado       text not null default 'propuesta'
-               check (estado in ('propuesta', 'en_curso', 'ejecutada', 'descartada', 'fallida', 'avisada', 'caducada')),
+               check (estado in ('propuesta', 'en_curso', 'ejecutada', 'descartada', 'fallida', 'avisada', 'caducada', 'deshecha')),
   resultado    text,
   decidida_por text,
   created_at   timestamptz not null default now(),
@@ -49,3 +49,7 @@ create table if not exists acciones_pauta (
 alter table acciones_pauta enable row level security;
 create index if not exists acciones_pauta_cuenta on acciones_pauta (user_id, created_at desc);
 create index if not exists acciones_pauta_pendientes on acciones_pauta (user_id) where estado = 'propuesta';
+
+-- Punto 6 (03-10-2026): las palabras negativas también quedan aquí, con el
+-- resourceName del criterio creado en Google para poder deshacerlas.
+alter table acciones_pauta add column if not exists recurso text;

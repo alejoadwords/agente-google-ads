@@ -163,7 +163,7 @@ async function porDondePreguntar(fila, token, cid) {
   });
 }
 
-async function gaql(customerId, token, query, login) {
+export async function gaql(customerId, token, query, login) {
   const h = { Authorization: `Bearer ${token}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
   if (login) h['login-customer-id'] = login;
   // Se prueban varias versiones porque Google retira las viejas sin avisarnos:
@@ -943,7 +943,7 @@ async function verificarCampanaMeta(fila, campanaId, campos) {
   return c;
 }
 
-async function accesoGoogleDeFila(fila) {
+export async function accesoGoogleDeFila(fila) {
   const token = await refrescarGoogle(fila);
   if (!token) return { error: 'El permiso de Google caducó. Vuelve a conectar la cuenta.' };
   const cid = String(fila.account_id || '').replace(/-/g, '');
@@ -953,14 +953,23 @@ async function accesoGoogleDeFila(fila) {
   return { token, cid, login, h };
 }
 
-async function mutarGoogle(cid, h, recurso, cuerpo) {
+export async function mutarGoogle(cid, h, recurso, cuerpo) {
   let ultimo = 'ninguna versión de la API respondió';
   for (const v of VERSIONES) {
     const r = await fetch(`https://googleads.googleapis.com/v${v}/customers/${cid}/${recurso}:mutate`, {
       method: 'POST', headers: h, body: JSON.stringify(cuerpo),
     });
-    if (r.ok) return { ok: true };
-    ultimo = (await r.text()).slice(0, 200);
+    // Lo creado vuelve en `datos`: una negativa se deshace con su resourceName.
+    if (r.ok) return { ok: true, datos: await r.json().catch(() => ({})) };
+    // El JSON de Google viene con sangría y el código útil (RESOURCE_NOT_FOUND,
+    // DUPLICATE_RESOURCE…) va al fondo: cortado a 200 caracteres no se veía.
+    const t = await r.text();
+    try {
+      const j = JSON.parse(t);
+      const e = j.error?.details?.[0]?.errors?.[0];
+      ultimo = e ? Object.values(e.errorCode || {})[0] + ': ' + e.message : (j.error?.message || t);
+    } catch { ultimo = t; }
+    ultimo = String(ultimo).replace(/\s+/g, ' ').slice(0, 300);
     if (r.status !== 404) break;
   }
   return { ok: false, error: ultimo };
