@@ -35,6 +35,44 @@ export const SIN_CAMPANA = '_clic_sin_campana';
 // tiene sentido volver a preguntarlo.
 export const SIN_PALABRA = '_clic_sin_palabra';
 
+// ── ¿Es de Google? ──────────────────────────────────────────────────────────
+// La plataforma llega como la escribió quien etiquetó los anuncios: Certain
+// pone utm_source=adwords, otros «google_ads», «cpc» o «gads». Se comparaba
+// con «Google» exacto, y de unos 20 leads con un gclid de verdad solo se
+// atribuyó 1 (04-10-2026). Ahora manda el tipo de clic (un gclid es de Google
+// diga lo que diga la UTM), después la plataforma normalizada, y si no hay
+// ninguna de las dos, el formato del clic.
+const PLATAFORMAS = [
+  [/^(google|adwords|google[ _-]?ads|googleads|gads|g[ _-]?ads|cpc|ppc|sem|search|pmax|youtube|yt|gdn)$/, 'Google'],
+  [/^(meta|facebook|fb|ig|instagram|facebook[ _-]?ads|meta[ _-]?ads|fb[ _-]?ads|ig[ _-]?ads|paid[ _-]?social|messenger|whatsapp[ _-]?ads)$/, 'Meta'],
+  [/^(tiktok|tiktok[ _-]?ads|tt)$/, 'TikTok'],
+  [/^(bing|microsoft|microsoft[ _-]?ads|msads)$/, 'Microsoft'],
+];
+/** «adwords» → «Google», «fb» → «Meta». Lo que no reconoce lo devuelve igual. Pura. */
+export function normPlataforma(v) {
+  const t = String(v || '').trim();
+  const k = t.toLowerCase();
+  if (!k) return '';
+  if (k.startsWith('google')) return 'Google';
+  if (k === 'meta orgánico' || k === 'meta organico') return 'Meta orgánico';
+  if (k.startsWith('meta')) return 'Meta';
+  for (const [re, red] of PLATAFORMAS) if (re.test(k)) return red;
+  return t;
+}
+const TIPOS_GOOGLE = ['gclid', 'wbraid', 'gbraid'];
+/** ¿Este lead viene de un clic en un anuncio de Google? Pura. */
+export function esClicDeGoogle(cf) {
+  const clic = String(cf?.['Clic de anuncio'] || '').trim();
+  if (!clic) return false;
+  const tipo = String(cf['Tipo de clic'] || '').toLowerCase();
+  if (tipo) return TIPOS_GOOGLE.includes(tipo);
+  const plat = normPlataforma(cf['Plataforma']);
+  if (plat) return plat === 'Google';
+  // Sin tipo ni plataforma: un fbclid empieza por «IwA»/«IwZ»; el resto que
+  // llega como clic de anuncio es, en la práctica, de Google.
+  return !/^Iw[A-Z]/.test(clic);
+}
+
 export function diaDe(iso) {
   return String(iso || '').slice(0, 10);
 }
@@ -46,7 +84,7 @@ export function pendientes(leads) {
     if (!String(cf['Clic de anuncio'] || '').trim()) return false;
     // Un fbclid también se guarda como «Clic de anuncio»; a Google no se le
     // pregunta por el clic de Meta.
-    if (String(cf['Plataforma'] || '').trim() !== 'Google') return false;
+    if (!esClicDeGoogle(cf)) return false;
     if (String(cf['ID de campaña'] || '').trim()) return false;
     if (String(cf['Campaña'] || '').trim()) return false;
     if (cf[SIN_CAMPANA]) return false;
@@ -160,7 +198,7 @@ export function sinPalabra(leads, ahora = Date.now()) {
   const limite = diaDe(new Date(ahora - DIAS_CLICK_VIEW * 864e5).toISOString());
   return (leads || []).filter((l) => {
     const cf = l.custom_fields || {};
-    return String(cf['Clic de anuncio'] || '').trim() && String(cf['Plataforma'] || '').trim() === 'Google' &&
+    return esClicDeGoogle(cf) &&
       String(cf['ID de campaña'] || '').trim() && !cf['Palabra clave'] && !cf[SIN_PALABRA] && diaDe(l.created_at) >= limite;
   });
 }

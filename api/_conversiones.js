@@ -22,6 +22,7 @@
 // SOLO desde funciones edge (regla 2 de CLAUDE.md).
 
 import { abrirConexion, cifrar, descifrar } from './_cifrado.js';
+import { normPlataforma } from './_gclid.js';
 import { dondePreguntar } from './_google-login.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -105,7 +106,8 @@ function partirNombre(nombre) {
 export function llavesDelLead(lead) {
   const cf = lead.custom_fields || {};
   const clic = String(cf['Clic de anuncio'] || '').trim() || null;
-  const plataforma = String(cf['Plataforma'] || '').toLowerCase();
+  // Normalizada: «adwords» es Google (ver normPlataforma en api/_gclid.js).
+  const plataforma = normPlataforma(cf['Plataforma']).toLowerCase();
   let tipo = String(cf['Tipo de clic'] || '').toLowerCase() || null;
   if (clic && !tipo) {
     if (plataforma.startsWith('meta')) tipo = cf['ID de anuncio'] ? 'ctwa_clid' : 'fbclid';

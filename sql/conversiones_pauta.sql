@@ -85,6 +85,24 @@ returns boolean language sql stable as $$
     else false end;
 $$;
 
+-- De qué red es un lead pagado, con la MISMA regla que normPlataforma /
+-- esClicDeGoogle en api/_gclid.js. Se comparaba con 'Google%' y 'Meta%', y
+-- Certain etiqueta utm_source=adwords: sus leads de Google nunca se reportaban
+-- (04-10-2026). El tipo de clic manda sobre la UTM.
+create or replace function plataforma_red(cf jsonb) returns text
+language sql immutable as $f$
+  select case
+    when lower(coalesce(cf->>'Tipo de clic', '')) in ('gclid', 'wbraid', 'gbraid') then 'google'
+    when lower(coalesce(cf->>'Tipo de clic', '')) in ('fbclid', 'ctwa_clid') then 'meta'
+    when cf ? 'ID de lead de Meta' then 'meta'
+    when lower(coalesce(cf->>'Plataforma', '')) in ('meta orgánico', 'meta organico') then null
+    when lower(coalesce(cf->>'Plataforma', '')) ~ '^(google|adwords|gads|g[ _-]?ads|googleads|cpc|ppc|sem|search|pmax|youtube|yt|gdn)' then 'google'
+    when lower(coalesce(cf->>'Plataforma', '')) ~ '^(meta|facebook|fb|ig$|ig[ _-]|instagram|paid[ _-]?social|messenger)' then 'meta'
+    when coalesce(cf->>'Plataforma', '') = '' and cf ? 'Clic de anuncio' and (cf->>'Clic de anuncio') !~ '^Iw[A-Z]' then 'google'
+    else null
+  end
+$f$;
+
 create or replace function conversiones_encolar() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
@@ -102,7 +120,7 @@ begin
   -- ella, un «Lead» no le dice nada a Meta que valga la pena.
   if tg_op = 'INSERT'
      and (new.custom_fields ? 'ID de lead de Meta'
-          or (coalesce(new.custom_fields->>'Plataforma', '') = 'Meta' and new.custom_fields ? 'Clic de anuncio'))
+          or (plataforma_red(new.custom_fields) = 'meta' and new.custom_fields ? 'Clic de anuncio'))
      and conversiones_red_activa(new.user_id, new.client_id, 'meta') then
     insert into conversiones_pauta (user_id, client_id, lead_id, red, evento, event_id, ocurrio_at)
     values (new.user_id, new.client_id, new.id, 'meta', 'Lead', 'acu-lead-' || new.id, coalesce(new.created_at, now()))
@@ -124,15 +142,14 @@ begin
               order by (p.client_id is not distinct from new.client_id) desc limit 1))
      limit 1;
     if v_etapa is not null then
-      if (new.custom_fields ? 'ID de lead de Meta' or coalesce(new.custom_fields->>'Plataforma', '') like 'Meta%')
-         and coalesce(new.custom_fields->>'Plataforma', '') <> 'Meta orgánico'
+      if plataforma_red(new.custom_fields) = 'meta'
          and conversiones_red_activa(new.user_id, new.client_id, 'meta') then
         insert into conversiones_pauta (user_id, client_id, lead_id, red, evento, etapa, valor_etapa, event_id, ocurrio_at)
         values (new.user_id, new.client_id, new.id, 'meta', v_nombre, v_etapa, v_valor,
                 'acu-et-' || new.id || '-' || v_etapa, now())
         on conflict (red, event_id) do nothing;
       end if;
-      if coalesce(new.custom_fields->>'Plataforma', '') like 'Google%' and new.custom_fields ? 'Clic de anuncio'
+      if plataforma_red(new.custom_fields) = 'google' and new.custom_fields ? 'Clic de anuncio'
          and conversiones_red_activa(new.user_id, new.client_id, 'google') then
         insert into conversiones_pauta (user_id, client_id, lead_id, red, evento, etapa, valor_etapa, event_id, ocurrio_at)
         values (new.user_id, new.client_id, new.id, 'google', v_nombre, v_etapa, v_valor,
