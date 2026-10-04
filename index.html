@@ -307,6 +307,11 @@ textarea.cmpw-input{font-family:var(--font);font-size:13px;line-height:1.55;resi
 .cmp-prog-txt b{color:var(--text)}
 .cmp-prog-txt a{color:var(--blue)}
 .cmp-txt-error{color:var(--danger)}
+.avz-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0 16px}
+.avz-trans{margin-top:12px;max-height:280px;overflow-y:auto;background:var(--bg-muted);border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.avz-linea{line-height:1.5}
+.avz-linea b{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-right:4px}
+.avz-linea.agente b{color:var(--blue)}
 .cmp-txt-aviso{color:var(--warning)}
 .cmp-estado{display:inline-block;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;white-space:nowrap}
 .cmp-estado.borrador{background:var(--bg-muted);color:var(--muted)}
@@ -5989,6 +5994,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div id="crm-paginas-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-pauta-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <div id="crm-reservas-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
+    <div id="crm-agentevoz-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:18px 22px"></div>
     <!-- La ficha del lead a página completa. Sin padding: la barra y el embudo
          van pegados arriba y solo el cuerpo lleva margen. -->
     <div id="crm-lead-view" style="display:none;flex-direction:column;flex:1;overflow-y:auto"></div>

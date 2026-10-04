@@ -1,0 +1,162 @@
+// voz-agente/agente.js — el worker que contesta las llamadas del agente de voz.
+//
+// Corre FUERA de Vercel (Fly.io): una llamada es una conexión de minutos y las
+// funciones de Vercel se cortan mucho antes. LiveKit le reparte las llamadas:
+//   · las de teléfono, que entran por Telnyx → SIP;
+//   · las pruebas desde el navegador (botón «Probar» del módulo).
+//
+// El cerebro de cada agente (quién es, qué sabe, qué puede hacer) lo da
+// Acuarius en cada llamada (acuarius.js → api/agente-voz.js). Aquí solo está
+// la parte de audio: oír (Deepgram), decidir el turno (VAD + detector),
+// pensar (Claude Haiku) y hablar (Cartesia).
+//
+//   node agente.js dev     → desarrollo, contra LiveKit Cloud
+//   node agente.js start   → producción
+
+import { cli, defineAgent, llm, voice, inference, ServerOptions } from '@livekit/agents';
+import * as anthropic from '@livekit/agents-plugin-anthropic';
+import * as deepgram from '@livekit/agents-plugin-deepgram';
+import * as cartesia from '@livekit/agents-plugin-cartesia';
+import * as silero from '@livekit/agents-plugin-silero';
+import { SipClient } from 'livekit-server-sdk';
+import { z } from 'zod';
+import { fileURLToPath } from 'node:url';
+import { crearCliente, datosDeLaLlamada, transcripcionDe, duracion } from './acuarius.js';
+
+export const NOMBRE_WORKER = 'acuarius-voz';
+const MODELO = process.env.AGENTE_VOZ_MODELO || 'claude-haiku-4-5';
+const VOZ_DEFECTO = process.env.VOZ_CARTESIA_DEFECTO || '';
+
+function herramientas({ acuarius, llamadaId, colgar, desviar }) {
+  const usar = (nombre) => async (args) => {
+    try {
+      const r = await acuarius.herramienta(llamadaId, nombre, args);
+      return r.texto || (r.ok ? 'Hecho.' : (r.error || 'No se pudo.'));
+    } catch (e) {
+      return 'No pude hacerlo ahora mismo por un problema técnico. Ofrece que lo llame un asesor.';
+    }
+  };
+  return {
+    guardar_datos: llm.tool({
+      description: 'Guarda en el CRM los datos de quien llama apenas los tengas: su nombre, su correo si lo da, y qué le interesa.',
+      parameters: z.object({
+        nombre: z.string().optional().describe('Nombre y apellido'),
+        correo: z.string().optional().describe('Correo electrónico'),
+        interes: z.string().optional().describe('Qué busca o por qué llama, en una frase'),
+      }),
+      execute: usar('guardar_datos'),
+    }),
+    buscar_inmuebles: llm.tool({
+      description: 'Busca inmuebles en el catálogo del negocio según lo que pidió la persona.',
+      parameters: z.object({
+        operacion: z.string().optional().describe('arriendo o venta'),
+        ciudad: z.string().optional(),
+        zona: z.string().optional().describe('Barrio o zona'),
+        presupuesto: z.string().optional().describe('Presupuesto como lo dijo, por ejemplo "3 millones"'),
+        habitaciones: z.number().optional(),
+      }),
+      execute: usar('buscar_inmuebles'),
+    }),
+    agendar_cita: llm.tool({
+      description: 'Agenda una cita SOLO después de que la persona confirmó servicio, día y hora.',
+      parameters: z.object({
+        servicio: z.string().describe('La clave del servicio'),
+        dia: z.string().describe('AAAA-MM-DD'),
+        hora: z.string().describe('HH:MM, 24 horas'),
+        nombre: z.string().describe('A nombre de quién'),
+      }),
+      execute: usar('agendar_cita'),
+    }),
+    pasar_a_asesor: llm.tool({
+      description: 'Pasa la llamada a una persona del equipo cuando la piden o cuando no puedes resolver algo.',
+      parameters: z.object({ motivo: z.string().optional() }),
+      execute: async (args) => {
+        const respuesta = await usar('pasar_a_asesor')(args);
+        // El desvío va después de que el agente diga la frase: unos segundos.
+        setTimeout(() => { desviar().catch(() => {}); }, 2500);
+        return respuesta;
+      },
+    }),
+    colgar: llm.tool({
+      description: 'Termina la llamada. Úsala después de despedirte.',
+      execute: async () => { setTimeout(() => { colgar('terminada').catch(() => {}); }, 2000); return 'Llamada terminada.'; },
+    }),
+  };
+}
+
+export default defineAgent({
+  prewarm: async (proc) => {
+    proc.userData.vad = await silero.VAD.load();
+  },
+  entry: async (ctx) => {
+    await ctx.connect();
+    const persona = await ctx.waitForParticipant();
+    const desde = Date.now();
+    const datos = datosDeLaLlamada({ atributos: persona.attributes || {}, metadata: ctx.job.metadata });
+    const acuarius = crearCliente();
+
+    const cfg = await acuarius.config({ sala: ctx.room.name, ...datos });
+    const sip = new SipClient(process.env.LIVEKIT_URL, process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET);
+    const esTelefono = datos.direccion === 'entrante' && !!datos.telefono;
+
+    let cerrada = false;
+    let estado = 'terminada';
+    let session = null;
+    const cerrar = async () => {
+      if (cerrada || !cfg.llamada_id) return;
+      cerrada = true;
+      const items = session ? session.history.items : [];
+      await acuarius.fin(cfg.llamada_id, {
+        segundos: duracion(desde), estado, transcripcion: transcripcionDe(items),
+        uso: session?.usage ? JSON.parse(JSON.stringify(session.usage)) : null,
+      }).catch(e => console.error('[voz] no se pudo cerrar la llamada', cfg.llamada_id, e.message));
+    };
+    ctx.addShutdownCallback(cerrar);
+    const colgar = async (como = 'terminada') => { estado = como; await cerrar(); await ctx.deleteRoom(); };
+    const desviar = async () => {
+      if (!esTelefono || !cfg.desvio) return;
+      estado = 'desviada';
+      await sip.transferSipParticipant(ctx.room.name, persona.identity, 'tel:+' + cfg.desvio);
+    };
+
+    // Agente apagado, sin número o sin minutos: no se deja a nadie hablando
+    // solo. Si hay a quién pasarla, se pasa; si no, se dice y se cuelga.
+    if (cfg.colgar || cfg.sin_saldo || !cfg.instrucciones) {
+      session = new voice.AgentSession({ tts: new cartesia.TTS({ model: 'sonic-3', language: 'es', voice: VOZ_DEFECTO }) });
+      await session.start({ agent: new voice.Agent({ instructions: 'Solo lees el mensaje.' }), room: ctx.room });
+      const frase = cfg.mensaje || 'En este momento no podemos atenderte por aquí. Por favor intenta más tarde.';
+      await session.say(frase, { allowInterruptions: false }).waitForPlayout();
+      if (cfg.desvio) await desviar().catch(() => {});
+      return colgar(cfg.desvio ? 'desviada' : 'terminada');
+    }
+
+    const agente = new voice.Agent({
+      instructions: cfg.instrucciones,
+      tools: herramientas({ acuarius, llamadaId: cfg.llamada_id, colgar, desviar }),
+    });
+    session = new voice.AgentSession({
+      vad: ctx.proc.userData.vad,
+      stt: new deepgram.STT({ model: 'nova-3', language: 'es' }),
+      llm: new anthropic.LLM({ model: MODELO, temperature: 0.4, maxTokens: 300 }),
+      tts: new cartesia.TTS({ model: 'sonic-3', language: 'es', voice: cfg.agente?.voz || VOZ_DEFECTO }),
+      // El detector de fin de turno por AUDIO, el modelo local (v1-mini): corre
+      // en nuestro servidor, sin costo por minuto, y entiende español. Es lo que
+      // decide si la persona terminó de hablar o solo hizo una pausa.
+      turnDetection: new inference.TurnDetector({ version: 'v1-mini' }),
+    });
+    await session.start({ agent: agente, room: ctx.room });
+    session.say(cfg.saludo);
+
+    // Tope de duración: lo que alcanza el saldo, o 30 min. Se avisa antes de cortar.
+    const max = Math.max(30, Number(cfg.max_segundos) || 300);
+    setTimeout(() => {
+      if (cerrada) return;
+      session.say('Se nos está acabando el tiempo de la llamada. Si necesitas algo más, te contacta un asesor. ¡Gracias!');
+      setTimeout(() => { colgar('terminada').catch(() => {}); }, 8000);
+    }, (max - 20) * 1000);
+  },
+});
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  cli.runApp(new ServerOptions({ agent: fileURLToPath(import.meta.url), agentName: NOMBRE_WORKER }));
+}

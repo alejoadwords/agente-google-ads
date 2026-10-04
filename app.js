@@ -29026,7 +29026,7 @@ function agnScheduleForLead() {
     // La ficha lleva el id en la ruta, así que su dirección se arma aparte en
     // `currentPath()`. Aquí solo queda anotada para que el reverso la reconozca.
     lead: '/crm/lead',
-    inbox: '/conversaciones', agents: '/conversaciones/agentes-ia',
+    inbox: '/conversaciones', agents: '/conversaciones/agentes-ia', agentevoz: '/conversaciones/agente-de-voz',
     analytics: '/analisis', nps: '/analisis/nps', campstats: '/analisis/aperturas',
   };
   const CRM_LEGACY = { '': 'kanban', '/contactos': 'list', '/agentes-ia': 'agents', '/inbox': 'inbox', '/analisis': 'analytics', '/automatizaciones': 'autos', '/agenda': 'agenda', '/tareas': 'tareas', '/campanas': 'campaigns', '/fuentes': 'sources' };
@@ -29044,7 +29044,7 @@ function agnScheduleForLead() {
     '/proyecto-seo': 'Proyecto SEO · Acuarius', '/roadmap': 'Roadmap · Acuarius', '/academia': 'Academia · Acuarius',
   };
   const AGENT_TITLES = { 'google-ads': 'Google Ads', 'meta-ads': 'Meta Ads', 'tiktok-ads': 'TikTok Ads', 'linkedin-ads': 'LinkedIn Ads', seo: 'SEO', social: 'Social Media', consultor: 'Consultor' };
-  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Agentes IA', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', paginas: 'Páginas', listas: 'Listas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas', reservas: 'Reservas', lead: 'Lead' };
+  const CRM_TITLES = { kanban: 'CRM', list: 'Contactos', agents: 'Agentes IA', inbox: 'Conversaciones', analytics: 'Análisis', autos: 'Automatizaciones', agenda: 'Agenda', tareas: 'Tareas', campaigns: 'Campañas', plantillas: 'Plantillas', paginas: 'Páginas', listas: 'Listas', sources: 'Fuentes', proposals: 'Propuestas', nps: 'Satisfacción', campstats: 'Aperturas', reservas: 'Reservas', agentevoz: 'Agente de voz', lead: 'Lead' };
 
   let currentView = 'home';
   let applying = false;   // evita pushState mientras una URL dirige la navegación
@@ -43618,3 +43618,257 @@ function medirUsoDePantallas() {
 }
 
 medirUsoDePantallas();
+
+
+// ══ AGENTE DE VOZ (módulo extra, en beta) ═════════════════════════════════════
+//
+// Un agente que CONTESTA LLAMADAS por el negocio (no es el «CRM por voz», que
+// es dictarle al CRM). Aquí se configura, se prueba desde el navegador y se ve
+// el historial de llamadas con su transcripción. El trabajo de verdad lo hace
+// el worker de voz-agente/; esta pantalla solo habla con /api/agente-voz.
+//
+// Solo aparece en el menú si la cuenta está en la beta (AGENTE_VOZ_BETA): se
+// pregunta al servidor al arrancar y, si dice que sí, se añade la pestaña.
+let avzEstado = null;        // lo último que respondió GET /api/agente-voz
+let avzBorrador = null;      // el agente que se está editando
+let avzSala = null;          // la llamada de prueba en curso (LiveKit Room)
+let avzAbierta = null;       // id de la llamada con la transcripción desplegada
+
+const avzQs = () => {
+  const c = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  return c ? '?client_id=' + encodeURIComponent(c) : '';
+};
+const avzNum = (n) => Number(n || 0).toLocaleString('es-CO');
+const avzDur = (s) => { s = Number(s) || 0; return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+
+async function avzCargar() {
+  const host = document.getElementById('crm-agentevoz-view');
+  if (!host) return;
+  if (!avzEstado) host.innerHTML = '<div class="cmp-wrap"><div class="cmp-vacio">Cargando…</div></div>';
+  try {
+    const r = await fetchAuth('/api/agente-voz' + avzQs(), { noCache: true });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    avzEstado = d;
+    if (d.activo) avzBorrador = Object.assign({}, (d.agentes || [])[0] || { nombre: 'Lucía', negocio: '', proposito: 'recepcion', tono: 'tu', activo: true });
+  } catch (e) {
+    avzEstado = { error: 'No se pudo cargar el agente de voz. Revisa la conexión y reintenta.' };
+  }
+  avzPintar();
+}
+
+function avzPintar() {
+  const host = document.getElementById('crm-agentevoz-view');
+  if (!host) return;
+  const e = avzEstado || {};
+  if (e.error) {
+    host.innerHTML = '<div class="cmp-wrap">' + emptyAgua('alert', 'No se pudo cargar', esc(e.error),
+      '<button class="btn-pri" onclick="avzCargar()">Reintentar</button>') + '</div>';
+    return;
+  }
+  if (!e.activo) {
+    host.innerHTML = '<div class="cmp-wrap">' + emptyAgua('bot', 'Agente de voz',
+      'Un asistente que contesta las llamadas de tu negocio, agenda citas y deja todo en el CRM. Está en beta: escríbenos para activarlo en tu cuenta.') + '</div>';
+    return;
+  }
+  const a = avzBorrador || {};
+  const plan = (e.planes || []).map(p => p.nombre + ' ' + p.usd + ' USD · ' + avzNum(p.minutos) + ' min').join(' · ');
+  host.innerHTML = '<div class="cmp-wrap">' +
+    '<div class="cmp-head"><div><div class="cmp-title">Agente de voz</div>' +
+      '<div class="cmp-sub">Contesta las llamadas de tu negocio, agenda citas y deja cada conversación en la ficha del contacto.</div></div></div>' +
+    '<div class="cmp-kpis">' +
+      '<div class="cmp-kpi"><div class="cmp-kpi-lbl">Minutos disponibles</div><div class="cmp-kpi-num">' + avzNum(e.saldo) + '</div>' +
+        '<div class="cmp-kpi-sub">Se cobra por minuto o fracción. Minuto adicional: ' + String(e.usd_minuto_extra || 0.25).replace('.', ',') + ' USD.</div></div>' +
+      '<div class="cmp-kpi"><div class="cmp-kpi-lbl">Número del agente</div><div class="cmp-kpi-num" style="font-size:var(--fs-lg)">' +
+        (a.numero ? '+' + esc(String(a.numero)) : 'Pendiente') + '</div>' +
+        '<div class="cmp-kpi-sub">' + (a.numero ? 'Las llamadas a este número las contesta tu agente.' : 'Te asignamos un número colombiano al activar tu plan.') + '</div></div>' +
+      '<div class="cmp-kpi"><div class="cmp-kpi-lbl">Planes</div><div class="cmp-kpi-sub" style="margin-top:8px">' + esc(plan) + '</div></div>' +
+    '</div>' +
+    avzFormHtml(a, e) +
+    avzPruebaHtml(a, e) +
+    avzLlamadasHtml(e) +
+  '</div>';
+}
+
+function avzSeg(campo, opciones, valor) {
+  return '<div class="cmp-tabs" style="display:inline-flex">' + opciones.map(o =>
+    '<button type="button" class="cmp-tab' + (valor === o[0] ? ' on' : '') + '" onclick="avzCampo(\'' + campo + '\',\'' + o[0] + '\')">' + o[1] + '</button>').join('') + '</div>';
+}
+
+function avzFormHtml(a) {
+  const campo = (id, etiqueta, valor, ayuda, placeholder) =>
+    '<div class="cmpw-campo"><div class="cmpw-label">' + etiqueta + '</div>' +
+      '<input class="auto-input cmpw-input" id="avz-' + id + '" value="' + esc(String(valor || '')) + '" placeholder="' + esc(placeholder || '') + '" oninput="avzCampo(\'' + id + '\', this.value, true)">' +
+      (ayuda ? '<div class="cmpw-ayuda">' + ayuda + '</div>' : '') + '</div>';
+  return '<div class="cmpw-card"><div class="cmpw-card-tit">' + icn('bot', 14) + ' Tu agente</div>' +
+    '<div class="avz-grid">' +
+      campo('nombre', 'Nombre del agente *', a.nombre, 'Es como se presenta al contestar.', 'Ej: Lucía') +
+      campo('negocio', 'Nombre del negocio *', a.negocio, 'Lo dice al contestar: «te habla Lucía de…».', 'Ej: Inmobiliaria Sol') +
+    '</div>' +
+    '<div class="avz-grid">' +
+      '<div class="cmpw-campo"><div class="cmpw-label">Para qué contesta</div>' +
+        avzSeg('proposito', [['recepcion', 'Recepción y citas'], ['calificacion', 'Calificar contactos']], a.proposito || 'recepcion') + '</div>' +
+      '<div class="cmpw-campo"><div class="cmpw-label">Trato</div>' +
+        avzSeg('tono', [['tu', 'De tú'], ['formal', 'De usted']], a.tono || 'tu') + '</div>' +
+    '</div>' +
+    campo('saludo', 'Saludo (opcional)', a.saludo, 'Si lo dejas vacío, saluda con su nombre y el del negocio. Puedes usar {{nombre}} para el de quien llama, si ya está en el CRM.', 'Ej: Hola {{nombre}}, gracias por llamar a Inmobiliaria Sol') +
+    '<div class="cmpw-campo"><div class="cmpw-label">Lo que el agente debe saber</div>' +
+      '<textarea class="auto-input cmpw-input" id="avz-instrucciones" rows="5" placeholder="Horarios, precios, qué no debe prometer, cómo describir el negocio…" oninput="avzCampo(\'instrucciones\', this.value, true)">' + esc(String(a.instrucciones || '')) + '</textarea>' +
+      '<div class="cmpw-ayuda">Tu catálogo y tus servicios de Reservas ya los conoce: no hace falta copiarlos aquí.</div></div>' +
+    campo('desvio', 'Número del asesor', a.desvio ? '+' + a.desvio : '', 'Si quien llama pide hablar con una persona, o se acaban los minutos, la llamada pasa a este número.', 'Ej: 300 123 4567') +
+    '<div class="cmpw-card-pie"><label class="cmpw-check"><input type="checkbox" ' + (a.activo !== false ? 'checked' : '') +
+      ' onchange="avzCampo(\'activo\', this.checked, true)"> Agente encendido</label>' +
+      '<button class="btn-pri" id="avz-guardar" onclick="avzGuardar()">Guardar</button></div>' +
+  '</div>';
+}
+
+function avzCampo(campo, valor, sinPintar) {
+  avzBorrador = avzBorrador || {};
+  avzBorrador[campo] = valor;
+  if (!sinPintar) avzPintar();
+}
+
+async function avzGuardar() {
+  const btn = document.getElementById('avz-guardar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const r = await fetchAuth('/api/agente-voz' + avzQs(), { method: 'POST', body: JSON.stringify({ accion: 'guardar', agente: avzBorrador }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    avzBorrador = Object.assign({}, d.agente);
+    showToast('Agente guardado');
+    await avzCargar();
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
+}
+
+function avzPruebaHtml(a, e) {
+  const enCurso = !!avzSala;
+  const pie = !a.id
+    ? '<div class="cmpw-ayuda">Guarda el agente para poder probarlo.</div>'
+    : !e.livekit
+      ? '<div class="cmpw-ayuda">El servicio de voz todavía no está conectado. En cuanto lo esté, podrás hablar con tu agente desde aquí.</div>'
+      : '<button class="' + (enCurso ? 'btn-ghost' : 'btn-pri') + '" onclick="' + (enCurso ? 'avzColgar()' : 'avzProbar()') + '">' +
+          (enCurso ? 'Terminar la prueba' : 'Hablar con mi agente') + '</button>' +
+        '<span class="cmpw-ayuda" style="margin:0">Desde el navegador, con tu micrófono. Las pruebas no gastan minutos ni crean contactos.</span>';
+  return '<div class="cmpw-card"><div class="cmpw-card-tit">' + icn('chat', 14) + ' Probar el agente</div>' +
+    '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' + pie + '</div>' +
+    '<div id="avz-transcripcion" class="avz-trans"' + (enCurso ? '' : ' style="display:none"') + '></div>' +
+  '</div>';
+}
+
+// livekit-client se carga solo cuando alguien prueba: pesa y casi nadie lo usa.
+function avzCargarLiveKit() {
+  if (window.LivekitClient) return Promise.resolve(window.LivekitClient);
+  return new Promise((ok, mal) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.min.js';
+    s.onload = () => window.LivekitClient ? ok(window.LivekitClient) : mal(new Error('No cargó el cliente de voz'));
+    s.onerror = () => mal(new Error('No se pudo cargar el cliente de voz. Revisa la conexión.'));
+    document.head.appendChild(s);
+  });
+}
+
+function avzLinea(quien, texto) {
+  const box = document.getElementById('avz-transcripcion');
+  if (!box || !texto) return;
+  box.style.display = '';
+  box.insertAdjacentHTML('beforeend', '<div class="avz-linea ' + quien + '"><b>' + (quien === 'agente' ? 'Agente' : 'Tú') + '</b> ' + esc(String(texto)) + '</div>');
+  box.scrollTop = box.scrollHeight;
+}
+
+async function avzProbar() {
+  const a = avzBorrador || {};
+  try {
+    const LK = await avzCargarLiveKit();
+    const r = await fetchAuth('/api/agente-voz' + avzQs(), { method: 'POST', body: JSON.stringify({ accion: 'probar', agente_id: a.id }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    const sala = new LK.Room({ adaptiveStream: true, dynacast: true });
+    // El audio del agente: cada pista que publica se engancha a un <audio>.
+    sala.on(LK.RoomEvent.TrackSubscribed, (track) => {
+      if (track.kind === 'audio') { const el = track.attach(); el.dataset.avz = '1'; document.body.appendChild(el); }
+    });
+    sala.on(LK.RoomEvent.Disconnected, () => { avzSala = null; document.querySelectorAll('audio[data-avz]').forEach(x => x.remove()); avzPintar(); setTimeout(avzCargar, 2500); });
+    // La transcripción en vivo llega por el canal de texto que publica el worker.
+    sala.registerTextStreamHandler('lk.transcription', async (lector, info) => {
+      const texto = await lector.readAll();
+      if (lector.info?.attributes?.['lk.transcription_final'] === 'false') return;
+      avzLinea(info.identity === sala.localParticipant.identity ? 'cliente' : 'agente', texto);
+    });
+    await sala.connect(d.url, d.token);
+    await sala.localParticipant.setMicrophoneEnabled(true);
+    avzSala = sala;
+    avzPintar();
+    avzLinea('agente', '(conectado: habla cuando quieras)');
+    setTimeout(() => { if (avzSala === sala) avzColgar(); }, (d.max_segundos || 300) * 1000);
+  } catch (e) {
+    const msg = /Permission|NotAllowed/i.test(String(e && e.name || e)) ? 'Necesitamos permiso para usar tu micrófono.' : String(e.message || e);
+    showToast(msg, 'error');
+    avzSala = null; avzPintar();
+  }
+}
+
+async function avzColgar() {
+  const s = avzSala;
+  avzSala = null;
+  if (s) { try { await s.disconnect(); } catch {} }
+  avzPintar();
+}
+
+function avzLlamadasHtml(e) {
+  const ll = e.llamadas || [];
+  const ESTADOS = { en_curso: ['En curso', 'enviando'], terminada: ['Terminada', 'enviada'], desviada: ['Pasó al asesor', 'programada'], sin_saldo: ['Sin minutos', 'pausada'], error: ['Error', 'pausada'] };
+  const filas = ll.map(l => {
+    const st = ESTADOS[l.estado] || ESTADOS.terminada;
+    const abierta = avzAbierta === l.id;
+    const trans = abierta ? '<div class="avz-trans" style="margin-top:10px">' + ((l.transcripcion || []).map(t =>
+      '<div class="avz-linea ' + t.rol + '"><b>' + (t.rol === 'agente' ? 'Agente' : 'Cliente') + '</b> ' + esc(String(t.texto)) + '</div>').join('') || 'Sin transcripción.') + '</div>' : '';
+    return '<div class="cmpw-card" style="margin-bottom:10px;cursor:pointer" onclick="avzAbierta = avzAbierta === \'' + l.id + '\' ? null : \'' + l.id + '\'; avzPintar()">' +
+      '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">' +
+        '<div><b>' + (l.direccion === 'prueba' ? 'Prueba desde el navegador' : (l.telefono ? '+' + esc(String(l.telefono)) : 'Número oculto')) + '</b>' +
+          '<div class="cmp-sub">' + new Date(l.inicio).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) +
+          ' · ' + avzDur(l.segundos) + (l.minutos_cobrados ? ' · ' + l.minutos_cobrados + (l.minutos_cobrados === 1 ? ' minuto cobrado' : ' minutos cobrados') : '') + '</div></div>' +
+        '<span class="cmp-estado ' + st[1] + '">' + st[0] + '</span>' +
+      '</div>' +
+      (l.resumen ? '<div class="cmpw-ayuda" style="font-size:12.5px;color:var(--text)">' + esc(String(l.resumen)) + '</div>' : '') +
+      trans +
+    '</div>';
+  }).join('');
+  return '<div class="cmpw-card-tit" style="margin-top:6px">' + icn('chat', 14) + ' Llamadas</div>' +
+    (filas || '<div class="cmp-vacio">Todavía no hay llamadas. Cuando tu agente conteste una, aparece aquí con su resumen y su transcripción.</div>');
+}
+
+// La vista se cuelga al final, como Reservas: sin tocar crmSetView por dentro.
+(function () {
+  const _prev = crmSetView;
+  crmSetView = function (v) {
+    _prev(v);
+    const el = document.getElementById('crm-agentevoz-view');
+    if (el) el.style.display = v === 'agentevoz' ? 'flex' : 'none';
+    if (v === 'agentevoz') avzCargar();
+    else if (avzSala) avzColgar();   // salir de la pantalla corta la prueba
+  };
+  // En el menú solo si la cuenta está en la beta: se pregunta al servidor
+  // cuando la sesión ya está lista, y si dice que sí se añade la pestaña.
+  alDOMListo(() => setTimeout(async () => {
+    try {
+      const r = await fetchAuth('/api/agente-voz' + avzQs());
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.activo || typeof NAV_TABS === 'undefined') return;
+      avzEstado = d;
+      if (!NAV_TABS.conversaciones.includes('agentevoz')) {
+        NAV_TABS.conversaciones.push('agentevoz');
+        NAV_TAB2MOD.agentevoz = 'conversaciones';
+        NAV_TAB_LABELS.agentevoz = 'Agente de voz';
+        if (!NAV_ALL_TABS.includes('agentevoz')) NAV_ALL_TABS.push('agentevoz');
+        // navBuildSubmenus no rehace un submenú que ya existe: se quita el de
+        // Conversaciones para que salga con la pestaña nueva.
+        document.getElementById('navsub-conversaciones')?.remove();
+        if (typeof navBuildSubmenus === 'function') navBuildSubmenus();
+      }
+    } catch { /* sin beta o sin conexión: el menú queda como estaba */ }
+  }, 5000));
+})();

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Agente de voz</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  La pantalla del Agente de voz con el CSS y las funciones REALES de public/
+  y respuestas de mentira del servidor: con agente y llamadas, cuenta nueva,
+  fuera de la beta y fallo al cargar.
+
+  Arrancar con:  PUERTO=4183 node pruebas/servidor-boceto.mjs
+  Abrir:         http://localhost:4183/pruebas/banco-agente-voz.html
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle);color:var(--text)}
+  #crm-agentevoz-view{display:flex !important;flex-direction:column;padding:18px 22px 80px}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:#0D0F1C;color:#fff;padding:9px 14px;z-index:5000;
+    display:flex;gap:10px;align-items:center;justify-content:center;font-size:12px;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:7px;padding:5px 10px;font-family:inherit;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="crm-agentevoz-view"></div>
+<div class="banco">
+  <span style="opacity:.6">BANCO ·</span>
+  <button onclick="conDatos('lleno')">con agente y llamadas</button>
+  <button onclick="conDatos('nuevo')">cuenta nueva</button>
+  <button onclick="conDatos('fuera')">fuera de la beta</button>
+  <button onclick="conDatos('error')">fallo al cargar</button>
+</div>
+<script>
+const hace = (min) => new Date(Date.now() - min * 60000).toISOString();
+const LLENO = {
+  activo: true, saldo: 214, usd_minuto_extra: 0.25, livekit: true,
+  planes: [{ nombre: 'Inicial', usd: 79, minutos: 300 }, { nombre: 'Crecimiento', usd: 199, minutos: 900 }, { nombre: 'Pro', usd: 399, minutos: 2000 }],
+  agentes: [{ id: 'A1', nombre: 'Lucía', negocio: 'Inmobiliaria Sol', proposito: 'recepcion', tono: 'tu', numero: '576015551234', desvio: '573001112233', activo: true,
+    instrucciones: 'Atendemos de lunes a sábado de 8 a 6. Las visitas se agendan con un día de anticipación.' }],
+  llamadas: [
+    { id: 'c1', direccion: 'entrante', telefono: '573104445566', estado: 'terminada', inicio: hace(12), segundos: 154, minutos_cobrados: 3,
+      resumen: 'Ana busca apartamento en arriendo en el norte, hasta 3 millones. Se agendó visita el martes a las 10:00.',
+      transcripcion: [{ rol: 'agente', texto: 'Hola Ana, te habla Lucía de Inmobiliaria Sol. ¿En qué te ayudo?' }, { rol: 'cliente', texto: 'Hola, quiero ver apartamentos en el norte.' }] },
+    { id: 'c2', direccion: 'entrante', telefono: '573209998877', estado: 'desviada', inicio: hace(95), segundos: 48, minutos_cobrados: 1, resumen: 'Pidió hablar con un asesor por un contrato vigente.', transcripcion: [] },
+    { id: 'c3', direccion: 'prueba', telefono: null, estado: 'terminada', inicio: hace(300), segundos: 75, minutos_cobrados: 0, resumen: null, transcripcion: [] },
+    { id: 'c4', direccion: 'entrante', telefono: '573001234567', estado: 'sin_saldo', inicio: hace(1500), segundos: 0, minutos_cobrados: 0, resumen: null, transcripcion: [] },
+  ],
+};
+const NUEVO = Object.assign({}, LLENO, { saldo: 300, agentes: [], llamadas: [], livekit: false });
+let MODO = 'lleno';
+function conDatos(m) { MODO = m; avzEstado = null; avzBorrador = null; avzCargar(); }
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+  document.getElementById('estilos-reales').textContent = (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+  const trozo = (desde, hasta) => {
+    const a = js.indexOf(desde);
+    if (a < 0) throw new Error('No encontré en app.js: ' + desde);
+    const b = hasta ? js.indexOf(hasta, a) : -1;
+    return js.slice(a, b > a ? b : js.length);
+  };
+  const codigo = [
+    (js.match(/function esc\(t\)\{.*\n/) || [''])[0],
+    trozo('const ICN_PATHS = {', '\n};\n') + '\n};\n',
+    trozo('function emptyAgua(', '\n}\n') + '\n}\n',
+    trozo('function icn(', '\n}\n') + '\n}\n',
+    'var agencyActiveClientId = null; var crmSetView = function(){}; var alDOMListo = function(){};',
+    'var showToast = function(m){ console.log(m); };',
+    'var fetchAuth = async function(url, o){' +
+    '  if (MODO === "error") return new Response(JSON.stringify({ error: "caída" }), { status: 503 });' +
+    '  if (o && o.method === "POST") return new Response(JSON.stringify({ agente: Object.assign({ id: "A9" }, JSON.parse(o.body).agente) }));' +
+    '  return new Response(JSON.stringify(MODO === "fuera" ? { activo: false } : MODO === "nuevo" ? NUEVO : LLENO));' +
+    '};',
+    trozo('// ══ AGENTE DE VOZ (módulo extra', null),
+  ].join('\n');
+  const s = document.createElement('script');
+  s.textContent = codigo;
+  document.body.appendChild(s);
+  avzCargar();
+})().catch(e => {
+  document.body.insertAdjacentHTML('beforeend', '<pre style="color:#B91C1C;white-space:pre-wrap">' + e.message + '</pre>');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "acuarius-voz-agente",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Worker del agente de voz de Acuarius (corre en Fly.io, no en Vercel)",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node agente.js dev",
+    "start": "node agente.js start",
+    "modelos": "node agente.js download-files"
+  },
+  "dependencies": {
+    "@livekit/agents": "1.9.1",
+    "@livekit/agents-plugin-anthropic": "1.9.1",
+    "@livekit/agents-plugin-cartesia": "1.9.1",
+    "@livekit/agents-plugin-deepgram": "1.9.1",
+    "@livekit/agents-plugin-silero": "1.9.1",
+    "livekit-server-sdk": "2.19.1",
+    "zod": "^3.25.0"
+  }
+}
