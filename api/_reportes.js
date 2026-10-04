@@ -30,7 +30,10 @@ async function sb(ruta, init) {
 export const MAX_DESTINATARIOS = 5;
 // Programas por plan. Free no tiene: es una función de agencia.
 export const TOPE_PROGRAMAS = { free: 0, pro: 2, trial: 50, agency: 50 };
-const MODELO_RESUMEN = 'claude-haiku-4-5';
+// Sonnet y no Haiku: este texto lo firma la agencia ante su cliente. Haiku se
+// inventaba acciones («ajustamos la distribución hacia Performance Max») que
+// nadie hizo. Cuesta cerca de un centavo de dólar por reporte.
+const MODELO_RESUMEN = 'claude-sonnet-5';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 // ── Fechas (todo en texto AAAA-MM-DD, hora de Colombia) ─────────────────────
@@ -82,11 +85,15 @@ const GANADAS = ['ganado', 'won'], PERDIDAS = ['perdido', 'lost', 'descartado'];
 /** Totales de un período a partir de campañas (ya leídas) y leads. Pura. */
 export function resumirPeriodo(campanas, leads) {
   const unidas = unir(campanas, leads).filas;
-  const t = { inversion: 0, clics: 0, impresiones: 0, leads: leads.length, leads_pauta: 0, ganados: 0, ganados_pauta: 0,
+  // conv_red: lo que la red cuenta con su propia medición (en Google, la
+  // columna «Conversiones»). No es lo mismo que un lead en el CRM, y el reporte
+  // enseña las dos: sin ellas, al contrastar con Google Ads, parecía que
+  // faltaban 231 conversiones (Certain, septiembre).
+  const t = { inversion: 0, clics: 0, impresiones: 0, conv_red: 0, leads: leads.length, leads_pauta: 0, ganados: 0, ganados_pauta: 0,
     perdidos: 0, en_proceso: 0, ingresos: 0, ingresos_pauta: 0 };
   const red = {};
   for (const c of unidas) {
-    t.inversion += c.inversion || 0; t.clics += c.clics || 0; t.impresiones += c.impresiones || 0;
+    t.inversion += c.inversion || 0; t.clics += c.clics || 0; t.impresiones += c.impresiones || 0; t.conv_red += c.conv || 0;
     const r = red[c.red] || (red[c.red] = { inversion: 0, leads: 0, ganados: 0, ingresos: 0 });
     r.inversion += c.inversion || 0; r.leads += c.crm?.leads || 0; r.ganados += c.crm?.ganados || 0; r.ingresos += c.crm?.ingresos || 0;
   }
@@ -112,7 +119,7 @@ export function resumirPeriodo(campanas, leads) {
     por_red: red,
     campanas: unidas.filter(c => c.inversion > 0 || c.crm?.leads)
       .sort((a, b) => b.inversion - a.inversion).slice(0, 10)
-      .map(c => ({ red: c.red, nombre: c.nombre, inversion: c.inversion, clics: c.clics || 0, leads: c.crm?.leads || 0, ganados: c.crm?.ganados || 0,
+      .map(c => ({ red: c.red, nombre: c.nombre, inversion: c.inversion, clics: c.clics || 0, conv_red: c.conv || 0, leads: c.crm?.leads || 0, ganados: c.crm?.ganados || 0,
         ingresos: c.crm?.ingresos || 0, cpl_real: c.crm?.leads ? c.inversion / c.crm.leads : null })),
     fuentes: Object.entries(fuentes).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([fuente, n]) => ({ fuente, n })),
   };
@@ -190,10 +197,10 @@ export async function resumenIA({ datos, firma, nombre, userId }) {
   const t = datos.actual.totales, a = datos.anterior.totales;
   const compacto = {
     periodo: datos.etiqueta, moneda: datos.moneda,
-    este_periodo: { inversion: Math.round(t.inversion), leads_crm: t.leads, leads_de_pauta: t.leads_pauta, ventas: t.ganados, ventas_de_pauta: t.ganados_pauta,
+    este_periodo: { inversion: Math.round(t.inversion), conversiones_que_cuenta_la_red: Math.round(t.conv_red * 10) / 10, leads_crm: t.leads, leads_de_pauta: t.leads_pauta, ventas: t.ganados, ventas_de_pauta: t.ganados_pauta,
       ingresos_de_pauta: Math.round(t.ingresos_pauta), costo_por_lead: t.cpl_real && Math.round(t.cpl_real), en_proceso: t.en_proceso, perdidos: t.perdidos },
     periodo_anterior: { inversion: Math.round(a.inversion), leads_crm: a.leads, leads_de_pauta: a.leads_pauta, ventas: a.ganados, costo_por_lead: a.cpl_real && Math.round(a.cpl_real) },
-    campanas: datos.actual.campanas.slice(0, 6).map(c => ({ nombre: c.nombre, red: c.red, inversion: Math.round(c.inversion), leads: c.leads, ventas: c.ganados })),
+    campanas: datos.actual.campanas.slice(0, 6).map(c => ({ nombre: c.nombre, red: c.red, inversion: Math.round(c.inversion), conversiones_red: Math.round((c.conv_red || 0) * 10) / 10, leads: c.leads, ventas: c.ganados })),
     lo_que_hicimos: datos.hicimos.map(h => h.que),
     cuentas_sin_leer: datos.cuentas_sin_leer,
     casi_ningun_lead_trae_campana: datos.aviso_atribucion,
@@ -202,14 +209,16 @@ export async function resumenIA({ datos, firma, nombre, userId }) {
   // instrucción de no usarlo no bastó: Haiku lo citaba igual. No se le da.
   if (datos.aviso_atribucion) {
     for (const k of ['leads_de_pauta', 'ventas_de_pauta', 'ingresos_de_pauta', 'costo_por_lead']) { delete compacto.este_periodo[k]; delete compacto.periodo_anterior[k]; }
-    compacto.campanas = compacto.campanas.map(({ nombre, red, inversion }) => ({ nombre, red, inversion }));
+    compacto.campanas = compacto.campanas.map(({ nombre, red, inversion, conversiones_red }) => ({ nombre, red, inversion, conversiones_red }));
   }
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: MODELO_RESUMEN, max_tokens: 700,
+        // Sonnet razona antes de escribir y eso gasta del mismo max_tokens: con
+        // 700 el texto no llegaba (ver la memoria del chat y max_tokens).
+        model: MODELO_RESUMEN, max_tokens: 2000,
         system: 'Eres el ejecutivo de cuenta de ' + (firma || 'una agencia de marketing') + '. Escribes el párrafo con el que abre el reporte de resultados para el cliente ' +
           (nombre || '') + '. Tres o cuatro frases, en español de Latinoamérica, claras y directas. ' +
           'Primera persona del plural ("invertimos", "ajustamos", "excluimos") SOLO para lo que hizo la agencia: la inversión y lo_que_hicimos. ' +
@@ -217,8 +226,10 @@ export async function resumenIA({ datos, firma, nombre, userId }) {
           'Usa solo los números que te doy: compara con el período anterior, destaca lo mejor y lo que hay que vigilar, y si hubo acciones, menciónalas. ' +
           'Distingue lo que viene de la pauta (leads_de_pauta, ventas_de_pauta) del total del CRM, que incluye referidos, portales y otras fuentes: ' +
           'no te atribuyas ("logramos") cambios del total que no vienen de la pauta; preséntalos como lo que pasó en el CRM. Si no hubo inversión en pauta, dilo. ' +
+          'Las únicas acciones de la agencia que existen son las de lo_que_hicimos: si está vacío, no digas que se ajustó, optimizó, redistribuyó ni cambió nada; di solo cuánto se invirtió. ' +
+          'Las conversiones que cuenta la red (Google o Meta) NO son leads del CRM: si son muchas más que los leads, dilo con esas palabras, sin presentarlas como leads ni como un resultado logrado. ' +
           'Si casi_ningun_lead_trae_campana es true, NO concluyas que la pauta no funciona ni cites su costo por lead: di que los leads están llegando sin el dato de la campaña de origen y que eso se está corrigiendo para medirla bien. ' +
-          'Nunca inventes cifras ni causas. Montos con separador de miles y su moneda. Sin saludo, sin despedida, sin títulos, sin viñetas ni markdown.',
+          'Nunca inventes cifras ni causas. Números al estilo de Colombia: punto para los miles y coma para los decimales (3.007.487 COP, 231,8). Sin saludo, sin despedida, sin títulos, sin viñetas ni markdown.',
         messages: [{ role: 'user', content: JSON.stringify(compacto) }],
       }),
     });

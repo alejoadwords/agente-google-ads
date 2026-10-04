@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-04-reportes-conversiones",
+      "fecha": "2026-10-04",
+      "tipo": "mejora",
+      "titulo": "El reporte muestra las conversiones de Google junto a los leads del CRM",
+      "texto": "Cada campaña del reporte trae ahora las conversiones que cuenta Google (o Meta), las mismas de tu cuenta de anuncios, al lado de los leads que de verdad llegaron al CRM. Si no cuadran, el reporte explica por qué, para que tu cliente no se confunda al compararlo con su cuenta."
+    },
+    {
       "id": "2026-10-04-reportes-revision",
       "fecha": "2026-10-04",
       "tipo": "mejora",

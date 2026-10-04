@@ -96,6 +96,11 @@
     const neutro = (act, ant) => cambio(act, ant).replace(/class="(sube|baja)"/, '');
     const kpi = (e, v, c) => '<div class="kpi"><div class="kpi-e">' + e + '</div><div class="kpi-v">' + v + '</div><div class="kpi-c">' + c + '</div></div>';
     const firma = marca.firma || '';
+    // De qué red son las conversiones: el cliente las va a contrastar con su
+    // Google Ads o su Meta, y tiene que saber con cuál.
+    const redes = [...new Set(d.actual.campanas.map(c => c.red))];
+    const segun = redes.length === 1 ? (redes[0] === 'google' ? 'Google' : redes[0] === 'meta' ? 'Meta' : 'la red') : 'Google y Meta';
+    const conv = (n) => n == null ? '—' : (Math.round(n * 10) / 10).toLocaleString('es-CO');
     document.title = 'Resultados de ' + d.etiqueta + (marca.nombre ? ' · ' + marca.nombre : '');
 
     let h = '<div class="cab">' +
@@ -119,7 +124,7 @@
       (d.aviso_atribucion
         ? kpi('Ingresos por ventas', plata(t.ingresos), cambio(t.ingresos, a.ingresos)) +
           kpi('Clics en los anuncios', num(t.clics), cambio(t.clics, a.clics)) +
-          kpi('Impresiones', num(t.impresiones), cambio(t.impresiones, a.impresiones))
+          kpi('Conversiones según ' + segun, conv(t.conv_red), 'Las cuenta ' + segun + ', no son leads del CRM')
         : kpi('Costo por lead de pauta', plata(t.cpl_real), cambio(t.cpl_real, a.cpl_real, true)) +
           kpi('Ingresos de ventas de pauta', plata(t.ingresos_pauta), cambio(t.ingresos_pauta, a.ingresos_pauta)) +
           kpi('Retorno de la inversión', t.retorno == null ? '—' : (Math.round(t.retorno * 10) / 10).toLocaleString('es-CO') + ' ×',
@@ -129,12 +134,22 @@
     if (d.actual.campanas.length) {
       const sinAtrib = !!d.aviso_atribucion;
       const red = (c) => '<span class="red">' + (c.red === 'google' ? 'Google' : c.red === 'meta' ? 'Meta' : esc(c.red)) + '</span> ' + esc(c.nombre);
-      h += '<h2>Campañas</h2><div class="caja-tabla"><table class="tabla"><thead><tr><th>Campaña</th><th class="n">Inversión</th>' +
-        (sinAtrib ? '<th class="n">Clics</th>' : '<th class="n">Leads</th><th class="n">Costo por lead</th><th class="n">Ventas</th>') + '</tr></thead><tbody>' +
-        d.actual.campanas.map(c => '<tr><td>' + red(c) + '</td><td class="n">' + plata(c.inversion) + '</td>' +
-          (sinAtrib ? '<td class="n">' + num(c.clics) + '</td>'
-            : '<td class="n">' + num(c.leads) + '</td><td class="n">' + plata(c.cpl_real) + '</td><td class="n">' + num(c.ganados) + '</td>') + '</tr>').join('') +
+      h += '<h2>Campañas</h2><div class="caja-tabla"><table class="tabla"><thead><tr><th>Campaña</th><th class="n">Inversión</th><th class="n">Clics</th>' +
+        '<th class="n">Conversiones según ' + segun + '</th><th class="n">Leads en el CRM</th>' +
+        (sinAtrib ? '' : '<th class="n">Costo por lead</th><th class="n">Ventas</th>') + '</tr></thead><tbody>' +
+        d.actual.campanas.map(c => '<tr><td>' + red(c) + '</td><td class="n">' + plata(c.inversion) + '</td><td class="n">' + num(c.clics) + '</td>' +
+          '<td class="n">' + conv(c.conv_red) + '</td><td class="n">' + num(c.leads) + '</td>' +
+          (sinAtrib ? '' : '<td class="n">' + plata(c.cpl_real) + '</td><td class="n">' + num(c.ganados) + '</td>') + '</tr>').join('') +
         '</tbody></table></div>';
+      // Las dos columnas no tienen por qué coincidir, y quien contrasta con su
+      // cuenta de anuncios lo primero que ve es que no cuadran: se explica.
+      const convTot = t.conv_red || 0;
+      if (convTot >= 5 && convTot > 2 * (t.leads_pauta || 0)) {
+        h += '<div class="aviso" style="margin-top:10px">' + segun + ' cuenta ' + conv(convTot) + ' conversiones y al CRM ' + (t.leads_pauta === 1 ? 'llegó 1 lead' : 'llegaron ' + num(t.leads_pauta) + ' leads') +
+          ' con el dato de su campaña. No son lo mismo: una conversión es lo que ' + segun + ' mide con su propia etiqueta (un formulario enviado, un clic a WhatsApp, una llamada), ' +
+          'y un lead es un contacto que de verdad entró al CRM. Cuando la diferencia es tan grande, o los leads de la pauta llegan sin el dato de la campaña, o la etiqueta de ' + segun +
+          ' está contando acciones que no son contactos. Lo estamos revisando.</div>';
+      }
     }
     if (d.actual.fuentes.length) {
       h += '<h2>De dónde llegaron los leads</h2><div class="caja-tabla"><table class="tabla"><tbody>' +

@@ -45,6 +45,8 @@ ok(t.leads === 5 && t.leads_pauta === 4 && t.ganados === 2 && t.ganados_pauta ==
 ok(t.cpl_real === 250000 && t.costo_venta === 1000000, 'costo por lead y por venta solo con lo de pauta');
 ok(t.retorno === 3 && t.ingresos === 3500000 && t.ingresos_pauta === 3000000, 'retorno = ingresos de pauta / inversión (el referido no cuenta)');
 ok(r.campanas.length === 1 && r.campanas[0].leads === 4, 'una campaña sin gasto ni leads no sale');
+const rc = resumirPeriodo([C({ conv: 231.78 }), C({ id: '3', nombre: 'Search', conv: 0 })], []);
+ok(rc.totales.conv_red === 231.78 && rc.campanas[0].conv_red === 231.78, 'las conversiones que cuenta la red se suman y van por campaña (Certain: 231,78 en PMax)');
 ok(r.fuentes[0].fuente === 'web' && r.fuentes[0].n === 4, 'fuentes ordenadas');
 ok(resumirPeriodo([], []).totales.cpl_real === null, 'sin pauta: costo por lead nulo, no cero');
 
