@@ -139,7 +139,10 @@ export default async function handler(req) {
       if (!prog) return jsonResp({ error: 'Ese reporte no existe.' }, 404);
       return enStreaming(async () => {
         const fila = await armarReporte(prog, { vista: true });
-        return { ok: true, reporte: { id: fila.id, token: fila.token, resumen: fila.resumen, etiqueta: fila.datos.etiqueta } };
+        // `url` va también para las pestañas que siguen con la versión anterior
+        // de la app: sin él abrían «/undefined», que carga el inicio.
+        return { ok: true, url: 'https://app.acuarius.app/r/' + fila.token + '?previa=1',
+          reporte: { id: fila.id, token: fila.token, resumen: fila.resumen, etiqueta: fila.datos.etiqueta } };
       });
     }
 
