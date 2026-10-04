@@ -388,7 +388,7 @@ function monedaDe(filas) {
 // lanza: es una mejora del dato, y si Google no contesta la pantalla tiene que
 // salir igual —con los leads sin atribuir, como salía antes—. Lo que sí hace
 // es DECIR que no pudo, en vez de dejar un cero que parece un dato.
-async function atribuirPorClic(conexiones, leads) {
+export async function atribuirPorClic(conexiones, leads) {
   const cuentas = (conexiones || []).filter(c => c.platform === 'google_ads' && c.account_id);
   if (!cuentas.length || !clicsPendientes(leads).length) return null;
 
@@ -930,54 +930,129 @@ async function diagnostico(quien, url) {
 // Lo único que esta pantalla hace en la red. Se comprueba que la campaña sea de
 // la cuenta publicitaria de ESA conexión —un id ajeno no se pausa— y solo se
 // pausa: nunca se activa ni se toca el presupuesto.
+// ── acciones en la red ──────────────────────────────────────────────────────
+// Las dos únicas cosas que Acuarius hace en una cuenta publicitaria: PAUSAR y
+// BAJAR un presupuesto. Nunca activar, nunca subir. Las usan el botón «Pausar»
+// y las reglas automáticas (api/_reglas-pauta.js). Se comprueba siempre que
+// la campaña sea de la cuenta de ESA conexión: un id ajeno no se toca.
+async function verificarCampanaMeta(fila, campanaId, campos) {
+  const tok = encodeURIComponent(fila.access_token);
+  const c = await fetch(`${GRAPH}/${campanaId}?fields=account_id,status,name${campos ? ',' + campos : ''}&access_token=${tok}`).then(r => r.json()).catch(() => ({}));
+  const act = String(fila.account_id || '').replace(/^act_/, '');
+  if (c.error || String(c.account_id || '') !== act) return null;
+  return c;
+}
+
+async function accesoGoogleDeFila(fila) {
+  const token = await refrescarGoogle(fila);
+  if (!token) return { error: 'El permiso de Google caducó. Vuelve a conectar la cuenta.' };
+  const cid = String(fila.account_id || '').replace(/-/g, '');
+  const login = await porDondePreguntar(fila, token, cid);
+  const h = { Authorization: `Bearer ${token}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
+  if (login) h['login-customer-id'] = login;
+  return { token, cid, login, h };
+}
+
+async function mutarGoogle(cid, h, recurso, cuerpo) {
+  let ultimo = 'ninguna versión de la API respondió';
+  for (const v of VERSIONES) {
+    const r = await fetch(`https://googleads.googleapis.com/v${v}/customers/${cid}/${recurso}:mutate`, {
+      method: 'POST', headers: h, body: JSON.stringify(cuerpo),
+    });
+    if (r.ok) return { ok: true };
+    ultimo = (await r.text()).slice(0, 200);
+    if (r.status !== 404) break;
+  }
+  return { ok: false, error: ultimo };
+}
+
+/** Pausa una campaña. Devuelve { ok, campana } o { error, status }. */
+export async function pausarEnRed(fila, campanaId) {
+  if (fila.platform === 'meta_ads') {
+    const c = await verificarCampanaMeta(fila, campanaId);
+    if (!c) return { error: 'Esa campaña no es de la cuenta publicitaria conectada.', status: 404 };
+    const r = await fetch(`${GRAPH}/${campanaId}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'PAUSED', access_token: fila.access_token }),
+    }).then(x => x.json()).catch(e => ({ error: { message: String(e?.message || e) } }));
+    if (r.error || !r.success) return { error: 'Meta no dejó pausarla: ' + String(r.error?.message || 'sin detalle').slice(0, 160), status: 502 };
+    return { ok: true, red: 'meta', campana: c.name || campanaId };
+  }
+  const g = await accesoGoogleDeFila(fila);
+  if (g.error) return { error: g.error, status: 502 };
+  // El recurso lleva el id de la cuenta: una campaña de otra cuenta no existe
+  // aquí y Google contesta con error, no la pausa.
+  const r = await mutarGoogle(g.cid, g.h, 'campaigns',
+    { operations: [{ update: { resourceName: `customers/${g.cid}/campaigns/${campanaId}`, status: 'PAUSED' }, updateMask: 'status' }] });
+  if (!r.ok) return { error: 'Google no dejó pausarla: ' + r.error, status: 502 };
+  return { ok: true, red: 'google', campana: campanaId };
+}
+
+/**
+ * Baja el presupuesto diario de una campaña un porcentaje (1–50). Solo baja.
+ * No toca presupuestos compartidos (Google) ni los que viven en los conjuntos
+ * de anuncios (Meta): bajar uno compartido afectaría a otras campañas, y en
+ * los conjuntos no hay UN presupuesto que bajar. Esos se dicen, no se tocan.
+ * Devuelve { ok, antes, despues } (en unidades de la moneda) o { error }.
+ */
+export async function bajarPresupuestoEnRed(fila, campanaId, porcentaje) {
+  const p = Math.round(Number(porcentaje));
+  if (!(p >= 1 && p <= 50)) return { error: 'El recorte tiene que estar entre 1 % y 50 %.', status: 400 };
+  if (fila.platform === 'meta_ads') {
+    const c = await verificarCampanaMeta(fila, campanaId, 'daily_budget,lifetime_budget');
+    if (!c) return { error: 'Esa campaña no es de la cuenta publicitaria conectada.', status: 404 };
+    if (!c.daily_budget) {
+      return { error: c.lifetime_budget
+        ? 'Esta campaña tiene presupuesto total, no diario: bájalo en el Administrador de anuncios.'
+        : 'El presupuesto de esta campaña está en sus conjuntos de anuncios: bájalo en el Administrador de anuncios.', status: 409 };
+    }
+    const antes = Number(c.daily_budget);           // en centavos de la moneda
+    const despues = Math.floor(antes * (100 - p) / 100);
+    const r = await fetch(`${GRAPH}/${campanaId}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ daily_budget: despues, access_token: fila.access_token }),
+    }).then(x => x.json()).catch(e => ({ error: { message: String(e?.message || e) } }));
+    if (r.error || !r.success) return { error: 'Meta no dejó bajar el presupuesto: ' + String(r.error?.message || 'sin detalle').slice(0, 160), status: 502 };
+    return { ok: true, red: 'meta', campana: c.name || campanaId, antes: antes / 100, despues: despues / 100 };
+  }
+  const g = await accesoGoogleDeFila(fila);
+  if (g.error) return { error: g.error, status: 502 };
+  const filas = await gaql(g.cid, g.token, `
+    SELECT campaign.name, campaign_budget.resource_name, campaign_budget.amount_micros, campaign_budget.explicitly_shared
+    FROM campaign WHERE campaign.id = ${Number(campanaId)}`, g.login);
+  const b = filas[0];
+  if (!b) return { error: 'Esa campaña no es de la cuenta publicitaria conectada.', status: 404 };
+  if (b.campaignBudget?.explicitlyShared) return { error: 'Esta campaña usa un presupuesto compartido con otras: bájalo en Google Ads.', status: 409 };
+  const antes = Number(b.campaignBudget?.amountMicros || 0);
+  if (!antes) return { error: 'No se encontró el presupuesto diario de esta campaña.', status: 409 };
+  // Google exige múltiplos de la unidad mínima de la moneda: se redondea hacia
+  // abajo a 10.000 micros, que vale para todas.
+  const despues = Math.floor(antes * (100 - p) / 100 / 10000) * 10000;
+  const r = await mutarGoogle(g.cid, g.h, 'campaignBudgets',
+    { operations: [{ update: { resourceName: b.campaignBudget.resourceName, amountMicros: String(despues) }, updateMask: 'amount_micros' }] });
+  if (!r.ok) return { error: 'Google no dejó bajar el presupuesto: ' + r.error, status: 502 };
+  return { ok: true, red: 'google', campana: b.campaign?.name || campanaId, antes: antes / 1e6, despues: despues / 1e6 };
+}
+
+/** La conexión de pauta de una cuenta, con tokens abiertos. */
+export async function conexionDePauta(userId, conexionId) {
+  return (await Promise.all((await sb(`/platform_connections?id=eq.${encodeURIComponent(conexionId)}` +
+    `&user_id=eq.${encodeURIComponent(userId)}&platform=in.(google_ads,meta_ads)&select=*&limit=1`)).map(abrirConexion)))[0] || null;
+}
+
 async function pausarCampana(quien, body) {
   if (soloSusLeads(quien.perfil)) {
     return jsonResp({ error: 'Tu perfil no puede pausar campañas. Pídeselo al administrador.' }, 403);
   }
   const campanaId = String(body.campana_id || '').replace(/\D/g, '');
   if (!campanaId || !body.conexion_id) return jsonResp({ error: 'Falta la campaña.' }, 400);
-  const fila = (await Promise.all((await sb(`/platform_connections?id=eq.${encodeURIComponent(body.conexion_id)}` +
-    `&user_id=eq.${encodeURIComponent(quien.userId)}&platform=in.(google_ads,meta_ads)&select=*&limit=1`)).map(abrirConexion)))[0];
+  const fila = await conexionDePauta(quien.userId, body.conexion_id);
   if (!fila) return jsonResp({ error: 'Esa conexión no es de tu cuenta.' }, 404);
   if (quien.cliente && fila.client_id && fila.client_id !== quien.cliente) {
     return jsonResp({ error: 'Esa cuenta publicitaria es de otro cliente.' }, 403);
   }
-
-  if (fila.platform === 'meta_ads') {
-    const tok = encodeURIComponent(fila.access_token);
-    const c = await fetch(`${GRAPH}/${campanaId}?fields=account_id,status,name&access_token=${tok}`).then(r => r.json()).catch(() => ({}));
-    const act = String(fila.account_id || '').replace(/^act_/, '');
-    if (c.error || String(c.account_id || '') !== act) {
-      return jsonResp({ error: 'Esa campaña no es de la cuenta publicitaria conectada.' }, 404);
-    }
-    const r = await fetch(`${GRAPH}/${campanaId}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'PAUSED', access_token: fila.access_token }),
-    }).then(x => x.json()).catch(e => ({ error: { message: String(e?.message || e) } }));
-    if (r.error || !r.success) return jsonResp({ error: 'Meta no dejó pausarla: ' + String(r.error?.message || 'sin detalle').slice(0, 160) }, 502);
-    return jsonResp({ ok: true, red: 'meta', campana: c.name || campanaId });
-  }
-
-  const token = await refrescarGoogle(fila);
-  if (!token) return jsonResp({ error: 'El permiso de Google caducó. Vuelve a conectar la cuenta.' }, 502);
-  const cid = String(fila.account_id || '').replace(/-/g, '');
-  const login = await porDondePreguntar(fila, token, cid);
-  const h = { Authorization: `Bearer ${token}`, 'developer-token': DEV_TOKEN, 'Content-Type': 'application/json' };
-  if (login) h['login-customer-id'] = login;
-  let ultimo = 'ninguna versión de la API respondió';
-  for (const v of VERSIONES) {
-    // El recurso lleva el id de la cuenta: una campaña de otra cuenta no existe
-    // aquí y Google contesta con error, no la pausa.
-    const r = await fetch(`https://googleads.googleapis.com/v${v}/customers/${cid}/campaigns:mutate`, {
-      method: 'POST', headers: h,
-      body: JSON.stringify({ operations: [{ update: { resourceName: `customers/${cid}/campaigns/${campanaId}`, status: 'PAUSED' }, updateMask: 'status' }] }),
-    });
-    if (r.ok) return jsonResp({ ok: true, red: 'google', campana: campanaId });
-    const t = await r.text();
-    ultimo = t.slice(0, 200);
-    if (r.status !== 404) break;
-  }
-  return jsonResp({ error: 'Google no dejó pausarla: ' + ultimo }, 502);
+  const r = await pausarEnRed(fila, campanaId);
+  return r.ok ? jsonResp(r) : jsonResp({ error: r.error }, r.status || 502);
 }
 
 export default async function handler(req) {

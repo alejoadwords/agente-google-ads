@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-03-reglas-pauta",
+      "fecha": "2026-10-03",
+      "tipo": "nuevo",
+      "titulo": "Reglas para tu pauta con los números de tu CRM",
+      "texto": "En Plataformas de pauta → Reglas puedes decir, por ejemplo: «si el costo por lead real de los últimos 7 días pasa de $50.000, pausa la campaña». Se mide con los leads y las ventas que llegaron a tu CRM, no solo con lo que reporta la red. Cada mañana te proponemos los cambios y tú los apruebas con un clic, o puedes dejar una regla en automático. Solo pueden avisar, pausar o bajar un presupuesto: nunca activan ni suben nada.",
+      "accion": {
+        "texto": "Crear una regla",
+        "ir": "pauta-reglas"
+      }
+    },
+    {
       "id": "2026-10-03-alertas-pauta",
       "fecha": "2026-10-03",
       "tipo": "nuevo",

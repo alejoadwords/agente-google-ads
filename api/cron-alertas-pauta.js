@@ -7,6 +7,7 @@
 export const config = { runtime: 'edge' };
 
 import { alertasDeCuenta, registrarNuevas, mandarResumen } from './_alertas-pauta.js';
+import { evaluarCuenta } from './_reglas-pauta.js';
 import { latir } from './_latido.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -19,7 +20,7 @@ export default async function handler(req) {
   }
   await latir('cron-alertas-pauta', { empezo: new Date().toISOString() });
   const fin = Date.now() + TOPE_MS;
-  const res = { cuentas: 0, alertas: 0, correos: 0, errores: 0, sinTiempo: 0 };
+  const res = { cuentas: 0, alertas: 0, acciones: 0, correos: 0, errores: 0, erroresReglas: 0, sinTiempo: 0 };
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/platform_connections?platform=in.(google_ads,meta_ads)&account_id=not.is.null&select=user_id,client_id`, {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
@@ -33,9 +34,14 @@ export default async function handler(req) {
       try {
         const { alertas } = await alertasDeCuenta(userId, null);
         const nuevas = await registrarNuevas(userId, null, alertas);
-        res.cuentas++; res.alertas += nuevas.length;
-        if (nuevas.length) {
-          const m = await mandarResumen(userId, nuevas);
+        // Las reglas van aparte: si fallan, las alertas salen igual, y se
+        // cuenta en el latido para que no se pierda en silencio.
+        let acciones = [];
+        try { acciones = await evaluarCuenta(userId); }
+        catch (e) { res.erroresReglas++; console.error('[reglas-pauta]', userId, e?.message || e); }
+        res.cuentas++; res.alertas += nuevas.length; res.acciones += acciones.length;
+        if (nuevas.length || acciones.length) {
+          const m = await mandarResumen(userId, nuevas, acciones);
           if (m.enviado) res.correos++;
           else console.warn('[alertas-pauta] correo no enviado', userId, m.motivo);
         }
@@ -44,7 +50,7 @@ export default async function handler(req) {
         console.error('[alertas-pauta]', userId, e?.message || e);
       }
     }
-    await latir('cron-alertas-pauta', res, res.errores ? res.errores + ' cuentas no se pudieron revisar' : (res.sinTiempo ? res.sinTiempo + ' cuentas sin tiempo' : null));
+    await latir('cron-alertas-pauta', res, res.errores ? res.errores + ' cuentas no se pudieron revisar' : res.erroresReglas ? res.erroresReglas + ' cuentas sin evaluar sus reglas' : (res.sinTiempo ? res.sinTiempo + ' cuentas sin tiempo' : null));
     return new Response(JSON.stringify({ ok: true, ...res }), { headers: { 'Content-Type': 'application/json' } });
   } catch (e) {
     await latir('cron-alertas-pauta', { error: true }, e?.message || String(e));

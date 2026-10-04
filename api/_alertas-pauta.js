@@ -174,27 +174,61 @@ async function correoDelDueno(userId) {
   return p?.email_address ? { correo: p.email_address, nombre: u.first_name || '' } : null;
 }
 
-export async function mandarResumen(userId, alertas) {
-  if (!alertas.length) return { enviado: false, motivo: 'sin alertas' };
+// `acciones` son las de las reglas (api/_reglas-pauta.js): propuestas que
+// esperan aprobación, avisos, o lo que una regla automática ya hizo.
+export async function mandarResumen(userId, alertas, acciones = []) {
+  if (!alertas.length && !acciones.length) return { enviado: false, motivo: 'sin alertas' };
   const dest = await correoDelDueno(userId);
   if (!dest) return { enviado: false, motivo: 'sin correo del dueño' };
   const graves = alertas.filter(a => a.gravedad === 'alta').length;
-  const cuerpo = alertas.map(a => bloque('<b>' + esc(a.titulo) + '</b><br>' + esc(a.detalle) +
-    '<br><span style="color:#6B7280;font-size:12px">' + (a.red === 'google' ? 'Google Ads' : 'Meta') + '</span>')).join('');
+  const red = (r) => '<br><span style="color:#6B7280;font-size:12px">' + (r === 'google' ? 'Google Ads' : 'Meta') + '</span>';
+  const propuestas = acciones.filter(a => a.estado === 'propuesta');
+  const hechas = acciones.filter(a => a.estado === 'ejecutada' || a.estado === 'fallida');
+  const avisos = acciones.filter(a => a.estado === 'avisada');
+  const accion = (a) => a.accion === 'pausar' ? 'Pausar' : 'Bajar el presupuesto un ' + a.porcentaje + ' %';
+  let cuerpo = '';
+  if (propuestas.length) {
+    cuerpo += '<p style="margin:16px 0 8px"><b>Esperan tu aprobación</b></p>' + propuestas.map(a => bloque(
+      '<b>' + esc(accion(a)) + ': ' + esc(a.campana) + '</b><br>' + esc(a.motivo) +
+      '<br><span style="color:#6B7280;font-size:12px">Regla «' + esc(a.regla) + '»</span>' + red(a.red))).join('');
+  }
+  if (hechas.length) {
+    cuerpo += '<p style="margin:16px 0 8px"><b>Lo que hicieron tus reglas automáticas</b></p>' + hechas.map(a => bloque(
+      '<b>' + (a.estado === 'ejecutada' ? '' : 'No se pudo — ') + esc(accion(a)) + ': ' + esc(a.campana) + '</b><br>' +
+      esc(a.estado === 'ejecutada' ? a.resultado : a.resultado + ' La campaña sigue igual.') + '<br>' + esc(a.motivo) + red(a.red))).join('');
+  }
+  if (avisos.length) {
+    cuerpo += '<p style="margin:16px 0 8px"><b>Avisos de tus reglas</b></p>' + avisos.map(a => bloque(
+      '<b>' + esc(a.campana) + '</b><br>' + esc(a.motivo) +
+      '<br><span style="color:#6B7280;font-size:12px">Regla «' + esc(a.regla) + '»</span>' + red(a.red))).join('');
+  }
+  if (alertas.length) {
+    cuerpo += (acciones.length ? '<p style="margin:16px 0 8px"><b>Lo que cambió ayer</b></p>' : '') +
+      alertas.map(a => bloque('<b>' + esc(a.titulo) + '</b><br>' + esc(a.detalle) + red(a.red))).join('');
+  }
+  const asunto = propuestas.length
+    ? propuestas.length + (propuestas.length === 1 ? ' cambio espera' : ' cambios esperan') + ' tu aprobación en la pauta'
+    : hechas.length
+      ? 'Tus reglas ' + (hechas.some(a => a.estado === 'fallida') ? 'intentaron cambiar' : 'cambiaron') + ' ' + hechas.length + (hechas.length === 1 ? ' campaña' : ' campañas')
+      : (graves ? '⚠ ' : '') + (alertas.length + avisos.length) + ((alertas.length + avisos.length) === 1 ? ' alerta' : ' alertas') + ' en tu pauta de ayer';
   const r = await enviarResend('alertas-pauta', {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: 'Acuarius <crm@app.acuarius.app>',
       to: dest.correo,
-      subject: (graves ? '⚠ ' : '') + alertas.length + (alertas.length === 1 ? ' alerta' : ' alertas') + ' en tu pauta de ayer',
+      subject: asunto,
       html: emailHtml({
-        titulo: (dest.nombre ? esc(dest.nombre) + ', esto' : 'Esto') + ' cambió ayer en tus campañas',
-        intro: 'Comparamos el día de ayer con la semana anterior, usando los leads que llegaron a tu CRM.',
+        titulo: (dest.nombre ? esc(dest.nombre) + ', esto' : 'Esto') + ' pasó en tus campañas',
+        intro: 'Usamos los leads y las ventas que llegaron a tu CRM, no solo lo que reporta la red.',
         cuerpo,
-        cta: { texto: 'Ver el diagnóstico', url: 'https://app.acuarius.app/?ir=pauta-diagnostico' },
-        pie: 'Acuarius solo te avisa: no pausa ni cambia nada en tus cuentas. Recibes este correo solo los días en que hay algo que revisar.',
-        preheader: alertas[0].titulo,
+        cta: propuestas.length
+          ? { texto: 'Revisar y aprobar', url: 'https://app.acuarius.app/?ir=pauta-reglas' }
+          : { texto: 'Ver el diagnóstico', url: 'https://app.acuarius.app/?ir=pauta-diagnostico' },
+        pie: hechas.some(a => a.estado === 'ejecutada')
+          ? 'Lo hizo una regla que tú dejaste en automático. Acuarius solo pausa o baja presupuestos: nunca activa ni sube nada. Puedes cambiar la regla en Plataformas de pauta → Reglas.'
+          : 'Acuarius no cambia nada en tus cuentas sin tu aprobación. Recibes este correo solo los días en que hay algo que revisar.',
+        preheader: propuestas[0] ? accion(propuestas[0]) + ': ' + propuestas[0].campana : (alertas[0]?.titulo || acciones[0]?.motivo || ''),
       }),
     }),
   }, userId);

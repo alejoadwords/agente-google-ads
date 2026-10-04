@@ -10563,6 +10563,7 @@ function irA(destino) {
         case 'pauta':         navGo('marketing'); setTimeout(() => crmSetView('pauta'), 150); break;
         case 'pauta-ventas':  navGo('marketing'); setTimeout(() => { pautaVista = 'ventas'; crmSetView('pauta'); }, 150); break;
         case 'pauta-diagnostico': navGo('marketing'); setTimeout(() => { pautaVista = 'diagnostico'; crmSetView('pauta'); }, 150); break;
+        case 'pauta-reglas':  navGo('marketing'); setTimeout(() => { pautaVista = 'reglas'; crmSetView('pauta'); }, 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'campanas':      navGo('marketing'); setTimeout(() => crmSetView('campaigns'), 150); break;
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
@@ -39620,7 +39621,7 @@ function lpCerrarEditor() {
 // nunca ve los tokens de Google ni de Meta.
 
 let pautaDatos = null;
-let pautaVista = 'campanas';       // campanas | diagnostico | conexiones | cartera | ventas
+let pautaVista = 'campanas';       // campanas | diagnostico | reglas | conexiones | cartera | ventas
 let pautaDias = 30;
 let pautaCargando = false;
 
@@ -39672,6 +39673,7 @@ function pautaRender() {
       '<div class="pauta-tabs">' +
         '<button class="pauta-tab' + (pautaVista === 'campanas' ? ' active' : '') + '" onclick="pautaIr(\'campanas\')">Campañas</button>' +
         '<button class="pauta-tab' + (pautaVista === 'diagnostico' ? ' active' : '') + '" onclick="pautaIr(\'diagnostico\')">Diagnóstico</button>' +
+        '<button class="pauta-tab' + (pautaVista === 'reglas' ? ' active' : '') + '" onclick="pautaIr(\'reglas\')">Reglas</button>' +
         (hayCartera ? '<button class="pauta-tab' + (pautaVista === 'cartera' ? ' active' : '') + '" onclick="pautaIr(\'cartera\')">Cartera</button>' : '') +
         '<button class="pauta-tab' + (pautaVista === 'conexiones' ? ' active' : '') + '" onclick="pautaIr(\'conexiones\')">Conexiones</button>' +
         '<button class="pauta-tab' + (pautaVista === 'ventas' ? ' active' : '') + '" onclick="pautaIr(\'ventas\')">Ventas a la pauta</button>' +
@@ -39710,6 +39712,7 @@ async function pautaCargar() {
   // Ventas a la pauta no depende del período ni de las campañas: tiene su
   // propia carga (api/conversiones.js).
   if (pautaVista === 'ventas') { ventasCargar(); return; }
+  if (pautaVista === 'reglas') { reglasCargar(); return; }
   pautaCargando = true;
   c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + (pautaVista === 'diagnostico' ? ' Revisando tus campañas…' : ' Leyendo tus campañas…') + '</div>';
 
@@ -40084,6 +40087,345 @@ function pautaPintarConexiones(d) {
     '</div></div>';
 
   c.innerHTML = html;
+}
+
+// ── Reglas automáticas ──────────────────────────────────────────────────────
+// Condiciones con los números del CRM (costo por lead real, costo por venta,
+// gasto sin leads) y una acción que solo RESTA: avisar, pausar o bajar el
+// presupuesto. Por defecto proponen y alguien aprueba. Se evalúan cada mañana
+// en el servidor (api/_reglas-pauta.js); aquí se crean y se deciden.
+let reglasDatos = null;
+let reglasForm = null;        // la regla que se está creando o editando
+let reglasCampanas = null;    // para elegir una campaña concreta
+
+const REGLAS_METRICA = [
+  { id: 'cpl_real', name: 'Costo por lead real (CRM)' },
+  { id: 'costo_venta', name: 'Costo por venta ganada' },
+  { id: 'gasto_sin_leads', name: 'Gasto sin ningún lead' },
+];
+const REGLAS_RED = [{ id: 'todas', name: 'Google y Meta' }, { id: 'google', name: 'Solo Google Ads' }, { id: 'meta', name: 'Solo Meta' }];
+const REGLAS_DIAS = [{ id: '3', name: 'Últimos 3 días' }, { id: '7', name: 'Últimos 7 días' }, { id: '14', name: 'Últimos 14 días' }];
+const REGLAS_ACCION = [
+  { id: 'avisar', name: 'Solo avisarme' },
+  { id: 'pausar', name: 'Pausar la campaña' },
+  { id: 'bajar_presupuesto', name: 'Bajar el presupuesto diario' },
+];
+const REGLAS_PORC = [10, 20, 30, 50].map(p => ({ id: String(p), name: p + ' %' }));
+const REGLAS_MODO = [
+  { id: 'aprobar', name: 'Proponérmelo y esperar mi aprobación' },
+  { id: 'auto', name: 'Hacerlo solo y avisarme' },
+];
+const REGLAS_ESTADO = {
+  propuesta:  ['Esperando', 'pauta-pill-ojo'],
+  en_curso:   ['En curso', 'pauta-pill-off'],
+  ejecutada:  ['Hecha', 'pauta-pill-ok'],
+  descartada: ['Descartada', 'pauta-pill-off'],
+  fallida:    ['No se pudo', 'pauta-pill-mal'],
+  avisada:    ['Aviso', 'pauta-pill-ojo'],
+  caducada:   ['Caducó', 'pauta-pill-off'],
+};
+const REGLAS_PLANTILLAS = [
+  { nombre: 'Costo por lead alto', metrica: 'cpl_real', dias: 7, accion: 'pausar', d: 'Pausa lo que trae leads demasiado caros.' },
+  { nombre: 'Gasta sin traer leads', metrica: 'gasto_sin_leads', dias: 3, accion: 'pausar', d: 'Para lo que gasta días sin un solo lead en el CRM.' },
+  { nombre: 'Venta demasiado cara', metrica: 'costo_venta', dias: 14, accion: 'bajar_presupuesto', porcentaje: 20, d: 'Recorta lo que vende, pero a pérdida.' },
+];
+
+function reglasNombreDe(lista, id) { return (lista.find(o => String(o.id) === String(id)) || {}).name || ''; }
+
+/** La regla en una frase: es lo que se lee en la lista y lo que se aprueba. */
+function reglasFrase(r) {
+  const que = { cpl_real: 'el costo por lead real', costo_venta: 'el costo por venta', gasto_sin_leads: 'el gasto sin ningún lead' }[r.metrica] || r.metrica;
+  const donde = r.campana_id ? '«' + (r.campana || r.campana_id) + '»' : (r.red === 'google' ? 'una campaña de Google' : r.red === 'meta' ? 'una campaña de Meta' : 'una campaña');
+  const accion = r.accion === 'avisar' ? 'te avisa'
+    : (r.accion === 'pausar' ? 'la pausa' : 'le baja el presupuesto un ' + r.porcentaje + ' %') + (r.modo === 'auto' ? ' sola' : ' cuando lo apruebes');
+  return 'Si en ' + donde + ' ' + que + ' de los últimos ' + r.dias + ' días pasa de ' + pautaPlata(Number(r.umbral), pautaDatos && pautaDatos.moneda) + ', ' + accion + '.';
+}
+
+async function reglasCargar() {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo tus reglas…</div>';
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/reglas-pauta' + (cliente ? '?client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok) { pautaError(d.error || 'No pudimos leer tus reglas.'); return; }
+    reglasDatos = d;
+    reglasPintar();
+  } catch (e) {
+    pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+function reglasPintar() {
+  const c = document.getElementById('pauta-cuerpo');
+  const d = reglasDatos;
+  if (!c || !d) return;
+  const puede = !!d.puede_editar;
+  const propuestas = d.acciones.filter(a => a.estado === 'propuesta');
+  const historial = d.acciones.filter(a => a.estado !== 'propuesta');
+
+  let html = '<div class="pauta-aviso">' + icn('sparkles', 15) + '<div style="flex:1">' +
+    '<b>Reglas con los números de tu CRM, no solo los de la red.</b> Se revisan cada mañana a las 8:00 con los días ya cerrados. ' +
+    'Solo pueden avisar, pausar o bajar un presupuesto: <b>nunca activan ni suben nada</b>. Si no dices lo contrario, te proponen el cambio y esperan tu aprobación.' +
+    '</div></div>';
+  if (!puede) {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) +
+      '<div style="flex:1">Las reglas las crea y las aprueba el dueño de la cuenta, un administrador o Mercadeo. Aquí puedes ver qué hicieron.</div></div>';
+  }
+
+  if (propuestas.length) {
+    html += '<div class="pauta-diag-grupo">Esperan tu aprobación · caducan a los 3 días</div><div class="pauta-diag-lista">' +
+      propuestas.map(a => '<div class="pauta-diag oportunidad">' +
+        '<div class="pauta-diag-ico">' + icn(a.accion === 'pausar' ? 'alert' : 'trend', 16) + '</div>' +
+        '<div class="pauta-diag-cuerpo">' +
+          '<div class="pauta-diag-tit">' + pautaRedChip(a.red) + '<span>' + esc(reglasTextoAccion(a)) + ': ' + esc(a.campana || a.campana_id) + '</span></div>' +
+          '<div class="pauta-diag-det">' + esc(a.motivo) + '<br><span style="color:var(--muted2)">Regla «' + esc(a.regla || '') + '» · ' +
+            esc(new Date(a.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })) + '</span></div>' +
+        '</div>' +
+        (puede ? '<div class="pauta-diag-acc" style="display:flex;gap:6px">' +
+          '<button class="btn-pri sm" onclick="reglasDecidir(\'' + esc(a.id) + '\', \'aprobar\', this)">Aprobar</button>' +
+          '<button class="btn-ghost sm" onclick="reglasDecidir(\'' + esc(a.id) + '\', \'descartar\', this)">Descartar</button></div>' : '') +
+      '</div>').join('') + '</div>';
+  }
+
+  html += '<div style="display:flex;align-items:center;gap:10px;margin:22px 0 10px">' +
+    '<div class="pauta-pasos-t" style="margin:0;flex:1">Tus reglas</div>' +
+    (puede && !reglasForm && d.reglas.length < d.tope ? '<button class="btn-pri sm" onclick="reglasNueva()">' + icn('plus', 13) + ' Nueva regla</button>' : '') +
+    '</div>';
+  if (reglasForm) html += reglasFormulario();
+  if (!d.reglas.length && !reglasForm) {
+    html += puede
+      ? '<div class="pauta-conxs">' + REGLAS_PLANTILLAS.map((p, i) =>
+          '<div class="pauta-conx"><div class="pauta-conx-t">' + esc(p.nombre) + '</div>' +
+          '<div class="pauta-conx-s" style="margin:4px 0 12px">' + esc(p.d) + '</div>' +
+          '<button class="btn-ghost sm" onclick="reglasNueva(' + i + ')">Usar esta</button></div>').join('') + '</div>'
+      : '<div class="pauta-vacio">Esta cuenta todavía no tiene reglas.</div>';
+  }
+  html += '<div class="pauta-diag-lista">' + d.reglas.map(r => '<div class="pauta-diag' + (r.activa ? '' : ' bien') + '" style="' + (r.activa ? '' : 'opacity:.6') + '">' +
+    '<div class="pauta-diag-ico">' + icn(r.accion === 'avisar' ? 'bell' : 'sparkles', 16) + '</div>' +
+    '<div class="pauta-diag-cuerpo">' +
+      '<div class="pauta-diag-tit"><span>' + esc(r.nombre) + '</span>' +
+        (r.activa ? '' : ' <span class="pauta-pill pauta-pill-off">Apagada</span>') +
+        (r.modo === 'auto' && r.accion !== 'avisar' ? ' <span class="pauta-pill pauta-pill-ojo">Automática</span>' : '') + '</div>' +
+      '<div class="pauta-diag-det">' + esc(reglasFrase(r)) + '</div>' +
+    '</div>' +
+    (puede ? '<div class="pauta-diag-acc" style="display:flex;gap:6px;flex-wrap:wrap">' +
+      '<button class="btn-ghost sm" onclick="reglasActivar(\'' + esc(r.id) + '\', ' + !r.activa + ', this)">' + (r.activa ? 'Apagar' : 'Encender') + '</button>' +
+      '<button class="btn-ghost sm" onclick="reglasEditar(\'' + esc(r.id) + '\')">Editar</button>' +
+      '<button class="btn-ghost sm" onclick="reglasBorrar(\'' + esc(r.id) + '\', this)">Borrar</button></div>' : '') +
+  '</div>').join('') + '</div>';
+
+  html += '<div class="pauta-pasos-t" style="margin:22px 0 8px">Lo que hicieron tus reglas · últimos 60 días</div>';
+  html += !historial.length
+    ? '<div class="pauta-vacio">Todavía nada. Aquí queda cada aviso, cada cambio y quién lo aprobó.</div>'
+    : '<div class="pauta-tabla-caja"><table class="pauta-tabla"><thead><tr>' +
+      '<th class="pauta-th">Cuándo</th><th class="pauta-th">Campaña</th><th class="pauta-th">Red</th><th class="pauta-th">Acción</th>' +
+      '<th class="pauta-th">Estado</th><th class="pauta-th">Detalle</th></tr></thead><tbody>' +
+      historial.map(a => {
+        const st = REGLAS_ESTADO[a.estado] || [a.estado, 'pauta-pill-off'];
+        const quien = a.decidida_por === 'regla automática' ? 'Lo hizo la regla sola' : a.decidida_por ? 'Decidido desde la app' : '';
+        return '<tr>' +
+          '<td class="pauta-td" style="white-space:nowrap">' + esc(new Date(a.decidida_at || a.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })) + '</td>' +
+          '<td class="pauta-td">' + esc(a.campana || a.campana_id) + '<div style="font-size:11px;color:var(--muted2)">Regla «' + esc(a.regla || '') + '»</div></td>' +
+          '<td class="pauta-td">' + pautaRedChip(a.red) + '</td>' +
+          '<td class="pauta-td">' + esc(reglasTextoAccion(a)) + '</td>' +
+          '<td class="pauta-td"><span class="pauta-pill ' + st[1] + '">' + esc(st[0]) + '</span></td>' +
+          '<td class="pauta-td" style="font-size:12px;color:var(--muted);max-width:380px">' + esc(a.motivo || '') +
+            (a.resultado ? '<div style="color:' + (a.estado === 'fallida' ? 'var(--danger)' : 'var(--text)') + ';margin-top:2px">' + esc(a.resultado) + '</div>' : '') +
+            (quien ? '<div style="color:var(--muted2);margin-top:2px">' + esc(quien) + '</div>' : '') + '</td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+
+  c.innerHTML = html;
+}
+
+function reglasTextoAccion(a) {
+  return a.accion === 'bajar_presupuesto' ? 'Bajar el presupuesto un ' + a.porcentaje + ' %' : a.accion === 'pausar' ? 'Pausar' : 'Aviso';
+}
+
+function reglasDdBoton(campo, lista, valor) {
+  return '<button type="button" class="dd-btn" style="max-width:none;width:100%;justify-content:space-between" onclick="reglasDd(this, \'' + campo + '\')">' +
+    '<span class="dd-btn-txt">' + esc(reglasNombreDe(lista, valor) || 'Elegir') + '</span>' +
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>';
+}
+
+function reglasOpcionesCampana() {
+  const red = reglasForm.red;
+  const lista = (reglasCampanas || []).filter(x => red === 'todas' || x.red === red)
+    .map(x => ({ id: x.id, name: x.nombre + (red === 'todas' ? ' · ' + (x.red === 'google' ? 'Google' : 'Meta') : '') }));
+  return [{ id: '', name: 'Todas las campañas' }].concat(lista.length ? [{ sep: true }] : []).concat(lista);
+}
+
+function reglasFormulario() {
+  const f = reglasForm;
+  const etq = (t, campo) => '<label style="display:flex;flex-direction:column;gap:4px;font-size:var(--fs-xs);color:var(--muted);font-weight:600">' + t + campo + '</label>';
+  const unidad = f.metrica === 'costo_venta' ? 'por venta' : f.metrica === 'gasto_sin_leads' ? 'de gasto' : 'por lead';
+  return '<div class="pauta-conx viva" style="margin-bottom:14px">' +
+    '<div class="pauta-conx-t" style="margin-bottom:12px">' + (f.id ? 'Editar regla' : 'Nueva regla') + '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">' +
+      etq('Nombre', '<input class="auto-input" id="rg-nombre" maxlength="80" value="' + esc(f.nombre || '') + '" oninput="reglasForm.nombre=this.value">') +
+      etq('Red', reglasDdBoton('red', REGLAS_RED, f.red)) +
+      etq('Campaña', reglasDdBoton('campana_id', reglasOpcionesCampana(), f.campana_id || '') +
+        (reglasCampanas === null ? '<span style="font-weight:400;color:var(--muted2)">Cargando tus campañas…</span>' : '')) +
+      etq('Qué medir', reglasDdBoton('metrica', REGLAS_METRICA, f.metrica)) +
+      etq('En qué ventana', reglasDdBoton('dias', REGLAS_DIAS, String(f.dias))) +
+      etq('Límite ' + unidad, '<input class="auto-input" id="rg-umbral" inputmode="decimal" placeholder="Ej. 50.000" value="' + esc(f.umbral || '') + '" oninput="reglasForm.umbral=this.value">') +
+      etq('Qué hacer si lo pasa', reglasDdBoton('accion', REGLAS_ACCION, f.accion)) +
+      (f.accion === 'bajar_presupuesto' ? etq('Cuánto bajarlo', reglasDdBoton('porcentaje', REGLAS_PORC, String(f.porcentaje || 20))) : '') +
+      (f.accion !== 'avisar' ? etq('Cómo', reglasDdBoton('modo', REGLAS_MODO, f.modo)) : '') +
+    '</div>' +
+    (f.accion === 'bajar_presupuesto'
+      ? '<div class="pauta-conx-nota" style="margin-top:12px"><span>Se baja el presupuesto diario de la campaña. Si comparte presupuesto con otras (Google) o lo tiene en cada conjunto de anuncios (Meta), no se toca y te lo decimos.</span></div>' : '') +
+    (f.modo === 'auto' && f.accion !== 'avisar'
+      ? '<div class="pauta-conx-nota ojo" style="margin-top:12px">' + icn('alert', 14) + '<span>En automático el cambio se hace sin preguntarte, cada mañana. Te llega un correo con lo que hizo. Una vez por campaña en cada ventana: no vuelve a tocarla hasta que pasen esos días.</span></div>' : '') +
+    '<div id="rg-err" style="display:none;color:var(--danger);font-size:var(--fs-sm);margin-top:10px"></div>' +
+    '<div id="rg-previa"></div>' +
+    '<div class="pauta-conx-btns" style="margin-top:14px">' +
+      '<button class="btn-pri" id="rg-guardar" onclick="reglasGuardar()">Guardar regla</button>' +
+      '<button class="btn-ghost" id="rg-probar" onclick="reglasPrevia()">Ver qué tocaría hoy</button>' +
+      '<button class="btn-ghost" onclick="reglasForm=null;reglasPintar()">Cancelar</button>' +
+    '</div></div>';
+}
+
+function reglasDd(btn, campo) {
+  const listas = { red: REGLAS_RED, campana_id: reglasOpcionesCampana(), metrica: REGLAS_METRICA, dias: REGLAS_DIAS, accion: REGLAS_ACCION, porcentaje: REGLAS_PORC, modo: REGLAS_MODO };
+  ddAbrir(btn, listas[campo], String(reglasForm[campo] ?? ''), id => {
+    if (campo === 'dias' || campo === 'porcentaje') reglasForm[campo] = Number(id);
+    else reglasForm[campo] = id;
+    if (campo === 'campana_id') {
+      const x = (reglasCampanas || []).find(c => String(c.id) === String(id));
+      reglasForm.campana = x ? x.nombre : null;
+      if (x && reglasForm.red === 'todas') reglasForm.red = x.red;
+    }
+    // Una campaña de otra red ya no vale.
+    if (campo === 'red' && reglasForm.campana_id) {
+      const x = (reglasCampanas || []).find(c => String(c.id) === String(reglasForm.campana_id));
+      if (x && id !== 'todas' && x.red !== id) { reglasForm.campana_id = ''; reglasForm.campana = null; }
+    }
+    reglasPintar();
+  });
+}
+
+function reglasNueva(plantilla) {
+  const p = REGLAS_PLANTILLAS[plantilla] || {};
+  reglasForm = { nombre: p.nombre || '', red: 'todas', campana_id: '', campana: null, metrica: p.metrica || 'cpl_real',
+    dias: p.dias || 7, umbral: '', accion: p.accion || 'pausar', porcentaje: p.porcentaje || 20, modo: 'aprobar' };
+  reglasPintar();
+  reglasTraerCampanas();
+  setTimeout(() => document.getElementById(plantilla === undefined ? 'rg-nombre' : 'rg-umbral')?.focus(), 30);
+}
+
+function reglasEditar(id) {
+  const r = (reglasDatos?.reglas || []).find(x => x.id === id);
+  if (!r) return;
+  reglasForm = { ...r, campana_id: r.campana_id || '', umbral: Number(r.umbral).toLocaleString('es-CO'), porcentaje: r.porcentaje || 20 };
+  reglasPintar();
+  reglasTraerCampanas();
+}
+
+// Las campañas para elegir una en concreto. Si ya están cargadas de la pestaña
+// Campañas se reutilizan; si no, se piden. Sin ellas la regla vale igual para
+// todas: el desplegable lo dice en vez de quedarse vacío sin explicación.
+async function reglasTraerCampanas() {
+  if (reglasCampanas) return;
+  if (pautaDatos && Array.isArray(pautaDatos.campanas)) {
+    reglasCampanas = pautaDatos.campanas.map(x => ({ id: x.id, nombre: x.nombre, red: x.red }));
+    reglasPintar();
+    return;
+  }
+  const hasta = new Date(), desde = new Date(hasta.getTime() - 29 * 86400000);
+  const f = (d) => d.toISOString().slice(0, 10);
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/pauta?desde=' + f(desde) + '&hasta=' + f(hasta) + (cliente ? '&client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    reglasCampanas = r.ok ? (d.campanas || []).map(x => ({ id: x.id, nombre: x.nombre, red: x.red })) : [];
+    if (!r.ok) showToast('No pudimos leer tus campañas: la regla puede aplicar a todas igual.', 'error');
+  } catch (e) {
+    reglasCampanas = [];
+    showToast('No pudimos leer tus campañas: la regla puede aplicar a todas igual.', 'error');
+  }
+  if (reglasForm) reglasPintar();
+}
+
+async function reglasPost(cuerpo) {
+  const r = await fetchAuth('/api/reglas-pauta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+  const d = await leerRespuesta(r);
+  if (!r.ok) { const e = new Error(d.error || ('HTTP ' + r.status)); e.datos = d; throw e; }
+  return d;
+}
+
+function reglasCuerpo() {
+  return { ...reglasForm, client_id: crmAmbitoCliente() || null };
+}
+
+async function reglasGuardar() {
+  const btn = document.getElementById('rg-guardar');
+  const err = document.getElementById('rg-err');
+  if (err) err.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    await reglasPost({ accion: 'guardar', regla: reglasCuerpo() });
+    showToast(reglasForm.id ? 'Regla actualizada' : 'Regla creada: se revisa mañana a las 8:00', 'success');
+    reglasForm = null;
+    reglasCargar();
+  } catch (e) {
+    if (err) { err.textContent = e.message; err.style.display = 'block'; } else showToast(e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar regla'; }
+  }
+}
+
+async function reglasPrevia() {
+  const btn = document.getElementById('rg-probar');
+  const caja = document.getElementById('rg-previa');
+  const err = document.getElementById('rg-err');
+  if (err) err.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.textContent = 'Revisando tus campañas…'; }
+  try {
+    const d = await reglasPost({ accion: 'previa', regla: reglasCuerpo() });
+    const t = d.tocaria || [];
+    if (caja) caja.innerHTML = '<div class="pauta-conx-nota' + (t.length ? ' ojo' : '') + '" style="margin-top:12px;display:block">' +
+      (t.length
+        ? '<b>Con los números de hoy tocaría ' + t.length + (t.length === 1 ? ' campaña' : ' campañas') + ':</b>' +
+          t.map(x => '<div style="margin-top:6px">' + pautaRedChip(x.red) + ' <b>' + esc(x.campana) + '</b> — ' + esc(x.motivo) + '</div>').join('')
+        : 'Con los números de hoy no tocaría ninguna campaña.') +
+      '<div style="margin-top:6px;color:var(--muted2)">Es solo una vista previa: no se cambió ni se guardó nada.</div></div>';
+  } catch (e) {
+    if (err) { err.textContent = e.message; err.style.display = 'block'; }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Ver qué tocaría hoy'; }
+}
+
+async function reglasActivar(id, activa, btn) {
+  if (btn) btn.disabled = true;
+  try { await reglasPost({ accion: 'activar', id, activa }); showToast(activa ? 'Regla encendida' : 'Regla apagada', 'success'); reglasCargar(); }
+  catch (e) { showToast('No se pudo: ' + e.message, 'error'); if (btn) btn.disabled = false; }
+}
+
+async function reglasBorrar(id, btn) {
+  const r = (reglasDatos?.reglas || []).find(x => x.id === id);
+  if (!confirm('¿Borrar la regla «' + (r?.nombre || '') + '»?\n\nLo que ya hizo queda en el historial.')) return;
+  if (btn) btn.disabled = true;
+  try { await reglasPost({ accion: 'borrar', id }); showToast('Regla borrada', 'success'); reglasCargar(); }
+  catch (e) { showToast('No se pudo borrar: ' + e.message, 'error'); if (btn) btn.disabled = false; }
+}
+
+async function reglasDecidir(id, accion, btn) {
+  const a = (reglasDatos?.acciones || []).find(x => x.id === id);
+  if (accion === 'aprobar' && !confirm(reglasTextoAccion(a || {}) + ' «' + (a?.campana || '') + '»?\n\nSe hace ya mismo en ' +
+    (a?.red === 'google' ? 'Google Ads' : 'Meta') + '. Si quieres deshacerlo, se hace desde el administrador de anuncios.')) return;
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = accion === 'aprobar' ? 'Haciendo el cambio…' : 'Descartando…'; }
+  try {
+    const d = await reglasPost({ accion, id });
+    showToast(accion === 'aprobar' ? (d.accion?.resultado || 'Hecho') : 'Propuesta descartada', 'success');
+  } catch (e) {
+    // Si falló en la red, la fila quedó como «No se pudo» con el motivo: se ve en el historial.
+    showToast((accion === 'aprobar' ? 'No se pudo hacer el cambio: ' : 'No se pudo: ') + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+  reglasCargar();
 }
 
 // ── Ventas a la pauta ───────────────────────────────────────────────────────
