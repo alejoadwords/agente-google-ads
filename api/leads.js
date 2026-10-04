@@ -900,6 +900,23 @@ export default async function handler(req) {
       update.tags = _prep.list;
       tagsIgnoradas = _prep.ignoradas;
     }
+    // Fusionar campos propios en vez de reemplazarlos. `custom_fields` pisa el
+    // objeto entero: mandar solo la campaña elegida a mano borraba el clic del
+    // anuncio y el resto. `custom_fields_merge` lee lo que hay y le suma lo
+    // nuevo (un valor null quita esa clave). Lo usa el formulario de lead.
+    if (fields.custom_fields_merge && typeof fields.custom_fields_merge === 'object' && update.custom_fields === undefined) {
+      try {
+        const pre = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${id}&user_id=eq.${userId}&select=custom_fields`, { headers: sbHeaders() });
+        const actuales = (await pre.json())?.[0]?.custom_fields || {};
+        const nuevos = { ...actuales };
+        for (const [k, v] of Object.entries(fields.custom_fields_merge)) {
+          if (v === null) delete nuevos[k]; else nuevos[String(k).slice(0, 80)] = String(v).slice(0, 300);
+        }
+        update.custom_fields = nuevos;
+      } catch (e) {
+        return jsonResp({ error: 'No se pudieron leer los campos del lead para guardar la campaña. Vuelve a intentarlo.' }, 502);
+      }
+    }
     update.updated_at = new Date().toISOString();
 
     // Si cambia la etapa o las etiquetas, capturar el estado anterior para los triggers

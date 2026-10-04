@@ -21290,6 +21290,124 @@ function crmUpdateSidebarCount() {
   if (btn) btn.style.display = 'block';
 }
 
+// ── Campaña por la que llegó un lead creado a mano ──────────────────────────
+// Los leads que entran por WhatsApp o por llamada los crea una persona a mano,
+// y llegaban sin campaña: en Certain, ~100 al mes (04-10-2026). Sin eso no se
+// sabe qué pauta vende. Si la fuente es de pauta, la campaña se pide; si el
+// lead ya la trae por el clic del anuncio, no se toca a mano.
+let crmCampSel = null;      // {id, nombre, red} | {nose:true} | {no:true} | null
+let crmCampAuto = false;    // la puso el clic del anuncio
+let crmCampAntes = null;    // la «Atribución» con la que se abrió, al editar
+let _crmCampCache = { clave: null, at: 0, lista: null, error: false };
+
+function crmFuenteEsPauta(key) {
+  const k = String(key || '');
+  if (['meta_ads', 'google_ads', 'tiktok_ads'].includes(k)) return true;
+  return /(meta|facebook|instagram|google|tiktok|pauta|anuncio|\bads?\b)/i.test(k + ' ' + fuenteLabel(k));
+}
+function crmRedDeFuente(key) {
+  const t = (String(key || '') + ' ' + fuenteLabel(key)).toLowerCase();
+  if (/google/.test(t)) return 'google';
+  if (/meta|facebook|instagram/.test(t)) return 'meta';
+  return null;
+}
+
+async function crmCampCargar() {
+  const cliente = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  const clave = cliente || '_cuenta';
+  // Diez minutos de caché: abrir el formulario no puede pedirle cada vez las campañas a Google y a Meta.
+  if (_crmCampCache.clave === clave && _crmCampCache.lista && Date.now() - _crmCampCache.at < 600000) return;
+  _crmCampCache = { clave, at: Date.now(), lista: null, error: false };
+  const hasta = new Date(), desde = new Date(hasta.getTime() - 59 * 86400000);
+  const f = (d) => d.toISOString().slice(0, 10);
+  try {
+    const r = await fetchAuth('/api/pauta?desde=' + f(desde) + '&hasta=' + f(hasta) + (cliente ? '&client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    _crmCampCache.lista = (d.campanas || [])
+      .filter(c => c.id && (c.inversion > 0 || ['enabled', 'active'].includes(String(c.estado || '').toLowerCase())))
+      .sort((a, b) => (a.red === b.red ? b.inversion - a.inversion : a.red < b.red ? -1 : 1))
+      .map(c => ({ id: String(c.id), nombre: c.nombre, red: c.red }));
+  } catch (e) {
+    _crmCampCache.lista = [];
+    _crmCampCache.error = true;
+  }
+}
+
+function crmCampInit(lead) {
+  const cf = (lead && lead.custom_fields) || {};
+  crmCampAuto = !!((cf['Clic de anuncio'] && cf['ID de campaña']) || cf['ID de lead de Meta']);
+  crmCampAntes = cf['Atribución'] || null;
+  const red = /google/i.test(cf['Plataforma'] || '') ? 'google' : /meta/i.test(cf['Plataforma'] || '') ? 'meta' : null;
+  crmCampSel = cf['ID de campaña'] ? { id: String(cf['ID de campaña']), nombre: cf['Campaña'] || String(cf['ID de campaña']), red }
+    : crmCampAntes === 'Manual, campaña desconocida' ? { nose: true } : null;
+  const sel = document.getElementById('crm-f-source');
+  if (sel && !sel._campEscucha) { sel.addEventListener('change', crmCampPintar); sel._campEscucha = true; }
+  crmCampPintar();
+  crmCampCargar().then(crmCampPintar);
+}
+
+function crmCampPintar() {
+  const btn = document.getElementById('crm-f-camp');
+  if (!btn) return;
+  const pauta = crmFuenteEsPauta(document.getElementById('crm-f-source')?.value);
+  const lbl = document.getElementById('crm-f-camp-label');
+  if (lbl) lbl.innerHTML = pauta ? 'Campaña por la que llegó <span style="color:var(--danger)">*</span>'
+    : 'Campaña <span style="font-weight:400;color:var(--muted2)">(si llegó por un anuncio)</span>';
+  const s = crmCampSel;
+  document.getElementById('crm-f-camp-txt').textContent = s
+    ? (s.id ? s.nombre + (s.red ? ' · ' + (s.red === 'google' ? 'Google' : 'Meta') : '') : s.nose ? 'Vino de un anuncio, no sé cuál' : 'No vino de un anuncio')
+    : (pauta ? 'Elige la campaña' : 'Ninguna');
+  btn.disabled = crmCampAuto;
+  btn.classList.toggle('activo', !!(s && s.id));
+  const nota = document.getElementById('crm-f-camp-nota');
+  const c = _crmCampCache;
+  const texto = crmCampAuto ? 'La puso el clic del anuncio: no se cambia a mano.'
+    : c.lista === null ? 'Cargando tus campañas…'
+    : c.error ? 'No pudimos leer tus campañas ahora. Puedes elegir «Vino de un anuncio, no sé cuál».'
+    : !c.lista.length ? 'No hay campañas con gasto en los últimos 60 días. Conéctalas en Plataformas de pauta.'
+    : '';
+  if (nota) { nota.textContent = texto; nota.style.display = texto ? 'block' : 'none'; }
+}
+
+function crmCampDd(btn) {
+  if (crmCampAuto) return;
+  const fuente = document.getElementById('crm-f-source')?.value;
+  const pauta = crmFuenteEsPauta(fuente), red = crmRedDeFuente(fuente);
+  // Si la fuente dice la red, solo sus campañas; si no, todas.
+  const camps = (_crmCampCache.lista || []).filter(c => !red || c.red === red);
+  const ops = [{ id: '__nose', name: 'Vino de un anuncio, no sé cuál' }];
+  if (!pauta) ops.push({ id: '__no', name: 'No vino de un anuncio' });
+  if (camps.length) ops.push({ sep: true }, ...camps.map(c => ({ id: c.id, name: c.nombre + ' · ' + (c.red === 'google' ? 'Google' : 'Meta') })));
+  const s = crmCampSel;
+  const valor = s ? (s.id || (s.nose ? '__nose' : '__no')) : '';
+  ddAbrir(btn, ops, valor, id => {
+    if (id === '__nose') crmCampSel = { nose: true };
+    else if (id === '__no') crmCampSel = { no: true };
+    else { const c = camps.find(x => x.id === id); crmCampSel = c ? { id: c.id, nombre: c.nombre, red: c.red } : null; }
+    crmCampPintar();
+  });
+}
+
+/** Lo que se guarda en los campos del lead. {} = nada que cambiar. */
+function crmCampCampos() {
+  if (crmCampAuto) return {};
+  const s = crmCampSel;
+  const fuente = document.getElementById('crm-f-source')?.value;
+  if (s && s.id) {
+    return { 'Campaña': s.nombre, 'ID de campaña': s.id, 'Plataforma': s.red === 'google' ? 'Google' : 'Meta', 'Atribución': 'Elegida a mano' };
+  }
+  if (s && s.nose) {
+    const red = crmRedDeFuente(fuente);
+    return { 'Atribución': 'Manual, campaña desconocida', 'Campaña': null, 'ID de campaña': null, ...(red ? { 'Plataforma': red === 'google' ? 'Google' : 'Meta' } : {}) };
+  }
+  // «No vino de un anuncio»: solo se borra lo que se había puesto a mano.
+  if (s && s.no && /^(Elegida a mano|Manual, campaña desconocida)$/.test(crmCampAntes || '')) {
+    return { 'Atribución': null, 'Campaña': null, 'ID de campaña': null, 'Plataforma': null };
+  }
+  return {};
+}
+
 // ── Modal crear/editar ────────────────────────────────────────────────────────
 function crmOpenModal(defaultStage) {
   fuenteAjustarPermiso();   // el enlace «Administrar» solo para quien puede
@@ -21301,6 +21419,7 @@ function crmOpenModal(defaultStage) {
   document.getElementById('crm-f-company').value = '';
   document.getElementById('crm-f-notes').value = '';
   document.getElementById('crm-f-source').value = 'manual';
+  crmCampInit(null);
   const valModalEl = document.getElementById('crm-f-value');
   if (valModalEl) valModalEl.value = '';
   const fcModalEl = document.getElementById('crm-f-close-date');
@@ -21671,6 +21790,12 @@ async function crmSaveLead() {
     aviso.style.display = texto ? 'block' : 'none';
   };
   decir('');
+  // Fuente de pauta sin campaña: no se guarda así, o se pierde la atribución.
+  if (crmFuenteEsPauta(document.getElementById('crm-f-source').value) && !crmCampAuto && !(crmCampSel && (crmCampSel.id || crmCampSel.nose))) {
+    decir('Elige la campaña por la que llegó este lead. Si no sabes cuál, elige «Vino de un anuncio, no sé cuál».');
+    document.getElementById('crm-f-camp')?.focus();
+    return;
+  }
   btn.disabled = true;
   btn.textContent = 'Guardando...';
   const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
@@ -21690,6 +21815,13 @@ async function crmSaveLead() {
     expected_close_date: (document.getElementById('crm-f-close-date') || {}).value || null,
     tags: document.getElementById('crm-f-tags') && document.getElementById('crm-f-tags').value.trim() ? document.getElementById('crm-f-tags').value.split(',').map(t => t.trim()).filter(Boolean) : null,
   };
+  // La campaña: al crear va en los campos; al editar se FUSIONA en el servidor,
+  // para no borrar el clic del anuncio ni los demás campos del lead.
+  const campos = crmCampCampos();
+  if (Object.keys(campos).length) {
+    if (crmEditingId) payload.custom_fields_merge = campos;
+    else payload.custom_fields = Object.fromEntries(Object.entries(campos).filter(([, v]) => v !== null));
+  }
   // La etapa de antes, para saber si este guardado es el que cierra el negocio.
   const etapaAntes = crmEditingId
     ? (crmLeads.find(l => l.id === crmEditingId) || {}).stage
@@ -22647,6 +22779,7 @@ function crmEditCurrentLead() {
   document.getElementById('crm-f-company').value = lead.company || '';
   document.getElementById('crm-f-notes').value = lead.notes || '';
   document.getElementById('crm-f-source').value = lead.source || 'manual';
+  crmCampInit(lead);
   const valEditEl = document.getElementById('crm-f-value');
   if (valEditEl) valEditEl.value = lead.value || '';
   const fcEditEl = document.getElementById('crm-f-close-date');
@@ -25828,6 +25961,7 @@ function crmCreateLeadFromConversation(conv) {
   document.getElementById('crm-f-company').value = '';
   document.getElementById('crm-f-notes').value = 'Lead capturado desde ' + (conv.channel || 'chat') + '.';
   document.getElementById('crm-f-source').value = conv.channel === 'whatsapp' ? 'web' : (conv.channel === 'meta_ads' ? 'meta_ads' : 'web');
+  crmCampInit(null);
   const valCLEl = document.getElementById('crm-f-value');
   if (valCLEl) valCLEl.value = '';
   const fcCLEl = document.getElementById('crm-f-close-date');

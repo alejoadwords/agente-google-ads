@@ -3869,6 +3869,7 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .dd-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-weight:500;background:var(--bg);color:var(--text);font-family:var(--font);cursor:pointer;transition:all .15s var(--ease);max-width:190px;white-space:nowrap}
 .dd-btn:hover{border-color:var(--border-h);background:var(--bg-subtle)}
 .dd-btn.activo{border-color:var(--blue);background:var(--blue-lt);color:var(--blue);font-weight:650}
+.dd-btn:disabled{opacity:.65;cursor:not-allowed}
 .dd-btn-txt{overflow:hidden;text-overflow:ellipsis}
 .dd-btn svg{flex-shrink:0;opacity:.5}
 .dd-menu{position:fixed;z-index:4000;min-width:190px;max-height:300px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow-lg);padding:5px;animation:ddIn .13s var(--ease)}
@@ -6208,6 +6209,17 @@ if (window.AGENTES_ACTIVOS) {
             <option value="web">Web</option>
           </select>
         </div>
+      </div>
+      <!-- La campaña por la que llegó. Los leads que entran por WhatsApp o llamada
+           los crea una persona a mano y llegaban sin campaña: así se pierde la
+           atribución de casi toda la pauta (Certain, 04-10-2026). -->
+      <div class="crm-field" id="crm-f-camp-wrap">
+        <label id="crm-f-camp-label">Campaña <span style="font-weight:400;color:var(--muted2)">(si llegó por un anuncio)</span></label>
+        <button type="button" class="dd-btn" id="crm-f-camp" style="max-width:none;width:100%;justify-content:space-between" onclick="crmCampDd(this)">
+          <span class="dd-btn-txt" id="crm-f-camp-txt">Elegir</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div id="crm-f-camp-nota" style="font-size:11.5px;color:var(--muted2);margin-top:4px;display:none"></div>
       </div>
       <div class="crm-field">
         <label>Notas</label>

@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-04-campana-lead-manual",
+      "fecha": "2026-10-04",
+      "tipo": "mejora",
+      "titulo": "Al crear un lead a mano, eliges la campaña por la que llegó",
+      "texto": "Cuando creas un lead que llegó por WhatsApp o por una llamada, ahora puedes elegir de qué campaña de Google o Meta vino. Si la fuente es Meta Ads o Google Ads, es obligatorio (o eliges «Vino de un anuncio, no sé cuál»). Así esos leads cuentan en Plataformas de pauta, en el Analista IA y en los reportes para tus clientes.",
+      "accion": {
+        "texto": "Crear un lead",
+        "ir": "crm"
+      }
+    },
+    {
       "id": "2026-10-04-reporte-agencia-v2",
       "fecha": "2026-10-04",
       "tipo": "nuevo",
