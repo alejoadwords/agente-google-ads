@@ -21,6 +21,7 @@ import { cli, defineAgent, llm, voice, inference, ServerOptions } from '@livekit
 import * as anthropic from '@livekit/agents-plugin-anthropic';
 import * as silero from '@livekit/agents-plugin-silero';
 import { SipClient } from 'livekit-server-sdk';
+import { BackgroundVoiceCancellation, TelephonyBackgroundVoiceCancellation } from '@livekit/noise-cancellation-node';
 import { fileURLToPath } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
 import { crearCliente, datosDeLaLlamada, transcripcionDe, duracion, conCache, resumenLatencias } from './acuarius.js';
@@ -156,7 +157,13 @@ export default defineAgent({
       },
     });
     session.on('metrics_collected', (ev) => { if (ev?.metrics) metricas.push(ev.metrics); });
-    await session.start({ agent: agente, room: ctx.room });
+    // Filtro de ruido y de voces de fondo (LiveKit Cloud) antes de que el
+    // audio llegue al oído y al detector de turnos. En la quinta prueba
+    // (05-10-2026) una radio de fondo se transcribió como si la persona
+    // hablara («Radioactiva…»). Por teléfono, el modelo afinado para llamadas.
+    await session.start({ agent: agente, room: ctx.room, inputOptions: {
+      noiseCancellation: esTelefono ? TelephonyBackgroundVoiceCancellation() : BackgroundVoiceCancellation(),
+    } });
     session.say(cfg.saludo);
 
     // Tope de duración: lo que alcanza el saldo, o 30 min. Se avisa antes de cortar.

@@ -121,6 +121,7 @@ console.log('\nLas instrucciones');
   ok(/despídete en ESE turno/.test(t) && /Nunca cuelgues sin despedirte/.test(t) && /gracias por preguntar/.test(t), 'se despide en voz alta antes de colgar, una sola vez, y fuera las frases de manual');
   ok(/NUNCA uses «vos»/.test(t) && /no a lo que no dijo/.test(t) && /con quién tengo el gusto/.test(t), 'tutea sin «vos», responde solo a lo que le dijeron y pide el nombre con naturalidad');
   ok(/NUNCA digas «sin tarjeta»/.test(t), 'y tiene prohibido en concreto «sin tarjeta» (lo inventó en las dos pruebas)');
+  ok(/tercera persona/.test(t) && /NO preguntes «¿hay algo más que necesites\?»/.test(t), 'habla del asesor en tercera persona y cierra sin «¿algo más?»');
   ok(/no lo pidas/.test(t) && /guardar_datos/.test(t), 'a quien no está en el CRM le pide el nombre y no el teléfono');
   t = lib.instruccionesDeVoz({ ...base, conocido: 'Ana Pérez, ana@x.co', hayCatalogo: true });
   ok(/YA ESTÁ EN EL CRM: Ana Pérez/.test(t) && /buscar_inmuebles/.test(t), 'a un conocido no le pide datos, y con catálogo sabe que puede buscar');

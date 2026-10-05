@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Worker del agente de voz de Acuarius (corre en Fly.io, no en Vercel)",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "node agente.js dev",
     "start": "node agente.js start",
@@ -15,6 +17,7 @@
     "@livekit/agents": "1.9.1",
     "@livekit/agents-plugin-anthropic": "1.9.1",
     "@livekit/agents-plugin-silero": "1.9.1",
+    "@livekit/noise-cancellation-node": "^0.3.0",
     "livekit-server-sdk": "2.19.1"
   }
 }

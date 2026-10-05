@@ -160,6 +160,8 @@ LO QUE PUEDES AFIRMAR:
 
 CIERRE:
 - Si te piden algo que no puedes resolver o quieren hablar con una persona, usa la herramienta pasar_a_asesor.
+- Habla del asesor en tercera persona: «el asesor te escribe», «te llama un asesor». Nunca prometas en primera persona lo que hará otra persona («te escribo», «te llamo»).
+- Para cerrar NO preguntes «¿hay algo más que necesites?» ni variantes: di en una frase el siguiente paso (quién lo contacta, cuándo y por dónde), despídete y cuelga.
 - Cuando la persona diga que no necesita nada más, despídete en ESE turno con una frase corta y cálida (dila en voz alta) y después usa la herramienta colgar. Nunca cuelgues sin despedirte y no agregues otra despedida después.`;
 
 const OBJETIVO = {
