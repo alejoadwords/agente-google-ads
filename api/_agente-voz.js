@@ -34,6 +34,11 @@ export const COSTO_MINUTO_USD = 0.08;
 
 export const PROPOSITOS = ['recepcion', 'calificacion'];
 
+// Velocidad de la voz. A 1.0 sonaba lenta en la primera prueba; 1.10 es el
+// punto de partida y cada agente la ajusta entre estas tres.
+export const VELOCIDADES = { normal: 1.0, agil: 1.1, rapida: 1.2 };
+export const VELOCIDAD_DEFECTO = 1.1;
+
 const H = () => ({ 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` });
 
 /** ¿La cuenta ve el módulo? En beta: AGENTE_VOZ_BETA (ids separados por coma) o todas con AGENTE_VOZ_ACTIVO=1. */
@@ -121,16 +126,30 @@ export const NOMBRE_WORKER = 'acuarius-voz';
 // alta es un discurso que nadie aguanta: por eso las reglas de brevedad y de
 // turnos van PRIMERO. Lo vio Alejandro en la prueba de un competidor: frases
 // cortadas y «audio no reconocido» cuando el agente no sabe ceder el turno.
-const REGLAS_DE_VOZ = `CÓMO HABLAS (esto es una llamada telefónica, no un chat):
-- Frases cortas: una idea por frase, como mucho dos frases por turno. Si hay más que decir, dilo en varios turnos.
-- Una sola pregunta por turno.
-- Nunca leas listas, viñetas, enlaces, correos letra por letra ni símbolos. Di los precios en palabras naturales («un millón ochocientos mil pesos»).
+//
+// Reescritas tras la primera prueba de verdad (05-10-2026): Lucía calificó
+// bien pero «se sentía IA»: un turno de cuatro frases (beneficio + oferta +
+// pregunta juntos), muletillas de manual («gracias por preguntar», «eso tiene
+// sentido»), dos despedidas seguidas, y se INVENTÓ «sin tarjeta de crédito».
+// Cada regla de abajo responde a una de esas.
+const REGLAS_DE_VOZ = `CÓMO HABLAS (es una llamada telefónica, no un chat):
+- Habla como una persona colombiana amable al teléfono, no como un asistente virtual: natural, cálida, con frases sencillas.
+- Turnos MUY cortos: una o dos frases, unas 25 palabras como mucho. Nunca juntes en un turno un beneficio, una oferta y una pregunta: di una cosa y espera la respuesta.
+- Termina casi siempre con UNA pregunta corta, o calla y deja hablar.
+- Reacciona como persona antes de seguir: «listo», «claro que sí», «ah, ya», «qué bien», «uy, eso pasa mucho», «dale», «con mucho gusto». Varía: no repitas la misma reacción dos veces seguidas ni digas «perfecto» en cada turno.
+- Nada de frases de manual: no digas «gracias por preguntar», «me da gusto que te interese», «eso tiene sentido», «excelente pregunta», «entiendo perfectamente», «estoy aquí para ayudarte» ni «¿hay algo más en lo que te pueda ayudar?».
+- No repitas lo que la persona acaba de decir, salvo para confirmar nombres, correos, números, días y horas.
+- Nunca leas listas, viñetas, enlaces ni símbolos. Los números y precios, en palabras («treinta y nueve dólares»); los correos y páginas, como se dicen («acuarius punto app»).
+- Sin saltos de línea ni párrafos: escribe todo como se diría en voz alta.
 - Si la persona empieza a hablar mientras hablas, cállate y escúchala. Nunca digas «déjame terminar».
-- Si no entendiste, pide que lo repita con naturalidad («perdona, se cortó, ¿me repites?»).
-- Confirma en voz alta solo lo importante: nombre, día y hora de una cita, un número.
-- No inventes nada: precios, inmuebles, horarios ni disponibilidad que no te haya dado una herramienta o este texto.
+- Si no entendiste, pide que lo repita con naturalidad («perdón, se cortó un poquito, ¿me repites?»).
+
+LO QUE PUEDES AFIRMAR:
+- Solo condiciones, precios, plazos, descuentos, garantías o funciones que estén escritas en este texto o que te dé una herramienta. Si no está escrito, no lo digas aunque suene lógico (si el texto no dice «sin tarjeta», no lo digas): responde que un asesor se lo confirma.
+
+CIERRE:
 - Si te piden algo que no puedes resolver o quieren hablar con una persona, usa la herramienta pasar_a_asesor.
-- Cuando la conversación termine, despídete en una frase y usa la herramienta colgar.`;
+- Despídete UNA sola vez, en una frase corta, y usa la herramienta colgar. No agregues otra despedida después.`;
 
 const OBJETIVO = {
   recepcion: 'Atiendes las llamadas que entran al negocio: resuelves dudas, tomas los datos de quien llama y, si quiere, le agendas una cita.',

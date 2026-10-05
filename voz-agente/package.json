@@ -11,6 +11,7 @@
     "modelos": "node agente.js download-files"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.33.1",
     "@livekit/agents": "1.9.1",
     "@livekit/agents-plugin-anthropic": "1.9.1",
     "@livekit/agents-plugin-silero": "1.9.1",

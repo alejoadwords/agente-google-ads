@@ -23,7 +23,8 @@ import * as silero from '@livekit/agents-plugin-silero';
 import { SipClient } from 'livekit-server-sdk';
 import { z } from 'zod';
 import { fileURLToPath } from 'node:url';
-import { crearCliente, datosDeLaLlamada, transcripcionDe, duracion } from './acuarius.js';
+import Anthropic from '@anthropic-ai/sdk';
+import { crearCliente, datosDeLaLlamada, transcripcionDe, duracion, conCache, resumenLatencias } from './acuarius.js';
 
 export const NOMBRE_WORKER = 'acuarius-voz';
 const MODELO = process.env.AGENTE_VOZ_MODELO || 'claude-haiku-4-5';
@@ -32,7 +33,20 @@ const VOZ_DEFECTO = process.env.VOZ_CARTESIA_DEFECTO || '';
 // La voz: Cartesia sonic-3 en español. Sin id de voz, Cartesia usa la suya por
 // defecto, que no es latina: por eso VOZ_CARTESIA_DEFECTO es obligatoria en
 // producción (se elige en LiveKit → Voices, filtrando por español).
-const vozDe = (voz) => new inference.TTS({ model: 'cartesia/sonic-3', language: 'es', ...(voz ? { voice: voz } : {}) });
+const vozDe = (voz, velocidad = 1.1) => new inference.TTS({
+  model: 'cartesia/sonic-3', language: 'es', ...(voz ? { voice: voz } : {}),
+  // A velocidad normal sonaba lenta en la primera prueba. Cartesia la toma
+  // como guía, no como multiplicador exacto, así que no suena acelerada.
+  modelOptions: { speed: velocidad },
+});
+
+// Claude con la caché de las instrucciones (ver conCache en acuarius.js).
+function claudeConCache() {
+  const cliente = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
+  const crear = cliente.messages.create.bind(cliente.messages);
+  cliente.messages.create = (params, opciones) => crear(conCache(params), opciones);
+  return cliente;
+}
 
 function herramientas({ acuarius, llamadaId, colgar, desviar }) {
   const usar = (nombre) => async (args) => {
@@ -109,13 +123,14 @@ export default defineAgent({
     let cerrada = false;
     let estado = 'terminada';
     let session = null;
+    const metricas = [];
     const cerrar = async () => {
       if (cerrada || !cfg.llamada_id) return;
       cerrada = true;
       const items = session ? session.history.items : [];
       await acuarius.fin(cfg.llamada_id, {
         segundos: duracion(desde), estado, transcripcion: transcripcionDe(items),
-        uso: session?.usage ? JSON.parse(JSON.stringify(session.usage)) : null,
+        uso: { ...(session?.usage ? JSON.parse(JSON.stringify(session.usage)) : {}), latencias: resumenLatencias(metricas) },
       }).catch(e => console.error('[voz] no se pudo cerrar la llamada', cfg.llamada_id, e.message));
     };
     ctx.addShutdownCallback(cerrar);
@@ -144,13 +159,22 @@ export default defineAgent({
     session = new voice.AgentSession({
       vad: ctx.proc.userData.vad,
       stt: new inference.STT({ model: 'deepgram/nova-3', language: 'es' }),
-      llm: new anthropic.LLM({ model: MODELO, temperature: 0.4, maxTokens: 300 }),
-      tts: vozDe(cfg.agente?.voz || VOZ_DEFECTO),
-      // El detector de fin de turno por AUDIO, el modelo local (v1-mini): corre
-      // en nuestro servidor, sin costo por minuto, y entiende español. Es lo que
-      // decide si la persona terminó de hablar o solo hizo una pausa.
-      turnDetection: new inference.TurnDetector({ version: 'v1-mini' }),
+      // Turnos cortos también por tamaño: 160 tokens son unas 100 palabras,
+      // de sobra para dos frases y una herramienta, y cortan cualquier discurso.
+      llm: new anthropic.LLM({ model: MODELO, temperature: 0.6, maxTokens: 160, client: claudeConCache() }),
+      tts: vozDe(cfg.agente?.voz || VOZ_DEFECTO, cfg.agente?.velocidad || 1.1),
+      // Que empiece a pensar Y a preparar la voz mientras la persona termina
+      // de hablar: si al final dice otra cosa, se descarta. Es lo que más
+      // acorta el silencio antes de cada respuesta.
+      turnHandling: {
+        // El detector de fin de turno por AUDIO, el modelo local (v1-mini):
+        // corre en el servidor, sin costo por minuto, y entiende español. Es
+        // lo que decide si la persona terminó de hablar o solo hizo una pausa.
+        turnDetection: new inference.TurnDetector({ version: 'v1-mini' }),
+        preemptiveGeneration: { enabled: true, preemptiveTts: true },
+      },
     });
+    session.on('metrics_collected', (ev) => { if (ev?.metrics) metricas.push(ev.metrics); });
     await session.start({ agent: agente, room: ctx.room });
     session.say(cfg.saludo);
 

@@ -115,7 +115,9 @@ console.log('\nLas instrucciones');
   const base = { agente: { nombre: 'Lucía', proposito: 'calificacion', instrucciones: 'Somos de Barranquilla.' }, negocio: 'Inmobiliaria Sol' };
   let t = lib.instruccionesDeVoz(base);
   ok(/Lucía/.test(t) && /Inmobiliaria Sol/.test(t) && /Somos de Barranquilla/.test(t), 'dice quién es, de qué negocio y lo que el negocio indicó');
-  ok(/Frases cortas/.test(t) && /cállate y escúchala/.test(t) && /colgar/.test(t), 'las reglas de voz (brevedad, ceder el turno, colgar) van dentro');
+  ok(/Turnos MUY cortos/.test(t) && /cállate y escúchala/.test(t) && /colgar/.test(t), 'las reglas de voz (brevedad, ceder el turno, colgar) van dentro');
+  ok(/Solo condiciones, precios/.test(t) && /sin tarjeta/.test(t), 'y la regla de no afirmar nada que no esté escrito (la prueba del 05-10 se inventó «sin tarjeta»)');
+  ok(/Despídete UNA sola vez/.test(t) && /gracias por preguntar/.test(t), 'una sola despedida y fuera las frases de manual');
   ok(/no lo pidas/.test(t) && /guardar_datos/.test(t), 'a quien no está en el CRM le pide el nombre y no el teléfono');
   t = lib.instruccionesDeVoz({ ...base, conocido: 'Ana Pérez, ana@x.co', hayCatalogo: true });
   ok(/YA ESTÁ EN EL CRM: Ana Pérez/.test(t) && /buscar_inmuebles/.test(t), 'a un conocido no le pide datos, y con catálogo sabe que puede buscar');
@@ -151,6 +153,7 @@ console.log('\nEl worker: configuración de la llamada');
   ok(T.llamadas_voz[0]?.lead_id === 'L1' && (T.llamadas_voz[0].estado ?? 'en_curso') === 'en_curso', 'abre la llamada colgada de su lead');
   ok(d.max_segundos === 1800, 'con 300 minutos de saldo, la llamada tiene el tope de 30 minutos', d.max_segundos);
   ok(d.desvio === '573001112233', 'sabe a qué número pasar al asesor');
+  ok(d.agente.velocidad === 1.1, 'sin velocidad configurada, habla a 1.1 (a 1.0 sonaba lenta)', d.agente.velocidad);
   r = await worker({ accion: 'config', sala: 's1', numero: '6015551234', telefono: '+573104445566' });
   ok(T.llamadas_voz.length === 1, 'si el worker se reinicia a mitad, reusa la misma llamada');
 
@@ -227,6 +230,10 @@ console.log('\nLa pantalla del cliente');
   r = await cliente('POST', { accion: 'guardar', agente: { nombre: 'Pedro', negocio: 'Sol', proposito: 'raro', desvio: '300 111 2233' } });
   d = await r.json();
   ok(r.status === 200 && d.agente.user_id === 'dueno' && d.agente.proposito === 'recepcion' && d.agente.desvio === '573001112233', 'crea el agente con lo validado', JSON.stringify(d));
+  r = await cliente('POST', { accion: 'guardar', agente: { nombre: 'Rápida', negocio: 'Sol', velocidad: '1.2' } });
+  ok((await r.json()).agente.velocidad === 1.2, 'guarda la velocidad elegida');
+  r = await cliente('POST', { accion: 'guardar', agente: { nombre: 'Loca', negocio: 'Sol', velocidad: '3' } });
+  ok((await r.json()).agente.velocidad === 1.1, 'una velocidad fuera de las tres opciones vuelve a la natural');
   r = await cliente('POST', { accion: 'guardar', agente: { id: 'A1', nombre: 'Lucía 2', negocio: 'Sol' } });
   ok(r.status === 200 && T.agentes_voz[0].nombre === 'Lucía 2', 'edita el suyo');
   T.agentes_voz.push({ id: 'AJ', user_id: 'otra', client_id: null, nombre: 'Ajeno', negocio: 'X', activo: true });
@@ -263,6 +270,27 @@ console.log('\nEl worker por dentro (voz-agente/acuarius.js)');
   let cab = null;
   await w.crearCliente({ secreto: 'mio', fetchFn: async (u, i) => { cab = i.headers['x-agente-voz']; return resp({}); } }).config({});
   ok(cab === 'mio', 'el worker se identifica con su secreto');
+}
+
+console.log('\nCaché de instrucciones y latencias (voz-agente/acuarius.js)');
+{
+  const w = await import('../voz-agente/acuarius.js');
+  let p = w.conCache({ model: 'x', system: 'Eres Lucía', messages: [{ role: 'user', content: 'hola' }] });
+  ok(Array.isArray(p.system) && p.system[0].text === 'Eres Lucía' && p.system[0].cache_control?.type === 'ephemeral' && p.messages.length === 1,
+    'las instrucciones van marcadas para caché y la conversación queda igual', JSON.stringify(p));
+  p = w.conCache({ system: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }] });
+  ok(!p.system[0].cache_control && p.system[1].cache_control, 'con varias partes, la marca va en la última (cubre todo lo anterior)');
+  const original = { system: 'x' }; w.conCache(original);
+  ok(original.system === 'x', 'no toca el objeto original');
+  ok(w.conCache({ messages: [] }).system === undefined, 'sin instrucciones no inventa nada');
+  const lat = w.resumenLatencias([
+    { type: 'eou_metrics', endOfUtteranceDelayMs: 400 }, { type: 'eou_metrics', endOfUtteranceDelayMs: 600 },
+    { type: 'llm_metrics', ttftMs: 500 }, { type: 'llm_metrics', ttftMs: 700 },
+    { type: 'tts_metrics', ttfbMs: 200 }, { type: 'tts_metrics', ttfbMs: -1 }, { type: 'stt_metrics' },
+  ]);
+  ok(lat.eou_ms.promedio === 500 && lat.llm_ttft_ms.promedio === 600 && lat.tts_ttfb_ms.n === 1 && lat.respuesta_ms === 1300,
+    'resume cuánto tarda cada parte y lo que siente la persona (1,3 s)', JSON.stringify(lat));
+  ok(w.resumenLatencias([]).respuesta_ms === null, 'sin métricas no inventa un tiempo');
 }
 
 console.log('\nWorker y servidor hablan de las mismas herramientas');

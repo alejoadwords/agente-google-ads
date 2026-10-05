@@ -61,3 +61,44 @@ export function transcripcionDe(items = []) {
 export function duracion(desdeMs, hastaMs = Date.now()) {
   return Math.max(0, Math.round((hastaMs - desdeMs) / 1000));
 }
+
+/**
+ * Las instrucciones del agente son las mismas en todos los turnos de una
+ * llamada; solo cambia la conversación. Marcarlas como caché hace que Claude
+ * no las vuelva a leer en cada turno: responde antes y cuesta menos. En la
+ * primera prueba (05-10-2026) se mandaron 51 mil tokens en 2,5 minutos sin
+ * caché. El plugin de Anthropic de LiveKit no lo hace solo, así que se le
+ * pasa un cliente que lo añade. Las herramientas van delante del sistema, así
+ * que quedan dentro de la misma caché.
+ */
+export function conCache(params) {
+  if (!params || !params.system) return params;
+  const sistema = typeof params.system === 'string' ? [{ type: 'text', text: params.system }] : [...params.system];
+  if (!sistema.length) return params;
+  const ultimo = sistema.length - 1;
+  sistema[ultimo] = { ...sistema[ultimo], cache_control: { type: 'ephemeral' } };
+  return { ...params, system: sistema };
+}
+
+const percentil = (xs, p) => {
+  if (!xs.length) return null;
+  const o = [...xs].sort((a, b) => a - b);
+  return Math.round(o[Math.min(o.length - 1, Math.floor(p * o.length))]);
+};
+const promedio = (xs) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+
+/**
+ * Cuánto tardó el agente en cada parte del turno, para dejar de adivinar dónde
+ * está la lentitud: detectar que la persona terminó (eou), que Claude empiece
+ * a responder (llm) y que la voz empiece a sonar (tts). Milisegundos.
+ */
+export function resumenLatencias(metricas = []) {
+  const de = (tipo, campo) => metricas.filter(m => m && m.type === tipo && Number.isFinite(m[campo]) && m[campo] >= 0).map(m => m[campo]);
+  const fila = (xs) => ({ promedio: promedio(xs), p90: percentil(xs, 0.9), n: xs.length });
+  const eou = de('eou_metrics', 'endOfUtteranceDelayMs');
+  const llm = de('llm_metrics', 'ttftMs');
+  const tts = de('tts_metrics', 'ttfbMs');
+  // Lo que siente la persona: desde que calla hasta que oye la respuesta.
+  const total = eou.length && llm.length && tts.length ? (promedio(eou) + promedio(llm) + promedio(tts)) : null;
+  return { eou_ms: fila(eou), llm_ttft_ms: fila(llm), tts_ttfb_ms: fila(tts), respuesta_ms: total };
+}

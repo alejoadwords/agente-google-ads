@@ -22,7 +22,7 @@ export const config = { runtime: 'edge' };
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 import { quienPregunta, alcanceDeCliente } from './_perfiles.js';
 import {
-  agenteVozActivo, PLANES_VOZ, USD_MINUTO_EXTRA, PROPOSITOS, minutosCobrados, costoEstimado, normalizarNumero,
+  agenteVozActivo, PLANES_VOZ, USD_MINUTO_EXTRA, PROPOSITOS, VELOCIDADES, VELOCIDAD_DEFECTO, minutosCobrados, costoEstimado, normalizarNumero,
   saldoMinutos, cobrarLlamada, esElWorker, tokenLiveKit, NOMBRE_WORKER, instruccionesDeVoz, saludoDe, bloqueCitasVoz,
   HERRAMIENTAS_SERVIDOR,
 } from './_agente-voz.js';
@@ -124,7 +124,7 @@ async function workerConfig(b) {
 
   return json({
     llamada_id: llamada.id,
-    agente: { id: agente.id, nombre: agente.nombre, voz: agente.voz || null, proposito: agente.proposito },
+    agente: { id: agente.id, nombre: agente.nombre, voz: agente.voz || null, proposito: agente.proposito, velocidad: Number(agente.velocidad) || VELOCIDAD_DEFECTO },
     instrucciones: instruccionesDeVoz({
       agente, negocio, conocido, hayCatalogo, citas,
       ahora: bloqueDeAhora('America/Bogota'),
@@ -250,6 +250,7 @@ function validarAgente(a) {
     instrucciones: String(a.instrucciones || '').trim().slice(0, 4000) || null,
     voz: String(a.voz || '').trim().slice(0, 80) || null,
     tono: a.tono === 'formal' ? 'formal' : 'tu',
+    velocidad: Object.values(VELOCIDADES).includes(Number(a.velocidad)) ? Number(a.velocidad) : VELOCIDAD_DEFECTO,
     desvio: a.desvio ? normalizarNumero(a.desvio) : null,
     activo: a.activo !== false,
   };

@@ -26,4 +26,8 @@ export const MUTACIONES = [
   { nombre: 'fin sin reintentos', archivo: 'w', romper: cambiar('...datos }, 4),', '...datos }, 1),') },
   { nombre: 'reintenta los 4xx', archivo: 'w', romper: cambiar('if (r.status < 500) return { status: r.status, ...d };', 'if (r.status < 400) return { status: r.status, ...d };') },
   { nombre: 'transcripción con el sistema', archivo: 'w', romper: cambiar(".filter(m => m && (m.role === 'user' || m.role === 'assistant'))", '.filter(m => m)') },
+  { nombre: 'sin caché', archivo: 'w', romper: cambiar("sistema[ultimo] = { ...sistema[ultimo], cache_control: { type: 'ephemeral' } };", '') },
+  { nombre: 'latencia que suma mal', archivo: 'w', romper: cambiar('(promedio(eou) + promedio(llm) + promedio(tts))', '(promedio(llm) + promedio(tts))') },
+  { nombre: 'velocidad libre', archivo: 'api', romper: cambiar('velocidad: Object.values(VELOCIDADES).includes(Number(a.velocidad)) ? Number(a.velocidad) : VELOCIDAD_DEFECTO,', 'velocidad: Number(a.velocidad) || VELOCIDAD_DEFECTO,') },
+  { nombre: 'sin regla de no inventar', archivo: 'lib', romper: cambiar('- Solo condiciones, precios, plazos', '- Condiciones, precios, plazos') },
 ];

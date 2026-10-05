@@ -44997,6 +44997,8 @@ function avzFormHtml(a) {
         avzSeg('proposito', [['recepcion', 'Recepción y citas'], ['calificacion', 'Calificar contactos']], a.proposito || 'recepcion') + '</div>' +
       '<div class="cmpw-campo"><div class="cmpw-label">Trato</div>' +
         avzSeg('tono', [['tu', 'De tú'], ['formal', 'De usted']], a.tono || 'tu') + '</div>' +
+      '<div class="cmpw-campo"><div class="cmpw-label">Ritmo al hablar</div>' +
+        avzSeg('velocidad', [['1', 'Pausado'], ['1.1', 'Natural'], ['1.2', 'Ágil']], String(Number(a.velocidad || 1.1))) + '</div>' +
     '</div>' +
     campo('saludo', 'Saludo (opcional)', a.saludo, 'Si lo dejas vacío, saluda con su nombre y el del negocio. Puedes usar {{nombre}} para el de quien llama, si ya está en el CRM.', 'Ej: Hola {{nombre}}, gracias por llamar a Inmobiliaria Sol') +
     '<div class="cmpw-campo"><div class="cmpw-label">Lo que el agente debe saber</div>' +
