@@ -174,7 +174,12 @@ async function workerHerramienta(b) {
       const lineas = (r.lineas || []).slice(0, 4);
       if (!lineas.length) return json({ ok: true, total: 0, texto: 'No hay inmuebles que cumplan eso en el catálogo. Ofrece que un asesor busque otras opciones.' });
       const aviso = r.ampliado ? `No hay en ${pistas.barrio}; estas son de otras zonas:\n` : '';
-      return json({ ok: true, total: r.total || 0, texto: aviso + lineas.join('\n') });
+      // El total, dicho: con solo las cuatro primeras el modelo creía que eran
+      // todas («en el norte con tu presupuesto tengo esa opción», con decenas).
+      const cuantas = (r.total || 0) > lineas.length
+        ? `Hay ${r.total} opciones; estas son las ${lineas.length} más económicas. Si la persona precisa algo (habitaciones, barrio, precio), vuelve a buscar con eso:\n`
+        : `Hay ${lineas.length} ${lineas.length === 1 ? 'opción' : 'opciones'}:\n`;
+      return json({ ok: true, total: r.total || 0, texto: aviso + cuantas + lineas.join('\n') });
     }
     case 'agendar_cita': {
       const info = await reservasParaAgente(userId, clientId);

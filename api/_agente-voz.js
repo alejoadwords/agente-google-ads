@@ -232,7 +232,7 @@ export const HERRAMIENTAS = [
       interes: { type: 'string', description: 'Qué busca o por qué llama, en una frase' },
     } } },
   { nombre: 'buscar_inmuebles',
-    descripcion: 'Busca en el catálogo del negocio. Llámala EN EL MISMO TURNO en que sepas qué busca la persona (la operación y la zona, o el presupuesto), sin anunciarla ni pedir permiso: el resultado llega en segundos y con él respondes. Si te falta un dato, búscala igual con lo que tengas.',
+    descripcion: 'Busca en el catálogo del negocio. Llámala EN EL MISMO TURNO en que sepas qué busca la persona (la operación y la zona, o el presupuesto), sin anunciarla ni pedir permiso: el resultado llega en segundos y con él respondes. Si te falta un dato, búscala igual con lo que tengas. Cada vez que la persona cambie o añada un criterio (habitaciones, barrio, presupuesto, tipo), vuelve a llamarla con TODO lo que sabes. El resultado dice cuántas opciones hay en total: nunca digas que solo hay las que te mostró.',
     parametros: { type: 'object', properties: {
       operacion: { type: 'string', description: 'arriendo o venta' },
       tipo: { type: 'string', description: 'apartamento, casa, local, oficina, bodega o lote' },
