@@ -5,6 +5,8 @@
 // con color por hash, dedupe por email (merge de tags/nota) y disparo de
 // automatizaciones lead_created + tag_added (anti-bucle: una vez por lead).
 
+import { normPlataforma } from './_gclid.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -244,6 +246,15 @@ export function camposDePauta(body) {
         break;
       }
     }
+  }
+  // La plataforma, en el nombre de Acuarius: utm_source=adwords es Google.
+  // Y si vino un clic, su tipo manda sobre la UTM (un gclid es de Google
+  // aunque la UTM diga otra cosa). Lo que escribió el anunciante se guarda
+  // aparte para no perderlo. Ver normPlataforma en api/_gclid.js.
+  if (out['Plataforma']) {
+    const original = out['Plataforma'];
+    const norm = (out['Tipo de clic'] && RED_DEL_CLIC[out['Tipo de clic']]) || normPlataforma(original);
+    if (norm !== original) { out['Plataforma'] = norm; out['Fuente del anuncio'] = original; }
   }
   return out;
 }

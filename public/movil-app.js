@@ -1069,22 +1069,87 @@ function ponerEtapa(k){
     pintarFicha(); pintarFiltros(); pintarLeads(); pintarPulso(); pintarSubtitulos();
   });
 }
+// ── ¿Llegó por un anuncio? ──
+// Lo mismo que el formulario de la web (crmCampInit en app.js): un lead creado
+// a mano llegaba sin campaña y la pauta se quedaba sin atribuir. Aquí no se
+// elige fuente, así que siempre se pregunta, y es un toque.
+var CAMPS = { clave: null, at: 0, lista: null, error: false };
+var campSel = null;   // {id, nombre, red} | {nose:true} | {no:true}
+
+async function pedirCampanas(){
+  if (MODO !== 'real' || typeof fetchAuth !== 'function') { CAMPS.lista = []; return; }
+  var clave = alcanceCliente() || '_cuenta';
+  if (CAMPS.clave === clave && CAMPS.lista && Date.now() - CAMPS.at < 600000) return;
+  CAMPS = { clave: clave, at: Date.now(), lista: null, error: false };
+  var hasta = new Date(), desde = new Date(hasta.getTime() - 59 * 86400000);
+  var f = function(d){ return d.toISOString().slice(0, 10); };
+  try {
+    var r = await fetchAuth(conAlcance('/api/pauta?desde=' + f(desde) + '&hasta=' + f(hasta)));
+    var d = r && r.ok ? await r.json() : null;
+    if (!d) throw new Error('sin datos');
+    CAMPS.lista = (d.campanas || []).filter(function(c){
+      return c.id && (c.inversion > 0 || ['enabled', 'active'].indexOf(String(c.estado || '').toLowerCase()) >= 0);
+    }).sort(function(a, b){ return a.red === b.red ? b.inversion - a.inversion : (a.red < b.red ? -1 : 1); })
+      .map(function(c){ return { id: String(c.id), nombre: c.nombre, red: c.red }; });
+  } catch (e) { CAMPS.lista = []; CAMPS.error = true; }
+}
+
+function pintarCampanas(){
+  var caja = $('#sh-camp');
+  if (!caja) return;
+  var op = function(id, texto, sub){
+    var on = campSel && ((campSel.id && campSel.id === id) || (campSel.nose && id === '__nose') || (campSel.no && id === '__no'));
+    return '<button class="opcion" aria-current="' + !!on + '" onclick="M.elegirCampana(\'' + esc(id) + '\')">'
+      + '<span>' + esc(texto) + (sub ? '<span style="display:block;font-size:var(--fs-xs);color:var(--muted)">' + esc(sub) + '</span>' : '') + '</span>'
+      + '<span class="marca">' + icn('check', 18) + '</span></button>';
+  };
+  var html = (CAMPS.lista || []).map(function(c){ return op(c.id, c.nombre, c.red === 'google' ? 'Google Ads' : 'Meta'); }).join('')
+    + op('__nose', 'Vino de un anuncio, no sé cuál') + op('__no', 'No vino de un anuncio');
+  if (CAMPS.lista === null) html = '<div style="color:var(--muted);font-size:var(--fs-sm);padding:8px 0">Cargando tus campañas…</div>' + op('__nose', 'Vino de un anuncio, no sé cuál') + op('__no', 'No vino de un anuncio');
+  else if (CAMPS.error) html = '<div style="color:var(--muted);font-size:var(--fs-sm);padding:8px 0">No pudimos leer tus campañas ahora.</div>' + html;
+  caja.innerHTML = html;
+}
+
+function elegirCampana(id){
+  if (id === '__nose') campSel = { nose: true };
+  else if (id === '__no') campSel = { no: true };
+  else {
+    var c = (CAMPS.lista || []).filter(function(x){ return x.id === id; })[0];
+    campSel = c ? { id: c.id, nombre: c.nombre, red: c.red } : null;
+  }
+  toque(8);
+  pintarCampanas();
+}
+
+function camposDeCampana(){
+  if (!campSel) return null;
+  if (campSel.id) return { 'Campaña': campSel.nombre, 'ID de campaña': campSel.id, 'Plataforma': campSel.red === 'google' ? 'Google' : 'Meta', 'Atribución': 'Elegida a mano' };
+  if (campSel.nose) return { 'Atribución': 'Manual, campaña desconocida' };
+  return { 'Atribución': 'Sin anuncio' };
+}
+
 function nuevoLead(){
   // Nombre y teléfono en campos SEPARADOS. Un solo cuadro con «Nombre y
   // teléfono» obliga a adivinar dónde acaba uno y empieza el otro, y lo que se
   // adivina mal se guarda mal.
+  campSel = null;
   abrirSheet('<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:10px">Contacto nuevo</div>'
     + '<input id="sh-nom" type="text" placeholder="Nombre">'
     + '<input id="sh-tel" type="tel" placeholder="Teléfono" style="margin-top:8px">'
     + '<input id="sh-mail" type="email" placeholder="Email (opcional)" style="margin-top:8px">'
+    + '<div style="font-weight:700;font-size:var(--fs-sm);margin:16px 0 2px">¿Llegó por un anuncio?</div>'
+    + '<div id="sh-camp" style="max-height:38vh;overflow-y:auto"></div>'
     + '<button class="bbtn" onclick="M.crearLead()">Crear contacto</button>');
+  pintarCampanas();
+  pedirCampanas().then(pintarCampanas);
 }
 async function crearLead(){
   var nom = ($('#sh-nom') || {}).value, tel = ($('#sh-tel') || {}).value, mail = ($('#sh-mail') || {}).value;
   nom = String(nom || '').trim(); tel = String(tel || '').trim(); mail = String(mail || '').trim();
   if (!nom) { chicharra('Ponle un nombre al contacto.', 'mal'); return; }
   if (!tel && !mail) { chicharra('Hace falta un teléfono o un email para poder contactarlo.', 'mal'); return; }
-  var cuerpo = { name: nom, phone: tel, email: mail, source: 'Móvil' };
+  if (!campSel) { chicharra('Dinos si llegó por un anuncio: la campaña, «no sé cuál» o «No vino de un anuncio».', 'mal'); return; }
+  var cuerpo = { name: nom, phone: tel, email: mail, source: 'Móvil', custom_fields: camposDeCampana() };
   // Al tablero que se está mirando: crearlo en el principal lo mandaría a un
   // tablero que quizá ni se usa —Certain trabaja en «Arriendo»— y parecería
   // que no se guardó.
@@ -3252,7 +3317,7 @@ function movilMontar(opciones){
     ponerModo: ponerModo,
     ponerQuien: ponerQuien,
     pulsoIr: pulsoIr,
-    guardarNota: guardarNota, guardarCampo: guardarCampo, crearLead: crearLead,
+    guardarNota: guardarNota, guardarCampo: guardarCampo, crearLead: crearLead, elegirCampana: elegirCampana,
     reintentarModulo: reintentarModulo,
     llamar: llamar, whatsapp: whatsapp,
     abrirMenu: abrirMenu, abrirAvisos: abrirAvisos, abrirPerfil: abrirPerfil,

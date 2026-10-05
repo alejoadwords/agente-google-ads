@@ -5138,6 +5138,8 @@ window.onload = async () => {
   }
   // Cargar recientes al iniciar
   setTimeout(function(){ loadRecentConversations(); }, 1000);
+  // Enlaces de los correos: «?ir=pauta-diagnostico» abre esa pantalla.
+  setTimeout(function(){ irDeLaUrl(); }, 1200);
   // Mostrar tour si es la primera vez
   setTimeout(function(){ if (tourShouldShow()) tourStart(); }, 1500);
   // Usuarios que ya hicieron el tour pero nunca conectaron una plataforma:
@@ -10541,7 +10543,12 @@ async function novCerrar() {
 // Destinos que puede pedir una novedad desde su botón de acción.
 function novIr(destino) {
   novCerrar();
-  setTimeout(() => {
+  setTimeout(() => irA(destino), 220);
+}
+
+// Ir a una sección por su nombre corto. Lo usan las novedades y los enlaces
+// de los correos («?ir=…»); estos no deben marcar ninguna novedad como vista.
+function irA(destino) {
     try {
       switch (destino) {
         case 'academia':      openAcademia(); break;
@@ -10555,6 +10562,11 @@ function novIr(destino) {
         case 'paginas':       navGo('marketing'); setTimeout(() => crmSetView('paginas'), 150); break;
         case 'pauta':         navGo('marketing'); setTimeout(() => crmSetView('pauta'), 150); break;
         case 'pauta-ventas':  navGo('marketing'); setTimeout(() => { pautaVista = 'ventas'; crmSetView('pauta'); }, 150); break;
+        case 'pauta-diagnostico': navGo('marketing'); setTimeout(() => { pautaVista = 'diagnostico'; crmSetView('pauta'); }, 150); break;
+        case 'pauta-reglas':  navGo('marketing'); setTimeout(() => { pautaVista = 'reglas'; crmSetView('pauta'); }, 150); break;
+        case 'pauta-busquedas': navGo('marketing'); setTimeout(() => { pautaVista = 'busquedas'; crmSetView('pauta'); }, 150); break;
+        case 'pauta-analista': navGo('marketing'); setTimeout(() => { pautaVista = 'analista'; crmSetView('pauta'); }, 150); break;
+        case 'pauta-reportes': navGo('marketing'); setTimeout(() => { pautaVista = 'reportes'; crmSetView('pauta'); }, 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'campanas':      navGo('marketing'); setTimeout(() => crmSetView('campaigns'), 150); break;
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
@@ -10567,7 +10579,6 @@ function novIr(destino) {
           else { console.warn('[novedades] destino desconocido:', destino); showToast('No pudimos abrir esa sección', 'error'); }
       }
     } catch (e) { console.warn('[novedades] destino no válido:', destino, e); }
-  }, 220);
 }
 
 // Abrir a mano las últimas novedades (⌘K → "Novedades")
@@ -18061,6 +18072,16 @@ async function crmLoadStages() {
   }
 }
 
+// Los correos (por ejemplo, las alertas de la pauta) enlazan a «?ir=<destino>»,
+// con los mismos destinos que las novedades. Se lee y se limpia al cargar.
+const _irPorUrl = (() => { try { return new URLSearchParams(location.search).get('ir'); } catch { return null; } })();
+function irDeLaUrl() {
+  if (!_irPorUrl) return;
+  try { window.history.replaceState({}, '', location.pathname + location.hash); } catch {}
+  // Solo nombres cortos: un «/ruta» en la URL no se sigue desde un enlace.
+  if (/^[a-z-]{2,40}$/.test(_irPorUrl)) irA(_irPorUrl);
+}
+
 // El correo del aviso enlaza a /crm?lead=<id>. Sin esto el enlace dejaría al
 // comercial en el tablero buscando a mano el lead del que le acaban de hablar.
 let _leadPorUrl = null;
@@ -21269,6 +21290,138 @@ function crmUpdateSidebarCount() {
   if (btn) btn.style.display = 'block';
 }
 
+// ── Campaña por la que llegó un lead creado a mano ──────────────────────────
+// Los leads que entran por WhatsApp o por llamada los crea una persona a mano,
+// y llegaban sin campaña: en Certain, ~100 al mes (04-10-2026). Sin eso no se
+// sabe qué pauta vende. Si la fuente es de pauta, la campaña se pide; si el
+// lead ya la trae por el clic del anuncio, no se toca a mano.
+let crmCampSel = null;      // {id, nombre, red} | {nose:true} | {no:true} | null
+let crmCampAuto = false;    // la puso el clic del anuncio
+let crmCampAntes = null;    // la «Atribución» con la que se abrió, al editar
+let _crmCampCache = { clave: null, at: 0, lista: null, error: false };
+
+function crmFuenteEsPauta(key) {
+  const k = String(key || '');
+  if (['meta_ads', 'google_ads', 'tiktok_ads'].includes(k)) return true;
+  return /(meta|facebook|instagram|google|tiktok|pauta|anuncio|\bads?\b)/i.test(k + ' ' + fuenteLabel(k));
+}
+// Con «Web» también se exige respuesta: en Certain casi todo lo que llega por
+// el WhatsApp de la página se crea con esa fuente (52 de 56 en septiembre de
+// 2026). Pero «Web» puede ser alguien sin anuncio, así que ahí se puede
+// contestar «No vino de un anuncio».
+function crmFuenteObligaCampana(key) {
+  return crmFuenteEsPauta(key) || String(key || '') === 'web' || /^web$/i.test(fuenteLabel(key));
+}
+function crmRedDeFuente(key) {
+  const t = (String(key || '') + ' ' + fuenteLabel(key)).toLowerCase();
+  if (/google/.test(t)) return 'google';
+  if (/meta|facebook|instagram/.test(t)) return 'meta';
+  return null;
+}
+
+async function crmCampCargar() {
+  const cliente = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  const clave = cliente || '_cuenta';
+  // Diez minutos de caché: abrir el formulario no puede pedirle cada vez las campañas a Google y a Meta.
+  if (_crmCampCache.clave === clave && _crmCampCache.lista && Date.now() - _crmCampCache.at < 600000) return;
+  _crmCampCache = { clave, at: Date.now(), lista: null, error: false };
+  const hasta = new Date(), desde = new Date(hasta.getTime() - 59 * 86400000);
+  const f = (d) => d.toISOString().slice(0, 10);
+  try {
+    const r = await fetchAuth('/api/pauta?desde=' + f(desde) + '&hasta=' + f(hasta) + (cliente ? '&client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    _crmCampCache.lista = (d.campanas || [])
+      .filter(c => c.id && (c.inversion > 0 || ['enabled', 'active'].includes(String(c.estado || '').toLowerCase())))
+      .sort((a, b) => (a.red === b.red ? b.inversion - a.inversion : a.red < b.red ? -1 : 1))
+      .map(c => ({ id: String(c.id), nombre: c.nombre, red: c.red }));
+  } catch (e) {
+    _crmCampCache.lista = [];
+    _crmCampCache.error = true;
+  }
+}
+
+function crmCampInit(lead) {
+  const cf = (lead && lead.custom_fields) || {};
+  crmCampAuto = !!((cf['Clic de anuncio'] && cf['ID de campaña']) || cf['ID de lead de Meta']);
+  crmCampAntes = cf['Atribución'] || null;
+  const red = /google/i.test(cf['Plataforma'] || '') ? 'google' : /meta/i.test(cf['Plataforma'] || '') ? 'meta' : null;
+  crmCampSel = cf['ID de campaña'] ? { id: String(cf['ID de campaña']), nombre: cf['Campaña'] || String(cf['ID de campaña']), red }
+    : crmCampAntes === 'Manual, campaña desconocida' ? { nose: true }
+    : crmCampAntes === 'Sin anuncio' ? { no: true } : null;
+  const sel = document.getElementById('crm-f-source');
+  if (sel && !sel._campEscucha) { sel.addEventListener('change', crmCampPintar); sel._campEscucha = true; }
+  crmCampPintar();
+  crmCampCargar().then(crmCampPintar);
+}
+
+function crmCampPintar() {
+  const btn = document.getElementById('crm-f-camp');
+  if (!btn) return;
+  const pauta = crmFuenteEsPauta(document.getElementById('crm-f-source')?.value);
+  const obliga = crmFuenteObligaCampana(document.getElementById('crm-f-source')?.value);
+  const lbl = document.getElementById('crm-f-camp-label');
+  if (lbl) lbl.innerHTML = obliga ? (pauta ? 'Campaña por la que llegó' : '¿Llegó por un anuncio?') + ' <span style="color:var(--danger)">*</span>'
+    : 'Campaña <span style="font-weight:400;color:var(--muted2)">(si llegó por un anuncio)</span>';
+  const s = crmCampSel;
+  document.getElementById('crm-f-camp-txt').textContent = s
+    ? (s.id ? s.nombre + (s.red ? ' · ' + (s.red === 'google' ? 'Google' : 'Meta') : '') : s.nose ? 'Vino de un anuncio, no sé cuál' : 'No vino de un anuncio')
+    : (pauta ? 'Elige la campaña' : obliga ? 'Elige una opción' : 'Ninguna');
+  btn.disabled = crmCampAuto;
+  btn.classList.toggle('activo', !!(s && s.id));
+  const nota = document.getElementById('crm-f-camp-nota');
+  const c = _crmCampCache;
+  const texto = crmCampAuto ? 'La puso el clic del anuncio: no se cambia a mano.'
+    : c.lista === null ? 'Cargando tus campañas…'
+    : c.error ? 'No pudimos leer tus campañas ahora. Puedes elegir «Vino de un anuncio, no sé cuál».'
+    : !c.lista.length ? 'No hay campañas con gasto en los últimos 60 días. Conéctalas en Plataformas de pauta.'
+    : '';
+  if (nota) { nota.textContent = texto; nota.style.display = texto ? 'block' : 'none'; }
+}
+
+function crmCampDd(btn) {
+  if (crmCampAuto) return;
+  const fuente = document.getElementById('crm-f-source')?.value;
+  const pauta = crmFuenteEsPauta(fuente), red = crmRedDeFuente(fuente);
+  // Si la fuente dice la red, solo sus campañas; si no, todas.
+  const camps = (_crmCampCache.lista || []).filter(c => !red || c.red === red);
+  const ops = [{ id: '__nose', name: 'Vino de un anuncio, no sé cuál' }];
+  if (!pauta) ops.push({ id: '__no', name: 'No vino de un anuncio' });
+  if (camps.length) ops.push({ sep: true }, ...camps.map(c => ({ id: c.id, name: c.nombre + ' · ' + (c.red === 'google' ? 'Google' : 'Meta') })));
+  const s = crmCampSel;
+  const valor = s ? (s.id || (s.nose ? '__nose' : '__no')) : '';
+  ddAbrir(btn, ops, valor, id => {
+    if (id === '__nose') crmCampSel = { nose: true };
+    else if (id === '__no') crmCampSel = { no: true };
+    else { const c = camps.find(x => x.id === id); crmCampSel = c ? { id: c.id, nombre: c.nombre, red: c.red } : null; }
+    crmCampPintar();
+  });
+}
+
+/** Lo que se guarda en los campos del lead. {} = nada que cambiar. */
+function crmCampCampos() {
+  if (crmCampAuto) return {};
+  const s = crmCampSel;
+  const fuente = document.getElementById('crm-f-source')?.value;
+  if (s && s.id) {
+    return { 'Campaña': s.nombre, 'ID de campaña': s.id, 'Plataforma': s.red === 'google' ? 'Google' : 'Meta', 'Atribución': 'Elegida a mano' };
+  }
+  if (s && s.nose) {
+    const red = crmRedDeFuente(fuente);
+    return { 'Atribución': 'Manual, campaña desconocida', 'Campaña': null, 'ID de campaña': null, ...(red ? { 'Plataforma': red === 'google' ? 'Google' : 'Meta' } : {}) };
+  }
+  // «No vino de un anuncio»: queda dicho, para no volver a preguntarlo en cada
+  // edición. Si antes se había puesto una campaña a mano, se borra; lo que vino
+  // de otra fuente (webhook, importación) no se toca.
+  if (s && s.no) {
+    if (/^(Elegida a mano|Manual, campaña desconocida)$/.test(crmCampAntes || '')) {
+      return { 'Atribución': 'Sin anuncio', 'Campaña': null, 'ID de campaña': null, 'Plataforma': null };
+    }
+    return crmCampAntes === 'Sin anuncio' ? {} : { 'Atribución': 'Sin anuncio' };
+  }
+  return {};
+}
+
 // ── Modal crear/editar ────────────────────────────────────────────────────────
 function crmOpenModal(defaultStage) {
   fuenteAjustarPermiso();   // el enlace «Administrar» solo para quien puede
@@ -21280,6 +21433,7 @@ function crmOpenModal(defaultStage) {
   document.getElementById('crm-f-company').value = '';
   document.getElementById('crm-f-notes').value = '';
   document.getElementById('crm-f-source').value = 'manual';
+  crmCampInit(null);
   const valModalEl = document.getElementById('crm-f-value');
   if (valModalEl) valModalEl.value = '';
   const fcModalEl = document.getElementById('crm-f-close-date');
@@ -21650,6 +21804,21 @@ async function crmSaveLead() {
     aviso.style.display = texto ? 'block' : 'none';
   };
   decir('');
+  // Fuente de pauta (o Web) sin respuesta: no se guarda así, o se pierde la atribución.
+  const fuenteF = document.getElementById('crm-f-source').value;
+  if (crmFuenteObligaCampana(fuenteF) && !crmCampAuto && !crmCampSel) {
+    decir(crmFuenteEsPauta(fuenteF)
+      ? 'Elige la campaña por la que llegó este lead. Si no sabes cuál, elige «Vino de un anuncio, no sé cuál».'
+      : '¿Este lead llegó por un anuncio? Elige la campaña, «Vino de un anuncio, no sé cuál» o «No vino de un anuncio».');
+    document.getElementById('crm-f-camp')?.focus();
+    return;
+  }
+  // Con fuente de pauta, «No vino de un anuncio» no es una respuesta válida.
+  if (crmFuenteEsPauta(fuenteF) && !crmCampAuto && crmCampSel && crmCampSel.no) {
+    decir('Con fuente ' + fuenteLabel(fuenteF) + ' el lead vino de un anuncio: elige la campaña o «Vino de un anuncio, no sé cuál».');
+    document.getElementById('crm-f-camp')?.focus();
+    return;
+  }
   btn.disabled = true;
   btn.textContent = 'Guardando...';
   const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
@@ -21669,6 +21838,13 @@ async function crmSaveLead() {
     expected_close_date: (document.getElementById('crm-f-close-date') || {}).value || null,
     tags: document.getElementById('crm-f-tags') && document.getElementById('crm-f-tags').value.trim() ? document.getElementById('crm-f-tags').value.split(',').map(t => t.trim()).filter(Boolean) : null,
   };
+  // La campaña: al crear va en los campos; al editar se FUSIONA en el servidor,
+  // para no borrar el clic del anuncio ni los demás campos del lead.
+  const campos = crmCampCampos();
+  if (Object.keys(campos).length) {
+    if (crmEditingId) payload.custom_fields_merge = campos;
+    else payload.custom_fields = Object.fromEntries(Object.entries(campos).filter(([, v]) => v !== null));
+  }
   // La etapa de antes, para saber si este guardado es el que cierra el negocio.
   const etapaAntes = crmEditingId
     ? (crmLeads.find(l => l.id === crmEditingId) || {}).stage
@@ -22626,6 +22802,7 @@ function crmEditCurrentLead() {
   document.getElementById('crm-f-company').value = lead.company || '';
   document.getElementById('crm-f-notes').value = lead.notes || '';
   document.getElementById('crm-f-source').value = lead.source || 'manual';
+  crmCampInit(lead);
   const valEditEl = document.getElementById('crm-f-value');
   if (valEditEl) valEditEl.value = lead.value || '';
   const fcEditEl = document.getElementById('crm-f-close-date');
@@ -25807,6 +25984,7 @@ function crmCreateLeadFromConversation(conv) {
   document.getElementById('crm-f-company').value = '';
   document.getElementById('crm-f-notes').value = 'Lead capturado desde ' + (conv.channel || 'chat') + '.';
   document.getElementById('crm-f-source').value = conv.channel === 'whatsapp' ? 'web' : (conv.channel === 'meta_ads' ? 'meta_ads' : 'web');
+  crmCampInit(null);
   const valCLEl = document.getElementById('crm-f-value');
   if (valCLEl) valCLEl.value = '';
   const fcCLEl = document.getElementById('crm-f-close-date');
@@ -37682,10 +37860,17 @@ async function plnGuardar(datos, id) {
 // Confirmación con nuestra propia cara. El confirm() del navegador rompe el
 // diseño —ya lo sufrimos con las respuestas rápidas— y encima no deja explicar
 // las consecuencias, que es justo lo que hace falta antes de borrar algo.
-function confirmarAgua({ titulo, texto, confirmar, peligro, onOk }) {
+function confirmarAgua({ titulo, texto, confirmar, peligro, onOk, onNo }) {
   const ov = document.createElement('div');
   ov.className = 'auto-modal-overlay';
-  const cerrar = () => ov.remove();
+  let resuelto = false;
+  const tecla = e => { if (e.key === 'Escape') cerrar(); };
+  const cerrar = () => {
+    document.removeEventListener('keydown', tecla, true);
+    ov.remove();
+    if (!resuelto && onNo) { resuelto = true; onNo(); }
+  };
+  document.addEventListener('keydown', tecla, true);
   ov.addEventListener('mousedown', e => { if (e.target === ov) cerrar(); });
   ov.innerHTML = '<div class="auto-modal" style="max-width:420px">' +
     '<div class="auto-modal-head">' +
@@ -37698,8 +37883,16 @@ function confirmarAgua({ titulo, texto, confirmar, peligro, onOk }) {
       '<button class="' + (peligro ? 'btn-dgr' : 'btn-pri') + ' sm" data-ok>' + esc(confirmar || 'Confirmar') + '</button>' +
     '</div></div>';
   ov.querySelectorAll('[data-x]').forEach(b => b.onclick = cerrar);
-  ov.querySelector('[data-ok]').onclick = async () => { cerrar(); await onOk(); };
+  ov.querySelector('[data-ok]').onclick = async () => { resuelto = true; cerrar(); await onOk(); };
   document.body.appendChild(ov);
+  ov.querySelector('[data-ok]').focus();
+}
+
+// La misma, para esperarla: `if (!await confirmarAguaP({...})) return;`.
+// `texto` va en texto plano (se escapa aquí); un salto de línea doble es un párrafo.
+function confirmarAguaP({ titulo, texto, confirmar, peligro }) {
+  const html = String(texto || '').split('\n\n').map(p => esc(p).replace(/\n/g, '<br>')).join('<br><br>');
+  return new Promise(res => confirmarAgua({ titulo, texto: html, confirmar, peligro, onOk: () => res(true), onNo: () => res(false) }));
 }
 
 // ── Editor de plantilla (formato simple) ──────────────────────────────────────
@@ -39603,7 +39796,7 @@ function lpCerrarEditor() {
 // nunca ve los tokens de Google ni de Meta.
 
 let pautaDatos = null;
-let pautaVista = 'campanas';       // campanas | diagnostico | conexiones | cartera | ventas
+let pautaVista = 'campanas';       // campanas | diagnostico | analista | reglas | busquedas | reportes | conexiones | cartera | ventas
 let pautaDias = 30;
 let pautaCargando = false;
 
@@ -39655,6 +39848,10 @@ function pautaRender() {
       '<div class="pauta-tabs">' +
         '<button class="pauta-tab' + (pautaVista === 'campanas' ? ' active' : '') + '" onclick="pautaIr(\'campanas\')">Campañas</button>' +
         '<button class="pauta-tab' + (pautaVista === 'diagnostico' ? ' active' : '') + '" onclick="pautaIr(\'diagnostico\')">Diagnóstico</button>' +
+        '<button class="pauta-tab' + (pautaVista === 'analista' ? ' active' : '') + '" onclick="pautaIr(\'analista\')">Analista IA</button>' +
+        '<button class="pauta-tab' + (pautaVista === 'reglas' ? ' active' : '') + '" onclick="pautaIr(\'reglas\')">Reglas</button>' +
+        '<button class="pauta-tab' + (pautaVista === 'busquedas' ? ' active' : '') + '" onclick="pautaIr(\'busquedas\')">Búsquedas</button>' +
+        '<button class="pauta-tab' + (pautaVista === 'reportes' ? ' active' : '') + '" onclick="pautaIr(\'reportes\')">Reportes</button>' +
         (hayCartera ? '<button class="pauta-tab' + (pautaVista === 'cartera' ? ' active' : '') + '" onclick="pautaIr(\'cartera\')">Cartera</button>' : '') +
         '<button class="pauta-tab' + (pautaVista === 'conexiones' ? ' active' : '') + '" onclick="pautaIr(\'conexiones\')">Conexiones</button>' +
         '<button class="pauta-tab' + (pautaVista === 'ventas' ? ' active' : '') + '" onclick="pautaIr(\'ventas\')">Ventas a la pauta</button>' +
@@ -39693,6 +39890,10 @@ async function pautaCargar() {
   // Ventas a la pauta no depende del período ni de las campañas: tiene su
   // propia carga (api/conversiones.js).
   if (pautaVista === 'ventas') { ventasCargar(); return; }
+  if (pautaVista === 'reglas') { reglasCargar(); return; }
+  if (pautaVista === 'busquedas') { busqCargar(); return; }
+  if (pautaVista === 'analista') { analistaCargar(); return; }
+  if (pautaVista === 'reportes') { rptCargar(); return; }
   pautaCargando = true;
   c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + (pautaVista === 'diagnostico' ? ' Revisando tus campañas…' : ' Leyendo tus campañas…') + '</div>';
 
@@ -39761,9 +39962,22 @@ function pautaPintarDiagnostico(d) {
   const grupo = (titulo, lista) => lista.length
     ? '<div class="pauta-diag-grupo">' + titulo + '</div><div class="pauta-diag-lista">' + lista.map(tarjeta).join('') + '</div>' : '';
 
+  // Alertas de los últimos días: lo que cambió de un día para otro (llegan
+  // también por correo cada mañana). null = no se pudieron leer, y se dice.
+  const al = d.alertas;
+  const bloqueAlertas = al === null
+    ? '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) + '<div style="flex:1">No se pudieron leer las alertas de los últimos días.</div></div>'
+    : (al && al.length
+      ? '<div class="pauta-diag-grupo">Alertas de los últimos días · también te llegan por correo cada mañana</div><div class="pauta-diag-lista">' +
+        al.map(a => tarjeta({ tipo: a.gravedad === 'alta' ? 'error' : 'oportunidad', red: a.red,
+          titulo: a.titulo, detalle: a.detalle + ' · ' + new Date(a.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) })).join('') +
+        '</div>'
+      : '');
+
   c.innerHTML =
     caidas.map(x => '<div class="pauta-aviso pauta-aviso-mal">' + icn('alert', 16) +
       '<div style="flex:1"><b>No se pudo revisar ' + esc(x.nombre || 'una cuenta') + '.</b> ' + esc(x.error) + '</div></div>').join('') +
+    bloqueAlertas +
     '<div class="pauta-diag-res">' +
       '<div class="pauta-diag-cifra mal"><b>' + errores.length + '</b><span>' + (errores.length === 1 ? 'error' : 'errores') + '</span></div>' +
       '<div class="pauta-diag-cifra ojo"><b>' + oport.length + '</b><span>' + (oport.length === 1 ? 'oportunidad' : 'oportunidades') + '</span></div>' +
@@ -39792,8 +40006,8 @@ function pautaBotonPausar(x, d) {
 }
 
 async function pautaPausar(p, btn) {
-  if (!confirm('¿Pausar «' + (p.nombre || 'esta campaña') + '»?\n\nDeja de gastar desde ya. La puedes volver a activar cuando quieras desde ' +
-    'el administrador de anuncios.')) return;
+  if (!await confirmarAguaP({ titulo: '¿Pausar esta campaña?', confirmar: 'Pausar', peligro: true,
+    texto: '«' + (p.nombre || 'Esta campaña') + '» deja de gastar desde ya.\n\nLa puedes volver a activar cuando quieras desde el administrador de anuncios.' })) return;
   const textoBtn = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Pausando…'; }
   try {
@@ -40056,6 +40270,1022 @@ function pautaPintarConexiones(d) {
   c.innerHTML = html;
 }
 
+// ── Reportes programados para clientes ──────────────────────────────────────
+// Cada semana, quincena o mes, un reporte con la pauta y el CRM sale solo a
+// los correos del cliente, con la firma, el logo y el color de la agencia.
+// Servidor: api/reportes.js, api/_reportes.js y api/cron-reportes.js; la
+// página pública es /r/<token> (public/reporte.html).
+let rptDatos = null;
+let rptForm = null;
+// El reporte armado que se está revisando: { reporte:{id,token,resumen,etiqueta}, programaId, origen:'form'|'programa' }.
+// Nada le llega al cliente sin pasar por aquí: desde la app solo se envía
+// una versión ya vista.
+let rptRevision = null;
+
+const RPT_FRECUENCIA = [
+  { id: 'semanal', name: 'Semanal — cada lunes, la semana anterior' },
+  { id: 'quincenal', name: 'Quincenal — los días 1 y 16' },
+  { id: 'mensual', name: 'Mensual — el día 1, el mes anterior' },
+];
+const RPT_IA = [{ id: 'si', name: 'Sí, con un resumen escrito por IA' }, { id: 'no', name: 'No, solo las cifras' }];
+const RPT_REVISAR = [
+  { id: 'si', name: 'Revisarlo yo antes de que salga (recomendado)' },
+  { id: 'no', name: 'Enviarlo solo, sin revisión' },
+];
+const RPT_ESTADO = { enviado: ['Enviado', 'pauta-pill-ok'], fallido: ['No salió', 'pauta-pill-mal'], por_revisar: ['Por revisar', 'pauta-pill-ojo'] };
+
+async function rptCargar() {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo tus reportes…</div>';
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/reportes' + (cliente ? '?client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok || d.error) { pautaError(d.error || 'No pudimos leer tus reportes.'); return; }
+    rptDatos = d;
+    rptPintar();
+  } catch (e) {
+    pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+function rptFecha(iso) {
+  return iso ? pautaFecha(String(iso).slice(0, 10)) : '—';
+}
+
+function rptPintar() {
+  const c = document.getElementById('pauta-cuerpo');
+  const d = rptDatos;
+  if (!c || !d) return;
+  const puede = !!d.puede_editar;
+  if (d.tope === 0 && !d.programas.length) {
+    c.innerHTML = emptyAgua('mail', 'Reportes automáticos para tus clientes',
+      'Cada semana, quincena o mes, un reporte con la pauta y los leads del CRM le llega solo a tu cliente, con tu marca. Está en los planes Pro y Agencia.', '');
+    return;
+  }
+  let html = '<div class="pauta-aviso">' + icn('mail', 15) + '<div style="flex:1">' +
+    '<b>Un reporte que se arma solo y le llega a tu cliente con tu marca.</b> Inversión, leads que llegaron al CRM, ventas y lo que hiciste en el período, ' +
+    'comparado con el período anterior. Lo ves y lo ajustas antes de que salga; si el cliente responde, te llega a ti.' +
+    (crmAmbitoCliente() ? ' Estos son los reportes de este cliente.' : '') + '</div>' +
+    (puede && !rptForm && (d.tope == null || d.programas.length < d.tope) ? '<button class="btn-pri" onclick="rptNuevo()">' + icn('plus', 13) + ' Nuevo reporte</button>' : '') +
+  '</div>';
+  if (!puede) {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) +
+      '<div style="flex:1">Los reportes los programa el dueño de la cuenta, un administrador o Mercadeo. Aquí puedes ver qué se envió.</div></div>';
+  }
+  if (rptForm) html += rptFormulario();
+  if (rptRevision && rptRevision.origen === 'form') html += rptPanel();
+
+  if (!d.programas.length && !rptForm) {
+    html += '<div class="pauta-vacio">' + (puede ? 'Todavía no hay reportes programados. Crea el primero: puedes ver cómo queda antes de que salga.' : 'Todavía no hay reportes programados.') + '</div>';
+  }
+  const pendientes = new Map((d.enviados || []).filter(e => e.estado === 'por_revisar').map(e => [e.programa_id, e]));
+  html += '<div class="pauta-diag-lista">' + d.programas.map(p => {
+    const frec = { semanal: 'Semanal', quincenal: 'Quincenal', mensual: 'Mensual' }[p.frecuencia];
+    const pend = pendientes.get(p.id);
+    return '<div class="pauta-diag' + (p.activo ? ' oportunidad' : '') + '" style="' + (p.activo ? '' : 'opacity:.65') + '">' +
+      '<div class="pauta-diag-ico">' + icn('mail', 16) + '</div>' +
+      '<div class="pauta-diag-cuerpo">' +
+        '<div class="pauta-diag-tit"><span>' + esc(p.nombre) + '</span>' + (p.activo ? '' : ' <span class="pauta-pill pauta-pill-off">Apagado</span>') +
+          (pend ? ' <span class="pauta-pill pauta-pill-ojo">Listo para revisar</span>' : '') + '</div>' +
+        '<div class="pauta-diag-det">' + esc(frec) + ' · a ' + esc((p.destinatarios || []).join(', ')) +
+          ' · ' + (p.revisar_antes !== false ? 'lo revisas antes de que salga' : 'sale solo') +
+          '<br><span style="color:var(--muted2)">' + (p.activo ? 'Próximo envío: ' + esc(rptFecha(p.proximo_envio)) : 'No se enviará mientras esté apagado') +
+          (p.ultimo_envio ? ' · Último: ' + esc(rptFecha(p.ultimo_envio)) : '') + (p.firma ? ' · Firma: ' + esc(p.firma) : '') + '</span></div>' +
+      '</div>' +
+      '<div class="pauta-diag-acc" style="display:flex;gap:6px;flex-wrap:wrap">' +
+        (pend
+          ? '<button class="btn-pri sm" onclick="rptAbrirPendiente(\'' + esc(p.id) + '\')">Revisar y enviar</button>'
+          : '<button class="' + (puede ? 'btn-ghost' : 'btn-ghost') + ' sm" onclick="rptRevisarPrograma(\'' + esc(p.id) + '\', this)">' + (puede ? 'Revisar y enviar' : 'Ver cómo queda') + '</button>') +
+        (puede ? '<button class="btn-ghost sm" onclick="rptEditar(\'' + esc(p.id) + '\')">Editar</button>' +
+          '<button class="btn-ghost sm" onclick="rptActivar(\'' + esc(p.id) + '\', ' + !p.activo + ', this)">' + (p.activo ? 'Apagar' : 'Encender') + '</button>' +
+          '<button class="btn-ghost sm" onclick="rptBorrar(\'' + esc(p.id) + '\', this)">Borrar</button>' : '') +
+      '</div></div>' +
+      (rptRevision && rptRevision.origen === 'programa' && rptRevision.programaId === p.id ? rptPanel() : '');
+  }).join('') + '</div>';
+
+  const env = d.enviados || [];
+  if (env.length) {
+    const nombres = new Map(d.programas.map(p => [p.id, p.nombre]));
+    html += '<div class="pauta-pasos-t" style="margin:22px 0 8px">Reportes enviados</div>' +
+      '<div class="pauta-tabla-caja"><table class="pauta-tabla"><thead><tr>' +
+      '<th class="pauta-th">Cuándo</th><th class="pauta-th">Reporte</th><th class="pauta-th">Período</th><th class="pauta-th">Estado</th>' +
+      '<th class="pauta-th num">Vistas</th><th class="pauta-th"></th></tr></thead><tbody>' +
+      env.map(e => {
+        const st = RPT_ESTADO[e.estado] || [e.estado, 'pauta-pill-off'];
+        return '<tr>' +
+          '<td class="pauta-td" style="white-space:nowrap">' + esc(new Date(e.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })) + '</td>' +
+          '<td class="pauta-td">' + esc(nombres.get(e.programa_id) || 'Reporte borrado') +
+            (e.enviado_a?.length ? '<div style="font-size:11px;color:var(--muted2)">' + esc(e.enviado_a.join(', ')) + '</div>' : '') + '</td>' +
+          '<td class="pauta-td" style="white-space:nowrap">' + esc(rptFecha(e.desde)) + ' al ' + esc(rptFecha(e.hasta)) + '</td>' +
+          '<td class="pauta-td"><span class="pauta-pill ' + st[1] + '">' + esc(st[0]) + '</span>' +
+            (e.error ? '<div style="font-size:11px;color:var(--muted2);max-width:240px">' + esc(e.error) + '</div>' : '') + '</td>' +
+          '<td class="pauta-td num">' + pautaNum(e.vistas) + '</td>' +
+          '<td class="pauta-td"><a class="pauta-link" href="/r/' + esc(e.token) + '" target="_blank" rel="noopener">Abrir</a></td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  c.innerHTML = html;
+}
+
+function rptDdBoton(campo, lista, valor) {
+  return '<button type="button" class="dd-btn" style="max-width:none;width:100%;justify-content:space-between" onclick="rptDd(this, \'' + campo + '\')">' +
+    '<span class="dd-btn-txt">' + esc(reglasNombreDe(lista, valor) || 'Elegir') + '</span>' +
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>';
+}
+
+function rptDd(btn, campo) {
+  const lista = campo === 'frecuencia' ? RPT_FRECUENCIA : campo === 'revisar_antes' ? RPT_REVISAR : RPT_IA;
+  const valor = campo === 'frecuencia' ? rptForm.frecuencia : ((campo === 'revisar_antes' ? rptForm.revisar_antes !== false : rptForm.incluir_ia) ? 'si' : 'no');
+  ddAbrir(btn, lista, valor, id => {
+    if (campo === 'frecuencia') rptForm.frecuencia = id; else rptForm[campo] = id === 'si';
+    rptPintar();
+  });
+}
+
+// ── Revisión: el reporte armado, dentro de la app ──
+function rptPanel() {
+  const r = rptRevision.reporte;
+  const deForm = rptRevision.origen === 'form';
+  const prog = deForm ? rptForm : (rptDatos?.programas || []).find(x => x.id === rptRevision.programaId);
+  const para = (prog?.destinatarios || []).join(', ');
+  return '<div class="pauta-conx viva" id="rp-panel" style="margin:4px 0 14px">' +
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">' +
+      '<div class="pauta-conx-t" style="flex:1">Vista previa · ' + esc(r.etiqueta || '') + '</div>' +
+      '<a class="pauta-link" href="/r/' + esc(r.token) + '?previa=1" target="_blank" rel="noopener">Abrir en otra pestaña</a>' +
+    '</div>' +
+    '<div style="font-size:var(--fs-xs);color:var(--muted);font-weight:600;margin-bottom:4px">Resumen para el cliente <span style="font-weight:400;color:var(--muted2)">— edítalo si quieres; vacío, el reporte sale sin resumen</span></div>' +
+    '<textarea class="auto-input" id="rp-resumen" rows="5" style="resize:vertical;line-height:1.5">' + esc(r.resumen || '') + '</textarea>' +
+    '<div style="margin:6px 0 12px"><button class="btn-ghost sm" onclick="rptGuardarResumen(this)">Guardar resumen y actualizar la vista</button></div>' +
+    '<iframe id="rp-marco" src="/r/' + esc(r.token) + '?previa=1" title="Vista previa del reporte" style="width:100%;height:760px;border:1px solid var(--border);border-radius:12px;background:var(--bg)"></iframe>' +
+    (deForm ? '<div style="margin-top:8px;font-size:12px;color:var(--muted2)">Si cambias algo del formulario (firma, color, logo), vuelve a generar la vista previa para verlo.</div>' : '') +
+    '<div class="pauta-conx-btns" style="margin-top:12px">' +
+      (rptDatos?.puede_editar && para
+        ? '<button class="btn-pri" id="rp-enviar" onclick="rptEnviarRevision(this)">' + (deForm ? 'Programar y enviar esta versión' : 'Enviar esta versión') + ' a ' + esc(para) + '</button>' : '') +
+      (deForm && rptDatos?.puede_editar ? '<button class="btn-ghost" onclick="rptGuardar()">Solo programar</button>' : '') +
+      (!deForm ? '<button class="btn-ghost" onclick="rptRevisarPrograma(\'' + esc(rptRevision.programaId) + '\', this, true)">Volver a generar</button>' : '') +
+      '<button class="btn-ghost" onclick="rptRevision=null;rptPintar()">Cerrar</button>' +
+    '</div></div>';
+}
+
+async function rptPreviaForm(btn) {
+  const err = document.getElementById('rp-err');
+  if (err) err.style.display = 'none';
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Armando el reporte…'; }
+  try {
+    const d = await rptPost({ accion: 'vista_previa', programa: { ...rptForm, client_id: crmAmbitoCliente() || null } });
+    rptRevision = { reporte: d.reporte, programaId: rptForm.id || null, origen: 'form' };
+    rptPintar();
+    setTimeout(() => document.getElementById('rp-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  } catch (e) {
+    if (err) { err.textContent = e.message; err.style.display = 'block'; } else showToast(e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+async function rptRevisarPrograma(id, btn, regenerar) {
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Armando el reporte…'; }
+  try {
+    const d = await rptPost({ accion: 'vista_previa', id });
+    rptRevision = { reporte: d.reporte, programaId: id, origen: 'programa' };
+    rptPintar();
+    setTimeout(() => document.getElementById('rp-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  } catch (e) {
+    showToast('No se pudo armar el reporte: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+// El que dejó armado el envío programado: se revisa ESE, sin volver a generarlo.
+function rptAbrirPendiente(id) {
+  const e = (rptDatos?.enviados || []).find(x => x.programa_id === id && x.estado === 'por_revisar');
+  if (!e) return;
+  rptRevision = { reporte: { id: e.id, token: e.token, resumen: e.resumen, etiqueta: rptFecha(e.desde) + ' al ' + rptFecha(e.hasta) }, programaId: id, origen: 'programa' };
+  rptPintar();
+  setTimeout(() => document.getElementById('rp-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+}
+
+async function rptGuardarResumen(btn) {
+  const t = document.getElementById('rp-resumen')?.value ?? '';
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const d = await rptPost({ accion: 'editar_resumen', reporte_id: rptRevision.reporte.id, resumen: t });
+    rptRevision.reporte.resumen = d.resumen;
+    const m = document.getElementById('rp-marco');
+    if (m) m.src = m.src;
+    showToast('Resumen guardado', 'success');
+  } catch (e) {
+    showToast('No se pudo guardar el resumen: ' + e.message, 'error');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = texto; }
+}
+
+async function rptEnviarRevision(btn) {
+  const deForm = rptRevision.origen === 'form';
+  const prog = deForm ? rptForm : (rptDatos?.programas || []).find(x => x.id === rptRevision.programaId);
+  const para = (prog?.destinatarios || []).join(', ');
+  if (!await confirmarAguaP({ titulo: '¿Enviar esta versión?', confirmar: 'Enviar',
+    texto: 'Le llega ahora a ' + para + ', tal como la ves.' + (deForm ? '\n\nAdemás queda programado: los siguientes salen según la frecuencia que elegiste.' : '') })) return;
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    // Si el resumen cambió y no se guardó, se guarda antes: se envía lo que se ve.
+    const t = document.getElementById('rp-resumen')?.value ?? '';
+    if (t.trim() !== String(rptRevision.reporte.resumen || '').trim()) {
+      await rptPost({ accion: 'editar_resumen', reporte_id: rptRevision.reporte.id, resumen: t });
+    }
+    let programaId = rptRevision.programaId;
+    if (deForm) {
+      const g = await rptPost({ accion: 'guardar', programa: { ...rptForm, client_id: crmAmbitoCliente() || null } });
+      programaId = g.programa?.id;
+    }
+    await rptPost({ accion: 'enviar_reporte', reporte_id: rptRevision.reporte.id, programa_id: programaId });
+    showToast('Reporte enviado a ' + para, 'success');
+    rptRevision = null; rptForm = null;
+    rptCargar();
+  } catch (e) {
+    showToast('No se pudo enviar: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+function rptFormulario() {
+  const f = rptForm;
+  const etq = (t, campo, ayuda) => '<label style="display:flex;flex-direction:column;gap:4px;font-size:var(--fs-xs);color:var(--muted);font-weight:600">' + t + campo +
+    (ayuda ? '<span style="font-weight:400;color:var(--muted2)">' + ayuda + '</span>' : '') + '</label>';
+  const colorOk = /^#[0-9a-f]{6}$/i.test(f.color || '');
+  return '<div class="pauta-conx viva" style="margin-bottom:14px">' +
+    '<div class="pauta-conx-t" style="margin-bottom:12px">' + (f.id ? 'Editar reporte' : 'Nuevo reporte') + '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">' +
+      etq('Nombre (normalmente, el del cliente)', '<input class="auto-input" id="rp-nombre" maxlength="80" value="' + esc(f.nombre || '') + '" oninput="rptForm.nombre=this.value">') +
+      etq('Cada cuánto', rptDdBoton('frecuencia', RPT_FRECUENCIA, f.frecuencia)) +
+      etq('Para', '<input class="auto-input" id="rp-para" placeholder="cliente@empresa.com, otro@empresa.com" value="' + esc((f.destinatarios || []).join(', ')) + '" oninput="rptForm.destinatarios=this.value.split(/[\\s,;]+/).filter(Boolean)">', 'Hasta 5 correos, separados por comas.') +
+      etq('Firma', '<input class="auto-input" id="rp-firma" maxlength="60" placeholder="El nombre de tu agencia" value="' + esc(f.firma || '') + '" oninput="rptForm.firma=this.value">', 'Así aparece quién lo envía.') +
+      etq('Logo (opcional)', '<input class="auto-input" id="rp-logo" placeholder="https://tuagencia.com/logo.png" value="' + esc(f.logo_url || '') + '" oninput="rptForm.logo_url=this.value">', 'Un enlace https a la imagen. Sin logo, va tu firma.') +
+      etq('Color (opcional)', '<div style="display:flex;gap:8px;align-items:center"><span id="rp-muestra" style="width:34px;height:34px;flex:none;border-radius:8px;border:1px solid var(--border);background:' + (colorOk ? esc(f.color) : 'var(--bg)') + '"></span>' +
+        '<input class="auto-input" id="rp-color" maxlength="7" placeholder="#1E2BCC" value="' + esc(f.color || '') + '" oninput="rptForm.color=this.value;rptMuestra(this.value)"></div>') +
+      etq('Resumen', rptDdBoton('incluir_ia', RPT_IA, f.incluir_ia ? 'si' : 'no')) +
+      etq('Antes de cada envío', rptDdBoton('revisar_antes', RPT_REVISAR, f.revisar_antes !== false ? 'si' : 'no'),
+        f.revisar_antes !== false ? 'El día del envío te avisamos por correo y sale cuando lo apruebes.' : 'Sale a las 7:00 sin que lo veas.') +
+    '</div>' +
+    '<div id="rp-err" style="display:none;color:var(--danger);font-size:var(--fs-sm);margin-top:10px"></div>' +
+    '<div class="pauta-conx-btns" style="margin-top:14px">' +
+      '<button class="btn-pri" id="rp-previa" onclick="rptPreviaForm(this)">' + (rptRevision?.origen === 'form' ? 'Volver a generar la vista previa' : 'Generar vista previa') + '</button>' +
+      '<button class="btn-ghost" id="rp-guardar" onclick="rptGuardar()">' + (f.id ? 'Guardar cambios' : 'Programar sin ver') + '</button>' +
+      '<button class="btn-ghost" onclick="rptForm=null;rptRevision=null;rptPintar()">Cancelar</button>' +
+    '</div></div>';
+}
+
+// La muestra del color se pinta a mano: repintar todo el formulario por cada
+// tecla le quitaría el foco al campo.
+function rptMuestra(v) {
+  const m = document.getElementById('rp-muestra');
+  if (m) m.style.background = /^#[0-9a-f]{6}$/i.test(v) ? v : 'var(--bg)';
+}
+
+function rptNuevo() {
+  const s = rptDatos?.sugerencias || {};
+  rptForm = { nombre: s.nombre || '', frecuencia: 'mensual', destinatarios: s.destinatario ? [s.destinatario] : [], firma: s.firma || '', logo_url: '', color: '', incluir_ia: true, revisar_antes: true };
+  rptRevision = null;
+  rptPintar();
+  setTimeout(() => document.getElementById(s.nombre ? 'rp-para' : 'rp-nombre')?.focus(), 30);
+}
+
+function rptEditar(id) {
+  const p = (rptDatos?.programas || []).find(x => x.id === id);
+  if (!p) return;
+  rptForm = { ...p };
+  rptPintar();
+}
+
+async function rptPost(cuerpo) {
+  const r = await fetchAuth('/api/reportes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+  // Vista previa y envío llegan en streaming: el error viene en el cuerpo aunque el estado sea 200.
+  const d = await leerRespuesta(r);
+  if (!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+
+async function rptGuardar() {
+  const btn = document.getElementById('rp-guardar');
+  const err = document.getElementById('rp-err');
+  if (err) err.style.display = 'none';
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const d = await rptPost({ accion: 'guardar', programa: { ...rptForm, client_id: crmAmbitoCliente() || null } });
+    const revisa = d.programa?.revisar_antes !== false;
+    showToast(rptForm.id ? 'Reporte actualizado' : 'Reporte programado. El ' + rptFecha(d.programa?.proximo_envio) +
+      (revisa ? ' te avisamos para que lo revises antes de que salga.' : ' sale solo.'), 'success');
+    rptForm = null; rptRevision = null;
+    rptCargar();
+  } catch (e) {
+    if (err) { err.textContent = e.message; err.style.display = 'block'; } else showToast(e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+async function rptActivar(id, activo, btn) {
+  if (btn) btn.disabled = true;
+  try { await rptPost({ accion: 'activar', id, activo }); showToast(activo ? 'Reporte encendido' : 'Reporte apagado', 'success'); rptCargar(); }
+  catch (e) { showToast('No se pudo: ' + e.message, 'error'); if (btn) btn.disabled = false; }
+}
+
+async function rptBorrar(id, btn) {
+  const p = (rptDatos?.programas || []).find(x => x.id === id);
+  if (!await confirmarAguaP({ titulo: '¿Borrar este reporte?', confirmar: 'Borrar', peligro: true,
+    texto: '«' + (p?.nombre || '') + '» deja de enviarse.\n\nLos reportes que ya se enviaron siguen abiertos para quien tenga el enlace.' })) return;
+  if (btn) btn.disabled = true;
+  try { await rptPost({ accion: 'borrar', id }); showToast('Reporte borrado', 'success'); rptCargar(); }
+  catch (e) { showToast('No se pudo borrar: ' + e.message, 'error'); if (btn) btn.disabled = false; }
+}
+
+// ── Analista IA ─────────────────────────────────────────────────────────────
+// Una revisión de la cuenta entera hecha por la IA, a pedido. Lo que se puede
+// ejecutar entra como propuesta (mismo Aprobar/Descartar que las reglas); el
+// resto son consejos. El servidor decide qué puede ser un botón, no el modelo:
+// ver api/_analista.js.
+let analistaDatos = null;
+let analistaPensando = false;
+
+async function analistaCargar() {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  if (!analistaPensando) c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo tus revisiones…</div>';
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/analista' + (cliente ? '?client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok || d.error) { pautaError(d.error || 'No pudimos leer tus revisiones.'); return; }
+    analistaDatos = d;
+    analistaPintar();
+  } catch (e) {
+    pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+function analistaPintar() {
+  const c = document.getElementById('pauta-cuerpo');
+  const d = analistaDatos;
+  if (!c || !d) return;
+  const cu = d.cupo || {};
+  const sinCupo = cu.quedan === 0;
+  const puede = !!d.puede_editar;
+  const cupoTxt = cu.tope == null ? '' : cu.usadas == null ? 'No pudimos contar tus revisiones de este mes.'
+    : 'Te quedan ' + cu.quedan + ' de ' + cu.tope + ' revisiones este mes.';
+  let html = '<div class="pauta-aviso">' + icn('sparkles', 15) + '<div style="flex:1">' +
+    '<b>Un analista que mira tu cuenta entera</b> —campañas, lo que pasó con sus leads en el CRM, búsquedas y motivos de pérdida— y te dice qué haría esta semana, en orden. ' +
+    'Lo que se puede hacer (pausar, bajar un presupuesto, excluir una búsqueda) te lo deja listo para aprobar; <b>nada se cambia sin tu clic</b>. ' +
+    '<span style="color:var(--muted2)">' + esc(cupoTxt) + '</span></div>' +
+    (puede ? '<button class="btn-pri" id="an-pedir" onclick="analistaPedir()"' + (sinCupo || analistaPensando ? ' disabled' : '') + '>' +
+      (analistaPensando ? 'Revisando…' : icn('sparkles', 13) + ' Pedir revisión') + '</button>' : '') +
+  '</div>';
+  if (analistaPensando) {
+    html += '<div class="pauta-cargando">' + icn('refresh', 15) + ' Revisando tu cuenta: leyendo campañas, búsquedas y tu CRM. Tarda cerca de medio minuto…</div>';
+  }
+  const revs = d.revisiones || [];
+  if (!revs.length && !analistaPensando) {
+    html += emptyAgua('sparkles', 'Todavía no hay revisiones',
+      puede ? 'Pide la primera: tarda medio minuto y no cambia nada en tus campañas.' : 'Las pide el dueño de la cuenta, un administrador o Mercadeo.', '');
+  } else if (revs.length) {
+    html += analistaRevision(revs[0], d, puede, true);
+    if (revs.length > 1) {
+      html += '<div class="pauta-pasos-t" style="margin:22px 0 8px">Revisiones anteriores</div>' +
+        revs.slice(1).map(rv => '<details style="margin-bottom:8px"><summary style="cursor:pointer;font-weight:600;font-size:var(--fs-sm)">' +
+          esc(analistaFecha(rv.created_at)) + '</summary><div style="margin-top:8px">' + analistaRevision(rv, d, puede, false) + '</div></details>').join('');
+    }
+  }
+  c.innerHTML = html;
+}
+
+function analistaFecha(iso) {
+  return new Date(iso).toLocaleString('es-CO', { day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' });
+}
+
+function analistaRevision(rv, d, puede, principal) {
+  const acc = new Map((d.acciones || []).map(a => [a.id, a]));
+  const tono = { alta: 'error', media: 'oportunidad', baja: 'bien' };
+  const estados = { propuesta: ['Esperando', 'pauta-pill-ojo'], en_curso: ['En curso', 'pauta-pill-off'], ejecutada: ['Hecha', 'pauta-pill-ok'],
+    descartada: ['Descartada', 'pauta-pill-off'], fallida: ['No se pudo', 'pauta-pill-mal'], caducada: ['Caducó', 'pauta-pill-off'], deshecha: ['Deshecha', 'pauta-pill-off'] };
+  let html = principal ? '<div class="pauta-pasos-t" style="margin:18px 0 6px">Revisión del ' + esc(analistaFecha(rv.created_at)) + '</div>' : '';
+  html += '<div class="pauta-conx-nota" style="display:block;margin-bottom:12px;line-height:1.55">' + esc(rv.resumen || '') + '</div>';
+  html += '<div class="pauta-diag-lista">' + (rv.recomendaciones || []).map((r, i) => {
+    const ids = r.accion_ids || [];
+    const filas = ids.map(id => acc.get(id)).filter(Boolean);
+    const botones = filas.map(a => {
+      const st = estados[a.estado] || [a.estado, 'pauta-pill-off'];
+      const que = analistaQue(a);
+      if (a.estado === 'propuesta' && puede) {
+        return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">' +
+          '<span style="font-size:12px;color:var(--muted)">' + esc(que) + '</span>' +
+          '<button class="btn-pri sm" onclick="analistaDecidir(\'' + esc(a.id) + '\', \'aprobar\', this)">Aprobar</button>' +
+          '<button class="btn-ghost sm" onclick="analistaDecidir(\'' + esc(a.id) + '\', \'descartar\', this)">Descartar</button></div>';
+      }
+      return '<div style="margin-top:6px;font-size:12px;color:var(--muted)"><span class="pauta-pill ' + st[1] + '">' + esc(st[0]) + '</span> ' +
+        esc(que) + (a.resultado ? ' — ' + esc(a.resultado) : '') + '</div>';
+    }).join('');
+    return '<div class="pauta-diag ' + (tono[r.prioridad] || 'oportunidad') + '">' +
+      '<div class="pauta-diag-ico">' + icn(r.acciones && r.acciones.length ? 'alert' : 'chat', 16) + '</div>' +
+      '<div class="pauta-diag-cuerpo">' +
+        '<div class="pauta-diag-tit"><span>' + (i + 1) + '. ' + esc(r.titulo) + '</span></div>' +
+        '<div class="pauta-diag-det">' + esc(r.por_que) + '</div>' +
+        (r.nota ? '<div style="margin-top:6px;font-size:12px;color:var(--muted2)">' + esc(r.nota) + '</div>' : '') +
+        botones +
+      '</div></div>';
+  }).join('') + '</div>';
+  return html;
+}
+
+function analistaQue(a) {
+  if (a.accion === 'pausar') return 'Pausar «' + (a.campana || '') + '»';
+  if (a.accion === 'bajar_presupuesto') return 'Bajar un ' + a.porcentaje + ' % el presupuesto de «' + (a.campana || '') + '»';
+  if (a.accion === 'negativa') return 'Excluir «' + (a.detalle?.texto || '') + '» (' + (a.detalle?.tipo === 'PHRASE' ? 'frase' : 'exacta') + ') en «' + (a.campana || '') + '»';
+  return a.accion;
+}
+
+async function analistaPedir() {
+  if (analistaPensando) return;
+  analistaPensando = true;
+  analistaPintar();
+  try {
+    const r = await fetchAuth('/api/analista', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'revisar', client_id: crmAmbitoCliente() || null }) });
+    // Llega en streaming: espacios mientras piensa y el JSON al final. El error
+    // viene en el cuerpo aunque el estado sea 200.
+    const d = await leerRespuesta(r);
+    if (d.error) showToast(d.error, 'error');
+    else showToast('Revisión lista', 'success');
+  } catch (e) {
+    showToast('Se cortó la conexión mientras revisábamos. Si en un minuto no aparece la revisión, vuelve a pedirla.', 'error');
+  }
+  analistaPensando = false;
+  if (pautaVista === 'analista') analistaCargar();
+}
+
+async function analistaDecidir(id, accion, btn) {
+  const a = (analistaDatos?.acciones || []).find(x => x.id === id);
+  if (accion === 'aprobar' && !await confirmarAguaP({ titulo: '¿Aprobar este cambio?', confirmar: 'Aprobar',
+    texto: analistaQue(a || {}) + '.\n\nSe hace ya mismo en ' + (a?.red === 'meta' ? 'Meta' : 'Google Ads') +
+      '. Lo puedes deshacer desde el administrador de anuncios' + (a?.accion === 'negativa' ? ' o desde la pestaña Búsquedas' : '') + '.' })) return;
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = accion === 'aprobar' ? 'Haciendo el cambio…' : 'Descartando…'; }
+  try {
+    const r = await fetchAuth('/api/reglas-pauta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion, id }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast(accion === 'aprobar' ? (d.accion?.resultado || 'Hecho') : 'Descartada', 'success');
+  } catch (e) {
+    showToast((accion === 'aprobar' ? 'No se pudo hacer el cambio: ' : 'No se pudo: ') + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+  analistaCargar();
+}
+
+// ── Búsquedas de Google y palabras negativas ────────────────────────────────
+// Por qué búsquedas salen los anuncios y cuáles conviene excluir. El juez es la
+// conversión —y, si Ventas a la pauta está activo, lo que avanzó en el CRM—.
+// Excluir lo decide siempre una persona, y cada negativa se puede deshacer.
+// Servidor: api/busquedas.js y api/_busquedas.js.
+let busqDatos = null;
+let busqDias = 30;
+
+async function busqCargar() {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo tus búsquedas en Google…</div>';
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/busquedas?dias=' + busqDias + (cliente ? '&client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok) { pautaError(d.error || 'No pudimos leer tus búsquedas.'); return; }
+    busqDatos = d;
+    busqPintar();
+  } catch (e) {
+    pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+function busqPintar() {
+  const c = document.getElementById('pauta-cuerpo');
+  const d = busqDatos;
+  if (!c || !d) return;
+  if (!d.cuentas.length) {
+    c.innerHTML = emptyAgua('search', 'Conecta Google Ads para ver tus búsquedas',
+      'Aquí verás por qué búsquedas salen tus anuncios, cuáles gastan sin traer nada y cuáles conviene excluir. Meta no tiene búsquedas: esto es solo de Google.',
+      '<button class="btn-pri" onclick="pautaIr(\'conexiones\')">Conectar Google Ads</button>');
+    return;
+  }
+  const puede = !!d.puede_editar;
+  let html = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">' +
+    '<div class="pauta-aviso" style="flex:1;margin:0;min-width:260px">' + icn('search', 15) + '<div style="flex:1">' +
+      '<b>Excluir una búsqueda solo resta:</b> tu anuncio deja de salir para ella. Lo decides tú, una por una, y cualquier negativa puesta desde aquí se puede deshacer. ' +
+      'Nunca te proponemos tu marca ni lo que ya es palabra clave.</div></div>' +
+    '<button class="dd-btn" onclick="busqDdDias(this)"><span class="dd-btn-txt">Últimos ' + busqDias + ' días</span>' +
+      '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>' +
+  '</div>';
+  if (!puede) {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) +
+      '<div style="flex:1">Las negativas las pone el dueño de la cuenta, un administrador o Mercadeo. Aquí puedes ver el análisis.</div></div>';
+  }
+  for (const cu of d.cuentas) html += busqCuenta(cu, puede, d.cuentas.length > 1);
+  html += busqCalidad(d);
+  html += busqHechas(d.hechas || [], puede);
+  c.innerHTML = html;
+}
+
+function busqDdDias(btn) {
+  ddAbrir(btn, [{ id: '30', name: 'Últimos 30 días' }, { id: '90', name: 'Últimos 90 días' }], String(busqDias), id => { busqDias = Number(id); busqCargar(); });
+}
+
+function busqCuenta(cu, puede, varias) {
+  let html = varias ? '<div class="pauta-pasos-t" style="margin:22px 0 8px">' + esc(cu.nombre) + '</div>' : '';
+  if (cu.error) {
+    return html + '<div class="pauta-aviso pauta-aviso-mal">' + icn('alert', 16) + '<div style="flex:1"><b>No se pudo revisar ' + esc(cu.nombre) + '.</b> ' + esc(cu.error) + '</div></div>';
+  }
+  const m = cu.moneda;
+  if (cu.modo === 'gasto') {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) + '<div style="flex:1">' +
+      '<b>Google no está contando conversiones en esta cuenta</b> (' + pautaPlata(cu.costoTotal, m) + ' en búsquedas y 0 conversiones). ' +
+      'Sin eso no se puede saber qué búsqueda funciona, así que no te recomendamos excluir ninguna: te enseñamos las palabras que más gastan para que las revises tú. ' +
+      'Para arreglarlo, revisa tus conversiones en Google Ads o activa <b>Ventas a la pauta</b>, que le cuenta a Google qué leads avanzaron en tu CRM.</div>' +
+      '<button class="btn-ghost sm" onclick="pautaIr(\'ventas\')">Ventas a la pauta</button></div>';
+  } else if (!cu.crm_activo) {
+    html += '<div class="pauta-conx-nota" style="margin-bottom:10px"><span>Juzgamos con las conversiones de Google (costo por conversión de la cuenta: <b>' + pautaPlata(cu.cpl, m) + '</b>). ' +
+      'Si activas las etapas en <button class="pauta-link" onclick="pautaIr(\'ventas\')">Ventas a la pauta</button>, también verás qué búsquedas traen leads que nunca avanzan.</span></div>';
+  }
+  if (cu.aviso_crm) html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) + '<div style="flex:1">' + esc(cu.aviso_crm) + '</div></div>';
+
+  const boton = (texto, tipo, campanas, motivo) => puede
+    ? '<button class="btn-ghost sm" onclick="busqExcluir(' + esc(JSON.stringify({ conexion_id: cu.conexion_id, texto, tipo, campanas, motivo })) + ', this)">Excluir</button>' : '';
+
+  // Palabras que se cuelan en varias búsquedas
+  html += '<div class="pauta-diag-grupo">' + (cu.modo === 'gasto' ? 'Palabras que más gastan sin conversiones · para revisar' : 'Palabras que se cuelan en tus búsquedas') + '</div>';
+  if (!cu.palabras.length) {
+    html += '<div class="pauta-vacio">' + (cu.modo === 'gasto' ? 'No hay palabras ajenas a tus palabras clave con gasto en este período.' : 'Ninguna palabra ajena a tu negocio está gastando sin resultado. Bien.') + '</div>';
+  } else {
+    html += '<div class="pauta-diag-lista">' + cu.palabras.map(p => {
+      const camp = p.campanas.map(x => x.nombre).join(', ');
+      const motivo = p.motivo ? 'Gastó ' + pautaPlata(p.costo, m) + ' en ' + p.clics + ' clics: ' + p.motivo + '.' : 'Gastó ' + pautaPlata(p.costo, m) + ' en ' + p.clics + ' clics, en ' + p.busquedas + (p.busquedas === 1 ? ' búsqueda' : ' búsquedas') + '.';
+      return '<div class="pauta-diag ' + (p.motivo ? 'error' : 'oportunidad') + '">' +
+        '<div class="pauta-diag-ico">' + icn(p.motivo ? 'alert' : 'search', 16) + '</div>' +
+        '<div class="pauta-diag-cuerpo">' +
+          '<div class="pauta-diag-tit"><span>«' + esc(p.texto) + '»</span></div>' +
+          '<div class="pauta-diag-det">' + esc(motivo) + '<br><span style="color:var(--muted2)">Ej.: ' + esc(p.ejemplos.join(' · ')) + ' · ' + esc(camp) + '</span></div>' +
+        '</div>' +
+        (puede ? '<div class="pauta-diag-acc">' + boton(p.texto, 'PHRASE', p.campanas.map(x => x.id), motivo) + '</div>' : '') +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  // Búsquedas concretas
+  if (cu.modo !== 'gasto') {
+    html += '<div class="pauta-diag-grupo">Búsquedas que gastaron sin resultado</div>';
+    if (!cu.terminos.length) {
+      html += '<div class="pauta-vacio">Ninguna búsqueda gastó más de lo que te cuesta una conversión sin traerla.</div>';
+    } else {
+      html += '<div class="pauta-tabla-caja"><table class="pauta-tabla"><thead><tr>' +
+        '<th class="pauta-th">Búsqueda</th><th class="pauta-th">Campaña</th><th class="pauta-th num">Gasto</th><th class="pauta-th num">Clics</th>' +
+        '<th class="pauta-th num">Conv.</th><th class="pauta-th">Por qué</th><th class="pauta-th"></th></tr></thead><tbody>' +
+        cu.terminos.map(t => {
+          const motivo = 'Gastó ' + pautaPlata(t.costo, m) + ' en ' + t.clics + ' clics: ' + t.motivo + '.';
+          return '<tr>' +
+            '<td class="pauta-td"><b>' + esc(t.texto) + '</b>' +
+              (t.propia ? '<div style="font-size:11px;color:var(--muted2)">Es de tu negocio: quizá convenga mejorar el anuncio o la página antes que excluirla.</div>' : '') + '</td>' +
+            '<td class="pauta-td" style="font-size:12px">' + esc(t.campana) + '</td>' +
+            '<td class="pauta-td num">' + pautaPlata(t.costo, m) + '</td>' +
+            '<td class="pauta-td num">' + pautaNum(t.clics) + '</td>' +
+            '<td class="pauta-td num">' + pautaNum(Math.round(t.conv * 10) / 10) + '</td>' +
+            '<td class="pauta-td" style="font-size:12px;color:var(--muted);max-width:260px">' + esc(t.motivo) + '</td>' +
+            '<td class="pauta-td">' + boton(t.texto, 'EXACT', [t.campanaId], motivo) + '</td>' +
+          '</tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+  }
+  return html;
+}
+
+// Lo que el CRM sabe y Google no: qué pasó con los leads de cada palabra clave.
+function busqCalidad(d) {
+  let html = '<div class="pauta-pasos-t" style="margin:22px 0 8px">Tus palabras clave según tu CRM · últimos 90 días</div>';
+  if (d.aviso_calidad) return html + '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) + '<div style="flex:1">' + esc(d.aviso_calidad) + '</div></div>';
+  const cal = d.calidad || [];
+  if (!cal.length) {
+    return html + '<div class="pauta-vacio">Todavía no hay leads de Google con su palabra clave. Se completan solos: cada lead que llega con el clic de un anuncio de Google trae la suya.</div>';
+  }
+  return html + '<div class="pauta-tabla-caja"><table class="pauta-tabla"><thead><tr>' +
+    '<th class="pauta-th">Palabra clave</th><th class="pauta-th num">Leads</th><th class="pauta-th num">Ganados</th><th class="pauta-th num">Perdidos</th>' +
+    '<th class="pauta-th num">En proceso</th><th class="pauta-th">Por qué se pierden</th></tr></thead><tbody>' +
+    cal.map(x => '<tr>' +
+      '<td class="pauta-td"><b>' + esc(x.palabra) + '</b>' + (x.flojo ? ' <span class="pauta-pill pauta-pill-ojo">Leads que no avanzan</span>' : '') + '</td>' +
+      '<td class="pauta-td num">' + x.leads + '</td><td class="pauta-td num">' + x.ganados + '</td>' +
+      '<td class="pauta-td num">' + x.perdidos + '</td><td class="pauta-td num">' + x.en_proceso + '</td>' +
+      '<td class="pauta-td" style="font-size:12px;color:var(--muted)">' + (x.motivos.length ? x.motivos.map(mo => esc(mo.motivo) + ' (' + mo.n + ')').join(' · ') : '—') + '</td>' +
+    '</tr>').join('') + '</tbody></table></div>';
+}
+
+function busqHechas(hechas, puede) {
+  if (!hechas.length) return '';
+  const est = { ejecutada: ['Activa', 'pauta-pill-ok'], fallida: ['No se pudo', 'pauta-pill-mal'], deshecha: ['Quitada', 'pauta-pill-off'] };
+  return '<div class="pauta-pasos-t" style="margin:22px 0 8px">Negativas puestas desde Acuarius</div>' +
+    '<div class="pauta-tabla-caja"><table class="pauta-tabla"><thead><tr>' +
+    '<th class="pauta-th">Cuándo</th><th class="pauta-th">Qué</th><th class="pauta-th">Campaña</th><th class="pauta-th">Estado</th><th class="pauta-th"></th></tr></thead><tbody>' +
+    hechas.map(h => {
+      const st = est[h.estado] || [h.estado, 'pauta-pill-off'];
+      return '<tr>' +
+        '<td class="pauta-td" style="white-space:nowrap">' + esc(new Date(h.decidida_at || h.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })) + '</td>' +
+        '<td class="pauta-td" style="font-size:12px;max-width:360px">' + esc(h.resultado || '') + (h.motivo ? '<div style="color:var(--muted2)">' + esc(h.motivo) + '</div>' : '') + '</td>' +
+        '<td class="pauta-td" style="font-size:12px">' + esc(h.campana || h.campana_id) + '</td>' +
+        '<td class="pauta-td"><span class="pauta-pill ' + st[1] + '">' + esc(st[0]) + '</span></td>' +
+        '<td class="pauta-td">' + (puede && h.estado === 'ejecutada' ? '<button class="btn-ghost sm" onclick="busqDeshacer(\'' + esc(h.id) + '\', this)">Deshacer</button>' : '') + '</td>' +
+      '</tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+async function busqExcluir(p, btn) {
+  const cuantas = (p.campanas || []).length;
+  const como = p.tipo === 'PHRASE'
+    ? 'Tu anuncio dejará de salir en CUALQUIER búsqueda que contenga «' + p.texto + '»'
+    : 'Tu anuncio dejará de salir cuando alguien busque exactamente «' + p.texto + '»';
+  if (!await confirmarAguaP({ titulo: '¿Excluir «' + p.texto + '»?', confirmar: 'Excluir',
+    texto: como + (cuantas > 1 ? ', en ' + cuantas + ' campañas' : '') + '.\n\nLo puedes deshacer desde esta misma pantalla.' })) return;
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Excluyendo…'; }
+  try {
+    const r = await fetchAuth('/api/busquedas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'negativa', ...p }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    const fallos = (d.resultados || []).filter(x => !x.ok);
+    showToast(fallos.length ? '«' + d.texto + '» excluida, salvo en ' + fallos.length + (fallos.length === 1 ? ' campaña' : ' campañas') + ': ' + fallos[0].error
+      : '«' + d.texto + '» excluida', fallos.length ? 'error' : 'success');
+    busqCargar();
+  } catch (e) {
+    showToast('No se pudo excluir: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+async function busqDeshacer(id, btn) {
+  if (!await confirmarAguaP({ titulo: '¿Quitar esta negativa?', confirmar: 'Quitar',
+    texto: 'Tu anuncio volverá a poder salir en esas búsquedas.' })) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Quitando…'; }
+  try {
+    const r = await fetchAuth('/api/busquedas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'deshacer', id }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    showToast('Negativa quitada', 'success');
+    busqCargar();
+  } catch (e) {
+    showToast('No se pudo quitar: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Deshacer'; }
+  }
+}
+
+// ── Reglas automáticas ──────────────────────────────────────────────────────
+// Condiciones con los números del CRM (costo por lead real, costo por venta,
+// gasto sin leads) y una acción que solo RESTA: avisar, pausar o bajar el
+// presupuesto. Por defecto proponen y alguien aprueba. Se evalúan cada mañana
+// en el servidor (api/_reglas-pauta.js); aquí se crean y se deciden.
+let reglasDatos = null;
+let reglasForm = null;        // la regla que se está creando o editando
+let reglasCampanas = null;    // para elegir una campaña concreta
+
+const REGLAS_METRICA = [
+  { id: 'cpl_real', name: 'Costo por lead real (CRM)' },
+  { id: 'costo_venta', name: 'Costo por venta ganada' },
+  { id: 'gasto_sin_leads', name: 'Gasto sin ningún lead' },
+];
+const REGLAS_RED = [{ id: 'todas', name: 'Google y Meta' }, { id: 'google', name: 'Solo Google Ads' }, { id: 'meta', name: 'Solo Meta' }];
+const REGLAS_DIAS = [{ id: '3', name: 'Últimos 3 días' }, { id: '7', name: 'Últimos 7 días' }, { id: '14', name: 'Últimos 14 días' }];
+const REGLAS_ACCION = [
+  { id: 'avisar', name: 'Solo avisarme' },
+  { id: 'pausar', name: 'Pausar la campaña' },
+  { id: 'bajar_presupuesto', name: 'Bajar el presupuesto diario' },
+];
+const REGLAS_PORC = [10, 20, 30, 50].map(p => ({ id: String(p), name: p + ' %' }));
+const REGLAS_MODO = [
+  { id: 'aprobar', name: 'Proponérmelo y esperar mi aprobación' },
+  { id: 'auto', name: 'Hacerlo solo y avisarme' },
+];
+const REGLAS_ESTADO = {
+  propuesta:  ['Esperando', 'pauta-pill-ojo'],
+  en_curso:   ['En curso', 'pauta-pill-off'],
+  ejecutada:  ['Hecha', 'pauta-pill-ok'],
+  descartada: ['Descartada', 'pauta-pill-off'],
+  fallida:    ['No se pudo', 'pauta-pill-mal'],
+  avisada:    ['Aviso', 'pauta-pill-ojo'],
+  caducada:   ['Caducó', 'pauta-pill-off'],
+};
+const REGLAS_PLANTILLAS = [
+  { nombre: 'Costo por lead alto', metrica: 'cpl_real', dias: 7, accion: 'pausar', d: 'Pausa lo que trae leads demasiado caros.' },
+  { nombre: 'Gasta sin traer leads', metrica: 'gasto_sin_leads', dias: 3, accion: 'pausar', d: 'Para lo que gasta días sin un solo lead en el CRM.' },
+  { nombre: 'Venta demasiado cara', metrica: 'costo_venta', dias: 14, accion: 'bajar_presupuesto', porcentaje: 20, d: 'Recorta lo que vende, pero a pérdida.' },
+];
+
+function reglasNombreDe(lista, id) { return (lista.find(o => String(o.id) === String(id)) || {}).name || ''; }
+
+/** La regla en una frase: es lo que se lee en la lista y lo que se aprueba. */
+function reglasFrase(r) {
+  const que = { cpl_real: 'el costo por lead real', costo_venta: 'el costo por venta', gasto_sin_leads: 'el gasto sin ningún lead' }[r.metrica] || r.metrica;
+  const donde = r.campana_id ? '«' + (r.campana || r.campana_id) + '»' : (r.red === 'google' ? 'una campaña de Google' : r.red === 'meta' ? 'una campaña de Meta' : 'una campaña');
+  const accion = r.accion === 'avisar' ? 'te avisa'
+    : (r.accion === 'pausar' ? 'la pausa' : 'le baja el presupuesto un ' + r.porcentaje + ' %') + (r.modo === 'auto' ? ' sola' : ' cuando lo apruebes');
+  return 'Si en ' + donde + ' ' + que + ' de los últimos ' + r.dias + ' días pasa de ' + pautaPlata(Number(r.umbral), pautaDatos && pautaDatos.moneda) + ', ' + accion + '.';
+}
+
+async function reglasCargar() {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo tus reglas…</div>';
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/reglas-pauta' + (cliente ? '?client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok) { pautaError(d.error || 'No pudimos leer tus reglas.'); return; }
+    reglasDatos = d;
+    reglasPintar();
+  } catch (e) {
+    pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+function reglasPintar() {
+  const c = document.getElementById('pauta-cuerpo');
+  const d = reglasDatos;
+  if (!c || !d) return;
+  const puede = !!d.puede_editar;
+  const propuestas = d.acciones.filter(a => a.estado === 'propuesta');
+  const historial = d.acciones.filter(a => a.estado !== 'propuesta');
+
+  let html = '<div class="pauta-aviso">' + icn('sparkles', 15) + '<div style="flex:1">' +
+    '<b>Reglas con los números de tu CRM, no solo los de la red.</b> Se revisan cada mañana a las 8:00 con los días ya cerrados. ' +
+    'Solo pueden avisar, pausar o bajar un presupuesto: <b>nunca activan ni suben nada</b>. Si no dices lo contrario, te proponen el cambio y esperan tu aprobación.' +
+    '</div></div>';
+  if (!puede) {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) +
+      '<div style="flex:1">Las reglas las crea y las aprueba el dueño de la cuenta, un administrador o Mercadeo. Aquí puedes ver qué hicieron.</div></div>';
+  }
+
+  if (propuestas.length) {
+    html += '<div class="pauta-diag-grupo">Esperan tu aprobación · caducan a los 3 días</div><div class="pauta-diag-lista">' +
+      propuestas.map(a => '<div class="pauta-diag oportunidad">' +
+        '<div class="pauta-diag-ico">' + icn(a.accion === 'pausar' ? 'alert' : 'trend', 16) + '</div>' +
+        '<div class="pauta-diag-cuerpo">' +
+          '<div class="pauta-diag-tit">' + pautaRedChip(a.red) + '<span>' + esc(reglasTextoAccion(a)) + ': ' + esc(a.campana || a.campana_id) + '</span></div>' +
+          '<div class="pauta-diag-det">' + esc(a.motivo) + '<br><span style="color:var(--muted2)">Regla «' + esc(a.regla || '') + '» · ' +
+            esc(new Date(a.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })) + '</span></div>' +
+        '</div>' +
+        (puede ? '<div class="pauta-diag-acc" style="display:flex;gap:6px">' +
+          '<button class="btn-pri sm" onclick="reglasDecidir(\'' + esc(a.id) + '\', \'aprobar\', this)">Aprobar</button>' +
+          '<button class="btn-ghost sm" onclick="reglasDecidir(\'' + esc(a.id) + '\', \'descartar\', this)">Descartar</button></div>' : '') +
+      '</div>').join('') + '</div>';
+  }
+
+  html += '<div style="display:flex;align-items:center;gap:10px;margin:22px 0 10px">' +
+    '<div class="pauta-pasos-t" style="margin:0;flex:1">Tus reglas</div>' +
+    (puede && !reglasForm && d.reglas.length < d.tope ? '<button class="btn-pri sm" onclick="reglasNueva()">' + icn('plus', 13) + ' Nueva regla</button>' : '') +
+    '</div>';
+  if (reglasForm) html += reglasFormulario();
+  if (!d.reglas.length && !reglasForm) {
+    html += puede
+      ? '<div class="pauta-conxs">' + REGLAS_PLANTILLAS.map((p, i) =>
+          '<div class="pauta-conx"><div class="pauta-conx-t">' + esc(p.nombre) + '</div>' +
+          '<div class="pauta-conx-s" style="margin:4px 0 12px">' + esc(p.d) + '</div>' +
+          '<button class="btn-ghost sm" onclick="reglasNueva(' + i + ')">Usar esta</button></div>').join('') + '</div>'
+      : '<div class="pauta-vacio">Esta cuenta todavía no tiene reglas.</div>';
+  }
+  html += '<div class="pauta-diag-lista">' + d.reglas.map(r => '<div class="pauta-diag' + (r.activa ? '' : ' bien') + '" style="' + (r.activa ? '' : 'opacity:.6') + '">' +
+    '<div class="pauta-diag-ico">' + icn(r.accion === 'avisar' ? 'bell' : 'sparkles', 16) + '</div>' +
+    '<div class="pauta-diag-cuerpo">' +
+      '<div class="pauta-diag-tit"><span>' + esc(r.nombre) + '</span>' +
+        (r.activa ? '' : ' <span class="pauta-pill pauta-pill-off">Apagada</span>') +
+        (r.modo === 'auto' && r.accion !== 'avisar' ? ' <span class="pauta-pill pauta-pill-ojo">Automática</span>' : '') + '</div>' +
+      '<div class="pauta-diag-det">' + esc(reglasFrase(r)) + '</div>' +
+    '</div>' +
+    (puede ? '<div class="pauta-diag-acc" style="display:flex;gap:6px;flex-wrap:wrap">' +
+      '<button class="btn-ghost sm" onclick="reglasActivar(\'' + esc(r.id) + '\', ' + !r.activa + ', this)">' + (r.activa ? 'Apagar' : 'Encender') + '</button>' +
+      '<button class="btn-ghost sm" onclick="reglasEditar(\'' + esc(r.id) + '\')">Editar</button>' +
+      '<button class="btn-ghost sm" onclick="reglasBorrar(\'' + esc(r.id) + '\', this)">Borrar</button></div>' : '') +
+  '</div>').join('') + '</div>';
+
+  html += '<div class="pauta-pasos-t" style="margin:22px 0 8px">Lo que hicieron tus reglas · últimos 60 días</div>';
+  html += !historial.length
+    ? '<div class="pauta-vacio">Todavía nada. Aquí queda cada aviso, cada cambio y quién lo aprobó.</div>'
+    : '<div class="pauta-tabla-caja"><table class="pauta-tabla"><thead><tr>' +
+      '<th class="pauta-th">Cuándo</th><th class="pauta-th">Campaña</th><th class="pauta-th">Red</th><th class="pauta-th">Acción</th>' +
+      '<th class="pauta-th">Estado</th><th class="pauta-th">Detalle</th></tr></thead><tbody>' +
+      historial.map(a => {
+        const st = REGLAS_ESTADO[a.estado] || [a.estado, 'pauta-pill-off'];
+        const quien = a.decidida_por === 'regla automática' ? 'Lo hizo la regla sola' : a.decidida_por ? 'Decidido desde la app' : '';
+        return '<tr>' +
+          '<td class="pauta-td" style="white-space:nowrap">' + esc(new Date(a.decidida_at || a.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })) + '</td>' +
+          '<td class="pauta-td">' + esc(a.campana || a.campana_id) + '<div style="font-size:11px;color:var(--muted2)">Regla «' + esc(a.regla || '') + '»</div></td>' +
+          '<td class="pauta-td">' + pautaRedChip(a.red) + '</td>' +
+          '<td class="pauta-td">' + esc(reglasTextoAccion(a)) + '</td>' +
+          '<td class="pauta-td"><span class="pauta-pill ' + st[1] + '">' + esc(st[0]) + '</span></td>' +
+          '<td class="pauta-td" style="font-size:12px;color:var(--muted);max-width:380px">' + esc(a.motivo || '') +
+            (a.resultado ? '<div style="color:' + (a.estado === 'fallida' ? 'var(--danger)' : 'var(--text)') + ';margin-top:2px">' + esc(a.resultado) + '</div>' : '') +
+            (quien ? '<div style="color:var(--muted2);margin-top:2px">' + esc(quien) + '</div>' : '') + '</td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+
+  c.innerHTML = html;
+}
+
+function reglasTextoAccion(a) {
+  if (a.accion === 'negativa') return 'Excluir «' + (a.detalle?.texto || '') + '»';
+  return a.accion === 'bajar_presupuesto' ? 'Bajar el presupuesto un ' + a.porcentaje + ' %' : a.accion === 'pausar' ? 'Pausar' : 'Aviso';
+}
+
+function reglasDdBoton(campo, lista, valor) {
+  return '<button type="button" class="dd-btn" style="max-width:none;width:100%;justify-content:space-between" onclick="reglasDd(this, \'' + campo + '\')">' +
+    '<span class="dd-btn-txt">' + esc(reglasNombreDe(lista, valor) || 'Elegir') + '</span>' +
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>';
+}
+
+function reglasOpcionesCampana() {
+  const red = reglasForm.red;
+  const lista = (reglasCampanas || []).filter(x => red === 'todas' || x.red === red)
+    .map(x => ({ id: x.id, name: x.nombre + (red === 'todas' ? ' · ' + (x.red === 'google' ? 'Google' : 'Meta') : '') }));
+  return [{ id: '', name: 'Todas las campañas' }].concat(lista.length ? [{ sep: true }] : []).concat(lista);
+}
+
+function reglasFormulario() {
+  const f = reglasForm;
+  const etq = (t, campo) => '<label style="display:flex;flex-direction:column;gap:4px;font-size:var(--fs-xs);color:var(--muted);font-weight:600">' + t + campo + '</label>';
+  const unidad = f.metrica === 'costo_venta' ? 'por venta' : f.metrica === 'gasto_sin_leads' ? 'de gasto' : 'por lead';
+  return '<div class="pauta-conx viva" style="margin-bottom:14px">' +
+    '<div class="pauta-conx-t" style="margin-bottom:12px">' + (f.id ? 'Editar regla' : 'Nueva regla') + '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">' +
+      etq('Nombre', '<input class="auto-input" id="rg-nombre" maxlength="80" value="' + esc(f.nombre || '') + '" oninput="reglasForm.nombre=this.value">') +
+      etq('Red', reglasDdBoton('red', REGLAS_RED, f.red)) +
+      etq('Campaña', reglasDdBoton('campana_id', reglasOpcionesCampana(), f.campana_id || '') +
+        (reglasCampanas === null ? '<span style="font-weight:400;color:var(--muted2)">Cargando tus campañas…</span>' : '')) +
+      etq('Qué medir', reglasDdBoton('metrica', REGLAS_METRICA, f.metrica)) +
+      etq('En qué ventana', reglasDdBoton('dias', REGLAS_DIAS, String(f.dias))) +
+      etq('Límite ' + unidad, '<input class="auto-input" id="rg-umbral" inputmode="decimal" placeholder="Ej. 50.000" value="' + esc(f.umbral || '') + '" oninput="reglasForm.umbral=this.value">') +
+      etq('Qué hacer si lo pasa', reglasDdBoton('accion', REGLAS_ACCION, f.accion)) +
+      (f.accion === 'bajar_presupuesto' ? etq('Cuánto bajarlo', reglasDdBoton('porcentaje', REGLAS_PORC, String(f.porcentaje || 20))) : '') +
+      (f.accion !== 'avisar' ? etq('Cómo', reglasDdBoton('modo', REGLAS_MODO, f.modo)) : '') +
+    '</div>' +
+    (f.accion === 'bajar_presupuesto'
+      ? '<div class="pauta-conx-nota" style="margin-top:12px"><span>Se baja el presupuesto diario de la campaña. Si comparte presupuesto con otras (Google) o lo tiene en cada conjunto de anuncios (Meta), no se toca y te lo decimos.</span></div>' : '') +
+    (f.modo === 'auto' && f.accion !== 'avisar'
+      ? '<div class="pauta-conx-nota ojo" style="margin-top:12px">' + icn('alert', 14) + '<span>En automático el cambio se hace sin preguntarte, cada mañana. Te llega un correo con lo que hizo. Una vez por campaña en cada ventana: no vuelve a tocarla hasta que pasen esos días.</span></div>' : '') +
+    '<div id="rg-err" style="display:none;color:var(--danger);font-size:var(--fs-sm);margin-top:10px"></div>' +
+    '<div id="rg-previa"></div>' +
+    '<div class="pauta-conx-btns" style="margin-top:14px">' +
+      '<button class="btn-pri" id="rg-guardar" onclick="reglasGuardar()">Guardar regla</button>' +
+      '<button class="btn-ghost" id="rg-probar" onclick="reglasPrevia()">Ver qué tocaría hoy</button>' +
+      '<button class="btn-ghost" onclick="reglasForm=null;reglasPintar()">Cancelar</button>' +
+    '</div></div>';
+}
+
+function reglasDd(btn, campo) {
+  const listas = { red: REGLAS_RED, campana_id: reglasOpcionesCampana(), metrica: REGLAS_METRICA, dias: REGLAS_DIAS, accion: REGLAS_ACCION, porcentaje: REGLAS_PORC, modo: REGLAS_MODO };
+  ddAbrir(btn, listas[campo], String(reglasForm[campo] ?? ''), id => {
+    if (campo === 'dias' || campo === 'porcentaje') reglasForm[campo] = Number(id);
+    else reglasForm[campo] = id;
+    if (campo === 'campana_id') {
+      const x = (reglasCampanas || []).find(c => String(c.id) === String(id));
+      reglasForm.campana = x ? x.nombre : null;
+      if (x && reglasForm.red === 'todas') reglasForm.red = x.red;
+    }
+    // Una campaña de otra red ya no vale.
+    if (campo === 'red' && reglasForm.campana_id) {
+      const x = (reglasCampanas || []).find(c => String(c.id) === String(reglasForm.campana_id));
+      if (x && id !== 'todas' && x.red !== id) { reglasForm.campana_id = ''; reglasForm.campana = null; }
+    }
+    reglasPintar();
+  });
+}
+
+function reglasNueva(plantilla) {
+  const p = REGLAS_PLANTILLAS[plantilla] || {};
+  reglasForm = { nombre: p.nombre || '', red: 'todas', campana_id: '', campana: null, metrica: p.metrica || 'cpl_real',
+    dias: p.dias || 7, umbral: '', accion: p.accion || 'pausar', porcentaje: p.porcentaje || 20, modo: 'aprobar' };
+  reglasPintar();
+  reglasTraerCampanas();
+  setTimeout(() => document.getElementById(plantilla === undefined ? 'rg-nombre' : 'rg-umbral')?.focus(), 30);
+}
+
+function reglasEditar(id) {
+  const r = (reglasDatos?.reglas || []).find(x => x.id === id);
+  if (!r) return;
+  reglasForm = { ...r, campana_id: r.campana_id || '', umbral: Number(r.umbral).toLocaleString('es-CO'), porcentaje: r.porcentaje || 20 };
+  reglasPintar();
+  reglasTraerCampanas();
+}
+
+// Las campañas para elegir una en concreto. Si ya están cargadas de la pestaña
+// Campañas se reutilizan; si no, se piden. Sin ellas la regla vale igual para
+// todas: el desplegable lo dice en vez de quedarse vacío sin explicación.
+async function reglasTraerCampanas() {
+  if (reglasCampanas) return;
+  if (pautaDatos && Array.isArray(pautaDatos.campanas)) {
+    reglasCampanas = pautaDatos.campanas.map(x => ({ id: x.id, nombre: x.nombre, red: x.red }));
+    reglasPintar();
+    return;
+  }
+  const hasta = new Date(), desde = new Date(hasta.getTime() - 29 * 86400000);
+  const f = (d) => d.toISOString().slice(0, 10);
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/pauta?desde=' + f(desde) + '&hasta=' + f(hasta) + (cliente ? '&client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    reglasCampanas = r.ok ? (d.campanas || []).map(x => ({ id: x.id, nombre: x.nombre, red: x.red })) : [];
+    if (!r.ok) showToast('No pudimos leer tus campañas: la regla puede aplicar a todas igual.', 'error');
+  } catch (e) {
+    reglasCampanas = [];
+    showToast('No pudimos leer tus campañas: la regla puede aplicar a todas igual.', 'error');
+  }
+  if (reglasForm) reglasPintar();
+}
+
+async function reglasPost(cuerpo) {
+  const r = await fetchAuth('/api/reglas-pauta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+  const d = await leerRespuesta(r);
+  if (!r.ok) { const e = new Error(d.error || ('HTTP ' + r.status)); e.datos = d; throw e; }
+  return d;
+}
+
+function reglasCuerpo() {
+  return { ...reglasForm, client_id: crmAmbitoCliente() || null };
+}
+
+async function reglasGuardar() {
+  const btn = document.getElementById('rg-guardar');
+  const err = document.getElementById('rg-err');
+  if (err) err.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    await reglasPost({ accion: 'guardar', regla: reglasCuerpo() });
+    showToast(reglasForm.id ? 'Regla actualizada' : 'Regla creada: se revisa mañana a las 8:00', 'success');
+    reglasForm = null;
+    reglasCargar();
+  } catch (e) {
+    if (err) { err.textContent = e.message; err.style.display = 'block'; } else showToast(e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar regla'; }
+  }
+}
+
+async function reglasPrevia() {
+  const btn = document.getElementById('rg-probar');
+  const caja = document.getElementById('rg-previa');
+  const err = document.getElementById('rg-err');
+  if (err) err.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.textContent = 'Revisando tus campañas…'; }
+  try {
+    const d = await reglasPost({ accion: 'previa', regla: reglasCuerpo() });
+    const t = d.tocaria || [];
+    if (caja) caja.innerHTML = '<div class="pauta-conx-nota' + (t.length ? ' ojo' : '') + '" style="margin-top:12px;display:block">' +
+      (t.length
+        ? '<b>Con los números de hoy tocaría ' + t.length + (t.length === 1 ? ' campaña' : ' campañas') + ':</b>' +
+          t.map(x => '<div style="margin-top:6px">' + pautaRedChip(x.red) + ' <b>' + esc(x.campana) + '</b> — ' + esc(x.motivo) + '</div>').join('')
+        : 'Con los números de hoy no tocaría ninguna campaña.') +
+      '<div style="margin-top:6px;color:var(--muted2)">Es solo una vista previa: no se cambió ni se guardó nada.</div></div>';
+  } catch (e) {
+    if (err) { err.textContent = e.message; err.style.display = 'block'; }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Ver qué tocaría hoy'; }
+}
+
+async function reglasActivar(id, activa, btn) {
+  if (btn) btn.disabled = true;
+  try { await reglasPost({ accion: 'activar', id, activa }); showToast(activa ? 'Regla encendida' : 'Regla apagada', 'success'); reglasCargar(); }
+  catch (e) { showToast('No se pudo: ' + e.message, 'error'); if (btn) btn.disabled = false; }
+}
+
+async function reglasBorrar(id, btn) {
+  const r = (reglasDatos?.reglas || []).find(x => x.id === id);
+  if (!await confirmarAguaP({ titulo: '¿Borrar esta regla?', confirmar: 'Borrar', peligro: true,
+    texto: '«' + (r?.nombre || '') + '» deja de revisarse.\n\nLo que ya hizo queda en el historial.' })) return;
+  if (btn) btn.disabled = true;
+  try { await reglasPost({ accion: 'borrar', id }); showToast('Regla borrada', 'success'); reglasCargar(); }
+  catch (e) { showToast('No se pudo borrar: ' + e.message, 'error'); if (btn) btn.disabled = false; }
+}
+
+async function reglasDecidir(id, accion, btn) {
+  const a = (reglasDatos?.acciones || []).find(x => x.id === id);
+  if (accion === 'aprobar' && !await confirmarAguaP({ titulo: '¿Aprobar este cambio?', confirmar: 'Aprobar',
+    texto: reglasTextoAccion(a || {}) + ' en «' + (a?.campana || '') + '».\n\nSe hace ya mismo en ' +
+      (a?.red === 'google' ? 'Google Ads' : 'Meta') + '. Si quieres deshacerlo, se hace desde el administrador de anuncios.' })) return;
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = accion === 'aprobar' ? 'Haciendo el cambio…' : 'Descartando…'; }
+  try {
+    const d = await reglasPost({ accion, id });
+    showToast(accion === 'aprobar' ? (d.accion?.resultado || 'Hecho') : 'Propuesta descartada', 'success');
+  } catch (e) {
+    // Si falló en la red, la fila quedó como «No se pudo» con el motivo: se ve en el historial.
+    showToast((accion === 'aprobar' ? 'No se pudo hacer el cambio: ' : 'No se pudo: ') + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+  reglasCargar();
+}
+
 // ── Ventas a la pauta ───────────────────────────────────────────────────────
 // Cada lead que se gana se le reporta a Meta y a Google como una venta, con su
 // valor. La cola, el envío y los reintentos viven en el servidor
@@ -40102,6 +41332,7 @@ function ventasPintar() {
       '<div style="flex:1">Esto lo configura el dueño de la cuenta o un administrador. Aquí puedes ver qué se envió.</div></div>';
   }
   html += '<div class="pauta-conxs">' + ventasTarjetaMeta(d.meta, puede) + ventasTarjetaGoogle(d.google, puede) + '</div>';
+  html += ventasEtapas(d.etapas || [], puede, d.meta.activo || d.google.activo);
   html += ventasRegistro(d.envios || [], puede);
   c.innerHTML = html;
 }
@@ -40183,8 +41414,63 @@ function ventasTarjetaGoogle(g, puede) {
   '</div>';
 }
 
+// Etapas del embudo que se reportan (03-10-2026). Con ellas Meta optimiza
+// hacia «Conversion Leads» —leads que avanzan, no formularios llenos— y
+// Google puede pujar por valor. Solo viajan los leads que vinieron de un
+// anuncio de esa red.
+function ventasEtapas(procesos, puede, algunaActiva) {
+  if (!procesos.length) return '';
+  let html = '<div class="pauta-pasos-t" style="margin:22px 0 6px">Etapas del embudo que se reportan</div>' +
+    '<div class="pauta-conx-nota" style="margin-bottom:10px"><span>Además de la venta, puedes avisarle a la red cuando un lead que vino de su anuncio avanza. ' +
+    '<b>Marca una o dos etapas que alcancen entre el 10 % y el 30 % de tus leads</b>: con ellas Meta busca personas que avanzan, no solo que llenan el formulario. ' +
+    'En Google cada etapa se crea como conversión <b>secundaria</b> («Acuarius — nombre de la etapa»): se mide sin cambiar tus pujas hasta que tú lo decidas. ' +
+    'El valor es opcional: lo que vale para ti que un lead llegue ahí.</span></div>' +
+    '<div class="pauta-conx-nota" style="margin-bottom:10px"><span><b>Anuncios a WhatsApp:</b> Meta solo acepta sus eventos estándar. La entrada sale como «lead enviado», ' +
+    'la <b>primera</b> etapa marcada que alcance el lead como «lead calificado» (una sola vez) y la venta como «compra», unidos al clic del anuncio durante los 7 días ' +
+    'siguientes. Necesita tu WhatsApp conectado a Acuarius; después de 7 días, o sin WhatsApp conectado, se usan teléfono y correo.</span></div>' +
+    (algunaActiva ? '' : '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) +
+      '<div style="flex:1">Activa Meta o Google arriba para que las etapas marcadas empiecen a enviarse.</div></div>');
+  procesos.forEach(p => {
+    html += '<div class="pauta-tabla-caja" style="margin-bottom:10px"><table class="pauta-tabla"><thead><tr>' +
+      '<th class="pauta-th">' + esc(p.nombre) + (p.principal ? ' <span style="color:var(--muted2);font-weight:500">· principal</span>' : '') + '</th>' +
+      '<th class="pauta-th" style="width:110px">Reportar</th><th class="pauta-th" style="width:180px">Valor (opcional)</th></tr></thead><tbody>' +
+      p.etapas.map(e =>
+        '<tr><td class="pauta-td">' + esc(e.label) + '</td>' +
+        '<td class="pauta-td"><div class="toggle' + (e.reportar ? ' on' : '') + '"' +
+          (puede ? ' role="switch" aria-checked="' + e.reportar + '" onclick="ventasEtapaAlternar(\'' + esc(e.id) + '\', this)"' : ' style="opacity:.6;cursor:default"') + '></div></td>' +
+        '<td class="pauta-td"><input class="auto-input" inputmode="numeric" style="padding:6px 10px;max-width:160px" placeholder="Sin valor"' +
+          ' value="' + (e.valor === null ? '' : esc(String(e.valor))) + '"' + (puede ? ' onchange="ventasEtapaValor(\'' + esc(e.id) + '\', this)"' : ' disabled') + '></td></tr>'
+      ).join('') + '</tbody></table></div>';
+  });
+  return html;
+}
+
+async function ventasEtapaAlternar(id, el) {
+  const nuevo = !el.classList.contains('on');
+  el.classList.toggle('on', nuevo);
+  el.setAttribute('aria-checked', String(nuevo));
+  try {
+    await ventasPost({ accion: 'etapa', stage_id: id, reportar: nuevo });
+    showToast(nuevo ? 'Esta etapa se reportará desde ahora' : 'Esta etapa ya no se reporta', 'success');
+  } catch (e) {
+    // Si no se guardó, el interruptor vuelve: lo que se ve tiene que ser lo que hay.
+    el.classList.toggle('on', !nuevo);
+    el.setAttribute('aria-checked', String(!nuevo));
+    showToast('No se pudo guardar: ' + e.message, 'error');
+  }
+}
+
+async function ventasEtapaValor(id, input) {
+  const v = String(input.value || '').replace(/[^\d]/g, '');
+  input.value = v;
+  try {
+    await ventasPost({ accion: 'etapa', stage_id: id, valor: v === '' ? null : Number(v) });
+    showToast('Valor guardado', 'success');
+  } catch (e) { showToast('No se pudo guardar el valor: ' + e.message, 'error'); }
+}
+
 function ventasRegistro(envios, puede) {
-  let html = '<div class="pauta-pasos-t" style="margin:22px 0 8px">Últimas ventas reportadas</div>';
+  let html = '<div class="pauta-pasos-t" style="margin:22px 0 8px">Últimos envíos a la pauta</div>';
   if (!envios.length) {
     return html + '<div class="pauta-vacio">Todavía no hay ventas en la cola. Aparecen aquí en cuanto ganes un lead con el envío activado.</div>';
   }
@@ -40195,7 +41481,8 @@ function ventasRegistro(envios, puede) {
     envios.map(e => {
       const st = VENTAS_ESTADO[e.estado] || [e.estado, 'pauta-pill-off'];
       const cuando = e.ocurrio_at ? new Date(e.ocurrio_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '—';
-      const detalle = e.motivo || (e.llave ? 'Identificada por ' + e.llave : '');
+      const detalle = (e.evento && e.evento !== 'Purchase' ? (e.evento === 'Lead' ? 'Entrada del lead' : 'Etapa «' + e.evento + '»') + ' · ' : '') +
+        (e.motivo || (e.llave ? 'Identificada por ' + e.llave : ''));
       const reintentable = puede && ['rechazado', 'sin_datos', 'pendiente'].includes(e.estado);
       return '<tr>' +
         '<td class="pauta-td" style="white-space:nowrap">' + esc(cuando) + '</td>' +

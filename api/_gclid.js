@@ -31,6 +31,47 @@ export const MAX_DIAS_POR_CARGA = 10;
 // Marca de «se preguntó y Google no lo conoce». Sin esto, un gclid de un
 // anuncio ya borrado se volvería a consultar en cada carga, para siempre.
 export const SIN_CAMPANA = '_clic_sin_campana';
+// Lo mismo para la palabra clave: un clic de Performance Max no tiene, y no
+// tiene sentido volver a preguntarlo.
+export const SIN_PALABRA = '_clic_sin_palabra';
+
+// ── ¿Es de Google? ──────────────────────────────────────────────────────────
+// La plataforma llega como la escribió quien etiquetó los anuncios: Certain
+// pone utm_source=adwords, otros «google_ads», «cpc» o «gads». Se comparaba
+// con «Google» exacto, y de unos 20 leads con un gclid de verdad solo se
+// atribuyó 1 (04-10-2026). Ahora manda el tipo de clic (un gclid es de Google
+// diga lo que diga la UTM), después la plataforma normalizada, y si no hay
+// ninguna de las dos, el formato del clic.
+const PLATAFORMAS = [
+  [/^(google|adwords|google[ _-]?ads|googleads|gads|g[ _-]?ads|cpc|ppc|sem|search|pmax|youtube|yt|gdn)$/, 'Google'],
+  [/^(meta|facebook|fb|ig|instagram|facebook[ _-]?ads|meta[ _-]?ads|fb[ _-]?ads|ig[ _-]?ads|paid[ _-]?social|messenger|whatsapp[ _-]?ads)$/, 'Meta'],
+  [/^(tiktok|tiktok[ _-]?ads|tt)$/, 'TikTok'],
+  [/^(bing|microsoft|microsoft[ _-]?ads|msads)$/, 'Microsoft'],
+];
+/** «adwords» → «Google», «fb» → «Meta». Lo que no reconoce lo devuelve igual. Pura. */
+export function normPlataforma(v) {
+  const t = String(v || '').trim();
+  const k = t.toLowerCase();
+  if (!k) return '';
+  if (k.startsWith('google')) return 'Google';
+  if (k === 'meta orgánico' || k === 'meta organico') return 'Meta orgánico';
+  if (k.startsWith('meta')) return 'Meta';
+  for (const [re, red] of PLATAFORMAS) if (re.test(k)) return red;
+  return t;
+}
+const TIPOS_GOOGLE = ['gclid', 'wbraid', 'gbraid'];
+/** ¿Este lead viene de un clic en un anuncio de Google? Pura. */
+export function esClicDeGoogle(cf) {
+  const clic = String(cf?.['Clic de anuncio'] || '').trim();
+  if (!clic) return false;
+  const tipo = String(cf['Tipo de clic'] || '').toLowerCase();
+  if (tipo) return TIPOS_GOOGLE.includes(tipo);
+  const plat = normPlataforma(cf['Plataforma']);
+  if (plat) return plat === 'Google';
+  // Sin tipo ni plataforma: un fbclid empieza por «IwA»/«IwZ»; el resto que
+  // llega como clic de anuncio es, en la práctica, de Google.
+  return !/^Iw[A-Z]/.test(clic);
+}
 
 export function diaDe(iso) {
   return String(iso || '').slice(0, 10);
@@ -43,7 +84,7 @@ export function pendientes(leads) {
     if (!String(cf['Clic de anuncio'] || '').trim()) return false;
     // Un fbclid también se guarda como «Clic de anuncio»; a Google no se le
     // pregunta por el clic de Meta.
-    if (String(cf['Plataforma'] || '').trim() !== 'Google') return false;
+    if (!esClicDeGoogle(cf)) return false;
     if (String(cf['ID de campaña'] || '').trim()) return false;
     if (String(cf['Campaña'] || '').trim()) return false;
     if (cf[SIN_CAMPANA]) return false;
@@ -118,7 +159,8 @@ export async function resolverClics({
       const hallado = mapa.get(String(cf['Clic de anuncio'] || ''));
       if (!hallado?.campaignId && !marcarSinCampana) { cuenta.pendientes++; continue; }
       const campos = hallado && hallado.campaignId
-        ? { ...cf, 'ID de campaña': String(hallado.campaignId), 'Campaña': String(hallado.campaignName || '') }
+        ? { ...cf, 'ID de campaña': String(hallado.campaignId), 'Campaña': String(hallado.campaignName || ''),
+            ...(hallado.palabra ? { 'Palabra clave': String(hallado.palabra) } : { [SIN_PALABRA]: true }) }
         : { ...cf, [SIN_CAMPANA]: true };
       // Se escribe también en el objeto que tenemos delante: sin esto, el
       // cruce de ESTA carga seguiría viendo el lead sin campaña y el cliente
@@ -133,7 +175,7 @@ export async function resolverClics({
 
 /** La consulta que Google entiende. Un solo día, que es lo que admite. */
 export function consultaDelDia(dia) {
-  return `SELECT click_view.gclid, campaign.id, campaign.name ` +
+  return `SELECT click_view.gclid, click_view.keyword_info.text, campaign.id, campaign.name ` +
          `FROM click_view WHERE segments.date = '${dia}'`;
 }
 
@@ -143,5 +185,50 @@ export function filasAClics(filas) {
     gclid: f?.clickView?.gclid || '',
     campaignId: f?.campaign?.id || '',
     campaignName: f?.campaign?.name || '',
+    palabra: f?.clickView?.keywordInfo?.text || '',
   })).filter(c => c.gclid);
+}
+
+/**
+ * Leads de Google que ya tienen campaña pero no palabra clave: los que se
+ * resolvieron antes del 03-10-2026, cuando solo se pedía la campaña. Solo los
+ * de los últimos 90 días, que es lo que Google guarda.
+ */
+export function sinPalabra(leads, ahora = Date.now()) {
+  const limite = diaDe(new Date(ahora - DIAS_CLICK_VIEW * 864e5).toISOString());
+  return (leads || []).filter((l) => {
+    const cf = l.custom_fields || {};
+    return esClicDeGoogle(cf) &&
+      String(cf['ID de campaña'] || '').trim() && !cf['Palabra clave'] && !cf[SIN_PALABRA] && diaDe(l.created_at) >= limite;
+  });
+}
+
+/** Completa la palabra clave de esos leads. Misma forma que resolverClics. */
+export async function completarPalabras({ leads, consultarDia, guardar, ahora = Date.now(), maxDias = MAX_DIAS_POR_CARGA, marcar = true } = {}) {
+  const cuenta = { resueltos: 0, sin_palabra: 0, dias: 0, pendientes: 0 };
+  const porDia = new Map();
+  for (const l of sinPalabra(leads, ahora)) {
+    const dia = diaDe(l.created_at);
+    if (!porDia.has(dia)) porDia.set(dia, []);
+    porDia.get(dia).push(l);
+  }
+  const dias = [...porDia.keys()].sort().reverse();
+  for (const [i, dia] of dias.entries()) {
+    if (i >= maxDias) { cuenta.pendientes += porDia.get(dia).length; continue; }
+    let clics;
+    try { clics = await consultarDia(dia); cuenta.dias++; }
+    catch { cuenta.pendientes += porDia.get(dia).length; continue; }
+    const mapa = new Map((clics || []).map(c => [String(c.gclid || ''), c]));
+    for (const l of porDia.get(dia)) {
+      const cf = l.custom_fields || {};
+      const hallado = mapa.get(String(cf['Clic de anuncio'] || ''));
+      // Con varias cuentas, el clic es de una sola: las otras no marcan nada.
+      if (!hallado && !marcar) { cuenta.pendientes++; continue; }
+      const campos = hallado?.palabra ? { ...cf, 'Palabra clave': String(hallado.palabra) } : { ...cf, [SIN_PALABRA]: true };
+      l.custom_fields = campos;
+      if (hallado?.palabra) cuenta.resueltos++; else cuenta.sin_palabra++;
+      await guardar(l.id, campos).catch(() => {});
+    }
+  }
+  return cuenta;
 }

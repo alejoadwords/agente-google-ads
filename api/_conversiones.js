@@ -22,6 +22,7 @@
 // SOLO desde funciones edge (regla 2 de CLAUDE.md).
 
 import { abrirConexion, cifrar, descifrar } from './_cifrado.js';
+import { normPlataforma } from './_gclid.js';
 import { dondePreguntar } from './_google-login.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -33,6 +34,20 @@ const VERSIONES_GOOGLE = [22, 23];
 export const NOMBRE_ACCION_GOOGLE = 'Venta en Acuarius';
 export const DIAS_META = 7;
 export const MAX_INTENTOS = 6;
+// El ctwa_clid une el evento con el clic al anuncio de WhatsApp durante 7 días
+// desde que la persona escribió. Después Meta ya no lo atribuye por esa vía.
+export const DIAS_CTWA = 7;
+
+/**
+ * Por mensajería de negocio Meta solo acepta sus eventos estándar, no nombres
+ * libres: la entrada es «LeadSubmitted», cualquier etapa marcada es
+ * «QualifiedLead» y la venta, «Purchase».
+ */
+export function nombreEventoWhatsapp(fila) {
+  if (fila.evento === 'Lead') return 'LeadSubmitted';
+  if (fila.etapa) return 'QualifiedLead';
+  return 'Purchase';
+}
 
 const sbH = (extra = {}) => ({ 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, ...extra });
 async function sb(ruta, init) {
@@ -91,7 +106,8 @@ function partirNombre(nombre) {
 export function llavesDelLead(lead) {
   const cf = lead.custom_fields || {};
   const clic = String(cf['Clic de anuncio'] || '').trim() || null;
-  const plataforma = String(cf['Plataforma'] || '').toLowerCase();
+  // Normalizada: «adwords» es Google (ver normPlataforma en api/_gclid.js).
+  const plataforma = normPlataforma(cf['Plataforma']).toLowerCase();
   let tipo = String(cf['Tipo de clic'] || '').toLowerCase() || null;
   if (clic && !tipo) {
     if (plataforma.startsWith('meta')) tipo = cf['ID de anuncio'] ? 'ctwa_clid' : 'fbclid';
@@ -184,7 +200,7 @@ export async function eventoMeta({ fila, lead, moneda, whatsapp }) {
   if (!llaves.length) return { sinDatos: true };
 
   const evento = {
-    event_name: fila.evento || 'Purchase',
+    event_name: porWhatsapp ? nombreEventoWhatsapp(fila) : (fila.evento || 'Purchase'),
     event_time: Math.floor(Date.parse(fila.ocurrio_at) / 1000),
     event_id: fila.event_id,
     user_data: ud,
@@ -192,7 +208,10 @@ export async function eventoMeta({ fila, lead, moneda, whatsapp }) {
   };
   // El valor es de la VENTA. Un «Lead» con el importe del negocio haría creer
   // a Meta que entrar ya facturó.
-  if (evento.event_name === 'Purchase') evento.custom_data = { value: Number(lead.value) || 0, currency: moneda };
+  if (evento.event_name === 'Purchase' && !fila.etapa) evento.custom_data = { value: Number(lead.value) || 0, currency: moneda };
+  // Una etapa del embudo («Cita de inmueble») lleva el valor de la etapa si
+  // se le puso uno; sin valor va sola, que para Conversion Leads basta.
+  if (fila.etapa && Number(fila.valor_etapa) > 0) evento.custom_data = { value: Number(fila.valor_etapa), currency: moneda };
   if (porWhatsapp) {
     evento.action_source = 'business_messaging';
     evento.messaging_channel = 'whatsapp';
@@ -342,20 +361,25 @@ export async function llamarGoogle(ruta, h, cuerpo) {
  * nuestro nombre se reutiliza (activar dos veces no puede crear dos); si no,
  * se crea: tipo «importación de clics», categoría compra, valor por venta.
  */
-export async function asegurarAccionGoogle(fila, moneda) {
+export async function asegurarAccionGoogle(fila, moneda, { nombre = NOMBRE_ACCION_GOOGLE, categoria = 'PURCHASE', secundaria = false } = {}) {
   const { cid, h } = await accesoGoogle(fila);
+  const nombreGaql = String(nombre).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const q = await llamarGoogle(`customers/${cid}/googleAds:search`, h, {
     query: `SELECT conversion_action.resource_name, conversion_action.status FROM conversion_action ` +
-      `WHERE conversion_action.name = '${NOMBRE_ACCION_GOOGLE}' AND conversion_action.status != 'REMOVED'`,
+      `WHERE conversion_action.name = '${nombreGaql}' AND conversion_action.status != 'REMOVED'`,
   });
   if (!q.ok) throw new Error(q.motivo);
   const ya = q.datos?.results?.[0]?.conversionAction?.resourceName;
   if (ya) return ya;
+  const crear = {
+    name: nombre, type: 'UPLOAD_CLICKS', category: categoria, status: 'ENABLED',
+    valueSettings: { defaultValue: 0, defaultCurrencyCode: moneda || 'COP', alwaysUseDefaultValue: false },
+  };
+  // Las etapas se crean SECUNDARIAS: se ven y se miden, pero no cambian las
+  // pujas de la cuenta hasta que el cliente decida usarlas como objetivo.
+  if (secundaria) crear.primaryForGoal = false;
   const c = await llamarGoogle(`customers/${cid}/conversionActions:mutate`, h, {
-    operations: [{ create: {
-      name: NOMBRE_ACCION_GOOGLE, type: 'UPLOAD_CLICKS', category: 'PURCHASE', status: 'ENABLED',
-      valueSettings: { defaultValue: 0, defaultCurrencyCode: moneda || 'COP', alwaysUseDefaultValue: false },
-    } }],
+    operations: [{ create: crear }],
   });
   if (!c.ok) throw new Error(c.motivo);
   const nueva = c.datos?.results?.[0]?.resourceName;
@@ -368,12 +392,35 @@ function fechaGoogle(iso) {
   return new Date(iso).toISOString().slice(0, 19).replace('T', ' ') + '+00:00';
 }
 
+/**
+ * El valor que viaja con el evento: el de la etapa si es un evento de etapa
+ * (llegar a «cita» no vale lo que vale la venta), el del negocio si es la venta.
+ */
+export function valorDeFila(fila, lead) {
+  return fila.etapa ? (Number(fila.valor_etapa) || 0) : (Number(lead.value) || 0);
+}
+
+/** Guarda la acción de Google de una etapa en la conexión, fusionando extra_data. */
+async function guardarAccionEtapa(con, etapa, recurso) {
+  const f = await sb(`/platform_connections?id=eq.${encodeURIComponent(con.id)}&select=extra_data&limit=1`);
+  // Se parte de lo que ya se sabe de la conexión Y de lo que diga la base: si
+  // la lectura volviera vacía, perder `accion` dejaría las ventas sin destino.
+  const extra = { ...(con.extra_data || {}), ...(f?.[0]?.extra_data || {}) };
+  const conv = { ...(con.extra_data?.conversiones || {}), ...(extra.conversiones || {}) };
+  conv.etapas = { ...(conv.etapas || {}), [etapa]: recurso };
+  await sb(`/platform_connections?id=eq.${encodeURIComponent(con.id)}`, {
+    method: 'PATCH', headers: sbH({ Prefer: 'return=minimal' }),
+    body: JSON.stringify({ extra_data: { ...extra, conversiones: conv } }),
+  });
+  con.extra_data = { ...(con.extra_data || {}), conversiones: conv };
+}
+
 export async function conversionGoogle({ fila, lead, moneda, accion }) {
   const k = llavesDelLead(lead);
   const conv = {
     conversionAction: accion,
     conversionDateTime: fechaGoogle(fila.ocurrio_at),
-    conversionValue: Number(lead.value) || 0,
+    conversionValue: valorDeFila(fila, lead),
     currencyCode: moneda,
     orderId: fila.event_id,
   };
@@ -391,6 +438,13 @@ export async function conversionGoogle({ fila, lead, moneda, accion }) {
 }
 
 // ── La cola ─────────────────────────────────────────────────────────────────
+/** ¿Otra etapa de este lead ya salió como «QualifiedLead» por WhatsApp? */
+async function yaCalificadoPorWhatsapp(fila) {
+  const f = await sb(`/conversiones_pauta?lead_id=eq.${encodeURIComponent(fila.lead_id)}&red=eq.meta&etapa=not.is.null` +
+    `&estado=eq.enviado&llave=like.*WhatsApp*&id=neq.${encodeURIComponent(fila.id)}&select=id&limit=1`).catch(() => []);
+  return !!(f && f.length);
+}
+
 async function monedaDeLaCuenta(userId) {
   try {
     const f = await sb(`/onboarding_cuenta?user_id=eq.${encodeURIComponent(userId)}&select=moneda&limit=1`);
@@ -421,7 +475,7 @@ export async function procesarFila(fila, { lead, conexiones, moneda }) {
   try {
     if (!lead || lead.deleted_at) {
       cambio = { estado: 'cancelado', motivo: 'El lead se borró antes de enviarse.' };
-    } else if (fila.evento !== 'Lead' && lead.stage !== 'ganado') {
+    } else if (!fila.etapa && fila.evento !== 'Lead' && lead.stage !== 'ganado') {
       cambio = { estado: 'cancelado', motivo: 'El lead dejó de estar ganado antes de enviarse.' };
     } else {
       const con = conexionPara(conexiones, fila.red, lead);
@@ -434,26 +488,47 @@ export async function procesarFila(fila, { lead, conexiones, moneda }) {
         } else {
           // Un clic a WhatsApp va al conjunto de datos de la cuenta de
           // WhatsApp, con el token de WhatsApp; todo lo demás, al pixel.
-          let canal = null, nota = null;
+          let canal = null, nota = null, repetido = false;
           if (llavesDelLead(lead).ctwa) {
-            canal = await canalWhatsappDelLead(lead).catch(() => null);
-            if (!canal) nota = 'Vino de un anuncio de WhatsApp, pero ese WhatsApp no está conectado a Acuarius: se usaron teléfono y correo.';
+            const desdeClic = Date.now() - (Date.parse(lead.created_at) || 0);
+            if (desdeClic > DIAS_CTWA * 86400000) {
+              nota = 'El clic a WhatsApp tiene más de 7 días: Meta ya no lo une al anuncio, así que se usaron teléfono y correo.';
+            } else {
+              canal = await canalWhatsappDelLead(lead).catch(() => null);
+              if (!canal) nota = 'Vino de un anuncio de WhatsApp, pero ese WhatsApp no está conectado a Acuarius: se usaron teléfono y correo.';
+            }
+            // «QualifiedLead» va UNA vez por clic: si el lead ya se reportó
+            // calificado por otra etapa, esta no suma otro calificado.
+            if (canal && fila.etapa) repetido = await yaCalificadoPorWhatsapp(fila);
           }
-          const ev = await eventoMeta({ fila, lead, moneda: mon, whatsapp: canal });
-          if (ev.sinDatos) cambio = { estado: 'sin_datos', motivo: 'El lead no tiene teléfono, correo ni datos del anuncio: Meta no podría reconocerlo.' };
-          else {
-            const destino = canal
-              ? { dataset: await datasetDeWhatsapp(canal), token: canal.token }
-              : { dataset: con.account_id, token: con.access_token };
-            const r = await mandarAMeta({ ...destino, eventos: [ev.evento], testCode: con.extra_data?.test_event_code || null });
-            cambio = r.ok
-              ? { estado: 'enviado', enviado_at: new Date().toISOString(), llave: ev.llave, motivo: nota, respuesta: r.respuesta }
-              : { estado: r.red && intentos < MAX_INTENTOS ? 'pendiente' : 'rechazado', llave: ev.llave, motivo: r.motivo, respuesta: r.respuesta || null };
-            if (fila.evento !== 'Lead') { cambio.valor = Number(lead.value) || 0; cambio.moneda = mon; }
+          if (repetido) {
+            cambio = { estado: 'cancelado', motivo: 'Este lead ya se reportó como calificado por WhatsApp en otra etapa: Meta cuenta un calificado por clic.' };
+          } else {
+            const ev = await eventoMeta({ fila, lead, moneda: mon, whatsapp: canal });
+            if (ev.sinDatos) cambio = { estado: 'sin_datos', motivo: 'El lead no tiene teléfono, correo ni datos del anuncio: Meta no podría reconocerlo.' };
+            else {
+              const destino = canal
+                ? { dataset: await datasetDeWhatsapp(canal), token: canal.token }
+                : { dataset: con.account_id, token: con.access_token };
+              const r = await mandarAMeta({ ...destino, eventos: [ev.evento], testCode: con.extra_data?.test_event_code || null });
+              cambio = r.ok
+                ? { estado: 'enviado', enviado_at: new Date().toISOString(), llave: ev.llave, motivo: nota, respuesta: r.respuesta }
+                : { estado: r.red && intentos < MAX_INTENTOS ? 'pendiente' : 'rechazado', llave: ev.llave, motivo: r.motivo, respuesta: r.respuesta || null };
+              if (fila.evento !== 'Lead') { cambio.valor = valorDeFila(fila, lead); cambio.moneda = mon; }
+            }
           }
         }
       } else {
-        const accion = con.extra_data?.conversiones?.accion;
+        // Cada etapa sube a su propia acción («Acuarius — Cita de inmueble»),
+        // creada la primera vez que hace falta y guardada en la conexión.
+        let accion = con.extra_data?.conversiones?.accion;
+        if (fila.etapa) {
+          accion = con.extra_data?.conversiones?.etapas?.[fila.etapa] || null;
+          if (!accion) {
+            accion = await asegurarAccionGoogle(con, mon, { nombre: 'Acuarius — ' + fila.evento, categoria: 'QUALIFIED_LEAD', secundaria: true });
+            await guardarAccionEtapa(con, fila.etapa, accion);
+          }
+        }
         if (!accion) {
           cambio = { estado: 'rechazado', motivo: 'Falta la acción de conversión de Google. Desactiva y vuelve a activar el envío.' };
         } else {
@@ -470,7 +545,7 @@ export async function procesarFila(fila, { lead, conexiones, moneda }) {
               motivo: parcial ? 'Google lo rechazó: ' + (r.datos.partialFailureError.message || 'sin detalle') : r.motivo,
               respuesta: r.datos || r.respuesta || null,
             };
-            cambio.valor = Number(lead.value) || 0; cambio.moneda = mon;
+            cambio.valor = valorDeFila(fila, lead); cambio.moneda = mon;
           }
         }
       }

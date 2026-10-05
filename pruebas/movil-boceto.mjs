@@ -275,8 +275,15 @@ console.log('\nLas tarjetas de pauta se REUTILIZAN, no se copian\n');
   // que no puede haber es consulta ni cálculo propios: ahí es donde las dos
   // versiones se separarían.
   const codigo = guionSinComentarios();
+  // Excepción, una sola y con nombre: `pedirCampanas` pide a /api/pauta la
+  // LISTA de campañas para que quien crea un contacto elija por cuál llegó
+  // (04-10-2026). Solo nombres e ids, ninguna métrica: no es el cálculo que
+  // esta regla protege. Cualquier otra consulta sigue prohibida.
+  const sinLista = codigo.replace(/async function pedirCampanas\(\)\{[\s\S]*?\n\}/, '');
   chk('no consulta las cuentas de pauta por su cuenta',
-      !/\/api\/(google-ads|meta-ads|pauta)/.test(codigo));
+      !/\/api\/(google-ads|meta-ads|pauta)/.test(sinLista));
+  chk('…salvo la lista de campañas para elegir por cuál llegó un contacto',
+      /async function pedirCampanas\(\)\{/.test(codigo) && sinLista !== codigo);
   // Buscar palabras sueltas como «promedio» o «delta» daba falsos positivos
   // —una está en el texto de ejemplo y la otra es una clase del SEO—. Lo
   // preciso: las tarjetas de pauta SALEN de app.js y solo se traducen.

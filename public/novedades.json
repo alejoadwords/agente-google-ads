@@ -2,6 +2,130 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-04-campana-lead-manual",
+      "fecha": "2026-10-04",
+      "tipo": "mejora",
+      "titulo": "Al crear un lead a mano, eliges la campaña por la que llegó",
+      "texto": "Cuando creas un lead que llegó por WhatsApp o por una llamada, ahora eliges de qué campaña de Google o Meta vino. Con fuente Meta Ads, Google Ads o Web es obligatorio responder: la campaña, «Vino de un anuncio, no sé cuál» o, con Web, «No vino de un anuncio». En la app del teléfono también se pregunta al crear el contacto. Así esos leads cuentan en Plataformas de pauta, en el Analista IA y en los reportes para tus clientes.",
+      "accion": {
+        "texto": "Crear un lead",
+        "ir": "crm"
+      }
+    },
+    {
+      "id": "2026-10-04-reporte-agencia-v2",
+      "fecha": "2026-10-04",
+      "tipo": "nuevo",
+      "titulo": "El reporte para tus clientes, ahora completo y con pestañas",
+      "texto": "El reporte programado ahora se arma como el de una agencia: resumen ejecutivo con período contra período, Google Ads con sus campañas y las búsquedas que gastan sin resultado, Meta Ads con sus capas de marca y captación y los mejores anuncios con su imagen, y una pestaña que solo Acuarius puede tener: «Del clic a la venta», con lo que pasó con esos contactos en tu CRM. Los textos y el plan de acción los escribe la IA con tus números.",
+      "accion": {
+        "texto": "Ver reportes",
+        "ir": "pauta-reportes"
+      }
+    },
+    {
+      "id": "2026-10-04-reportes-conversiones",
+      "fecha": "2026-10-04",
+      "tipo": "mejora",
+      "titulo": "El reporte muestra las conversiones de Google junto a los leads del CRM",
+      "texto": "Cada campaña del reporte trae ahora las conversiones que cuenta Google (o Meta), las mismas de tu cuenta de anuncios, al lado de los leads que de verdad llegaron al CRM. Si no cuadran, el reporte explica por qué, para que tu cliente no se confunda al compararlo con su cuenta."
+    },
+    {
+      "id": "2026-10-04-reportes-revision",
+      "fecha": "2026-10-04",
+      "tipo": "mejora",
+      "titulo": "Revisa cada reporte antes de que le llegue a tu cliente",
+      "texto": "Al crear un reporte programado ahora generas la vista previa con los números reales, la ves dentro de Acuarius, ajustas el resumen si quieres y decides si lo envías ya o solo lo programas. Y en cada envío programado, por defecto, te avisamos por correo cuando está listo: no le llega a tu cliente hasta que lo apruebes.",
+      "accion": {
+        "texto": "Ir a Reportes",
+        "ir": "pauta-reportes"
+      }
+    },
+    {
+      "id": "2026-10-04-reportes-programados",
+      "fecha": "2026-10-04",
+      "tipo": "nuevo",
+      "titulo": "Reportes automáticos para tus clientes, con tu marca",
+      "texto": "En Plataformas de pauta → Reportes programas un reporte semanal, quincenal o mensual para cada cliente. Se arma solo con la inversión, los leads que llegaron al CRM, las ventas y lo que hiciste en el período, comparado con el período anterior, y le llega a tu cliente a las 7:00 con tu nombre, tu logo y tu color. Puedes verlo antes de que salga o enviarlo cuando quieras.",
+      "accion": {
+        "texto": "Programar un reporte",
+        "ir": "pauta-reportes"
+      }
+    },
+    {
+      "id": "2026-10-04-confirmaciones-pauta",
+      "fecha": "2026-10-04",
+      "tipo": "mejora",
+      "titulo": "Confirmaciones con la cara de Acuarius en Plataformas de pauta",
+      "texto": "Pausar una campaña, aprobar una propuesta del Analista IA o de tus reglas, excluir una búsqueda o borrar una regla ahora te pide confirmación en una ventana de Acuarius, que explica qué va a pasar y cómo deshacerlo, en vez del aviso gris del navegador."
+    },
+    {
+      "id": "2026-10-03-analista-ia",
+      "fecha": "2026-10-03",
+      "tipo": "nuevo",
+      "titulo": "Analista IA: una revisión de tu pauta con los datos de tu CRM",
+      "texto": "En Plataformas de pauta → Analista IA pides una revisión y en medio minuto tienes qué haría un experto esta semana con tu cuenta, en orden y con los números que lo sostienen: campañas, lo que pasó con sus leads en el CRM, búsquedas que se cuelan y motivos de pérdida. Lo que se puede hacer —pausar, bajar un presupuesto o excluir una búsqueda— te queda listo para aprobar con un clic. Nada se cambia sin tu aprobación.",
+      "accion": {
+        "texto": "Pedir una revisión",
+        "ir": "pauta-analista"
+      }
+    },
+    {
+      "id": "2026-10-03-busquedas-negativas",
+      "fecha": "2026-10-03",
+      "tipo": "nuevo",
+      "titulo": "Excluye las búsquedas que te hacen gastar sin vender",
+      "texto": "En Plataformas de pauta → Búsquedas ves por qué búsquedas salen tus anuncios de Google, cuáles gastan sin traer resultados y qué palabras ajenas a tu negocio se cuelan (como «gratis», «empleo» o el nombre de un competidor). Las excluyes con un clic y lo puedes deshacer. Además, cada lead de Google ahora guarda su palabra clave, y ves cuáles traen leads que nunca avanzan en tu CRM. Nunca te proponemos tu marca ni lo que ya es palabra clave.",
+      "accion": {
+        "texto": "Ver mis búsquedas",
+        "ir": "pauta-busquedas"
+      }
+    },
+    {
+      "id": "2026-10-03-reglas-pauta",
+      "fecha": "2026-10-03",
+      "tipo": "nuevo",
+      "titulo": "Reglas para tu pauta con los números de tu CRM",
+      "texto": "En Plataformas de pauta → Reglas puedes decir, por ejemplo: «si el costo por lead real de los últimos 7 días pasa de $50.000, pausa la campaña». Se mide con los leads y las ventas que llegaron a tu CRM, no solo con lo que reporta la red. Cada mañana te proponemos los cambios y tú los apruebas con un clic, o puedes dejar una regla en automático. Solo pueden avisar, pausar o bajar un presupuesto: nunca activan ni suben nada.",
+      "accion": {
+        "texto": "Crear una regla",
+        "ir": "pauta-reglas"
+      }
+    },
+    {
+      "id": "2026-10-03-alertas-pauta",
+      "fecha": "2026-10-03",
+      "tipo": "nuevo",
+      "titulo": "Alertas de tu pauta cada mañana",
+      "texto": "Si tienes Google Ads o Meta conectado, cada mañana revisamos lo que pasó ayer en tus campañas y te escribimos solo si hay algo: una campaña que dejó de entregar, un gasto que se disparó, un costo por lead que se duplicó o dos días gastando sin que entre un lead a tu CRM. Lo ves también en Plataformas de pauta → Diagnóstico. Acuarius solo te avisa: no cambia nada en tus cuentas.",
+      "accion": {
+        "texto": "Ver el diagnóstico",
+        "ir": "pauta-diagnostico"
+      }
+    },
+    {
+      "id": "2026-10-03-whatsapp-calificado",
+      "fecha": "2026-10-03",
+      "tipo": "mejora",
+      "titulo": "Tus anuncios a WhatsApp aprenden quién se califica y quién compra",
+      "texto": "Si tu WhatsApp está conectado a Acuarius, cada conversación que llega por un anuncio de Meta se le reporta como «lead enviado», la primera etapa que marques en Ventas a la pauta como «lead calificado» y la venta como «compra», unidas al clic del anuncio. Así Meta puede optimizar tus campañas de mensajes hacia personas que avanzan y compran, no solo hacia las que escriben.",
+      "accion": {
+        "texto": "Configurar",
+        "ir": "pauta-ventas"
+      }
+    },
+    {
+      "id": "2026-10-03-etapas-a-la-pauta",
+      "fecha": "2026-10-03",
+      "tipo": "nuevo",
+      "titulo": "Meta y Google aprenden de tu embudo, no solo de la venta",
+      "texto": "En Marketing → Plataformas de pauta → Ventas a la pauta puedes marcar etapas de tus procesos (por ejemplo «Presentación de propuesta» o «Cita») para que se le reporten a Meta y a Google cuando un lead que vino de su anuncio llega ahí, con un valor si quieres. Meta usa esas etapas para buscar leads que avanzan, no solo que llenan el formulario; en Google cada etapa entra como conversión secundaria, sin cambiar tus pujas hasta que tú lo decidas.",
+      "accion": {
+        "texto": "Configurar",
+        "ir": "pauta-ventas"
+      }
+    },
+    {
       "id": "2026-10-02-campanas-horario-legal",
       "fecha": "2026-10-02",
       "tipo": "mejora",

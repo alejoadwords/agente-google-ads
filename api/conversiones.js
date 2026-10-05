@@ -7,6 +7,7 @@
 //   POST {accion:'meta-quitar'}
 //   POST {accion:'google-activar', activo}         al activar crea «Venta en Acuarius»
 //   POST {accion:'reintentar', id}
+//   POST {accion:'etapa', stage_id, reportar, valor}   etapa del embudo que se reporta
 //
 // Meta NO pasa por el inicio de sesión de nuestra app (que espera el App
 // Review): el cliente pega el id de su conjunto de datos y un token de la API
@@ -92,6 +93,22 @@ function eventoDePrueba() {
   };
 }
 
+// Las etapas intermedias de cada proceso del ámbito. «nuevo» ya sale como
+// «Lead» y «ganado» como la venta; «perdido» no es un avance.
+const ETAPAS_FIJAS = new Set(['nuevo', 'ganado', 'perdido']);
+async function etapasDelAmbito(userId, clientId) {
+  const filtro = clientId ? `&or=(client_id.eq.${encodeURIComponent(clientId)},client_id.is.null)` : '';
+  const procesos = await sb(`/pipelines?user_id=eq.${encodeURIComponent(userId)}${filtro}&select=id,name,is_default,client_id&order=created_at.asc`) || [];
+  if (!procesos.length) return [];
+  const etapas = await sb(`/pipeline_stages?pipeline_id=in.(${procesos.map(p => p.id).join(',')})` +
+    `&select=id,pipeline_id,key,label,position,pauta_reportar,pauta_valor&order=position.asc`) || [];
+  return procesos.map(p => ({
+    pipeline_id: p.id, nombre: p.name, principal: !!p.is_default,
+    etapas: etapas.filter(e => e.pipeline_id === p.id && !ETAPAS_FIJAS.has(e.key))
+      .map(e => ({ id: e.id, key: e.key, label: e.label, reportar: !!e.pauta_reportar, valor: e.pauta_valor === null ? null : Number(e.pauta_valor) })),
+  })).filter(p => p.etapas.length);
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const sesion = await verificarSesion(req);
@@ -112,12 +129,13 @@ export default async function handler(req) {
       const [meta, google] = await Promise.all([conexionMeta(userId, clientId), conexionGoogle(userId, clientId)]);
       const filtroEnvios = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '';
       const envios = await sb(`/conversiones_pauta?user_id=eq.${encodeURIComponent(userId)}${filtroEnvios}` +
-        `&select=id,lead_id,red,estado,valor,moneda,llave,motivo,intentos,ocurrio_at,enviado_at,created_at&order=created_at.desc&limit=60`) || [];
+        `&select=id,lead_id,red,evento,estado,valor,moneda,llave,motivo,intentos,ocurrio_at,enviado_at,created_at&order=created_at.desc&limit=60`) || [];
       const ids = [...new Set(envios.map(e => e.lead_id))];
       const nombres = ids.length
         ? await sb(`/leads?id=in.(${ids.join(',')})&select=id,name`).catch(() => []) : [];
       const nom = new Map((nombres || []).map(l => [l.id, l.name]));
       return jsonResp({
+        etapas: await etapasDelAmbito(userId, clientId),
         puede_configurar: puede,
         meta: meta ? {
           conectado: true, dataset: meta.account_id, nombre: meta.account_name || null,
@@ -256,6 +274,30 @@ export default async function handler(req) {
       const accion = await asegurarAccionGoogle(con, moneda);
       await guardarExtra(con.id, { conversiones: { activo: true, accion, desde: new Date().toISOString() } });
       return jsonResp({ ok: true, activo: true, accion: NOMBRE_ACCION_GOOGLE });
+    }
+
+    // ── Etapa del embudo que se reporta ─────────────────────────────────────
+    if (body.accion === 'etapa') {
+      const id = String(body.stage_id || '');
+      const filas = await sb(`/pipeline_stages?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}&select=id,key,pipeline_id&limit=1`);
+      const st = filas?.[0];
+      if (!st) return jsonResp({ error: 'Esa etapa no es de tu cuenta.' }, 404);
+      if (ETAPAS_FIJAS.has(st.key)) return jsonResp({ error: 'Esa etapa ya se reporta sola (entrada o venta).' }, 400);
+      // Un miembro acotado a un cliente solo toca los procesos de su cliente.
+      if (clientId) {
+        const p = await sb(`/pipelines?id=eq.${encodeURIComponent(st.pipeline_id)}&select=client_id&limit=1`);
+        if (p?.[0]?.client_id && p[0].client_id !== clientId) return jsonResp({ error: 'Ese proceso es de otro cliente.' }, 403);
+      }
+      const cambio = {};
+      if (body.reportar !== undefined) cambio.pauta_reportar = !!body.reportar;
+      if (body.valor !== undefined) {
+        const v = body.valor === null || body.valor === '' ? null : Number(String(body.valor).replace(/[^\d.]/g, ''));
+        if (v !== null && (!Number.isFinite(v) || v < 0 || v > 1e12)) return jsonResp({ error: 'El valor tiene que ser un número positivo.' }, 400);
+        cambio.pauta_valor = v;
+      }
+      if (!Object.keys(cambio).length) return jsonResp({ error: 'Nada que cambiar' }, 400);
+      await sb(`/pipeline_stages?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: sbH({ Prefer: 'return=minimal' }), body: JSON.stringify(cambio) });
+      return jsonResp({ ok: true });
     }
 
     // ── Reintentar uno ──────────────────────────────────────────────────────
