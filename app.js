@@ -45089,7 +45089,19 @@ async function avzProbar() {
     await sala.localParticipant.setMicrophoneEnabled(true);
     avzSala = sala;
     avzPintar();
-    avzLinea('agente', '(conectado: habla cuando quieras)');
+    avzLinea('agente', '(conectando con tu agente…)');
+    // Si el agente no entra a la sala, la persona habla sola y cree que no
+    // funciona el micrófono: pasó en la primera prueba. A los 20 s se dice y
+    // se corta, en vez de dejar la prueba abierta en silencio.
+    const entro = () => sala.remoteParticipants && sala.remoteParticipants.size > 0;
+    if (entro()) avzLinea('agente', '(conectado: habla cuando quieras)');
+    else sala.once(LK.RoomEvent.ParticipantConnected, () => avzLinea('agente', '(conectado: habla cuando quieras)'));
+    setTimeout(() => {
+      if (avzSala === sala && !entro()) {
+        showToast('El agente no respondió. Intenta de nuevo en un momento; si sigue igual, avísanos.', 'error');
+        avzColgar();
+      }
+    }, 20000);
     setTimeout(() => { if (avzSala === sala) avzColgar(); }, (d.max_segundos || 300) * 1000);
   } catch (e) {
     const msg = /Permission|NotAllowed/i.test(String(e && e.name || e)) ? 'Necesitamos permiso para usar tu micrófono.' : String(e.message || e);
