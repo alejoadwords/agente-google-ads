@@ -22,9 +22,11 @@ Meta conectado, ve a **Marketing → Plataformas de pauta → Campañas** y mira
 la campaña de Meta traiga inversión, impresiones y clics distintos de cero. (El
 agente Meta Ads está apagado desde el 17-09-2026: el panel ya no está ahí.)
 
-**Comprobado por API el 02-10-2026**: «Acuarius — Tráfico al sitio (App Review)»
-activa, 5 días seguidos entregando; en 30 días 5.845 impresiones, 487 clics,
-233 visitas a la página y $35.860 COP. El panel NO sale en ceros.
+**Comprobado por API el 05-10-2026**: «Acuarius — Tráfico al sitio (App Review)»
+activa y entregando; en los últimos 7 días 11.780 impresiones, 991 clics y
+$67.112 COP (ayer, $12.283). El panel NO sale en ceros. La cuenta de prueba
+`acuarius.review@gmail.com` no tiene Meta conectado: la única conexión de Meta
+es la de Alejandro.
 
 ### Preparación
 
@@ -140,8 +142,10 @@ números.
 ### 10 · Pausar una campaña (3:10 – 4:00)
 
 Volver a la pestaña **Campañas**. En la fila de «Acuarius — Tráfico al sitio (App
-Review)», debajo de «Activa», pulsar **Pausar**, confirmar en el cuadro que
-aparece y enseñar el aviso «Campaña pausada»: la fila pasa a «Pausada». Después,
+Review)», debajo de «Activa», pulsar **Pausar**. Aparece la ventana de
+Acuarius **«¿Pausar esta campaña?»** (desde el 04-10-2026 ya no es el cuadro gris
+del navegador): **detente 2 segundos** para que se lea y pulsa el botón rojo
+**Pausar**. Enseña el aviso «Campaña pausada»: la fila pasa a «Pausada». Después,
 abrir el **Administrador de anuncios** de Meta y enseñar esa campaña **en pausa**.
 
 > **Justifica `ads_management`.** Desde el 02-10-2026 cada campaña activa de la
