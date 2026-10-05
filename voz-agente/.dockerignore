@@ -1,0 +1,5 @@
+node_modules
+.secretos.env
+*.env
+livekit.toml
+README.md

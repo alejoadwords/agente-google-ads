@@ -19,3 +19,4 @@ Academia/
 fal-ai-client-*.tgz
 recovery-codes.txt
 voz-agente/node_modules/
+voz-agente/.secretos.env

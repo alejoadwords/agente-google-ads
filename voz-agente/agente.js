@@ -10,13 +10,15 @@
 // la parte de audio: oír (Deepgram), decidir el turno (VAD + detector),
 // pensar (Claude Haiku) y hablar (Cartesia).
 //
+// Deepgram y Cartesia van por LiveKit Inference: la misma cuenta y la misma
+// factura de LiveKit, sin cuentas ni claves aparte, y sin que el audio se
+// guarde. Claude no está en LiveKit Inference: va con nuestra clave de Anthropic.
+//
 //   node agente.js dev     → desarrollo, contra LiveKit Cloud
 //   node agente.js start   → producción
 
 import { cli, defineAgent, llm, voice, inference, ServerOptions } from '@livekit/agents';
 import * as anthropic from '@livekit/agents-plugin-anthropic';
-import * as deepgram from '@livekit/agents-plugin-deepgram';
-import * as cartesia from '@livekit/agents-plugin-cartesia';
 import * as silero from '@livekit/agents-plugin-silero';
 import { SipClient } from 'livekit-server-sdk';
 import { z } from 'zod';
@@ -26,6 +28,11 @@ import { crearCliente, datosDeLaLlamada, transcripcionDe, duracion } from './acu
 export const NOMBRE_WORKER = 'acuarius-voz';
 const MODELO = process.env.AGENTE_VOZ_MODELO || 'claude-haiku-4-5';
 const VOZ_DEFECTO = process.env.VOZ_CARTESIA_DEFECTO || '';
+
+// La voz: Cartesia sonic-3 en español. Sin id de voz, Cartesia usa la suya por
+// defecto, que no es latina: por eso VOZ_CARTESIA_DEFECTO es obligatoria en
+// producción (se elige en LiveKit → Voices, filtrando por español).
+const vozDe = (voz) => new inference.TTS({ model: 'cartesia/sonic-3', language: 'es', ...(voz ? { voice: voz } : {}) });
 
 function herramientas({ acuarius, llamadaId, colgar, desviar }) {
   const usar = (nombre) => async (args) => {
@@ -122,7 +129,7 @@ export default defineAgent({
     // Agente apagado, sin número o sin minutos: no se deja a nadie hablando
     // solo. Si hay a quién pasarla, se pasa; si no, se dice y se cuelga.
     if (cfg.colgar || cfg.sin_saldo || !cfg.instrucciones) {
-      session = new voice.AgentSession({ tts: new cartesia.TTS({ model: 'sonic-3', language: 'es', voice: VOZ_DEFECTO }) });
+      session = new voice.AgentSession({ tts: vozDe(VOZ_DEFECTO) });
       await session.start({ agent: new voice.Agent({ instructions: 'Solo lees el mensaje.' }), room: ctx.room });
       const frase = cfg.mensaje || 'En este momento no podemos atenderte por aquí. Por favor intenta más tarde.';
       await session.say(frase, { allowInterruptions: false }).waitForPlayout();
@@ -136,9 +143,9 @@ export default defineAgent({
     });
     session = new voice.AgentSession({
       vad: ctx.proc.userData.vad,
-      stt: new deepgram.STT({ model: 'nova-3', language: 'es' }),
+      stt: new inference.STT({ model: 'deepgram/nova-3', language: 'es' }),
       llm: new anthropic.LLM({ model: MODELO, temperature: 0.4, maxTokens: 300 }),
-      tts: new cartesia.TTS({ model: 'sonic-3', language: 'es', voice: cfg.agente?.voz || VOZ_DEFECTO }),
+      tts: vozDe(cfg.agente?.voz || VOZ_DEFECTO),
       // El detector de fin de turno por AUDIO, el modelo local (v1-mini): corre
       // en nuestro servidor, sin costo por minuto, y entiende español. Es lo que
       // decide si la persona terminó de hablar o solo hizo una pausa.
