@@ -115,8 +115,14 @@ function cuentaGoogle(fila) {
   return { operatingAccount: op, ...(login && login !== op.accountId ? { loginAccount: { accountType: 'GOOGLE_ADS', accountId: login } } : {}) };
 }
 
-async function dm(token, ruta, cuerpo, metodo = 'POST') {
-  const r = await fetch(DM + ruta, { method: metodo, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
+// `login`: la cuenta administradora desde la que se llega. Para las listas
+// (userLists) va en la cabecera `login-account`; sin ella, una cuenta que se
+// maneja desde un administrador —Certain— responde 403 «no tienes permiso»
+// (comprobado el 05-10-2026). En ingest/remove va dentro de `destinations`.
+async function dm(token, ruta, cuerpo, metodo = 'POST', login = null) {
+  const h = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
+  if (login) h['login-account'] = 'accountTypes/GOOGLE_ADS/accounts/' + login;
+  const r = await fetch(DM + ruta, { method: metodo, headers: h, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
   const t = await r.text();
   let d = {}; try { d = JSON.parse(t); } catch {}
   if (!r.ok) {
@@ -124,6 +130,13 @@ async function dm(token, ruta, cuerpo, metodo = 'POST') {
     throw Object.assign(new Error('Google: ' + msg), { status: r.status, raw: msg });
   }
   return d;
+}
+
+/** Las listas de la cuenta (solo lectura): para comprobar el acceso. */
+export async function listasGoogle(fila) {
+  const g = await tokenGoogle(fila); if (g.error) throw Object.assign(new Error(g.error), g);
+  const c = cuentaGoogle(fila);
+  return (await dm(g.token, `/accountTypes/GOOGLE_ADS/accounts/${c.operatingAccount.accountId}/userLists?pageSize=20`, null, 'GET', c.loginAccount?.accountId || null)).userLists || [];
 }
 
 export const redes = {
@@ -134,7 +147,7 @@ export const redes = {
       const d = await dm(g.token, `/accountTypes/GOOGLE_ADS/accounts/${c.operatingAccount.accountId}/userLists`, {
         displayName: nombre.slice(0, 200), description: 'Audiencia del CRM, sincronizada por Acuarius.', membershipDuration: DURACION,
         ingestedUserListInfo: { uploadKeyTypes: ['CONTACT_ID'], contactIdInfo: { dataSourceType: 'DATA_SOURCE_TYPE_FIRST_PARTY' } },
-      });
+      }, 'POST', c.loginAccount?.accountId || null);
       // El id viene en el nombre del recurso: accountTypes/GOOGLE_ADS/accounts/X/userLists/ID
       return String(d.id || String(d.name || '').split('/').pop());
     },
