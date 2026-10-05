@@ -224,6 +224,12 @@ console.log('\nEl worker: herramientas');
   const p0 = buscarPistas({ presupuesto: 'hasta dos', habitaciones: 'tres', tipo: '' });
   ok(p0.presupuesto === undefined && p0.habitaciones === undefined && p0.tipo === undefined, 'lo que no se entiende se deja sin filtrar, no se convierte en basura', JSON.stringify(p0));
   ok(buscarPistas({ presupuesto: 2500000 }).presupuesto === 2500000, 'un presupuesto que ya es número pasa tal cual');
+  const { correoLimpio } = await import('../api/agente-voz.js');
+  ok(correoLimpio('Alejandro.González@Gmail.com') === 'alejandro.gonzalez@gmail.com' && correoLimpio(' juan @ x.co ') === 'juan@x.co', 'el correo dictado queda limpio: sin tildes, sin espacios, en minúsculas');
+  ok(correoLimpio('alejandro arroba gmail') === '' && correoLimpio('') === '', 'y lo que no es un correo no se guarda');
+  const bus = lib.HERRAMIENTAS.find(h => h.nombre === 'buscar_inmuebles').parametros;
+  ok(bus.required?.includes('habitaciones') && bus.required.includes('presupuesto'), 'los criterios de búsqueda son obligatorios (opcionales, el modelo olvidaba las habitaciones)');
+  ok(buscarPistas({ habitaciones: 0, presupuesto: '', zona: '', tipo: '' }).habitaciones === undefined && buscarPistas({ zona: '' }).barrio === undefined, 'el 0 y los vacíos obligatorios no filtran');
 
   const r = await worker({ accion: 'herramienta', llamada_id: prueba, nombre: 'borrar_todo', args: {} });
   ok(r.status === 400, 'una herramienta que no existe se rechaza');

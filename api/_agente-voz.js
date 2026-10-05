@@ -162,6 +162,8 @@ CIERRE:
 - Si te piden algo que no puedes resolver o quieren hablar con una persona, usa la herramienta pasar_a_asesor.
 - Habla del asesor en tercera persona: «el asesor te escribe», «te llama un asesor». Nunca prometas en primera persona lo que hará otra persona («te escribo», «te llamo»).
 - Para cerrar NO preguntes «¿hay algo más que necesites?» ni variantes: di en una frase el siguiente paso (quién lo contacta, cuándo y por dónde), despídete y cuelga.
+- Guarda los datos con guardar_datos EN EL TURNO en que te los dan (el nombre cuando lo dice, el correo cuando lo dicta), no al final.
+- Después de despedirte no digas nada más: usa colgar. Si te faltó un dato, pídelo ANTES de despedirte.
 - Cuando la persona diga que no necesita nada más, despídete en ESE turno con una frase corta y cálida (dila en voz alta) y después usa la herramienta colgar. Nunca cuelgues sin despedirte y no agregues otra despedida después.`;
 
 const OBJETIVO = {
@@ -250,13 +252,16 @@ export const HERRAMIENTAS = [
     } } },
   { nombre: 'buscar_inmuebles',
     descripcion: 'Busca en el catálogo del negocio. Llámala EN EL MISMO TURNO en que sepas qué busca la persona (la operación y la zona, o el presupuesto), sin anunciarla ni pedir permiso: el resultado llega en segundos y con él respondes. Si te falta un dato, búscala igual con lo que tengas. Cada vez que la persona cambie o añada un criterio (habitaciones, barrio, presupuesto, tipo), vuelve a llamarla con TODO lo que sabes. El resultado dice cuántas opciones hay en total: nunca digas que solo hay las que te mostró.',
-    parametros: { type: 'object', properties: {
+    // Todos obligatorios: con campos opcionales el modelo dejaba fuera las
+    // habitaciones que la persona acababa de decir («mínimo dos»). Obligado a
+    // llenar cada uno, lo piensa; si de verdad no lo sabe, manda vacío o 0.
+    parametros: { type: 'object', required: ['operacion', 'tipo', 'zona', 'presupuesto', 'habitaciones'], properties: {
       operacion: { type: 'string', description: 'arriendo o venta' },
-      tipo: { type: 'string', description: 'apartamento, casa, local, oficina, bodega o lote' },
+      tipo: { type: 'string', description: 'apartamento, casa, local, oficina, bodega o lote; vacío si no lo dijo' },
       ciudad: { type: 'string' },
-      zona: { type: 'string', description: 'Barrio o zona como lo dijo la persona, por ejemplo «el norte» o «Alto Prado»' },
-      presupuesto: { type: 'string', description: 'Presupuesto máximo en cifras, por ejemplo «3 millones» o «2500000». Inclúyelo siempre que lo haya dicho' },
-      habitaciones: { type: 'integer', description: 'Habitaciones mínimas. Inclúyelas SIEMPRE que la persona las haya dicho en cualquier momento de la llamada (por ejemplo «mínimo dos» → 2)' },
+      zona: { type: 'string', description: 'Barrio o zona como lo dijo la persona, por ejemplo «el norte» o «Alto Prado»; vacío si no lo dijo' },
+      presupuesto: { type: 'string', description: 'Presupuesto máximo en cifras, por ejemplo «3 millones» o «2500000»; vacío si no lo dijo' },
+      habitaciones: { type: 'integer', description: 'Habitaciones mínimas que dijo la persona en cualquier momento de la llamada (por ejemplo, si a «¿cuántas habitaciones?» respondió «mínimo dos» → 2). 0 solo si nunca las dijo' },
     } } },
   { nombre: 'agendar_cita',
     descripcion: 'Agenda una cita SOLO después de que la persona confirmó servicio, día y hora.',

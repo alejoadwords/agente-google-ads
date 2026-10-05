@@ -152,7 +152,7 @@ async function workerHerramienta(b) {
       if (prueba) return json({ ok: true, prueba: true, texto: 'Datos anotados (llamada de prueba: no se guardan en el CRM).' });
       const { lead } = await intakeLead(userId, clientId, {
         name: String(a.nombre || '').slice(0, 120) || undefined,
-        email: String(a.correo || '').trim().toLowerCase().slice(0, 160) || undefined,
+        email: correoLimpio(a.correo) || undefined,
         phone: llamada.telefono || undefined,
         note: a.interes ? String(a.interes).slice(0, 500) : undefined,
         source: 'agente_de_voz', sourceLabel: 'Agente de voz',
@@ -257,6 +257,16 @@ async function workerFin(b) {
         metadata: { agente_voz: true, llamada_id: llamada.id, estado } }) });
   }
   return json({ ok: true, minutos });
+}
+
+/**
+ * El correo como se dictó por teléfono no siempre es un correo: el modelo lo
+ * escribía «Alejandro.González@Gmail.com». Sin tildes, sin espacios, en
+ * minúsculas; y si no tiene forma de correo, no se guarda.
+ */
+export function correoLimpio(c) {
+  const t = String(c || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '').toLowerCase().slice(0, 160);
+  return /^[^@]+@[^@]+\.[a-z]{2,}$/.test(t) ? t : '';
 }
 
 /** Lo nuevo manda; lo que no vino se toma de la búsqueda anterior. */
