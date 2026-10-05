@@ -40475,7 +40475,8 @@ async function audBorrar(id, btn) {
 async function audPermisoGoogle(btn) {
   btn.disabled = true;
   try {
-    const r = await fetchAuth('/api/gcal-enlace?para=google');
+    // Mismo enlace firmado que «Conectar» (irAConectar): se pide por POST.
+    const r = await fetchAuth('/api/gcal-enlace?para=google', { method: 'POST' });
     const d = await leerRespuesta(r);
     if (!r.ok || !d.url) throw new Error(d.error || 'No se pudo preparar el enlace.');
     window.location.href = d.url + '&audiencias=1';
