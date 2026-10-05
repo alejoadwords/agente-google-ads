@@ -23522,14 +23522,19 @@ async function agConnectChannel(channel, agentId) {
         : 'No se encontraron páginas de Facebook en esta cuenta de Meta', 'error');
       return;
     }
-    const lista = pages.map(function (p, i) {
-      const ig = p.instagram_business_account;
-      return (i + 1) + '. ' + (channel === 'instagram' ? '@' + (ig.username || ig.name || p.name) : p.name);
-    }).join('\n');
-    const elegido = prompt('¿Qué cuenta quieres conectar?\n\n' + lista);
-    const idx = parseInt(elegido) - 1;
-    if (isNaN(idx) || !pages[idx]) return;
+    const idx = await elegirAguaP({
+      titulo: channel === 'instagram' ? '¿Qué cuenta de Instagram conectas?' : '¿Qué página de Facebook conectas?',
+      texto: 'Solo se conecta la que elijas. Sus mensajes llegarán a Conversaciones.',
+      opciones: pages.map(function (p, i) {
+        const ig = p.instagram_business_account;
+        return channel === 'instagram'
+          ? { valor: i, nombre: '@' + (ig.username || ig.name || p.name), detalle: 'Página: ' + p.name }
+          : { valor: i, nombre: p.name, detalle: 'Messenger' };
+      }),
+    });
+    if (idx === null || !pages[idx]) return;
 
+    showToast('Conectando…', 'info');
     const r = await fetchAuth('/api/channel-connections?action=connect_page', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agent_id: agentId, client_id: _canClienteAlConectar || null,
@@ -24317,12 +24322,13 @@ async function canConectar(channel) {
   const agentes = (typeof crmAgents !== 'undefined' ? crmAgents : []);
   let agentId = null;
   if (agentes.length) {
-    const lista = agentes.map((a, i) => (i + 1) + '. ' + a.name).join('\n');
-    const r = prompt('¿Quién atiende este canal?\n\n0. Mi equipo — manual desde el inbox\n' + lista +
-      '\n\nEscribe el número:', '0');
-    if (r === null) return;
-    const i = parseInt(r, 10);
-    if (i > 0 && agentes[i - 1]) agentId = agentes[i - 1].id;
+    const v = await elegirAguaP({
+      titulo: '¿Quién atiende este canal?',
+      opciones: [{ valor: 'equipo', nombre: 'Mi equipo', detalle: 'Los mensajes llegan al inbox y responde una persona' }]
+        .concat(agentes.map(a => ({ valor: a.id, nombre: a.name, detalle: 'Agente de IA: contesta solo y te pasa la conversación' }))),
+    });
+    if (v === null) return;
+    if (v !== 'equipo') agentId = v;
   }
   document.getElementById('can-overlay')?.remove();
   // El canal nace con el cliente que tengas activo: es lo que casi siempre se
@@ -37897,6 +37903,40 @@ function confirmarAgua({ titulo, texto, confirmar, peligro, onOk, onNo }) {
 function confirmarAguaP({ titulo, texto, confirmar, peligro }) {
   const html = String(texto || '').split('\n\n').map(p => esc(p).replace(/\n/g, '<br>')).join('<br><br>');
   return new Promise(res => confirmarAgua({ titulo, texto: html, confirmar, peligro, onOk: () => res(true), onNo: () => res(false) }));
+}
+
+// Elegir una opción de una lista, con nuestra cara. Reemplaza al prompt() del
+// navegador, que obligaba a escribir un número en un cuadro gris.
+// `const v = await elegirAguaP({ titulo, texto, opciones: [{ valor, nombre, detalle }] })`;
+// devuelve el valor elegido o null si se cierra.
+function elegirAguaP({ titulo, texto, opciones }) {
+  return new Promise(res => {
+    const ov = document.createElement('div');
+    ov.className = 'auto-modal-overlay';
+    let hecho = false;
+    const tecla = e => { if (e.key === 'Escape') cerrar(null); };
+    const cerrar = v => {
+      document.removeEventListener('keydown', tecla, true);
+      ov.remove();
+      if (!hecho) { hecho = true; res(v); }
+    };
+    document.addEventListener('keydown', tecla, true);
+    ov.addEventListener('mousedown', e => { if (e.target === ov) cerrar(null); });
+    ov.innerHTML = '<div class="auto-modal" style="max-width:440px">' +
+      '<div class="auto-modal-head">' +
+        '<div style="font-size:var(--fs-md);font-weight:800">' + esc(titulo) + '</div>' +
+        '<button class="btn-ghost sm" data-x>✕</button>' +
+      '</div>' +
+      '<div class="auto-modal-body">' +
+        (texto ? '<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px">' + esc(texto) + '</div>' : '') +
+        opciones.map((o, i) => '<button class="elegir-op" data-i="' + i + '"><b>' + esc(o.nombre) + '</b>' +
+          (o.detalle ? '<span>' + esc(o.detalle) + '</span>' : '') + '</button>').join('') +
+      '</div></div>';
+    ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => cerrar(null));
+    ov.querySelectorAll('[data-i]').forEach(b => b.onclick = () => cerrar(opciones[Number(b.dataset.i)].valor));
+    document.body.appendChild(ov);
+    ov.querySelector('[data-i]')?.focus();
+  });
 }
 
 // ── Editor de plantilla (formato simple) ──────────────────────────────────────

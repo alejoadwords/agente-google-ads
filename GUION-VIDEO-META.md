@@ -40,7 +40,11 @@ es la de Alejandro.
 - [ ] **La cuenta de prueba sin conexión de Meta.** `acuarius.review@gmail.com`
       no debe tener ninguna cuenta de Meta conectada: el revisor tiene que verte
       hacer la conexión desde cero. Si ya la tiene, entra y pulsa *Desconectar
-      cuenta* antes de grabar.
+      cuenta* antes de grabar. Tampoco debe tener **canales de Messenger ni
+      Instagram** en Fuentes de leads → Configurar canales: se conectan en el
+      video (escena 10 bis). Y en Facebook de Johana, Configuración →
+      Integraciones comerciales → **quitar Acuarius**, para que el diálogo pida
+      los permisos desde cero (si no, arrastra los que se dieron antes).
 - [ ] **Contraseña puesta** en `REVISION-META.md`, que va en el formulario.
 - [ ] **Navegador limpio**: ventana nueva o perfil aparte. Sin barra de
       marcadores —la tuya tiene carpetas con nombres de clientes— y sin más
@@ -110,7 +114,14 @@ tiene la campaña con datos.
 
 ### 6 · Elegir la página (1:20 – 1:35)
 
-Seleccionar la página **Acuarius AI** y terminar el diálogo.
+En «Elige los Páginas a los que quieres que acceda Acuarius» marcar **«Activar
+solo los Páginas actuales»** (no «todos los actuales y futuros»), seleccionar
+solo **Acuarius AI** y seguir. Lo mismo en la pantalla de Instagram: solo
+**@acuarius.app**.
+
+Al final sale **«Revisa la solicitud de acceso de Acuarius»** con los nueve
+permisos: detente ahí, baja despacio hasta el final para que se lean todos, y
+pulsa **Guardar**.
 
 > **Justifica `pages_show_list`.** Marca solo la página que vas a usar, no todas:
 > refuerza que conectas únicamente lo que el usuario elige.
@@ -156,7 +167,31 @@ abrir el **Administrador de anuncios** de Meta y enseñar esa campaña **en paus
 > **Después de grabar, reactivarla** desde el Administrador de anuncios: la
 > campaña tiene que seguir entregando para que el revisor vea datos.
 
-### 11 · Un mensaje real de Messenger (4:00 – 4:45)
+### 10 bis · Conectar Messenger e Instagram como canales (4:00 – 4:40)
+
+Conectar Meta Ads **no** deja los mensajes funcionando: da permiso sobre la
+página, pero la suscripción de la página a los mensajes la hace este paso. Sin
+él, el mensaje de la escena 11 nunca llega.
+
+**Marketing → Fuentes de leads** → en «Canales de chat» pulsar **Configurar
+canales**.
+
+1. En **Messenger**, **+ Conectar**. Sale la ventana «¿Quién atiende este
+   canal?»: elegir **Mi equipo** (los mensajes van al inbox y respondes tú).
+   Luego «¿Qué página de Facebook conectas?»: **Acuarius AI**. Aparece
+   «Conectando…» y después «Conectado: Acuarius AI».
+2. En **Instagram**, igual: **Mi equipo** y **@acuarius.app**. Aparece
+   «Conectado: @acuarius.app».
+
+> **Justifica `pages_manage_metadata` y `pages_show_list`.** La lista de páginas
+> sale de `pages_show_list`; al conectar, Acuarius suscribe la página al webhook
+> de mensajes con `pages_manage_metadata`. Detente 2 segundos en cada «Conectado».
+>
+> Si sale un error en rojo, para: no se graba encima. @acuarius.app tiene mucho
+> historial y Meta a veces tarda en la lectura de prueba; desde el 05-10-2026 eso
+> ya no bloquea la conexión, pero cualquier otro error sí hay que mirarlo.
+
+### 11 · Un mensaje real de Messenger (4:40 – 5:15)
 
 Desde el segundo dispositivo, escribirle a la página **Acuarius AI** por
 Messenger algo normal: «Hola, quiero información sobre precios».
@@ -165,12 +200,13 @@ Volver a Acuarius → **Conversaciones**. El mensaje entra. Responder desde ahí
 enseñar que la respuesta llega a Messenger en el otro dispositivo.
 
 > **Justifica `pages_messaging` y `pages_manage_metadata`** — sin la suscripción
-> al webhook el mensaje nunca habría llegado, y eso es exactamente lo que se ve.
+> de la escena 10 bis el mensaje nunca habría llegado, y eso es exactamente lo
+> que se ve.
 >
 > Enseña **las dos pantallas**: la entrada y la respuesta llegando. Es lo que
 > prueba que el ciclo se cierra.
 
-### 11 bis · Un mensaje directo de Instagram (4:45 – 5:15)
+### 11 bis · Un mensaje directo de Instagram (5:15 – 5:45)
 
 Desde el segundo dispositivo, mandarle un **mensaje directo** a la cuenta de
 Instagram conectada: «Hola, ¿tienen disponibilidad esta semana?».
@@ -183,7 +219,7 @@ Instagram en el otro dispositivo.
 > los dos permisos añadidos en el panel, la cuenta de Instagram con «Permitir
 > acceso a los mensajes» activado, y Meta Ads reconectado para aceptarlos.
 
-### 12 · La identidad de la página (5:15 – 5:30)
+### 12 · La identidad de la página (5:45 – 6:00)
 
 En la misma conversación, señalar con el cursor **el nombre y la foto de la
 página** conectada.
@@ -191,7 +227,7 @@ página** conectada.
 > **Justifica `pages_read_engagement`.** Es un permiso pequeño y se demuestra en
 > cinco segundos, pero si no aparece en el video te lo pueden negar suelto.
 
-### 13 · Desconectar (5:30 – 6:00)
+### 13 · Desconectar (6:00 – 6:30)
 
 Ajustes → Integraciones → Meta Ads → **Desconectar cuenta**. Que se vea la
 tarjeta volviendo a **«sin conectar»**.
@@ -221,10 +257,10 @@ tarjeta volviendo a **«sin conectar»**.
 |---|---|---|
 | `business_management` | 4 | ☐ |
 | `ads_read` | 5, 8, 9 (Campañas y Diagnóstico) | ☐ |
-| `pages_show_list` | 6 | ☐ |
+| `pages_show_list` | 6, 10 bis (lista de páginas) | ☐ |
 | `ads_management` | 10 (**Pausar campaña**) | ☐ |
 | `pages_messaging` | 11 | ☐ |
-| `pages_manage_metadata` | 11 | ☐ |
+| `pages_manage_metadata` | 10 bis (**conectar el canal**) y 11 | ☐ |
 | `pages_read_engagement` | 12 | ☐ |
 | `instagram_manage_messages` | 11 bis | ☐ |
 | `instagram_basic` | 11 bis | ☐ |

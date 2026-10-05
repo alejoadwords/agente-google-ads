@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-05-elegir-canal",
+      "fecha": "2026-10-05",
+      "tipo": "mejora",
+      "titulo": "Conectar un canal ya no te pide escribir números",
+      "texto": "Al conectar Messenger o Instagram eliges quién atiende y qué página o cuenta conectas en una lista, con un clic, en vez del cuadro del navegador donde había que escribir el número de la opción."
+    },
+    {
       "id": "2026-10-05-audiencias-crm",
       "fecha": "2026-10-05",
       "tipo": "nuevo",
