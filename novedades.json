@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-05-audiencias-crm",
+      "fecha": "2026-10-05",
+      "tipo": "nuevo",
+      "titulo": "Tus leads del CRM, como audiencias en Google y Meta",
+      "texto": "En Plataformas de pauta → Audiencias conviertes un grupo del CRM —los que ya compraron, los que están en proceso, los perdidos o los de una etiqueta— en una audiencia de Google o de Meta. Sirve para excluir de tus campañas de captación a quien ya es cliente o ya habla contigo, y para buscar gente parecida a los que compraron. Se actualizan solas cada mañana y viajan cifradas.",
+      "accion": {
+        "texto": "Crear una audiencia",
+        "ir": "pauta-audiencias"
+      }
+    },
+    {
       "id": "2026-10-04-campana-lead-manual",
       "fecha": "2026-10-04",
       "tipo": "mejora",

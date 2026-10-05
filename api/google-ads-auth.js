@@ -17,7 +17,11 @@ export default async function handler(req, res) {
   if (!e || e.caducado) {
     return res.redirect('https://app.acuarius.app/?ads_error=' + (e?.caducado ? 'enlace_caducado' : 'enlace_invalido'));
   }
-  const state = JSON.stringify({ nonce: 'google_ads_connect', c: req.query.c });
+  // ?audiencias=1: además pide el permiso de la Data Manager API, la única vía
+  // para subir audiencias de clientes (Customer Match) desde abril de 2026
+  // (api/_audiencias.js). `include_granted_scopes` conserva el de Google Ads.
+  const audiencias = req.query.audiencias === '1';
+  const state = JSON.stringify({ nonce: 'google_ads_connect', c: req.query.c, audiencias });
 
   const params = new URLSearchParams({
     client_id:     clientId,
@@ -26,8 +30,10 @@ export default async function handler(req, res) {
     scope: [
       'https://www.googleapis.com/auth/adwords',
       'https://www.googleapis.com/auth/userinfo.email',
+      ...(audiencias ? ['https://www.googleapis.com/auth/datamanager'] : []),
     ].join(' '),
     access_type: 'offline',
+    include_granted_scopes: 'true',
     prompt: 'consent',
     state,
   });
