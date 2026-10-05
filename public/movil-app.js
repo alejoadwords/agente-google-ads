@@ -1822,6 +1822,143 @@ function cerrarBarra(id){
   setTimeout(function(){ if (h.parentNode) h.remove(); }, 200);
 }
 
+// ── Agente de voz ───────────────────────────────────────────────────────────
+// La misma prueba de la web (Conversaciones → Agente de voz) pero en el
+// teléfono, que es donde de verdad se habla. Aquí solo se prueba y se ven las
+// llamadas: la configuración del agente —instrucciones largas, voz, ritmo—
+// sigue en el computador. Solo aparece en el menú si la cuenta está en la
+// beta: lo decide el servidor (GET /api/agente-voz responde activo:false).
+var VOZ = null;          // lo que respondió el servidor
+var vozSala = null;      // la llamada de prueba en curso
+async function vozEstado(){
+  try {
+    var r = await fetchAuth(conAlcance('/api/agente-voz'));
+    var d = await r.json().catch(function(){ return {}; });
+    VOZ = r.ok ? d : { activo: false, error: d.error || ('HTTP ' + r.status) };
+  } catch (e) { VOZ = { activo: false, error: 'sin conexión' }; }
+  return VOZ;
+}
+function vozDur(s){ s = Number(s)||0; return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
+function vozCuerpo(){
+  var d = VOZ || {};
+  if (d.error && !d.activo) return '<div class="vacio">No se pudo cargar el agente de voz.<br>Revisa la conexión e inténtalo de nuevo.</div>';
+  var a = (d.agentes || []).filter(function(x){ return x.activo; })[0] || (d.agentes || [])[0];
+  if (!a) return '<div class="vacio">Todavía no tienes un agente de voz.<br>Créalo desde el computador en Conversaciones → Agente de voz y vuelve aquí a probarlo.</div>';
+  var llamadas = (d.llamadas || []).slice(0, 15).map(function(l, i){
+    var quien = l.direccion === 'prueba' ? 'Prueba' : (l.telefono ? '+' + l.telefono : 'Número oculto');
+    var trans = (l.transcripcion || []).map(function(t){
+      return '<div class="voz-linea '+(t.rol === 'agente' ? 'agente' : '')+'"><b>'+(t.rol === 'agente' ? 'Agente' : 'Cliente')+'</b> '+esc(t.texto)+'</div>';
+    }).join('');
+    return '<div class="caja" style="margin-bottom:8px" onclick="M.vozVer(this)">'
+      + '<div style="display:flex;justify-content:space-between;gap:8px"><b>'+esc(quien)+'</b><span style="color:var(--muted);font-size:var(--fs-xs)">'
+      + new Date(l.inicio).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'})+' · '+vozDur(l.segundos)+'</span></div>'
+      + (l.resumen ? '<div style="font-size:var(--fs-sm);margin-top:6px;line-height:1.45">'+esc(l.resumen)+'</div>' : '')
+      + (trans ? '<div class="voz-trans" hidden style="margin-top:8px">'+trans+'</div>' : '')
+      + '</div>';
+  }).join('');
+  return '<div class="secc"><div class="caja">'
+      + '<div style="font-weight:700;font-size:var(--fs-md)">'+esc(a.nombre)+' · '+esc(a.negocio || '')+'</div>'
+      + '<div style="color:var(--muted);font-size:var(--fs-sm);margin-top:3px">'
+      + (a.activo ? 'Encendido' : 'Apagado') + ' · ' + Number(d.saldo || 0).toLocaleString('es-CO') + ' minutos disponibles</div>'
+      + (d.livekit === false
+          ? '<div style="color:var(--muted);font-size:var(--fs-sm);margin-top:10px">El servicio de voz todavía no está conectado.</div>'
+          : '<button class="bbtn" id="voz-btn" onclick="M.vozProbar(\''+esc(a.id)+'\')">'+(vozSala ? 'Terminar la prueba' : 'Hablar con mi agente')+'</button>'
+            + '<div style="color:var(--muted);font-size:var(--fs-xs);margin-top:8px;text-align:center">Con el micrófono del teléfono. Las pruebas no gastan minutos ni crean contactos.</div>')
+      + '<div class="voz-trans" id="voz-vivo"'+(vozSala ? '' : ' hidden')+'></div>'
+    + '</div></div>'
+    + '<div class="secc"><h2>Llamadas</h2>'
+    + (llamadas || '<div class="vacio" style="padding:24px">Todavía no hay llamadas.</div>')
+    + '<div style="color:var(--muted);font-size:var(--fs-xs);text-align:center;margin:14px 0 24px">Las instrucciones, la voz y el ritmo se cambian desde el computador.</div></div>';
+}
+// Tocar una llamada abre o cierra su transcripción.
+function vozVer(el){ var t = el && el.querySelector('.voz-trans'); if (t) { t.hidden = !t.hidden; toque(); } }
+async function abrirVoz(){
+  toque();
+  cerrarBarra('hoja-menu');
+  var h = hojaConCab('hoja-voz', 'Agente de voz', 'Pruébalo y mira sus llamadas', '<div class="vacio">Cargando…</div>');
+  await vozEstado();
+  var c = h.querySelector('.cab'); while (c && c.nextSibling) c.nextSibling.remove();
+  h.insertAdjacentHTML('beforeend', vozCuerpo());
+}
+function vozRepintar(){
+  var h = $('#hoja-voz'); if (!h) return;
+  var c = h.querySelector('.cab'); while (c && c.nextSibling) c.nextSibling.remove();
+  h.insertAdjacentHTML('beforeend', vozCuerpo());
+}
+function vozLinea(quien, texto){
+  var box = $('#voz-vivo'); if (!box || !texto) return;
+  box.hidden = false;
+  box.insertAdjacentHTML('beforeend', '<div class="voz-linea '+(quien === 'agente' ? 'agente' : '')+'"><b>'+(quien === 'agente' ? 'Agente' : 'Tú')+'</b> '+esc(texto)+'</div>');
+  box.scrollTop = box.scrollHeight;
+}
+function vozCargarLiveKit(){
+  if (window.LivekitClient) return Promise.resolve(window.LivekitClient);
+  return new Promise(function(ok, mal){
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.min.js';
+    s.onload = function(){ window.LivekitClient ? ok(window.LivekitClient) : mal(new Error('No cargó el cliente de voz')); };
+    s.onerror = function(){ mal(new Error('No se pudo cargar el cliente de voz. Revisa la conexión.')); };
+    document.head.appendChild(s);
+  });
+}
+async function vozProbar(agenteId){
+  if (vozSala) return vozColgar();
+  toque();
+  var btn = $('#voz-btn'); if (btn) { btn.disabled = true; btn.textContent = 'Conectando…'; }
+  try {
+    // El micrófono se pide YA, dentro del toque: en iPhone, si se pide después
+    // de esperar a la red, Safari lo niega por no venir de un gesto.
+    var mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mic.getTracks().forEach(function(t){ t.stop(); });
+    var LK = await vozCargarLiveKit();
+    var r = await fetchAuth(conAlcance('/api/agente-voz'), { method: 'POST', body: JSON.stringify({ accion: 'probar', agente_id: agenteId }) });
+    var d = await r.json().catch(function(){ return {}; });
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    var sala = new LK.Room({ adaptiveStream: true, dynacast: true });
+    sala.on(LK.RoomEvent.TrackSubscribed, function(track){
+      if (track.kind === 'audio') { var el = track.attach(); el.setAttribute('data-voz','1'); el.setAttribute('playsinline',''); document.body.appendChild(el); }
+    });
+    sala.on(LK.RoomEvent.Disconnected, function(){
+      vozSala = null; document.querySelectorAll('audio[data-voz]').forEach(function(x){ x.remove(); });
+      setTimeout(function(){ vozEstado().then(vozRepintar); }, 2500);
+      vozRepintar();
+    });
+    sala.registerTextStreamHandler('lk.transcription', async function(lector, info){
+      var texto = await lector.readAll();
+      if (lector.info && lector.info.attributes && lector.info.attributes['lk.transcription_final'] === 'false') return;
+      vozLinea(info.identity === sala.localParticipant.identity ? 'cliente' : 'agente', texto);
+    });
+    await sala.connect(d.url, d.token);
+    await sala.localParticipant.setMicrophoneEnabled(true);
+    // iPhone no deja sonar audio que no arrancó con un toque: si lo bloquea,
+    // el botón pasa a pedir ese toque.
+    try { await sala.startAudio(); } catch (e) {}
+    vozSala = sala;
+    vozRepintar();
+    vozLinea('agente', '(conectando con tu agente…)');
+    var entro = function(){ return sala.remoteParticipants && sala.remoteParticipants.size > 0; };
+    if (entro()) vozLinea('agente', '(conectado: habla cuando quieras)');
+    else sala.once(LK.RoomEvent.ParticipantConnected, function(){ vozLinea('agente', '(conectado: habla cuando quieras)'); });
+    if (!sala.canPlaybackAudio) {
+      var b = $('#voz-btn');
+      if (b) { b.textContent = 'Toca para oír al agente'; b.onclick = function(){ sala.startAudio(); vozRepintar(); }; }
+    }
+    setTimeout(function(){
+      if (vozSala === sala && !entro()) { chicharra('El agente no respondió. Intenta de nuevo en un momento.', 'error'); vozColgar(); }
+    }, 20000);
+    setTimeout(function(){ if (vozSala === sala) vozColgar(); }, (d.max_segundos || 300) * 1000);
+  } catch (e) {
+    var msg = /Permission|NotAllowed/i.test(String(e && (e.name || e.message) || e)) ? 'Necesitamos permiso para usar el micrófono.' : String(e.message || e);
+    chicharra(msg, 'error');
+    vozSala = null; vozRepintar();
+  }
+}
+async function vozColgar(){
+  var s = vozSala; vozSala = null;
+  if (s) { try { await s.disconnect(); } catch (e) {} }
+  vozRepintar();
+}
+
 // El menú. Lo que antes era la pestaña «Más» —una etiqueta que no dice nada—
 // más lo de marketing que no cabe abajo.
 function abrirMenu(){
@@ -1831,8 +1968,15 @@ function abrirMenu(){
     ['Contenido',  ['studio','plant','paginas']],
     ['Tu cuenta',  ['clientes','academia','ajustes']],
   ];
+  if (VOZ && VOZ.activo) grupos.unshift(['Atender', ['agentevoz']]);
   var cuerpo = grupos.map(function(g){
     var filas = g[1].map(function(id){
+      if (id === 'agentevoz') {
+        return '<button class="mfila" onclick="M.abrirVoz()">'
+          + '<span class="micono">'+icn('phone',18)+'</span>'
+          + '<span class="cuerpo"><span class="mt">Agente de voz</span><span class="ms">Pruébalo hablando con él</span></span>'
+          + '<span class="chev">'+icn('arrow',18)+'</span></button>';
+      }
       var m = null;
       for (var i=0;i<MODULOS.length;i++) if (MODULOS[i].id === id) m = MODULOS[i];
       if (!m) return '';
@@ -2063,6 +2207,7 @@ async function elegirCliente(id){
   filtroEtapa = 'todos';
   MODULO_CACHE = {};
   cargarReales();
+  vozEstado();   // cada cliente tiene su propio agente de voz
 }
 
 // El subtítulo de estas pantallas venía escrito a mano y AFIRMABA cosas:
@@ -3152,6 +3297,7 @@ async function arrancar(){
   var hay = await abrirSesion();
   if (!hay) { MODO = 'ejemplo'; pintarModo(); return; }
   await cargarReales();
+  vozEstado();   // sin esperar: solo decide si el menú muestra el agente de voz
 }
 
 // Los subtítulos de cada cabecera, calculados.
@@ -3321,6 +3467,7 @@ function movilMontar(opciones){
     reintentarModulo: reintentarModulo,
     llamar: llamar, whatsapp: whatsapp,
     abrirMenu: abrirMenu, abrirAvisos: abrirAvisos, abrirPerfil: abrirPerfil,
+    abrirVoz: abrirVoz, vozProbar: vozProbar, vozVer: vozVer,
     cerrarBarra: cerrarBarra, volverEscritorio: volverEscritorio, cerrarSesion: cerrarSesion,
     abrirClientes: abrirClientes, elegirCliente: elegirCliente,
     verVideo: verVideo, verPestana: verPestana, usarRapida: usarRapida,

@@ -570,3 +570,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .casilla b{font-weight:700}
 .casilla-nota{margin-top:12px;padding:10px 12px;border-radius:var(--rlg);background:var(--bg-subtle);
   color:var(--muted);font-size:var(--fs-xs);line-height:1.5}
+
+/* Agente de voz: la transcripción en vivo y la de cada llamada. */
+.voz-trans{margin-top:12px;max-height:260px;overflow-y:auto;background:var(--bg-muted);border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:var(--fs-sm);line-height:1.45}
+.voz-trans[hidden]{display:none}
+.voz-linea b{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-right:4px}
+.voz-linea.agente b{color:var(--blue)}
