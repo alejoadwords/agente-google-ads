@@ -30,4 +30,7 @@ export const MUTACIONES = [
   { nombre: 'latencia que suma mal', archivo: 'w', romper: cambiar('(promedio(eou) + promedio(llm) + promedio(tts))', '(promedio(llm) + promedio(tts))') },
   { nombre: 'velocidad libre', archivo: 'api', romper: cambiar('velocidad: Object.values(VELOCIDADES).includes(Number(a.velocidad)) ? Number(a.velocidad) : VELOCIDAD_DEFECTO,', 'velocidad: Number(a.velocidad) || VELOCIDAD_DEFECTO,') },
   { nombre: 'sin regla de no inventar', archivo: 'lib', romper: cambiar('- Solo condiciones, precios, plazos', '- Condiciones, precios, plazos') },
+  { nombre: 'presupuesto como texto', archivo: 'api', romper: cambiar("typeof a.presupuesto === 'number' ? a.presupuesto : aPlata(a.presupuesto)", 'a.presupuesto') },
+  { nombre: 'zona en campo que no se lee', archivo: 'api', romper: cambiar("    barrio: (a.zona || a.barrio || '').trim() || undefined,", "    zona: (a.zona || a.barrio || '').trim() || undefined,") },
+  { nombre: 'tipo sin mayúscula', archivo: 'api', romper: cambiar("tipo ? tipo.charAt(0).toUpperCase() + tipo.slice(1) : undefined", "tipo || undefined") },
 ];

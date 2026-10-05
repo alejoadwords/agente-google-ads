@@ -71,10 +71,11 @@ function herramientas({ acuarius, llamadaId, colgar, desviar }) {
       description: 'Busca inmuebles en el catálogo del negocio según lo que pidió la persona.',
       parameters: z.object({
         operacion: z.string().optional().describe('arriendo o venta'),
+        tipo: z.string().optional().describe('apartamento, casa, local, oficina, bodega o lote'),
         ciudad: z.string().optional(),
-        zona: z.string().optional().describe('Barrio o zona'),
+        zona: z.string().optional().describe('Barrio o zona como lo dijo la persona, por ejemplo «el norte» o «Alto Prado»'),
         presupuesto: z.string().optional().describe('Presupuesto como lo dijo, por ejemplo "3 millones"'),
-        habitaciones: z.number().optional(),
+        habitaciones: z.number().optional().describe('Habitaciones mínimas'),
       }),
       execute: usar('buscar_inmuebles'),
     }),

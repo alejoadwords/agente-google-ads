@@ -26,7 +26,7 @@ import {
   saldoMinutos, cobrarLlamada, esElWorker, tokenLiveKit, NOMBRE_WORKER, instruccionesDeVoz, saludoDe, bloqueCitasVoz,
   HERRAMIENTAS_SERVIDOR,
 } from './_agente-voz.js';
-import { bloqueDeAhora, tratamiento, propiedadesParaPrompt } from './_inbox-engine.js';
+import { bloqueDeAhora, tratamiento, propiedadesParaPrompt, aPlata } from './_inbox-engine.js';
 import { reservasParaAgente, ejecutarReserva } from './_reservas-agente.js';
 import { intakeLead } from './_lead-intake.js';
 import { registrarError } from './_registro-errores.js';
@@ -163,11 +163,18 @@ async function workerHerramienta(b) {
       return json({ ok: true, texto: 'Datos guardados en el CRM.' });
     }
     case 'buscar_inmuebles': {
-      const r = await propiedadesParaPrompt(userId, clientId, {
-        operacion: a.operacion, ciudad: a.ciudad, zona: a.zona, presupuesto: a.presupuesto, habitaciones: a.habitaciones,
-      });
+      // Las pistas como las entiende la búsqueda del agente de WhatsApp. En la
+      // primera prueba con Certain (05-10-2026) el presupuesto llegaba como
+      // texto («3 millones»): el filtro quedaba en «lte.NaN», la consulta
+      // fallaba en silencio y Aura dijo que no había nada, con 8 opciones en
+      // el catálogo. Y la zona iba en un campo que la búsqueda no lee, así que
+      // «el norte» nunca se traducía a sus barrios.
+      const pistas = buscarPistas(a);
+      const r = await propiedadesParaPrompt(userId, clientId, pistas);
       const lineas = (r.lineas || []).slice(0, 4);
-      return json({ ok: true, total: r.total || 0, texto: lineas.length ? lineas.join('\n') : 'No hay inmuebles que cumplan eso en el catálogo.' });
+      if (!lineas.length) return json({ ok: true, total: 0, texto: 'No hay inmuebles que cumplan eso en el catálogo. Ofrece que un asesor busque otras opciones.' });
+      const aviso = r.ampliado ? `No hay en ${pistas.barrio}; estas son de otras zonas:\n` : '';
+      return json({ ok: true, total: r.total || 0, texto: aviso + lineas.join('\n') });
     }
     case 'agendar_cita': {
       const info = await reservasParaAgente(userId, clientId);
@@ -238,6 +245,25 @@ async function workerFin(b) {
         metadata: { agente_voz: true, llamada_id: llamada.id, estado } }) });
   }
   return json({ ok: true, minutos });
+}
+
+/**
+ * Lo que dijo el modelo, como lo espera propiedadesParaPrompt: el presupuesto
+ * en pesos (número), la zona en `barrio` (es el campo que traduce «el norte»
+ * a los barrios del catálogo) y el tipo con la mayúscula del catálogo.
+ */
+export function buscarPistas(a = {}) {
+  const presupuesto = typeof a.presupuesto === 'number' ? a.presupuesto : aPlata(a.presupuesto);
+  const tipo = String(a.tipo || '').trim().toLowerCase();
+  const habitaciones = Math.round(Number(a.habitaciones)) || 0;
+  return {
+    operacion: a.operacion || undefined,
+    ciudad: a.ciudad || undefined,
+    barrio: (a.zona || a.barrio || '').trim() || undefined,
+    presupuesto: presupuesto > 0 ? presupuesto : undefined,
+    habitaciones: habitaciones > 0 ? habitaciones : undefined,
+    tipo: tipo ? tipo.charAt(0).toUpperCase() + tipo.slice(1) : undefined,
+  };
 }
 
 // ── El cliente ──────────────────────────────────────────────────────────────

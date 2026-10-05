@@ -35,9 +35,9 @@ async function tokenDe(sub) {
 }
 
 // ── Supabase de mentira ─────────────────────────────────────────────────────
-let T, idn = 0;
+let T, idn = 0, consultasCatalogo = [];
 function cumple(fila, k, v) {
-  if (['select', 'order', 'limit', 'offset', 'on_conflict'].includes(k)) return true;
+  if (['select', 'order', 'limit', 'offset', 'on_conflict', 'or'].includes(k)) return true;
   if (!(k in fila)) return v === 'is.null';
   const x = fila[k];
   if (v === 'is.null') return x == null;
@@ -53,6 +53,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.hostname === 'api.clerk.com') return resp({ id: 'dueno', public_metadata: { plan: 'pro' } });
   if (u.hostname !== 'base.falsa') return resp({});
   const tabla = u.pathname.replace('/rest/v1/', '');
+  if (tabla === 'client_properties') consultasCatalogo.push(decodeURIComponent(u.search));
   if (tabla === 'rpc/minutos_voz_saldo') {
     const b = JSON.parse(init.body);
     return resp(T.minutos_voz.filter(m => m.user_id === b.p_user).reduce((a, m) => a + m.cantidad, 0));
@@ -191,6 +192,26 @@ console.log('\nEl worker: herramientas');
   ok(d.prueba && T.leads.length === 1, 'en una prueba, guardar datos no crea leads de ensayo en el CRM');
   d = await (await worker({ accion: 'herramienta', llamada_id: prueba, nombre: 'pasar_a_asesor', args: {} })).json();
   ok(d.desvio === '573001112233' && !T.lead_activities.length, 'pasar a un asesor devuelve el número, y en prueba no escribe notas');
+  // Lo que pasó con Certain el 05-10-2026: «3 millones» como texto dejaba la
+  // consulta en «lte.NaN» y Aura decía que no había nada.
+  T.client_properties = [
+    { user_id: 'dueno', client_id: null, codigo: 'X1', operacion: 'Arriendo', tipo: 'Apartamento', ciudad: 'Barranquilla', barrio: 'Alto Prado', habitaciones: 3, precio: 2800000, precio_arriendo: 2800000 },
+    { user_id: 'dueno', client_id: null, codigo: 'X2', operacion: 'Arriendo', tipo: 'Apartamento', ciudad: 'Barranquilla', barrio: 'Villa Santos', habitaciones: 3, precio: 2600000, precio_arriendo: 2600000 },
+    { user_id: 'dueno', client_id: null, codigo: 'X3', operacion: 'Arriendo', tipo: 'Apartamento', ciudad: 'Barranquilla', barrio: 'Rebolo', habitaciones: 3, precio: 900000, precio_arriendo: 900000 },
+  ];
+  consultasCatalogo = [];
+  d = await (await worker({ accion: 'herramienta', llamada_id: prueba, nombre: 'buscar_inmuebles',
+    args: { operacion: 'arriendo', tipo: 'apartamento', ciudad: 'Barranquilla', zona: 'el norte', presupuesto: '3 millones', habitaciones: 3 } })).json();
+  const busqueda = consultasCatalogo.find(q => q.includes('habitaciones=gte.')) || '';
+  ok(/precio_arriendo\.lte\.3450000/.test(busqueda) && !/NaN/.test(busqueda), 'el presupuesto «3 millones» llega como número (con el 15 % de margen), nunca NaN', busqueda);
+  ok(/habitaciones=gte\.3/.test(busqueda) && /tipo=eq\.Apartamento/.test(busqueda), 'filtra por habitaciones y por tipo con la mayúscula del catálogo', busqueda);
+  ok(/barrio=in\.\(.*Alto Prado.*\)/.test(busqueda) && !/Rebolo/.test(busqueda.match(/barrio=in\.\(([^)]*)\)/)?.[1] || ''), '«el norte» se traduce a los barrios del norte del catálogo', busqueda);
+  ok(d.ok && d.total > 0 && /X1|X2/.test(d.texto), 'y devuelve los inmuebles', JSON.stringify(d));
+  const { buscarPistas } = await import('../api/agente-voz.js');
+  const p0 = buscarPistas({ presupuesto: 'hasta dos', habitaciones: 'tres', tipo: '' });
+  ok(p0.presupuesto === undefined && p0.habitaciones === undefined && p0.tipo === undefined, 'lo que no se entiende se deja sin filtrar, no se convierte en basura', JSON.stringify(p0));
+  ok(buscarPistas({ presupuesto: 2500000 }).presupuesto === 2500000, 'un presupuesto que ya es número pasa tal cual');
+
   const r = await worker({ accion: 'herramienta', llamada_id: prueba, nombre: 'borrar_todo', args: {} });
   ok(r.status === 400, 'una herramienta que no existe se rechaza');
 }
