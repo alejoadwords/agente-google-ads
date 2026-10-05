@@ -1988,6 +1988,17 @@ function abrirMenu(){
     return filas ? '<div class="mgrupo">'+esc(g[0])+'</div><div>'+filas+'</div>' : '';
   }).join('');
   hojaConCab('hoja-menu', 'Menú', '', cuerpo);
+  // Si el menú se abre antes de que el servidor diga si hay agente de voz, se
+  // añade la opción al menú abierto en cuanto responda.
+  if (!VOZ) vozEstado().then(function(){
+    var h = $('#hoja-menu');
+    if (!VOZ || !VOZ.activo || !h || h.querySelector('[onclick="M.abrirVoz()"]')) return;
+    var cab = h.querySelector('.cab');
+    if (cab) cab.insertAdjacentHTML('afterend', '<div class="mgrupo">Atender</div><div>'
+      + '<button class="mfila" onclick="M.abrirVoz()"><span class="micono">'+icn('phone',18)+'</span>'
+      + '<span class="cuerpo"><span class="mt">Agente de voz</span><span class="ms">Pruébalo hablando con él</span></span>'
+      + '<span class="chev">'+icn('arrow',18)+'</span></button></div>');
+  });
 }
 
 // Los avisos sin leer: las notas que la dirección le deja a quien atiende. Son
@@ -2207,7 +2218,6 @@ async function elegirCliente(id){
   filtroEtapa = 'todos';
   MODULO_CACHE = {};
   cargarReales();
-  vozEstado();   // cada cliente tiene su propio agente de voz
 }
 
 // El subtítulo de estas pantallas venía escrito a mano y AFIRMABA cosas:
@@ -3182,6 +3192,11 @@ var _alcanceUsado = null;   // con cuál se cargó, para saber si cambió
 async function cargarReales(){
   if (typeof fetchAuth !== 'function') { MODO = 'ejemplo'; pintarModo(); return; }
   MODO = 'cargando';
+  // ¿La cuenta (o el cliente elegido) tiene agente de voz? Decide si el menú
+  // lo muestra. Va AQUÍ y no al arrancar: dentro de la aplicación el móvil
+  // entra por movilMontar, que nunca pasa por arrancar(), y la opción no
+  // aparecía (05-10-2026). Sin esperar: no frena la carga de lo demás.
+  vozEstado();
   // También aquí: al móvil suelto se le resuelve la sesión más tarde, y desde
   // ese instante los ejemplos dejan de poder enseñarse.
   vaciarEjemplos();
@@ -3297,7 +3312,6 @@ async function arrancar(){
   var hay = await abrirSesion();
   if (!hay) { MODO = 'ejemplo'; pintarModo(); return; }
   await cargarReales();
-  vozEstado();   // sin esperar: solo decide si el menú muestra el agente de voz
 }
 
 // Los subtítulos de cada cabecera, calculados.
