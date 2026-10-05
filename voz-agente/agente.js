@@ -172,6 +172,12 @@ export default defineAgent({
         // lo que decide si la persona terminó de hablar o solo hizo una pausa.
         turnDetection: new inference.TurnDetector({ version: 'v1-mini' }),
         preemptiveGeneration: { enabled: true, preemptiveTts: true },
+        // Cuánto esperar a que la persona termine. Con el tope por defecto
+        // (2,5 s) uno de cada diez turnos se quedaba esperando 2,5 s antes de
+        // responder (segunda prueba, 05-10). A 1,6 s como máximo responde
+        // antes; si alguien hace una pausa larga y se le interrumpe, el
+        // agente se calla en cuanto vuelve a hablar.
+        endpointing: { minDelay: 300, maxDelay: 1600 },
       },
     });
     session.on('metrics_collected', (ev) => { if (ev?.metrics) metricas.push(ev.metrics); });
