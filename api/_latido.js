@@ -65,6 +65,7 @@ export const CADA = {
   'cron-catalogo': 30,           // 25,55 * * * *
   'cron-conversiones': 10,      // */10 — ventas a Meta y Google
   'cron-alertas-pauta': 24 * 60, // 0 13 * * * — alertas de la pauta de ayer
+  'cron-audiencias': 24 * 60,    // 0 11 * * * — audiencias del CRM a Google y Meta
   'cron-reportes': 24 * 60,      // */15 12-14 * * * — reportes programados para clientes
   'cron-notas': 24 * 60,         // 0 13,20 * * 1-5
   'cron-recordatorios': 10,

@@ -10567,6 +10567,7 @@ function irA(destino) {
         case 'pauta-busquedas': navGo('marketing'); setTimeout(() => { pautaVista = 'busquedas'; crmSetView('pauta'); }, 150); break;
         case 'pauta-analista': navGo('marketing'); setTimeout(() => { pautaVista = 'analista'; crmSetView('pauta'); }, 150); break;
         case 'pauta-reportes': navGo('marketing'); setTimeout(() => { pautaVista = 'reportes'; crmSetView('pauta'); }, 150); break;
+        case 'pauta-audiencias': navGo('marketing'); setTimeout(() => { pautaVista = 'audiencias'; crmSetView('pauta'); }, 150); break;
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'campanas':      navGo('marketing'); setTimeout(() => crmSetView('campaigns'), 150); break;
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
@@ -18077,6 +18078,9 @@ async function crmLoadStages() {
 const _irPorUrl = (() => { try { return new URLSearchParams(location.search).get('ir'); } catch { return null; } })();
 function irDeLaUrl() {
   if (!_irPorUrl) return;
+  // Lo que trae la vuelta de Google al dar el permiso de audiencias se guarda
+  // ANTES de limpiar la URL: si no, la pestaña nunca se entera (audCargar).
+  try { window._audGooglePorUrl = new URLSearchParams(location.search).get('audiencias_google'); } catch {}
   try { window.history.replaceState({}, '', location.pathname + location.hash); } catch {}
   // Solo nombres cortos: un «/ruta» en la URL no se sigue desde un enlace.
   if (/^[a-z-]{2,40}$/.test(_irPorUrl)) irA(_irPorUrl);
@@ -39796,7 +39800,7 @@ function lpCerrarEditor() {
 // nunca ve los tokens de Google ni de Meta.
 
 let pautaDatos = null;
-let pautaVista = 'campanas';       // campanas | diagnostico | analista | reglas | busquedas | reportes | conexiones | cartera | ventas
+let pautaVista = 'campanas';       // campanas | diagnostico | analista | reglas | busquedas | audiencias | reportes | conexiones | cartera | ventas
 let pautaDias = 30;
 let pautaCargando = false;
 
@@ -39851,6 +39855,7 @@ function pautaRender() {
         '<button class="pauta-tab' + (pautaVista === 'analista' ? ' active' : '') + '" onclick="pautaIr(\'analista\')">Analista IA</button>' +
         '<button class="pauta-tab' + (pautaVista === 'reglas' ? ' active' : '') + '" onclick="pautaIr(\'reglas\')">Reglas</button>' +
         '<button class="pauta-tab' + (pautaVista === 'busquedas' ? ' active' : '') + '" onclick="pautaIr(\'busquedas\')">Búsquedas</button>' +
+        '<button class="pauta-tab' + (pautaVista === 'audiencias' ? ' active' : '') + '" onclick="pautaIr(\'audiencias\')">Audiencias</button>' +
         '<button class="pauta-tab' + (pautaVista === 'reportes' ? ' active' : '') + '" onclick="pautaIr(\'reportes\')">Reportes</button>' +
         (hayCartera ? '<button class="pauta-tab' + (pautaVista === 'cartera' ? ' active' : '') + '" onclick="pautaIr(\'cartera\')">Cartera</button>' : '') +
         '<button class="pauta-tab' + (pautaVista === 'conexiones' ? ' active' : '') + '" onclick="pautaIr(\'conexiones\')">Conexiones</button>' +
@@ -39894,6 +39899,7 @@ async function pautaCargar() {
   if (pautaVista === 'busquedas') { busqCargar(); return; }
   if (pautaVista === 'analista') { analistaCargar(); return; }
   if (pautaVista === 'reportes') { rptCargar(); return; }
+  if (pautaVista === 'audiencias') { audCargar(); return; }
   pautaCargando = true;
   c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + (pautaVista === 'diagnostico' ? ' Revisando tus campañas…' : ' Leyendo tus campañas…') + '</div>';
 
@@ -40268,6 +40274,215 @@ function pautaPintarConexiones(d) {
     '</div></div>';
 
   c.innerHTML = html;
+}
+
+// ── Audiencias del CRM ──────────────────────────────────────────────────────
+// Grupos del CRM (los que ya compraron, los que están en proceso, los
+// perdidos, o por etiqueta) que se suben como lista de clientes a Google o a
+// Meta, para excluirlos de la captación o buscar parecidos. Se mantienen al
+// día solas cada mañana. Servidor: api/audiencias.js y api/_audiencias.js.
+let audDatos = null;
+let audForm = null;
+
+const AUD_DIAS = [{ id: '0', name: 'Todos, sin importar cuándo llegaron' }, { id: '30', name: 'Los de los últimos 30 días' }, { id: '90', name: 'Los de los últimos 90 días' },
+  { id: '180', name: 'Los de los últimos 6 meses' }, { id: '365', name: 'Los del último año' }];
+const AUD_NOMBRE = { clientes: 'Clientes del CRM', en_proceso: 'Leads en proceso del CRM', perdidos: 'Leads perdidos del CRM', todos: 'Todos los leads del CRM', etiquetas: 'Leads con etiqueta' };
+
+async function audCargar() {
+  const c = document.getElementById('pauta-cuerpo');
+  if (!c) return;
+  c.innerHTML = '<div class="pauta-cargando">' + icn('refresh', 15) + ' Leyendo tus audiencias…</div>';
+  // Al volver de Google tras dar el permiso: se dice qué pasó y se limpia la URL.
+  const q = window._audGooglePorUrl;
+  if (q) {
+    window._audGooglePorUrl = null;
+    showToast(q === 'ok' ? 'Listo: Google ya deja subir audiencias.' : 'Google no recibió el permiso de audiencias: hay que marcar esa casilla en la pantalla de Google.', q === 'ok' ? 'success' : 'error');
+  }
+  const cliente = crmAmbitoCliente();
+  try {
+    const r = await fetchAuth('/api/audiencias' + (cliente ? '?client_id=' + encodeURIComponent(cliente) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok || d.error) { pautaError(d.error || 'No pudimos leer tus audiencias.'); return; }
+    audDatos = d;
+    audPintar();
+  } catch (e) {
+    pautaError('No pudimos conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.');
+  }
+}
+
+function audPintar() {
+  const c = document.getElementById('pauta-cuerpo');
+  const d = audDatos;
+  if (!c || !d) return;
+  const puede = !!d.puede_editar;
+  if (!d.cuentas.length) {
+    c.innerHTML = emptyAgua('users', 'Conecta Google Ads o Meta para crear audiencias',
+      'Con tus leads del CRM armamos listas de clientes en la red, para que no pagues por volver a traer a quien ya te compró.',
+      '<button class="btn-pri" onclick="pautaIr(\'conexiones\')">Conectar una cuenta</button>');
+    return;
+  }
+  let html = '<div class="pauta-aviso">' + icn('users', 15) + '<div style="flex:1">' +
+    '<b>Tus leads del CRM, como audiencias en Google y Meta.</b> Lo más útil: <b>excluir de la captación a quien ya es cliente o ya está hablando contigo</b>, para no pagar dos veces por la misma persona. ' +
+    'También sirven para buscar gente parecida a los que compraron. Se actualizan solas cada mañana: quien gana o se pierde, cambia de lista. ' +
+    'Viajan cifradas: ni Google ni Meta ven el correo o el teléfono en claro.</div>' +
+    (puede && !audForm && d.plan_ok ? '<button class="btn-pri" onclick="audNueva()">' + icn('plus', 13) + ' Nueva audiencia</button>' : '') + '</div>';
+  if (!d.plan_ok) html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) + '<div style="flex:1">Las audiencias del CRM son de los planes Pro y Agencia.</div></div>';
+
+  // Google necesita un permiso aparte para las audiencias.
+  for (const cu of d.cuentas.filter(x => x.red === 'google' && x.permiso === false)) {
+    html += '<div class="pauta-aviso pauta-aviso-ojo">' + icn('alert', 15) + '<div style="flex:1"><b>Google pide un permiso más para subir audiencias</b> a «' + esc(cu.nombre) + '». ' +
+      'Al darlo, Google puede mostrar «Google no verificó esta app» mientras revisa ese permiso: entra en <b>Configuración avanzada → Ir a Acuarius</b> y marca la casilla de audiencias.</div>' +
+      (puede ? '<button class="btn-ghost sm" onclick="audPermisoGoogle(this)">Dar permiso en Google</button>' : '') + '</div>';
+  }
+  if (audForm) html += audFormulario();
+
+  if (!d.audiencias.length && !audForm) {
+    html += '<div class="pauta-vacio">Todavía no hay audiencias. La primera que conviene: <b>Clientes que ya compraron</b>, para excluirlos de tus campañas de captación.</div>';
+  }
+  html += '<div class="pauta-diag-lista">' + d.audiencias.map(a => {
+    const red = a.red === 'google' ? 'Google Ads' : 'Meta';
+    const seg = d.segmentos[a.segmento] + (a.filtro?.etiquetas?.length ? ': ' + a.filtro.etiquetas.join(', ') : '') + (a.filtro?.dias ? ' · últimos ' + a.filtro.dias + ' días' : '');
+    return '<div class="pauta-diag' + (a.error ? ' error' : a.activa ? ' bien' : '') + '" style="' + (a.activa ? '' : 'opacity:.65') + '">' +
+      '<div class="pauta-diag-ico">' + icn('users', 16) + '</div>' +
+      '<div class="pauta-diag-cuerpo">' +
+        '<div class="pauta-diag-tit">' + pautaRedChip(a.red) + '<span>' + esc(a.nombre) + '</span>' + (a.activa ? '' : ' <span class="pauta-pill pauta-pill-off">Apagada</span>') + '</div>' +
+        '<div class="pauta-diag-det">' + esc(seg) + ' · <b>' + pautaNum(a.miembros) + '</b> contactos enviados' +
+          (a.ultimo_sync ? ' · actualizada ' + esc(new Date(a.ultimo_sync).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })) : ' · todavía sin subir') +
+          (a.error ? '<div style="color:var(--danger);margin-top:4px">' + esc(a.error) + '</div>' : '') + '</div>' +
+      '</div>' +
+      (puede ? '<div class="pauta-diag-acc" style="display:flex;gap:6px;flex-wrap:wrap">' +
+        '<button class="btn-ghost sm" onclick="audSincronizar(\'' + esc(a.id) + '\', this)">Actualizar ahora</button>' +
+        '<button class="btn-ghost sm" onclick="audActivar(\'' + esc(a.id) + '\', ' + !a.activa + ', this)">' + (a.activa ? 'Apagar' : 'Encender') + '</button>' +
+        '<button class="btn-ghost sm" onclick="audBorrar(\'' + esc(a.id) + '\', this)">Borrar</button></div>' : '') +
+    '</div>';
+  }).join('') + '</div>';
+
+  html += '<div class="pauta-pasos-t" style="margin:22px 0 8px">Cómo usarlas para excluir</div><div class="pauta-conxs">' +
+    '<div class="pauta-conx"><div class="pauta-conx-t">Google Ads</div><div class="pauta-conx-s" style="margin-top:6px;line-height:1.6">Campaña → <b>Públicos</b> → Editar → <b>Excluir</b> → Tus datos → elige la audiencia. ' +
+      'Google necesita reconocer unos cientos de contactos para usarla (en la Red de Búsqueda pide más), y tarda hasta un día en procesarla.</div></div>' +
+    '<div class="pauta-conx"><div class="pauta-conx-t">Meta</div><div class="pauta-conx-s" style="margin-top:6px;line-height:1.6">Conjunto de anuncios → <b>Público</b> → <b>Excluir</b> → elige la audiencia. ' +
+      'Para buscar parecidos: Públicos → Crear público similar a partir de «Clientes del CRM».</div></div></div>';
+  c.innerHTML = html;
+}
+
+function audDdBoton(campo, lista, valor) {
+  return '<button type="button" class="dd-btn" style="max-width:none;width:100%;justify-content:space-between" onclick="audDd(this, \'' + campo + '\')">' +
+    '<span class="dd-btn-txt">' + esc(reglasNombreDe(lista, valor) || 'Elegir') + '</span>' +
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>';
+}
+function audListas() {
+  const d = audDatos;
+  return {
+    conexion_id: d.cuentas.map(c => ({ id: c.id, name: c.nombre + ' · ' + (c.red === 'google' ? 'Google Ads' : 'Meta') + (c.red === 'google' && c.permiso === false ? ' (falta el permiso)' : '') })),
+    segmento: Object.entries(d.segmentos).map(([id, name]) => ({ id, name })),
+    dias: AUD_DIAS,
+  };
+}
+function audDd(btn, campo) {
+  ddAbrir(btn, audListas()[campo], String(audForm[campo] ?? ''), id => {
+    const antes = AUD_NOMBRE[audForm.segmento];
+    audForm[campo] = campo === 'dias' ? Number(id) : id;
+    // El nombre sigue al grupo mientras nadie lo haya cambiado a mano.
+    if (campo === 'segmento' && (!audForm.nombre || audForm.nombre === antes)) audForm.nombre = AUD_NOMBRE[id];
+    audPintar();
+  });
+}
+
+function audFormulario() {
+  const f = audForm;
+  const etq = (t, campo, ayuda) => '<label style="display:flex;flex-direction:column;gap:4px;font-size:var(--fs-xs);color:var(--muted);font-weight:600">' + t + campo +
+    (ayuda ? '<span style="font-weight:400;color:var(--muted2)">' + ayuda + '</span>' : '') + '</label>';
+  const L = audListas();
+  return '<div class="pauta-conx viva" style="margin-bottom:14px">' +
+    '<div class="pauta-conx-t" style="margin-bottom:12px">Nueva audiencia</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">' +
+      etq('Qué leads entran', audDdBoton('segmento', L.segmento, f.segmento)) +
+      (f.segmento === 'etiquetas' ? etq('Etiquetas', '<input class="auto-input" id="au-tags" placeholder="vip, arriendo" value="' + esc(f.etiquetas || '') + '" oninput="audForm.etiquetas=this.value">', 'Entran los leads con cualquiera de ellas.') : '') +
+      etq('Cuándo llegaron', audDdBoton('dias', L.dias, String(f.dias || 0))) +
+      etq('A qué cuenta', audDdBoton('conexion_id', L.conexion_id, f.conexion_id)) +
+      etq('Nombre en la red', '<input class="auto-input" id="au-nombre" maxlength="120" value="' + esc(f.nombre || '') + '" oninput="audForm.nombre=this.value">', 'Así la vas a encontrar en Google Ads o en Meta.') +
+    '</div>' +
+    '<label style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-size:var(--fs-sm);line-height:1.5;cursor:pointer">' +
+      '<input type="checkbox" id="au-ok" ' + (f.consentimiento ? 'checked' : '') + ' onchange="audForm.consentimiento=this.checked" style="margin-top:3px">' +
+      '<span>Confirmo que estos contactos me dieron sus datos y autorizaron usarlos para publicidad, según la Ley 1581 de 2012 de protección de datos y las condiciones de listas de clientes de Google y de audiencias personalizadas de Meta.</span></label>' +
+    '<div id="au-err" style="display:none;color:var(--danger);font-size:var(--fs-sm);margin-top:10px"></div>' +
+    '<div class="pauta-conx-btns" style="margin-top:14px">' +
+      '<button class="btn-pri" id="au-crear" onclick="audCrear(this)">Crear y subir</button>' +
+      '<button class="btn-ghost" onclick="audForm=null;audPintar()">Cancelar</button>' +
+    '</div></div>';
+}
+
+function audNueva() {
+  const primera = (audDatos.cuentas.find(c => c.red === 'meta' || c.permiso !== false) || audDatos.cuentas[0]);
+  audForm = { segmento: 'clientes', nombre: AUD_NOMBRE.clientes, conexion_id: primera ? primera.id : '', dias: 0, consentimiento: false };
+  audPintar();
+}
+
+async function audPost(cuerpo) {
+  const r = await fetchAuth('/api/audiencias', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+  // Crear y actualizar llegan en streaming: el error viene en el cuerpo aunque el estado sea 200.
+  const d = await leerRespuesta(r);
+  if (!r.ok || d.error === true || (typeof d.error === 'string' && d.error)) throw new Error(d.mensaje || (typeof d.error === 'string' ? d.error : 'No se pudo.'));
+  return d;
+}
+
+async function audCrear(btn) {
+  const err = document.getElementById('au-err');
+  if (err) err.style.display = 'none';
+  const texto = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Creando y subiendo… (puede tardar un minuto)';
+  try {
+    const d = await audPost({ accion: 'crear', nombre: audForm.nombre, conexion_id: audForm.conexion_id, segmento: audForm.segmento,
+      filtro: { etiquetas: audForm.etiquetas || '', dias: audForm.dias || 0 }, consentimiento: !!audForm.consentimiento, client_id: crmAmbitoCliente() || null });
+    showToast('Audiencia creada con ' + pautaNum(d.miembros) + ' contactos.', 'success');
+    audForm = null;
+    audCargar();
+  } catch (e) {
+    // Si se creó pero la red no la aceptó, la fila existe con su error: se recarga para verlo.
+    if (err) { err.textContent = e.message; err.style.display = 'block'; }
+    btn.disabled = false; btn.textContent = texto;
+    if (audForm) { const f = audForm; await audCargar(); audForm = f; audPintar(); const e2 = document.getElementById('au-err'); if (e2) { e2.textContent = e.message; e2.style.display = 'block'; } }
+  }
+}
+
+async function audSincronizar(id, btn) {
+  const texto = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Actualizando…';
+  try {
+    const d = await audPost({ accion: 'sincronizar', id });
+    showToast('Lista al día: ' + pautaNum(d.miembros) + ' contactos (' + d.entran + ' entraron, ' + d.salen + ' salieron).', 'success');
+  } catch (e) {
+    showToast('No se pudo actualizar: ' + e.message, 'error');
+  }
+  audCargar();
+}
+
+async function audActivar(id, activa, btn) {
+  btn.disabled = true;
+  try { await audPost({ accion: 'activar', id, activa }); showToast(activa ? 'Audiencia encendida' : 'Audiencia apagada: deja de actualizarse', 'success'); audCargar(); }
+  catch (e) { showToast('No se pudo: ' + e.message, 'error'); btn.disabled = false; }
+}
+
+async function audBorrar(id, btn) {
+  const a = (audDatos?.audiencias || []).find(x => x.id === id);
+  if (!await confirmarAguaP({ titulo: '¿Dejar de usar esta audiencia?', confirmar: 'Borrar', peligro: true,
+    texto: '«' + (a?.nombre || '') + '» deja de actualizarse desde Acuarius.\n\nLa lista sigue existiendo en ' + (a?.red === 'google' ? 'Google Ads' : 'Meta') + ' con los contactos que ya tenía: si ya no la usas, bórrala también allí.' })) return;
+  btn.disabled = true;
+  try { await audPost({ accion: 'borrar', id }); showToast('Audiencia borrada de Acuarius', 'success'); audCargar(); }
+  catch (e) { showToast('No se pudo borrar: ' + e.message, 'error'); btn.disabled = false; }
+}
+
+async function audPermisoGoogle(btn) {
+  btn.disabled = true;
+  try {
+    const r = await fetchAuth('/api/gcal-enlace?para=google');
+    const d = await leerRespuesta(r);
+    if (!r.ok || !d.url) throw new Error(d.error || 'No se pudo preparar el enlace.');
+    window.location.href = d.url + '&audiencias=1';
+  } catch (e) {
+    showToast('No se pudo abrir Google: ' + e.message, 'error');
+    btn.disabled = false;
+  }
 }
 
 // ── Reportes programados para clientes ──────────────────────────────────────

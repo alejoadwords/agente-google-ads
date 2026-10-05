@@ -7,7 +7,7 @@ const SUPABASE_URL        = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 // Guarda la conexión en Supabase. Retorna true si fue exitoso.
-async function saveGoogleConnection(userId, tokens, userInfo) {
+async function saveGoogleConnection(userId, tokens, userInfo, conservarNombre) {
   if (!userId || !SUPABASE_URL) return false;
   const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString();
   try {
@@ -30,7 +30,9 @@ async function saveGoogleConnection(userId, tokens, userInfo) {
         access_token:     await cifrar(tokens.access_token),
         ...(tokens.refresh_token ? { refresh_token: await cifrar(tokens.refresh_token) } : {}),
         token_expires_at: expiresAt,
-        account_name:     userInfo.email || '',
+        // Al volver a autorizar para audiencias la cuenta ya está elegida: pisar
+        // su nombre con el correo dejaba «Certain & Pezzano» como un email.
+        ...(conservarNombre ? {} : { account_name: userInfo.email || '' }),
         updated_at:       new Date().toISOString(),
       }),
     });
@@ -89,8 +91,15 @@ export default async function handler(req, res) {
     // en los registros de Vercel y en sessionStorage. Si no se guarda, se dice:
     // antes el navegador tiraba del token de la URL y la conexión «funcionaba»
     // hasta la siguiente sesión.
-    const guardado = await saveGoogleConnection(userId, tokens, userInfo);
+    let audiencias = false;
+    try { audiencias = !!JSON.parse(state || '{}').audiencias; } catch {}
+    const guardado = await saveGoogleConnection(userId, tokens, userInfo, audiencias);
     if (!guardado) return res.redirect('https://app.acuarius.app/?ads_error=save_failed');
+    if (audiencias) {
+      // Si la persona desmarcó el permiso en la pantalla de Google, se dice.
+      const concedido = String(tokens.scope || '').includes('auth/datamanager');
+      return res.redirect('https://app.acuarius.app/?ir=pauta-audiencias&audiencias_google=' + (concedido ? 'ok' : 'sin_permiso'));
+    }
 
     return res.redirect(
       `https://app.acuarius.app/?ads_connected=true&platform=google_ads` +
