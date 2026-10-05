@@ -34,6 +34,9 @@ export const MUTACIONES = [
   { nombre: 'zona en campo que no se lee', archivo: 'api', romper: cambiar("    barrio: (a.zona || a.barrio || '').trim() || undefined,", "    zona: (a.zona || a.barrio || '').trim() || undefined,") },
   { nombre: 'tipo sin mayúscula', archivo: 'api', romper: cambiar("tipo ? tipo.charAt(0).toUpperCase() + tipo.slice(1) : undefined", "tipo || undefined") },
   { nombre: 'ensayo con otro modelo', archivo: 'api', romper: cambiar("const MODELO_VOZ = 'claude-haiku-4-5';", "const MODELO_VOZ = 'claude-sonnet-4-5';") },
-  { nombre: 'ensayo no ejecuta herramientas', archivo: 'api', romper: cambiar("const d = await (await ejecutar({ llamada_id: cfg.llamada_id, nombre: u.name, args: u.input })).json();", "const d = { texto: 'Hecho.' };") },
+  { nombre: 'ensayo no ejecuta herramientas', archivo: 'api', romper: cambiar("const d = await (await ejecutar({ llamada_id: cfg.llamada_id, nombre: u.name, args: u.input, contexto })).json();", "const d = { texto: 'Hecho.' };") },
   { nombre: 'ensayo sigue tras colgar', archivo: 'api', romper: cambiar("    if (colgo) break;\n", "") },
+  { nombre: 'sin habitaciones de la conversación', archivo: 'api', romper: cambiar("        if (h) pistas.habitaciones = h;", "") },
+  { nombre: 'cualquier número son habitaciones', archivo: 'api', romper: cambiar("if (antes && HABITACION.test(antes.texto) && /\\?/.test(antes.texto)) {", "if (antes) {") },
+  { nombre: 'correo sin limpiar', archivo: 'api', romper: cambiar("        email: correoLimpio(a.correo) || undefined,", "        email: a.correo || undefined,") },
 ];

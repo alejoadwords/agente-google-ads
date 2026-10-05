@@ -173,6 +173,13 @@ async function workerHerramienta(b) {
       // búsqueda el modelo olvida uno que ya mandó (pasó con las
       // habitaciones), se conserva el anterior.
       const pistas = combinarBusqueda(llamada.busqueda, buscarPistas(a));
+      // Y lo que el modelo no mandó pero la persona sí dijo, leído de la
+      // conversación por código. Haiku olvidaba las habitaciones en uno de
+      // cada dos ensayos aunque el campo fuera obligatorio.
+      if (!pistas.habitaciones) {
+        const h = habitacionesDeLaConversacion(b.contexto);
+        if (h) pistas.habitaciones = h;
+      }
       // Se espera: en una función edge, lo que no se espera puede quedar
       // cortado al responder. Si falla, la búsqueda sigue igual.
       try { await sb(`/llamadas_voz?id=eq.${llamada.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ busqueda: pistas }) }); }
@@ -269,6 +276,38 @@ export function correoLimpio(c) {
   return /^[^@]+@[^@]+\.[a-z]{2,}$/.test(t) ? t : '';
 }
 
+const NUMEROS = { un: 1, una: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8 };
+const numeroDe = (t) => {
+  const m = String(t || '').toLowerCase().match(/\b(\d{1,2}|una?|uno|dos|tres|cuatro|cinco|seis|siete|ocho)\b/);
+  if (!m) return null;
+  const n = /^\d+$/.test(m[1]) ? Number(m[1]) : NUMEROS[m[1]];
+  return n >= 1 && n <= 8 ? n : null;
+};
+const HABITACION = /\b(habitaci[oó]n|habitaciones|alcobas?|cuartos?|dormitorios?|piezas?)\b/i;
+
+/**
+ * Las habitaciones que dijo la persona, leídas de la conversación (como llega
+ * por teléfono: en palabras). Vale «tres habitaciones» dicho de una vez, y un
+ * número dicho justo después de que el agente preguntara por habitaciones
+ * («¿cuántas habitaciones?» → «mínimo dos»). Se mira de lo último a lo
+ * primero: si cambió de idea, vale lo último que dijo.
+ */
+export function habitacionesDeLaConversacion(contexto = []) {
+  const c = Array.isArray(contexto) ? contexto.filter(t => t && t.texto) : [];
+  for (let i = c.length - 1; i >= 0; i--) {
+    if (c[i].rol !== 'cliente') continue;
+    const t = String(c[i].texto);
+    const junto = t.match(/\b(\d{1,2}|una?|uno|dos|tres|cuatro|cinco|seis|siete|ocho)\s+(habitaci[oó]n|habitaciones|alcobas?|cuartos?|dormitorios?|piezas?)\b/i);
+    if (junto) return numeroDe(junto[1]);
+    const antes = c.slice(0, i).reverse().find(x => x.rol === 'agente');
+    if (antes && HABITACION.test(antes.texto) && /\?/.test(antes.texto)) {
+      const n = numeroDe(t);
+      if (n) return n;
+    }
+  }
+  return null;
+}
+
 /** Lo nuevo manda; lo que no vino se toma de la búsqueda anterior. */
 export function combinarBusqueda(antes, ahora) {
   const out = { ...(antes && typeof antes === 'object' ? antes : {}) };
@@ -344,7 +383,8 @@ export async function ensayar({ agenteId, turnos, modelo = MODELO_VOZ, ejecutar 
         let resultado;
         if (u.name === 'colgar') { colgo = true; resultado = 'Llamada terminada.'; }
         else {
-          const d = await (await ejecutar({ llamada_id: cfg.llamada_id, nombre: u.name, args: u.input })).json();
+          const contexto = traza.filter(t => t.rol).slice(-10).map(t => ({ rol: t.rol, texto: t.texto }));
+          const d = await (await ejecutar({ llamada_id: cfg.llamada_id, nombre: u.name, args: u.input, contexto })).json();
           resultado = d.texto || d.error || (d.ok ? 'Hecho.' : 'No se pudo.');
         }
         traza.push({ herramienta: u.name, args: u.input, resultado: String(resultado).slice(0, 600) });

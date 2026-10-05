@@ -52,10 +52,10 @@ function claudeConCache() {
 // (HERRAMIENTAS en api/_agente-voz.js): una sola definición para el worker y
 // para el ensayo en texto. Aquí solo se decide QUIÉN las ejecuta: colgar y el
 // desvío son del worker; el resto, del servidor.
-export function herramientas(defs, { acuarius, llamadaId, colgar, desviar }) {
+export function herramientas(defs, { acuarius, llamadaId, colgar, desviar, contexto = () => [] }) {
   const usar = (nombre) => async (args) => {
     try {
-      const r = await acuarius.herramienta(llamadaId, nombre, args);
+      const r = await acuarius.herramienta(llamadaId, nombre, args, contexto());
       return r.texto || (r.ok ? 'Hecho.' : (r.error || 'No se pudo.'));
     } catch (e) {
       return 'No pude hacerlo ahora mismo por un problema técnico. Ofrece que lo llame un asesor.';
@@ -130,7 +130,8 @@ export default defineAgent({
 
     const agente = new voice.Agent({
       instructions: cfg.instrucciones,
-      tools: herramientas(cfg.herramientas, { acuarius, llamadaId: cfg.llamada_id, colgar, desviar }),
+      tools: herramientas(cfg.herramientas, { acuarius, llamadaId: cfg.llamada_id, colgar, desviar,
+        contexto: () => (session ? transcripcionDe(session.history.items).slice(-10) : []) }),
     });
     session = new voice.AgentSession({
       vad: ctx.proc.userData.vad,

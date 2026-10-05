@@ -35,7 +35,7 @@ async function tokenDe(sub) {
 }
 
 // ── Supabase de mentira ─────────────────────────────────────────────────────
-let T, idn = 0, consultasCatalogo = [];
+let T, idn = 0, consultasCatalogo = [], consultasLeads = [];
 function cumple(fila, k, v) {
   if (['select', 'order', 'limit', 'offset', 'on_conflict', 'or'].includes(k)) return true;
   if (!(k in fila)) return v === 'is.null';
@@ -54,6 +54,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.hostname !== 'base.falsa') return resp({});
   const tabla = u.pathname.replace('/rest/v1/', '');
   if (tabla === 'client_properties') consultasCatalogo.push(decodeURIComponent(u.search));
+  if (tabla === 'leads') consultasLeads.push(decodeURIComponent(u.search));
   if (tabla === 'rpc/minutos_voz_saldo') {
     const b = JSON.parse(init.body);
     return resp(T.minutos_voz.filter(m => m.user_id === b.p_user).reduce((a, m) => a + m.cantidad, 0));
@@ -224,6 +225,23 @@ console.log('\nEl worker: herramientas');
   const p0 = buscarPistas({ presupuesto: 'hasta dos', habitaciones: 'tres', tipo: '' });
   ok(p0.presupuesto === undefined && p0.habitaciones === undefined && p0.tipo === undefined, 'lo que no se entiende se deja sin filtrar, no se convierte en basura', JSON.stringify(p0));
   ok(buscarPistas({ presupuesto: 2500000 }).presupuesto === 2500000, 'un presupuesto que ya es número pasa tal cual');
+  const { habitacionesDeLaConversacion: hab } = await import('../api/agente-voz.js');
+  ok(hab([{ rol: 'agente', texto: '¿Cuántas habitaciones necesitas mínimo?' }, { rol: 'cliente', texto: 'Mínimo dos.' }]) === 2, '«mínimo dos» tras preguntar por habitaciones → 2 (lo que Haiku olvidaba)');
+  ok(hab([{ rol: 'cliente', texto: 'Necesito tres habitaciones y máximo tres millones' }]) === 3, '«tres habitaciones» dicho de una vez → 3');
+  ok(hab([{ rol: 'cliente', texto: 'quiero 2 alcobas' }, { rol: 'agente', texto: 'Listo.' }, { rol: 'cliente', texto: 'mejor de cuatro cuartos' }]) === 4, 'si cambia de idea, vale lo último');
+  ok(hab([{ rol: 'agente', texto: '¿Cuál es tu presupuesto?' }, { rol: 'cliente', texto: 'Máximo cuatro millones' }]) === null, 'un número que responde a otra pregunta NO son habitaciones');
+  ok(hab([]) === null && hab(undefined) === null, 'sin conversación, nada');
+  T.llamadas_voz.find(l => l.id === prueba).busqueda = null;
+  consultasCatalogo = [];
+  await worker({ accion: 'herramienta', llamada_id: prueba, nombre: 'buscar_inmuebles', args: { operacion: 'arriendo', zona: 'el norte', presupuesto: '4000000', habitaciones: 0 },
+    contexto: [{ rol: 'agente', texto: '¿Cuántas habitaciones necesitas?' }, { rol: 'cliente', texto: 'Pueden ser mínimo dos.' }] });
+  ok(consultasCatalogo.some(q => /habitaciones=gte\.2/.test(q)), 'la búsqueda aplica las habitaciones de la conversación aunque el modelo mande 0', consultasCatalogo.join(' || '));
+  // En una llamada real, el correo dictado se guarda limpio en el lead.
+  await worker({ accion: 'config', sala: 'real-correo', numero: '576015551234', telefono: '+573104445566', direccion: 'entrante' });
+  const real = T.llamadas_voz.find(l => l.sala === 'real-correo');
+  consultasLeads = [];
+  await worker({ accion: 'herramienta', llamada_id: real.id, nombre: 'guardar_datos', args: { nombre: 'Ana Pérez', correo: 'Ana.Pérez@X.co' } });
+  ok(consultasLeads.some(q => q.includes('email=eq.ana.perez@x.co')) && !consultasLeads.some(q => /Pérez@|Ana\.P/.test(q)), 'en una llamada real el lead se busca y guarda con el correo limpio', consultasLeads.join(' || '));
   const { correoLimpio } = await import('../api/agente-voz.js');
   ok(correoLimpio('Alejandro.González@Gmail.com') === 'alejandro.gonzalez@gmail.com' && correoLimpio(' juan @ x.co ') === 'juan@x.co', 'el correo dictado queda limpio: sin tildes, sin espacios, en minúsculas');
   ok(correoLimpio('alejandro arroba gmail') === '' && correoLimpio('') === '', 'y lo que no es un correo no se guarda');

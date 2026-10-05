@@ -26,7 +26,9 @@ export function crearCliente({ base = process.env.ACUARIUS_URL || 'https://app.a
   };
   return {
     config: (datos) => post({ accion: 'config', ...datos }),
-    herramienta: (llamadaId, nombre, args) => post({ accion: 'herramienta', llamada_id: llamadaId, nombre, args }, 1),
+    // El contexto (lo último de la conversación) deja que el servidor complete
+    // por código lo que el modelo olvidó pasar, como las habitaciones.
+    herramienta: (llamadaId, nombre, args, contexto) => post({ accion: 'herramienta', llamada_id: llamadaId, nombre, args, contexto }, 1),
     // El fin se reintenta más: si se pierde, la llamada no se cobra ni queda en la ficha.
     fin: (llamadaId, datos) => post({ accion: 'fin', llamada_id: llamadaId, ...datos }, 4),
   };
