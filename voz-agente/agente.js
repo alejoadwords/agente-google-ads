@@ -21,7 +21,6 @@ import { cli, defineAgent, llm, voice, inference, ServerOptions } from '@livekit
 import * as anthropic from '@livekit/agents-plugin-anthropic';
 import * as silero from '@livekit/agents-plugin-silero';
 import { SipClient } from 'livekit-server-sdk';
-import { z } from 'zod';
 import { fileURLToPath } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
 import { crearCliente, datosDeLaLlamada, transcripcionDe, duracion, conCache, resumenLatencias } from './acuarius.js';
@@ -48,7 +47,11 @@ function claudeConCache() {
   return cliente;
 }
 
-function herramientas({ acuarius, llamadaId, colgar, desviar }) {
+// Las herramientas llegan de Acuarius en la configuración de cada llamada
+// (HERRAMIENTAS en api/_agente-voz.js): una sola definición para el worker y
+// para el ensayo en texto. Aquí solo se decide QUIÉN las ejecuta: colgar y el
+// desvío son del worker; el resto, del servidor.
+export function herramientas(defs, { acuarius, llamadaId, colgar, desviar }) {
   const usar = (nombre) => async (args) => {
     try {
       const r = await acuarius.herramienta(llamadaId, nombre, args);
@@ -57,53 +60,24 @@ function herramientas({ acuarius, llamadaId, colgar, desviar }) {
       return 'No pude hacerlo ahora mismo por un problema técnico. Ofrece que lo llame un asesor.';
     }
   };
-  return {
-    guardar_datos: llm.tool({
-      description: 'Guarda en el CRM los datos de quien llama apenas los tengas: su nombre, su correo si lo da, y qué le interesa.',
-      parameters: z.object({
-        nombre: z.string().optional().describe('Nombre y apellido'),
-        correo: z.string().optional().describe('Correo electrónico'),
-        interes: z.string().optional().describe('Qué busca o por qué llama, en una frase'),
-      }),
-      execute: usar('guardar_datos'),
-    }),
-    buscar_inmuebles: llm.tool({
-      description: 'Busca inmuebles en el catálogo del negocio según lo que pidió la persona.',
-      parameters: z.object({
-        operacion: z.string().optional().describe('arriendo o venta'),
-        tipo: z.string().optional().describe('apartamento, casa, local, oficina, bodega o lote'),
-        ciudad: z.string().optional(),
-        zona: z.string().optional().describe('Barrio o zona como lo dijo la persona, por ejemplo «el norte» o «Alto Prado»'),
-        presupuesto: z.string().optional().describe('Presupuesto como lo dijo, por ejemplo "3 millones"'),
-        habitaciones: z.number().optional().describe('Habitaciones mínimas'),
-      }),
-      execute: usar('buscar_inmuebles'),
-    }),
-    agendar_cita: llm.tool({
-      description: 'Agenda una cita SOLO después de que la persona confirmó servicio, día y hora.',
-      parameters: z.object({
-        servicio: z.string().describe('La clave del servicio'),
-        dia: z.string().describe('AAAA-MM-DD'),
-        hora: z.string().describe('HH:MM, 24 horas'),
-        nombre: z.string().describe('A nombre de quién'),
-      }),
-      execute: usar('agendar_cita'),
-    }),
-    pasar_a_asesor: llm.tool({
-      description: 'Pasa la llamada a una persona del equipo cuando la piden o cuando no puedes resolver algo.',
-      parameters: z.object({ motivo: z.string().optional() }),
-      execute: async (args) => {
-        const respuesta = await usar('pasar_a_asesor')(args);
-        // El desvío va después de que el agente diga la frase: unos segundos.
-        setTimeout(() => { desviar().catch(() => {}); }, 2500);
-        return respuesta;
-      },
-    }),
-    colgar: llm.tool({
-      description: 'Termina la llamada. Úsala después de despedirte.',
-      execute: async () => { setTimeout(() => { colgar('terminada').catch(() => {}); }, 2000); return 'Llamada terminada.'; },
-    }),
+  const ejecutores = {
+    colgar: async () => { setTimeout(() => { colgar('terminada').catch(() => {}); }, 2000); return 'Llamada terminada.'; },
+    pasar_a_asesor: async (args) => {
+      const respuesta = await usar('pasar_a_asesor')(args);
+      // El desvío va después de que el agente diga la frase: unos segundos.
+      setTimeout(() => { desviar().catch(() => {}); }, 2500);
+      return respuesta;
+    },
   };
+  const out = {};
+  for (const h of defs || []) {
+    out[h.nombre] = llm.tool({
+      description: h.descripcion,
+      parameters: h.parametros || { type: 'object', properties: {} },
+      execute: ejecutores[h.nombre] || usar(h.nombre),
+    });
+  }
+  return out;
 }
 
 export default defineAgent({
@@ -155,7 +129,7 @@ export default defineAgent({
 
     const agente = new voice.Agent({
       instructions: cfg.instrucciones,
-      tools: herramientas({ acuarius, llamadaId: cfg.llamada_id, colgar, desviar }),
+      tools: herramientas(cfg.herramientas, { acuarius, llamadaId: cfg.llamada_id, colgar, desviar }),
     });
     session = new voice.AgentSession({
       vad: ctx.proc.userData.vad,

@@ -316,16 +316,50 @@ console.log('\nCaché de instrucciones y latencias (voz-agente/acuarius.js)');
   ok(w.resumenLatencias([]).respuesta_ms === null, 'sin métricas no inventa un tiempo');
 }
 
-console.log('\nWorker y servidor hablan de las mismas herramientas');
+console.log('\nUna sola definición de herramientas');
 {
-  const src = fs.readFileSync(new URL('../voz-agente/agente.js', import.meta.url), 'utf8');
-  const delWorker = [...src.matchAll(/^\s{4}(\w+): llm\.tool\(/gm)].map(m => m[1]);
-  const alServidor = [...src.matchAll(/usar\('(\w+)'\)/g)].map(m => m[1]);
-  ok(delWorker.includes('colgar') && delWorker.filter(n => n !== 'colgar').sort().join() === [...lib.HERRAMIENTAS_SERVIDOR].sort().join(),
-    'cada herramienta del worker (salvo colgar, que es suya) la ejecuta el servidor', delWorker.join());
-  ok([...new Set(alServidor)].sort().join() === [...lib.HERRAMIENTAS_SERVIDOR].sort().join(), 'y el worker no le pide al servidor ninguna que no exista', alServidor.join());
+  const nombres = lib.HERRAMIENTAS.map(h => h.nombre);
+  ok(nombres.includes('colgar') && lib.HERRAMIENTAS_SERVIDOR.join() === nombres.filter(n => n !== 'colgar').join(), 'colgar es del worker; las demás, del servidor', nombres.join());
   const api = fs.readFileSync(new URL('../api/agente-voz.js', import.meta.url), 'utf8');
   ok(lib.HERRAMIENTAS_SERVIDOR.every(n => api.includes(`case '${n}':`)), 'el servidor tiene un caso para cada una');
+  ok(lib.HERRAMIENTAS.every(h => h.parametros?.type === 'object' && h.descripcion.length > 20), 'todas con esquema y descripción');
+  const src = fs.readFileSync(new URL('../voz-agente/agente.js', import.meta.url), 'utf8');
+  ok(/herramientas\(cfg\.herramientas,/.test(src) && !/llm\.tool\(\{\s*description: '/.test(src), 'el worker las toma de la configuración y no tiene copia propia');
+  const busca = lib.HERRAMIENTAS.find(h => h.nombre === 'buscar_inmuebles').descripcion;
+  ok(/MISMO TURNO/.test(busca) && /sin anunciarla/.test(busca), 'buscar_inmuebles se llama en el mismo turno y sin anunciarla (dijo «déjame buscar» tres veces sin buscar)');
+  ok(/relleno/.test(lib.HERRAMIENTAS.find(h => h.nombre === 'guardar_datos').descripcion), 'guardar_datos prohíbe datos de relleno («Por confirmar»)');
+  mundo();
+  const d = await (await worker({ accion: 'config', sala: 'cfg-h', agente_id: 'A1', direccion: 'prueba' })).json();
+  ok(Array.isArray(d.herramientas) && d.herramientas.some(h => h.nombre === 'buscar_inmuebles' && h.parametros), 'la configuración de cada llamada trae las definiciones');
+}
+
+console.log('\nEnsayo en texto');
+{
+  const { ensayar } = await import('../api/agente-voz.js');
+  const llamadas = [];
+  // Un Claude de mentira: al pedir arriendo en el norte, busca; con el
+  // resultado, responde; al despedirse, cuelga.
+  const llm = async (c) => {
+    llamadas.push(c);
+    const ultimo = c.messages[c.messages.length - 1];
+    if (Array.isArray(ultimo.content) && ultimo.content[0]?.type === 'tool_result') {
+      return { content: [{ type: 'text', text: 'Tengo uno en Alto Prado por dos millones ochocientos.' }] };
+    }
+    if (/norte/.test(ultimo.content)) return { content: [{ type: 'tool_use', id: 't1', name: 'buscar_inmuebles', input: { operacion: 'arriendo', zona: 'el norte' } }] };
+    if (/gracias/.test(ultimo.content)) return { content: [{ type: 'text', text: 'Con gusto, chao.' }, { type: 'tool_use', id: 't2', name: 'colgar', input: {} }] };
+    return { content: [{ type: 'text', text: '¿Con quién tengo el gusto?' }] };
+  };
+  const ejecutados = [];
+  const ejecutar = async (b) => { ejecutados.push(b); return new Response(JSON.stringify({ ok: true, texto: 'X1 · Alto Prado · $2.800.000' })); };
+  const config = async () => new Response(JSON.stringify({ llamada_id: 'L9', saludo: 'Hola, te habla Aura', instrucciones: 'SISTEMA', herramientas: lib.HERRAMIENTAS }));
+  const r = await ensayar({ agenteId: 'A1', turnos: ['Hola', 'Busco arriendo en el norte', 'Muchas gracias', 'esto ya no se dice'], ejecutar, llm, config });
+  ok(r.traza[0].texto === 'Hola, te habla Aura' && llamadas[0].system === 'SISTEMA' && llamadas[0].tools.length === lib.HERRAMIENTAS.length,
+    'usa el saludo, las instrucciones y las herramientas de la configuración real');
+  ok(llamadas[0].model === 'claude-haiku-4-5' && llamadas[0].max_tokens === 160, 'y el mismo modelo y tope que el teléfono');
+  ok(ejecutados.length === 1 && ejecutados[0].nombre === 'buscar_inmuebles' && ejecutados[0].llamada_id === 'L9', 'ejecuta la búsqueda por el mismo camino que una llamada', JSON.stringify(ejecutados));
+  ok(r.traza.some(t => t.herramienta === 'buscar_inmuebles' && /Alto Prado/.test(t.resultado)) && r.traza.some(t => /Alto Prado por dos millones/.test(t.texto || '')),
+    'la traza muestra la herramienta, su resultado y la respuesta con él');
+  ok(r.colgo && !r.traza.some(t => t.texto === 'esto ya no se dice'), 'al colgar se detiene', JSON.stringify(r.traza.slice(-2)));
 }
 
 console.log(mal ? `\n${mal} fallos` : '\nTodo en verde');

@@ -151,6 +151,7 @@ const REGLAS_DE_VOZ = `CÓMO HABLAS (es una llamada telefónica, no un chat):
 - Nunca leas listas, viñetas, enlaces ni símbolos. Los números y precios, en palabras («treinta y nueve dólares»); los correos y páginas, como se dicen («acuarius punto app»).
 - Sin saltos de línea ni párrafos: escribe todo como se diría en voz alta.
 - Si la persona empieza a hablar mientras hablas, cállate y escúchala. Nunca digas «déjame terminar».
+- Si una herramienta puede averiguar algo, llámala en ESE turno. Nunca digas «déjame buscar», «voy a revisar» o «un momento» sin llamar la herramienta en ese mismo turno: mejor no lo anuncies, llámala y responde con el resultado.
 - Si no entendiste, pide que lo repita con naturalidad («perdón, se cortó un poquito, ¿me repites?»).
 
 LO QUE PUEDES AFIRMAR:
@@ -184,7 +185,7 @@ export function instruccionesDeVoz({ agente, negocio, ahora = '', conocido = nul
   } else {
     partes.push('Quien llama no está en el CRM todavía. Pide su nombre con naturalidad y guárdalo con guardar_datos en cuanto lo tengas. El número de teléfono ya lo tienes: no lo pidas.');
   }
-  if (hayCatalogo) partes.push('Tienes un catálogo de inmuebles: cuando la persona diga qué busca, usa buscar_inmuebles y menciona como mucho dos opciones por turno, con lo esencial.');
+  if (hayCatalogo) partes.push('Tienes un catálogo de inmuebles: en cuanto sepas si busca arriendo o compra y la zona (o el presupuesto), llama buscar_inmuebles en ese mismo turno, sin preguntar si quiere que le muestres. Menciona como mucho dos opciones por turno, con barrio, habitaciones y precio.');
   if (citas) partes.push(citas);
   if (agente.instrucciones) partes.push('INDICACIONES DEL NEGOCIO:\n' + String(agente.instrucciones).slice(0, 4000));
   return partes.filter(Boolean).join('\n\n');
@@ -214,7 +215,46 @@ ${lineas.join('\n')}
 Ofrece como mucho dos horas por turno. Antes de agendar, confirma servicio, día y hora en una frase y espera el sí. Usa la clave del servicio, el día en formato AAAA-MM-DD y la hora en HH:MM.`;
 }
 
-// Las herramientas que el worker le ofrece al modelo. El worker las declara
-// con sus parámetros; aquí está la lista de las que este servidor ejecuta,
-// para que pruebas/agente-voz.mjs vigile que no se separen.
-export const HERRAMIENTAS_SERVIDOR = ['guardar_datos', 'buscar_inmuebles', 'agendar_cita', 'pasar_a_asesor'];
+// Las herramientas del agente, definidas UNA vez. El worker las recibe en la
+// configuración de cada llamada y el ensayo en texto usa las mismas: antes el
+// worker tenía su propia copia y nada garantizaba que dijeran lo mismo.
+//
+// Las descripciones son instrucciones para el modelo. La de buscar_inmuebles
+// insiste en llamarla SIN anunciarla: en la tercera prueba con Certain
+// (05-10-2026) dijo «déjame buscar» tres veces y nunca la llamó. La de
+// guardar_datos prohíbe el relleno: guardó «Por confirmar» como nombre.
+export const HERRAMIENTAS = [
+  { nombre: 'guardar_datos',
+    descripcion: 'Guarda en el CRM lo que la persona YA te dijo: su nombre, su correo y qué le interesa. Llámala cada vez que sepas algo nuevo. Nunca mandes datos de relleno («Por confirmar», «Cliente», «Sin nombre»): si no sabes el nombre, no lo incluyas.',
+    parametros: { type: 'object', properties: {
+      nombre: { type: 'string', description: 'Nombre y apellido, tal como lo dijo la persona' },
+      correo: { type: 'string', description: 'Correo electrónico, tal como lo dictó' },
+      interes: { type: 'string', description: 'Qué busca o por qué llama, en una frase' },
+    } } },
+  { nombre: 'buscar_inmuebles',
+    descripcion: 'Busca en el catálogo del negocio. Llámala EN EL MISMO TURNO en que sepas qué busca la persona (la operación y la zona, o el presupuesto), sin anunciarla ni pedir permiso: el resultado llega en segundos y con él respondes. Si te falta un dato, búscala igual con lo que tengas.',
+    parametros: { type: 'object', properties: {
+      operacion: { type: 'string', description: 'arriendo o venta' },
+      tipo: { type: 'string', description: 'apartamento, casa, local, oficina, bodega o lote' },
+      ciudad: { type: 'string' },
+      zona: { type: 'string', description: 'Barrio o zona como lo dijo la persona, por ejemplo «el norte» o «Alto Prado»' },
+      presupuesto: { type: 'string', description: 'Presupuesto como lo dijo, por ejemplo «3 millones»' },
+      habitaciones: { type: 'integer', description: 'Habitaciones mínimas' },
+    } } },
+  { nombre: 'agendar_cita',
+    descripcion: 'Agenda una cita SOLO después de que la persona confirmó servicio, día y hora.',
+    parametros: { type: 'object', required: ['servicio', 'dia', 'hora', 'nombre'], properties: {
+      servicio: { type: 'string', description: 'La clave del servicio' },
+      dia: { type: 'string', description: 'AAAA-MM-DD' },
+      hora: { type: 'string', description: 'HH:MM, 24 horas' },
+      nombre: { type: 'string', description: 'A nombre de quién' },
+    } } },
+  { nombre: 'pasar_a_asesor',
+    descripcion: 'Pasa la llamada a una persona del equipo cuando la piden o cuando no puedes resolver algo.',
+    parametros: { type: 'object', properties: { motivo: { type: 'string' } } } },
+  { nombre: 'colgar', soloWorker: true,
+    descripcion: 'Termina la llamada. Úsala justo DESPUÉS de haber dicho tu despedida en voz alta.',
+    parametros: { type: 'object', properties: {} } },
+];
+// Las que ejecuta este servidor (colgar la resuelve el worker).
+export const HERRAMIENTAS_SERVIDOR = HERRAMIENTAS.filter(h => !h.soloWorker).map(h => h.nombre);

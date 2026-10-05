@@ -24,7 +24,7 @@ import { quienPregunta, alcanceDeCliente } from './_perfiles.js';
 import {
   agenteVozActivo, PLANES_VOZ, USD_MINUTO_EXTRA, PROPOSITOS, VELOCIDADES, VELOCIDAD_DEFECTO, minutosCobrados, costoEstimado, normalizarNumero,
   saldoMinutos, cobrarLlamada, esElWorker, tokenLiveKit, NOMBRE_WORKER, instruccionesDeVoz, saludoDe, bloqueCitasVoz,
-  HERRAMIENTAS_SERVIDOR,
+  HERRAMIENTAS_SERVIDOR, HERRAMIENTAS,
 } from './_agente-voz.js';
 import { bloqueDeAhora, tratamiento, propiedadesParaPrompt, aPlata } from './_inbox-engine.js';
 import { reservasParaAgente, ejecutarReserva } from './_reservas-agente.js';
@@ -133,7 +133,7 @@ async function workerConfig(b) {
     saludo: saludoDe(agente, negocio, primerNombre),
     desvio: agente.desvio || null,
     max_segundos: maxSegundos,
-    herramientas: HERRAMIENTAS_SERVIDOR,
+    herramientas: HERRAMIENTAS,
   });
 }
 
@@ -266,6 +266,64 @@ export function buscarPistas(a = {}) {
   };
 }
 
+// ── Ensayo en texto ─────────────────────────────────────────────────────────
+// La conversación de una llamada, sin audio: el mismo modelo, las mismas
+// instrucciones y las mismas herramientas (ejecutadas por workerHerramienta,
+// en modo prueba: no crea leads ni cobra). Sirve para probar un cambio antes
+// de que alguien tenga que llamar para descubrir que no funciona.
+//
+// Va por streaming: varias respuestas de Claude seguidas pasan de los 25 s
+// en que una función edge tiene que empezar a responder.
+const MODELO_VOZ = 'claude-haiku-4-5';
+
+async function claude(cuerpo) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error('Anthropic ' + r.status + ': ' + JSON.stringify(d).slice(0, 200));
+  return d;
+}
+
+export async function ensayar({ agenteId, turnos, ejecutar = workerHerramienta, llm = claude, config = workerConfig }) {
+  const sala = 'ensayo-' + crypto.randomUUID();
+  const cfg = await (await config({ sala, agente_id: agenteId, direccion: 'prueba' })).json();
+  if (!cfg.llamada_id) return { error: cfg.error || 'sin configuración' };
+  const tools = (cfg.herramientas || HERRAMIENTAS).map(h => ({ name: h.nombre, description: h.descripcion, input_schema: h.parametros }));
+  const mensajes = [{ role: 'user', content: '(entra la llamada)' }, { role: 'assistant', content: cfg.saludo }];
+  const traza = [{ rol: 'agente', texto: cfg.saludo }];
+  let colgo = false;
+  for (const turno of (turnos || []).slice(0, 12)) {
+    if (colgo) break;
+    mensajes.push({ role: 'user', content: String(turno) });
+    traza.push({ rol: 'cliente', texto: String(turno) });
+    for (let paso = 0; paso < 4; paso++) {
+      const t0 = Date.now();
+      const r = await llm({ model: MODELO_VOZ, max_tokens: 160, temperature: 0.6, system: cfg.instrucciones, tools, messages: mensajes });
+      const ms = Date.now() - t0;
+      mensajes.push({ role: 'assistant', content: r.content });
+      const texto = r.content.filter(c => c.type === 'text').map(c => c.text).join(' ').trim();
+      if (texto) traza.push({ rol: 'agente', texto, ms });
+      const usos = r.content.filter(c => c.type === 'tool_use');
+      if (!usos.length) break;
+      const resultados = [];
+      for (const u of usos) {
+        let resultado;
+        if (u.name === 'colgar') { colgo = true; resultado = 'Llamada terminada.'; }
+        else {
+          const d = await (await ejecutar({ llamada_id: cfg.llamada_id, nombre: u.name, args: u.input })).json();
+          resultado = d.texto || d.error || (d.ok ? 'Hecho.' : 'No se pudo.');
+        }
+        traza.push({ herramienta: u.name, args: u.input, resultado: String(resultado).slice(0, 600) });
+        resultados.push({ type: 'tool_result', tool_use_id: u.id, content: String(resultado) });
+      }
+      mensajes.push({ role: 'user', content: resultados });
+    }
+  }
+  return { llamada_id: cfg.llamada_id, traza, colgo };
+}
+
 // ── El cliente ──────────────────────────────────────────────────────────────
 function validarAgente(a) {
   const out = {
@@ -348,6 +406,18 @@ export default async function handler(req) {
       if (b.accion === 'config') return await workerConfig(b);
       if (b.accion === 'herramienta') return await workerHerramienta(b);
       if (b.accion === 'fin') return await workerFin(b);
+      if (b.accion === 'ensayo') {
+        // Respuesta en streaming: se abre ya y se cierra con el resultado.
+        const { readable, writable } = new TransformStream();
+        const w = writable.getWriter();
+        const enc = new TextEncoder();
+        w.write(enc.encode(' '));
+        ensayar({ agenteId: b.agente_id, turnos: b.turnos })
+          .then(r => w.write(enc.encode(JSON.stringify(r))))
+          .catch(e => w.write(enc.encode(JSON.stringify({ error: String(e.message || e) }))))
+          .finally(() => w.close());
+        return new Response(readable, { headers: { 'Content-Type': 'application/json', ...CORS } });
+      }
       return json({ error: 'Acción desconocida' }, 400);
     }
     if (req.method !== 'GET' && req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
