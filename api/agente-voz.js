@@ -24,7 +24,7 @@ import { quienPregunta, alcanceDeCliente } from './_perfiles.js';
 import {
   agenteVozActivo, PLANES_VOZ, USD_MINUTO_EXTRA, PROPOSITOS, VELOCIDADES, VELOCIDAD_DEFECTO, minutosCobrados, costoEstimado, normalizarNumero,
   saldoMinutos, cobrarLlamada, esElWorker, tokenLiveKit, NOMBRE_WORKER, instruccionesDeVoz, saludoDe, bloqueCitasVoz,
-  HERRAMIENTAS_SERVIDOR, HERRAMIENTAS,
+  HERRAMIENTAS_SERVIDOR, HERRAMIENTAS, proximosDias,
 } from './_agente-voz.js';
 import { bloqueDeAhora, tratamiento, propiedadesParaPrompt, aPlata } from './_inbox-engine.js';
 import { reservasParaAgente, ejecutarReserva } from './_reservas-agente.js';
@@ -127,7 +127,7 @@ async function workerConfig(b) {
     agente: { id: agente.id, nombre: agente.nombre, voz: agente.voz || null, proposito: agente.proposito, velocidad: Number(agente.velocidad) || VELOCIDAD_DEFECTO },
     instrucciones: instruccionesDeVoz({
       agente, negocio, conocido, hayCatalogo, citas,
-      ahora: bloqueDeAhora('America/Bogota'),
+      ahora: bloqueDeAhora('America/Bogota') + '\n' + proximosDias(),
       tratamiento: tratamiento(agente.tono === 'formal' ? 'formal' : 'tu'),
     }),
     saludo: saludoDe(agente, negocio, primerNombre),
@@ -169,7 +169,14 @@ async function workerHerramienta(b) {
       // fallaba en silencio y Aura dijo que no había nada, con 8 opciones en
       // el catálogo. Y la zona iba en un campo que la búsqueda no lee, así que
       // «el norte» nunca se traducía a sus barrios.
-      const pistas = buscarPistas(a);
+      // Los criterios se acumulan durante la llamada: si en la segunda
+      // búsqueda el modelo olvida uno que ya mandó (pasó con las
+      // habitaciones), se conserva el anterior.
+      const pistas = combinarBusqueda(llamada.busqueda, buscarPistas(a));
+      // Se espera: en una función edge, lo que no se espera puede quedar
+      // cortado al responder. Si falla, la búsqueda sigue igual.
+      try { await sb(`/llamadas_voz?id=eq.${llamada.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ busqueda: pistas }) }); }
+      catch (e) { console.error('[agente-voz] no se guardó la búsqueda:', e.message); }
       const r = await propiedadesParaPrompt(userId, clientId, pistas);
       const lineas = (r.lineas || []).slice(0, 4);
       if (!lineas.length) return json({ ok: true, total: 0, texto: 'No hay inmuebles que cumplan eso en el catálogo. Ofrece que un asesor busque otras opciones.' });
@@ -252,6 +259,13 @@ async function workerFin(b) {
   return json({ ok: true, minutos });
 }
 
+/** Lo nuevo manda; lo que no vino se toma de la búsqueda anterior. */
+export function combinarBusqueda(antes, ahora) {
+  const out = { ...(antes && typeof antes === 'object' ? antes : {}) };
+  for (const [k, v] of Object.entries(ahora || {})) if (v !== undefined && v !== null && v !== '') out[k] = v;
+  return out;
+}
+
 /**
  * Lo que dijo el modelo, como lo espera propiedadesParaPrompt: el presupuesto
  * en pesos (número), la zona en `barrio` (es el campo que traduce «el norte»
@@ -291,7 +305,7 @@ async function claude(cuerpo) {
   return d;
 }
 
-export async function ensayar({ agenteId, turnos, ejecutar = workerHerramienta, llm = claude, config = workerConfig }) {
+export async function ensayar({ agenteId, turnos, modelo = MODELO_VOZ, ejecutar = workerHerramienta, llm = claude, config = workerConfig }) {
   const sala = 'ensayo-' + crypto.randomUUID();
   const cfg = await (await config({ sala, agente_id: agenteId, direccion: 'prueba' })).json();
   if (!cfg.llamada_id) return { error: cfg.error || 'sin configuración' };
@@ -299,14 +313,17 @@ export async function ensayar({ agenteId, turnos, ejecutar = workerHerramienta, 
   const mensajes = [{ role: 'user', content: '(entra la llamada)' }, { role: 'assistant', content: cfg.saludo }];
   const traza = [{ rol: 'agente', texto: cfg.saludo }];
   let colgo = false;
+  const uso = { entrada: 0, salida: 0, cache: 0 };
   for (const turno of (turnos || []).slice(0, 12)) {
     if (colgo) break;
     mensajes.push({ role: 'user', content: String(turno) });
     traza.push({ rol: 'cliente', texto: String(turno) });
     for (let paso = 0; paso < 4; paso++) {
       const t0 = Date.now();
-      const r = await llm({ model: MODELO_VOZ, max_tokens: 160, temperature: 0.6, system: cfg.instrucciones, tools, messages: mensajes });
+      const r = await llm({ model: modelo, max_tokens: 160, temperature: 0.6, system: cfg.instrucciones, tools, messages: mensajes });
       const ms = Date.now() - t0;
+      uso.entrada += r.usage?.input_tokens || 0; uso.salida += r.usage?.output_tokens || 0;
+      uso.cache += r.usage?.cache_read_input_tokens || 0;
       mensajes.push({ role: 'assistant', content: r.content });
       const texto = r.content.filter(c => c.type === 'text').map(c => c.text).join(' ').trim();
       if (texto) traza.push({ rol: 'agente', texto, ms });
@@ -326,7 +343,7 @@ export async function ensayar({ agenteId, turnos, ejecutar = workerHerramienta, 
       mensajes.push({ role: 'user', content: resultados });
     }
   }
-  return { llamada_id: cfg.llamada_id, traza, colgo };
+  return { llamada_id: cfg.llamada_id, modelo, traza, colgo, uso };
 }
 
 // ── El cliente ──────────────────────────────────────────────────────────────
@@ -417,7 +434,7 @@ export default async function handler(req) {
         const w = writable.getWriter();
         const enc = new TextEncoder();
         w.write(enc.encode(' '));
-        ensayar({ agenteId: b.agente_id, turnos: b.turnos })
+        ensayar({ agenteId: b.agente_id, turnos: b.turnos, modelo: /^claude-[a-z0-9.-]+$/.test(b.modelo || '') ? b.modelo : MODELO_VOZ })
           .then(r => w.write(enc.encode(JSON.stringify(r))))
           .catch(e => w.write(enc.encode(JSON.stringify({ error: String(e.message || e) }))))
           .finally(() => w.close());

@@ -191,6 +191,21 @@ export function instruccionesDeVoz({ agente, negocio, ahora = '', conocido = nul
   return partes.filter(Boolean).join('\n\n');
 }
 
+/**
+ * Los próximos siete días con su fecha, calculados en Bogotá. El modelo se
+ * equivocaba sumando días («el jueves sería el 9 de octubre», era el 8):
+ * aquí no tiene que calcular nada, solo leer.
+ */
+export function proximosDias(ahora = new Date(), zona = 'America/Bogota') {
+  const f = new Intl.DateTimeFormat('es-CO', { timeZone: zona, weekday: 'long', day: 'numeric', month: 'long' });
+  const dias = [];
+  for (let i = 0; i < 8; i++) {
+    const d = f.format(new Date(ahora.getTime() + i * 86400000));
+    dias.push((i === 0 ? 'hoy ' : i === 1 ? 'mañana ' : '') + d);
+  }
+  return 'CALENDARIO (úsalo tal cual, no calcules fechas): ' + dias.join('; ') + '.';
+}
+
 /** El saludo con el que arranca la llamada. */
 export function saludoDe(agente, negocio, conocidoNombre = null) {
   if (agente.saludo) {
@@ -238,8 +253,8 @@ export const HERRAMIENTAS = [
       tipo: { type: 'string', description: 'apartamento, casa, local, oficina, bodega o lote' },
       ciudad: { type: 'string' },
       zona: { type: 'string', description: 'Barrio o zona como lo dijo la persona, por ejemplo «el norte» o «Alto Prado»' },
-      presupuesto: { type: 'string', description: 'Presupuesto como lo dijo, por ejemplo «3 millones»' },
-      habitaciones: { type: 'integer', description: 'Habitaciones mínimas' },
+      presupuesto: { type: 'string', description: 'Presupuesto máximo en cifras, por ejemplo «3 millones» o «2500000». Inclúyelo siempre que lo haya dicho' },
+      habitaciones: { type: 'integer', description: 'Habitaciones mínimas. Inclúyelas SIEMPRE que la persona las haya dicho en cualquier momento de la llamada (por ejemplo «mínimo dos» → 2)' },
     } } },
   { nombre: 'agendar_cita',
     descripcion: 'Agenda una cita SOLO después de que la persona confirmó servicio, día y hora.',

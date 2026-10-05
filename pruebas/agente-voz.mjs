@@ -132,6 +132,13 @@ console.log('\nLas instrucciones');
   ok(/agendar_cita/.test(citas) && /ab12cd34/.test(citas) && /2026-10-06 a las 09:00, 10:00/.test(citas) && !/\[RESERVA/.test(citas), 'las citas se ofrecen con la herramienta, sin el bloque [RESERVA] del chat');
 }
 
+console.log('\nEl calendario');
+{
+  const cal = lib.proximosDias(new Date('2026-10-05T15:00:00Z'));
+  ok(/hoy lunes, 5 de octubre/.test(cal) && /jueves, 8 de octubre/.test(cal) && /mañana martes, 6 de octubre/.test(cal), 'los próximos días con su fecha, sin que el modelo sume (dijo jueves 9)', cal);
+  ok(/martes, 6 de octubre/.test(lib.proximosDias(new Date('2026-10-06T04:30:00Z'))) && /hoy lunes/.test(lib.proximosDias(new Date('2026-10-06T04:30:00Z'))), 'calculado en Bogotá: a las 11:30 p. m. sigue siendo lunes');
+}
+
 console.log('\nEl token de LiveKit');
 {
   const tok = await lib.tokenLiveKit({ identidad: 'cliente-1', sala: 'prueba-1', agente: 'acuarius-voz', metadata: '{"agente_id":"A1"}' });
@@ -208,7 +215,11 @@ console.log('\nEl worker: herramientas');
   ok(/barrio=in\.\(.*Alto Prado.*\)/.test(busqueda) && !/Rebolo/.test(busqueda.match(/barrio=in\.\(([^)]*)\)/)?.[1] || ''), '«el norte» se traduce a los barrios del norte del catálogo', busqueda);
   ok(d.ok && d.total > 0 && /X1|X2/.test(d.texto), 'y devuelve los inmuebles', JSON.stringify(d));
   ok(/^Hay \d+ opci/.test(d.texto), 'y dice cuántas hay, para que no tome las primeras por todas', d.texto);
-  const { buscarPistas } = await import('../api/agente-voz.js');
+  const { buscarPistas, combinarBusqueda } = await import('../api/agente-voz.js');
+  const c = combinarBusqueda({ zona: 'el norte', habitaciones: 2, presupuesto: 4000000 }, { zona: 'el norte', presupuesto: 3500000, habitaciones: undefined });
+  ok(c.habitaciones === 2 && c.presupuesto === 3500000, 'una segunda búsqueda conserva las habitaciones que el modelo olvidó y actualiza lo nuevo', JSON.stringify(c));
+  const ll = T.llamadas_voz.find(l => l.id === prueba);
+  ok(ll.busqueda?.habitaciones === 3 && ll.busqueda?.tipo === 'Apartamento', 'la llamada guarda los criterios de su última búsqueda', JSON.stringify(ll.busqueda));
   const p0 = buscarPistas({ presupuesto: 'hasta dos', habitaciones: 'tres', tipo: '' });
   ok(p0.presupuesto === undefined && p0.habitaciones === undefined && p0.tipo === undefined, 'lo que no se entiende se deja sin filtrar, no se convierte en basura', JSON.stringify(p0));
   ok(buscarPistas({ presupuesto: 2500000 }).presupuesto === 2500000, 'un presupuesto que ya es número pasa tal cual');
