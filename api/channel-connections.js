@@ -33,6 +33,23 @@ async function metaTokenDe(userId) {
  * Por qué no se pueden leer los mensajes de Instagram, dicho de forma que se
  * sepa qué hacer. Exportado para probarlo.
  */
+/**
+ * ¿Este error de la lectura de prueba impide de verdad recibir mensajes?
+ * Solo si falta el permiso o la cuenta tiene cerrado el acceso. Una cuenta con
+ * mucho historial (@acuarius.app, 11.477 seguidores) responde «Timeout:
+ * demasiadas conversaciones con usuarios sin rol» (código -2, subcódigo
+ * 2534084) o «An unknown error occurred» en acceso estándar: el permiso está y
+ * los mensajes nuevos llegan por webhook igual. Bloquear ahí impedía conectar
+ * el canal (05-10-2026). Pura.
+ */
+export function errorBloqueaInstagram(err) {
+  const msg = String(err?.message || '') + ' ' + String(err?.error_user_msg || '');
+  const code = Number(err?.code);
+  if (code === 230 || /instagram_manage_messages permission/i.test(msg) && !/acceso avanzado|advanced access/i.test(msg)) return true;
+  if (/access to messages|allow access|connected tools|herramientas conectadas|desactiv[oó] el acceso/i.test(msg) || code === 10) return true;
+  return false;
+}
+
 export function errorMensajesInstagram(err) {
   const msg = String(err?.message || '');
   const code = Number(err?.code);
@@ -44,7 +61,9 @@ export function errorMensajesInstagram(err) {
     };
   }
   // La cuenta de Instagram tiene cerrado el acceso de apps a sus mensajes.
-  if (/access to messages|allow access|connected tools|herramientas conectadas/i.test(msg) || code === 10) {
+  // Meta lo dice a veces en español: «El propietario de la cuenta desactivó el
+  // acceso a los mensajes directos de Instagram» (código 200, visto el 05-10-2026).
+  if (/access to messages|allow access|connected tools|herramientas conectadas|desactiv[oó] el acceso/i.test(msg) || code === 10) {
     return {
       error: 'Instagram no deja leer los mensajes de esta cuenta. En la app de Instagram: Configuración → Mensajes → Herramientas conectadas → activa «Permitir acceso a los mensajes», y vuelve a intentarlo.',
       detail: msg,
@@ -228,7 +247,10 @@ export default async function handler(req) {
       const prueba = await fetch(
         `https://graph.facebook.com/v19.0/${encodeURIComponent(page_id)}/conversations?platform=instagram&limit=1&access_token=${pagina.access_token}`
       ).then(r => r.json()).catch(e => ({ error: { message: String(e && e.message || e) } }));
-      if (prueba?.error) return jsonResp(errorMensajesInstagram(prueba.error), 400);
+      if (prueba?.error && errorBloqueaInstagram(prueba.error)) return jsonResp(errorMensajesInstagram(prueba.error), 400);
+      // Otro error (tiempo agotado por historial grande, error desconocido de
+      // Meta): no se sabe leer el historial, pero el permiso está. Se conecta.
+      if (prueba?.error) console.warn('[channel-connections] instagram: lectura de prueba falló sin bloquear:', prueba.error.code, prueba.error.error_subcode, prueba.error.message);
     }
 
     const externalId = channel === 'instagram' ? String(ig.id) : String(page_id);
