@@ -26119,13 +26119,21 @@ async function crmCopilotAction(action, btn) {
           ${s.days_estimate ? `<div style="font-size:11px;color:var(--muted)">Estimado de cierre: ~${s.days_estimate} días</div>` : ''}
         </div>`;
     } else if (action === 'draft_message' && data.result) {
+      // El texto NO va dentro del onclick: JSON.stringify lo envuelve en
+      // comillas dobles, que cortaban el atributo, y el botón lanzaba
+      // «Unexpected end of input» en cada clic sin copiar nada.
       content.innerHTML = `
         <div class="crm-copilot-panel">
           <div class="crm-copilot-result">${esc(data.result)}</div>
-          <button class="crm-copy-msg-btn" onclick="navigator.clipboard.writeText(${JSON.stringify(data.result)}).then(()=>{this.textContent='✓ Copiado'})">Copiar mensaje</button>
+          <button class="crm-copy-msg-btn">Copiar mensaje</button>
         </div>`;
+      const btnCopiar = content.querySelector('.crm-copy-msg-btn');
+      btnCopiar.onclick = () => navigator.clipboard.writeText(data.result)
+        .then(() => { btnCopiar.textContent = '✓ Copiado'; })
+        .catch(() => showToast('No se pudo copiar. Selecciona el texto y cópialo a mano.', 'error'));
     } else if (data.result) {
-      content.innerHTML = `<div class="crm-copilot-panel"><div class="crm-copilot-result">${data.result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</div></div>`;
+      // Lo que devuelve la IA se escapa antes de dar formato a las negritas.
+      content.innerHTML = `<div class="crm-copilot-panel"><div class="crm-copilot-result">${esc(data.result).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</div></div>`;
     }
   } catch(e) {
     content.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:10px 0">Error al consultar la IA. Intenta de nuevo.</div>';
