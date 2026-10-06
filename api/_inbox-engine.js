@@ -1976,6 +1976,9 @@ export async function processIncoming({ channel, externalId, contactId, contactN
         // vez. Este camino (atención manual) sale antes que el del agente, así
         // que tiene que hacerlo él también.
         archivada_at: null,
+        // Una conversación resuelta a la que el cliente vuelve a escribir no
+        // está resuelta: vuelve a la bandeja como pendiente de una persona.
+        ...(conv.status === 'resolved' ? { status: 'human' } : {}),
       }),
     });
 
@@ -2026,7 +2029,9 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
     method: 'PATCH', headers: sb(),
     // Si estaba archivada, vuelve a la bandeja: el cliente escribió otra vez.
-    body: JSON.stringify({ last_inbound_at: new Date().toISOString(), archivada_at: null }),
+    // Y si estaba resuelta, la retoma el agente, que es quien va a contestar.
+    body: JSON.stringify({ last_inbound_at: new Date().toISOString(), archivada_at: null,
+      ...(conv.status === 'resolved' ? { status: 'bot' } : {}) }),
   }).catch(() => {});
 
   // ── El cupo del mes ────────────────────────────────────────────────────────
