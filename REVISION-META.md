@@ -379,44 +379,37 @@ Texto para pegar (en inglés):
 > URL: https://app.acuarius.app
 > Email: acuarius.review@gmail.com
 > Password: [PONER LA CONTRASEÑA]
-> The account has no two-factor authentication and no Meta connection, so you can perform
-> the connection flow yourself.
+> The account has no two-factor authentication. Meta Ads is disconnected so you can perform
+> the connection flow yourself. The Page "Acuarius AI" and its Instagram account
+> @acuarius.app are already connected as Messenger and Instagram channels, so you can test
+> messaging without connecting a Page of your own.
 >
-> **Steps**
+> **Ads (business_management, ads_read, ads_management, pages_show_list)**
 > 1. Sign in at https://app.acuarius.app with the credentials above.
-> 2. Open Settings (gear icon) → Integrations → Meta Ads → "Conectar con Meta".
-> 3. Complete the Facebook login dialog: choose "only current" assets and select one Page,
->    one business portfolio and one Instagram account, then review the requested
->    permissions and press Save. (`business_management`, `pages_show_list`, `instagram_basic`)
-> 4. Back in Acuarius the connection is shown with the ad accounts it can see; the user
->    picks which one is active. (`ads_read`)
-> 5. Open Marketing → Plataformas de pauta → "Campañas": campaigns of the connected ad
->    account with spend, impressions and clicks, next to their leads in the CRM. (`ads_read`)
-> 6. Open the "Diagnóstico" tab: it lists errors and improvement opportunities for those
->    campaigns, each with the numbers behind it. (`ads_read`)
-> 7. Back on the "Campañas" tab, press "Pausar" under an active campaign and confirm: the
->    campaign is paused in Meta (the same action appears in Diagnóstico for a campaign
->    that spends without leads). Nothing is ever activated or re-budgeted from Acuarius.
->    (`ads_management`)
-> 8. Open Marketing → Fuentes → "Configurar canales". Connect Messenger ("Mi equipo" →
->    the Page) and Instagram ("Mi equipo" → the Instagram account). Connecting subscribes
->    the Page to our webhook. (`pages_show_list`, `pages_manage_metadata`)
-> 9. Send a message to the connected Page. It appears in Conversaciones (inbox) with the
->    sender's name; reply from there and the reply is delivered to Messenger.
->    (`pages_messaging`, `pages_manage_metadata`, `pages_read_engagement`)
-> 10. Send a direct message to the connected Instagram professional account. It appears in
->    Conversaciones; reply from there and the reply is delivered in Instagram.
->    (`instagram_manage_messages`, `instagram_basic`)
+> 2. Open Settings (gear icon) → Integrations → Meta Ads → "Conectar con Meta" and complete
+>    the Facebook dialog: choose "only current" assets, select one business portfolio, one
+>    Page and one Instagram account, review the permissions and press Save.
+> 3. Back in Acuarius, pick the active ad account. Then open Marketing → Plataformas de pauta →
+>    "Campañas": campaigns with spend, impressions and clicks, next to their leads in the CRM.
+> 4. "Diagnóstico" tab: errors and opportunities for those campaigns, with the numbers behind.
+> 5. Back on "Campañas", press "Pausar" under an active campaign and confirm: it is paused in
+>    Meta. Nothing is ever activated or re-budgeted upwards from Acuarius.
 >
-> Note on steps 9 and 10: while these permissions are in standard access, Meta only
-> delivers messages sent by accounts that have a role on our app (we used an app tester
-> and an Instagram tester in the video). Messages from other accounts will not reach the
-> inbox until advanced access is granted — which is what this request is for.
-> 11. Go back to Settings → Integrations → Disconnect. Access is revoked and the token is
->    deleted.
+> **Messaging (pages_manage_metadata, pages_messaging, pages_read_engagement, instagram_basic,
+> instagram_manage_messages)**
+> 6. Marketing → Fuentes → "Configurar canales" → "Mis canales" shows Messenger and Instagram
+>    connected. Connecting a channel ("+ Conectar" → "Mi equipo" → choose the Page or account)
+>    subscribes the Page to our webhook.
+> 7. While the app is in standard access, Meta only delivers messages from accounts with a role
+>    on the app. From a Facebook account with the Tester role, send a message to
+>    https://m.me/1063964316799074; from an Instagram account with the Instagram Tester role,
+>    send a direct message to @acuarius.app.
+> 8. Open "Conversaciones": each message appears with the sender's name and the network icon.
+>    Open it, type a reply and press "Enviar": it is delivered in Messenger or Instagram.
+> 9. Settings → Integrations → Meta Ads → "Desconectar cuenta" revokes access and deletes the
+>    token.
 >
-> The interface is in Spanish, which is the language of our market. The video follows
-> exactly these steps.
+> The interface is in Spanish, the language of our market. The video follows these steps.
 
 **Notas nuestras, no van en el formulario:**
 
