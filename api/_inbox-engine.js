@@ -1972,6 +1972,10 @@ export async function processIncoming({ channel, externalId, contactId, contactN
         // el último mensaje a secas: si no, escribirle nosotros la reiniciaría.
         last_inbound_at: new Date().toISOString(),
         unread_count: (conv.unread_count || 0) + 1,
+        // Si estaba archivada, vuelve a la bandeja: el cliente escribió otra
+        // vez. Este camino (atención manual) sale antes que el del agente, así
+        // que tiene que hacerlo él también.
+        archivada_at: null,
       }),
     });
 
