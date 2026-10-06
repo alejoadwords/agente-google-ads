@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-05-canal-sin-agente",
+      "fecha": "2026-10-05",
+      "tipo": "arreglo",
+      "titulo": "Conectar un canal para tu equipo ya no abre «Nuevo agente»",
+      "texto": "Al conectar Messenger, Instagram o TikTok para que lo atienda tu equipo, se abría el formulario para crear un agente de IA como si hiciera falta uno. Ahora vuelves a tus canales y ves el recién conectado."
+    },
+    {
       "id": "2026-10-05-archivar-conversaciones",
       "fecha": "2026-10-05",
       "tipo": "nuevo",

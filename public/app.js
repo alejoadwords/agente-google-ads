@@ -23544,7 +23544,11 @@ async function agConnectChannel(channel, agentId) {
     if (!r.ok) { showToast(d.error || 'No se pudo conectar', 'error'); return; }
     showToast('Conectado: ' + (d.connection && d.connection.channel_name || ''), 'success');
     await crmLoadAgents();
-    crmOpenAgentModal(agentId);
+    // Con «Mi equipo» no hay agente: abrir su ventana sin id mostraba el
+    // formulario de «Nuevo agente de IA», como si hubiera que crear uno. Se
+    // vuelve a los canales, donde se ve el recién conectado.
+    if (agentId) crmOpenAgentModal(agentId);
+    else canAbrirGestor();
   }
 }
 
