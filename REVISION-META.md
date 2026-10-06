@@ -221,13 +221,17 @@ Párrafo común que abre todas (Meta valora que se repita el contexto):
 
 ### ads_management
 
-> We use `ads_management` for one action only: **pausing** a campaign. Every active
-> campaign in the Campaigns tab has a "Pausar" (pause) button, and the Diagnosis tab
-> offers the same action when a campaign keeps spending without bringing any lead into
-> the user's CRM. The user presses it, confirms, and the campaign is paused in Meta. We
-> never activate campaigns, change budgets or delete anything: pausing stops spend, it
-> never creates it, and turning a campaign back on is left to the user in Ads Manager.
-> Shown in the video on the Campaigns tab.
+> We use `ads_management` for two actions only, and both reduce spend: pausing a campaign
+> and lowering a campaign's daily budget (by 1 % to 50 %). Every active campaign in the
+> Campaigns tab has a "Pausar" (pause) button: the user presses it, confirms, and the
+> campaign is paused in Meta. The same two actions can be proposed by our AI analyst or
+> by an automatic rule that the user creates and switches on (for example, "pause a
+> campaign that spends more than X without bringing any lead into the CRM"); proposals
+> wait for the user's approval, and the user can turn any rule off at any time. We never
+> activate campaigns, never raise budgets, never create ads and never delete anything:
+> turning a campaign back on or increasing its budget is left to the user in Ads Manager.
+> Shown in the video on the Campaigns tab, where a campaign is paused and then appears
+> paused in Ads Manager.
 
 ### business_management
 
