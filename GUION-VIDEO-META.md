@@ -55,7 +55,12 @@ es la de Alejandro.
       11 bis). **Esa cuenta necesita rol de tester en la app**: mientras no se
       apruebe la revisión, Meta solo entrega mensajes de personas con rol. Johana
       la invita en developers.facebook.com → app Acuarius → Roles de la app, y
-      hay que aceptar la invitación antes de grabar.
+      hay que aceptar la invitación antes de grabar. **Para Instagram es otro
+      rol**: «Evaluador de Instagram» para la cuenta que manda el DM
+      (marketing.digital.con.alejo, aceptada el 05-10-2026). La invitación no
+      sale en la app del teléfono: se acepta en la web, en
+      instagram.com/accounts/manage_access → Invitaciones de evaluador. Sin
+      ese rol Meta no entrega el DM y el inbox se queda vacío sin ningún error.
 - [ ] Cerrar Slack, correo y todo lo que pueda sacar una notificación encima.
 
 ### Ajustes
