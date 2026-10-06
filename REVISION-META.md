@@ -249,8 +249,11 @@ Párrafo común que abre todas (Meta valora que se repita el contexto):
 
 > We use `pages_read_engagement` to read the basic identity of the connected Page — name,
 > id and profile picture — so the user can see which Page a conversation belongs to inside
-> the inbox. This matters for agencies handling several Pages at once. Shown in the video
-> in the connected channels and in each conversation of the inbox.
+> the inbox. This matters for agencies handling several Pages at once. We also read the
+> name of the person who writes to the Page, from the Page's conversations, so the inbox
+> shows who the message is from instead of a numeric id. Shown in the video in the
+> connected channels and in each conversation of the inbox (the Messenger conversation
+> appears with the sender's name).
 
 ### pages_manage_metadata
 
