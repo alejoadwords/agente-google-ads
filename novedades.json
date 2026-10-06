@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-06-nombres-con-apostrofe",
+      "fecha": "2026-10-06",
+      "tipo": "arreglo",
+      "titulo": "Botones que no respondían con nombres como «D'Angelo»",
+      "texto": "Si una etiqueta, lista, plantilla, página de aterrizaje, motivo de cierre o agente tenía un apóstrofe o comillas en el nombre (por ejemplo «Pinto's Bar»), sus botones de borrar, filtrar o quitar no hacían nada. Ahora funcionan con cualquier nombre. Lo mismo con las sugerencias rápidas del chat."
+    },
+    {
       "id": "2026-10-06-campana-hasta-revisar",
       "fecha": "2026-10-06",
       "tipo": "mejora",

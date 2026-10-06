@@ -2483,7 +2483,7 @@ function dashRenderManualTags() {
   wrap.innerHTML = Object.entries(dashManualData).map(([k, v]) => `
     <div class="dash-manual-tag">
       <span><strong>${k}:</strong> ${v}</span>
-      <button onclick="dashRemoveManual('${k.replace(/'/g, "\\'")}')">×</button>
+      <button onclick="dashRemoveManual(${escJsAttr(k)})">×</button>
     </div>
   `).join('');
 }
@@ -2548,7 +2548,7 @@ async function dashLoadList() {
           <div class="dash-list-actions">
             <button class="dash-list-btn" onclick="navigator.clipboard.writeText('${url}').then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='Copiar'},1500)})" title="Copiar enlace">Copiar</button>
             <button class="dash-list-btn primary" onclick="window.open('${url}','_blank')" title="Abrir dashboard">Abrir ↗</button>
-            <button class="dash-list-btn danger" onclick="dashDelete('${d.id}','${esc(d.client_name).replace(/'/g,"\\'")}')" title="Eliminar dashboard">✕</button>
+            <button class="dash-list-btn danger" onclick="dashDelete('${d.id}',${escJsAttr(d.client_name)})" title="Eliminar dashboard">✕</button>
           </div>
         </div>
       `;
@@ -6039,7 +6039,7 @@ function renderSugerencias(opciones) {
   wrap.id = 'sugerencias-wrap';
   wrap.style.cssText = 'padding-left:42px;display:flex;flex-wrap:wrap;gap:7px;margin-top:-6px';
   wrap.innerHTML = opciones.map(op =>
-    `<button onclick="qSend('${op.replace(/'/g,"\'")}');document.getElementById('sugerencias-wrap')?.remove()" style="padding:6px 13px;background:var(--bg);border:1.5px solid var(--blue-md);border-radius:20px;font-size:12px;color:var(--blue);cursor:pointer;font-family:var(--font);font-weight:500;transition:all .15s;white-space:nowrap" onmouseover="this.style.background='var(--blue-lt)'" onmouseout="this.style.background='var(--bg)'">${op}</button>`
+    `<button onclick="qSend(${escJsAttr(op)});document.getElementById('sugerencias-wrap')?.remove()" style="padding:6px 13px;background:var(--bg);border:1.5px solid var(--blue-md);border-radius:20px;font-size:12px;color:var(--blue);cursor:pointer;font-family:var(--font);font-weight:500;transition:all .15s;white-space:nowrap" onmouseover="this.style.background='var(--blue-lt)'" onmouseout="this.style.background='var(--bg)'">${op}</button>`
   ).join('');
   area.appendChild(wrap);
   scrollB();
@@ -7378,7 +7378,7 @@ function _renderGDashContent(ov, campaigns) {
 
   const campRows = campaigns.slice(0, 5).map(c => {
     const dot = c.status === 'ENABLED' ? '#22c55e' : '#9ca3af';
-    return `<div onclick="injectCampaignAnalysis('google','${c.name.replace(/'/g, '').replace(/"/g, '')}')"
+    return `<div onclick="injectCampaignAnalysis('google',${escJsAttr(c.name)})"
       style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:11px"
       onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='none'">
       <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span>
@@ -7475,15 +7475,14 @@ async function showMetaAdsDashboard() {
   const campRows = (campaigns?.campaigns||[]).slice(0, 5).map(c => {
     const isActive = c.status === 'ACTIVE';
     const dot = isActive ? '#22c55e' : '#9ca3af';
-    const safeName = (c.name||'').replace(/'/g, '').replace(/"/g, '');
     const toggleLabel = isActive ? '⏸' : '▶';
     const toggleTitle = isActive ? 'Pausar campaña' : 'Activar campaña';
     const toggleAction = isActive ? 'PAUSED' : 'ACTIVE';
     return `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:5px;font-size:11px">
       <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span>
-      <span onclick="injectCampaignAnalysis('meta','${safeName}')" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);cursor:pointer" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${c.name}</span>
+      <span onclick="injectCampaignAnalysis('meta',${escJsAttr(c.name)})" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);cursor:pointer" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${c.name}</span>
       <span style="color:var(--muted2);flex-shrink:0;font-size:10px">$${c.spend}</span>
-      <button onclick="manageCampaignStatus('${c.id}','${safeName}','${toggleAction}')" title="${toggleTitle}"
+      <button onclick="manageCampaignStatus('${c.id}',${escJsAttr(c.name)},'${toggleAction}')" title="${toggleTitle}"
         style="flex-shrink:0;background:${isActive ? '#fef3c7' : '#dcfce7'};border:1px solid ${isActive ? '#fde68a' : '#bbf7d0'};border-radius:4px;cursor:pointer;padding:2px 6px;font-size:10px;color:${isActive ? '#92400e' : '#15803d'};font-weight:600">
         ${toggleLabel}
       </button>
@@ -11300,6 +11299,13 @@ function fmtI(s){
   return s;
 }
 function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+// Para meter un dato libre como argumento de un onclick="…". esc() no basta:
+// el navegador decodifica &#39; a ' antes de correr el handler, así que
+// onclick="f('${esc("D'Angelo")}')" llega como f('D'Angelo') y revienta con
+// SyntaxError (el botón no hace nada). JSON.stringify arma un literal JS
+// válido —escapa comillas, barras y saltos de línea— y esc() lo deja seguro
+// dentro del atributo. Se usa SIN comillas alrededor: onclick="f(${escJsAttr(x)})".
+function escJsAttr(v){return esc(JSON.stringify(v==null?'':String(v)))}
 function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()}}
 function autoR(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px'}
 // Abrir home por defecto — sin expandir ningún agente en sidebar
@@ -18721,7 +18727,7 @@ function tagChipHtml(name, removable) {
   const c = tagColor(name);
   return '<span class="tag-chip" style="background:' + c + '1A;color:' + c + '" title="' + (tagIsAuto(name) ? 'Etiqueta automática' : 'Etiqueta') + '">' +
     (tagIsAuto(name) ? '⚡' : '') + esc(name) +
-    (removable ? '<button class="tag-chip-x" onclick="event.stopPropagation();crmDetailRemoveTag(\'' + esc(name) + '\')" title="Quitar">✕</button>' : '') +
+    (removable ? '<button class="tag-chip-x" onclick="event.stopPropagation();crmDetailRemoveTag(' + escJsAttr(name) + ')" title="Quitar">✕</button>' : '') +
     '</span>';
 }
 
@@ -19239,7 +19245,7 @@ function etRender() {
       '<span class="tag-chip" style="background:' + c + '1A;color:' + c + '">' + esc(t.name) + '</span>' +
       '<span style="flex:1;font-size:11.5px;color:var(--muted2)">' +
         (n ? n + (n === 1 ? ' lead' : ' leads') : 'sin usar') + '</span>' +
-      '<button class="mot-borrar" title="Quitar etiqueta" onclick="etBorrar(\'' + esc(t.id) + '\',\'' + esc(t.name) + '\',' + n + ')">' + ICONO_PAPELERA + '</button>' +
+      '<button class="mot-borrar" title="Quitar etiqueta" onclick="etBorrar(\'' + esc(t.id) + '\',' + escJsAttr(t.name) + ',' + n + ')">' + ICONO_PAPELERA + '</button>' +
     '</div>';
   }).join('') +
   '<div style="margin-top:16px;padding-top:13px;border-top:1px dashed var(--border);font-size:11.5px;color:var(--muted);line-height:1.55">' +
@@ -19283,7 +19289,7 @@ function crmRenderTagFilter() {
     const on = crmFilterTags.includes(n);
     return '<button class="tag-chip tag-filter-chip' + (on ? ' on' : '') + '" style="' +
       (on ? 'background:' + c + ';color:#fff' : 'background:' + c + '1A;color:' + c) +
-      '" onclick="crmToggleTagFilter(\'' + esc(n) + '\')">' + esc(n) + '</button>';
+      '" onclick="crmToggleTagFilter(' + escJsAttr(n) + ')">' + esc(n) + '</button>';
   }).join('') + (crmFilterTags.length ? '<button class="tag-filter-clear" onclick="crmFilterTags=[];crmRenderTagFilter();crmRender();crmUpdateLeadsStats()">limpiar</button>' : '');
 }
 
@@ -20629,7 +20635,7 @@ function motRender() {
           '<input class="mot-input" value="' + esc(r.label) + '" maxlength="60" ' +
             'onblur="motRenombrar(\'' + esc(r.id) + '\', this)" ' +
             'onkeydown="if(event.key===\'Enter\')this.blur()">' +
-          '<button class="mot-borrar" title="Quitar del catálogo" onclick="motBorrar(\'' + esc(r.id) + '\',\'' + esc(r.label) + '\')">' + ICONO_PAPELERA + '</button>' +
+          '<button class="mot-borrar" title="Quitar del catálogo" onclick="motBorrar(\'' + esc(r.id) + '\',' + escJsAttr(r.label) + ')">' + ICONO_PAPELERA + '</button>' +
         '</div>').join('')
         : '<div style="font-size:12px;color:var(--muted2);padding:6px 0">Ninguno todavía.</div>') +
       '<div style="display:flex;gap:6px;margin-top:9px">' +
@@ -23024,7 +23030,7 @@ function crmRenderAgents() {
       </div>
       <div class="crm-agent-status ${ag.is_active ? 'active' : 'inactive'}"></div>
       <button class="mot-borrar" title="Eliminar agente"
-        onclick="event.stopPropagation();agBorrar('${esc(ag.id)}','${esc(ag.name)}',${activeConns.length})">${ICONO_PAPELERA}</button>
+        onclick="event.stopPropagation();agBorrar('${esc(ag.id)}',${escJsAttr(ag.name)},${activeConns.length})">${ICONO_PAPELERA}</button>
     </div>`;
   }).join('');
 }
@@ -26020,7 +26026,7 @@ function crmRenderAnalytics() {
     ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Leads por etiqueta</div>' +
       tagRows.map(([name, s]) => {
         const c = tagColor(name);
-        return '<div class="crm-source-row" style="cursor:pointer" title="Ver estos leads en el pipeline" onclick="crmFilterTags=[\'' + esc(name) + '\'];crmRenderTagFilter();crmSetView(\'kanban\')">' +
+        return '<div class="crm-source-row" style="cursor:pointer" title="Ver estos leads en el pipeline" onclick="crmFilterTags=[' + escJsAttr(name) + '];crmRenderTagFilter();crmSetView(\'kanban\')">' +
           '<div class="crm-source-label"><span class="tag-chip" style="background:' + c + '1A;color:' + c + '">' + (tagIsAuto(name) ? '⚡' : '') + esc(name) + '</span></div>' +
           '<div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((s.count / maxTag) * 100) + '%;background:' + c + '"></div></div>' +
           '<div class="crm-source-count">' + s.count + '</div>' +
@@ -27919,7 +27925,7 @@ function seoRenderGeoTab() {
         return '<td title="' + esc(r.snippet || '') + '"><span class="seop-delta up">✓ mención' + (r.rank ? ' #' + r.rank : '') + '</span></td>';
       }).join('');
       return '<tr><td style="max-width:320px;white-space:normal">' + esc(q.q) + '</td>' + cells +
-        '<td><button class="seop-row-btn" title="Eliminar consulta" onclick="seoGeoDeleteQuery(\'' + esc(q.q).replace(/'/g, "\\'") + '\')">✕</button></td></tr>';
+        '<td><button class="seop-row-btn" title="Eliminar consulta" onclick="seoGeoDeleteQuery(' + escJsAttr(q.q) + ')">✕</button></td></tr>';
     }).join('');
     table = '<div class="seop-scroll" style="margin-top:4px"><table class="seop-table"><tr><th>Consulta</th>' + engineCols + '<th></th></tr>' + rows + '</table></div>';
 
@@ -31228,7 +31234,7 @@ function cmpWAudRender() {
     const tagChips = (typeof crmTags !== 'undefined' ? crmTags : []).filter(t => t.name !== 'no-email').map(t => {
       const on = _cmpAudTags.includes(t.name);
       const c = tagColor(t.name);
-      return '<button class="tag-chip tag-filter-chip" id="cmp-tag-' + esc(t.name) + '" style="background:' + (on ? c : c + '1A') + ';color:' + (on ? '#fff' : c) + '" onclick="cmpToggleTag(\'' + esc(t.name) + '\')">' + esc(t.name) + '</button>';
+      return '<button class="tag-chip tag-filter-chip" id="cmp-tag-' + esc(t.name) + '" style="background:' + (on ? c : c + '1A') + ';color:' + (on ? '#fff' : c) + '" onclick="cmpToggleTag(' + escJsAttr(t.name) + ')">' + esc(t.name) + '</button>';
     }).join('');
     box.innerHTML =
       '<div style="font-weight:700;font-size:var(--fs-sm);margin-bottom:6px">Etiquetas</div>' +
@@ -35579,7 +35585,7 @@ async function asgRender() {
       const reg = (asgData.reglas || {})[f] || { modo: 'off', fijo: null };
       return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">' +
         '<div style="flex:1;font-size:12.5px">' + esc(ASG_FUENTES_LABEL[f] || f) + '</div>' +
-        '<select class="auto-input" style="width:120px;padding:6px 8px;font-size:12px" data-asg-modo="' + esc(f) + '" onchange="asgOnModo(\'' + esc(f) + '\')">' +
+        '<select class="auto-input" style="width:120px;padding:6px 8px;font-size:12px" data-asg-modo="' + esc(f) + '" onchange="asgOnModo(' + escJsAttr(f) + ')">' +
           '<option value="off"' + (reg.modo === 'off' ? ' selected' : '') + '>Sin asignar</option>' +
           '<option value="turnos"' + (reg.modo === 'turnos' ? ' selected' : '') + '>En turnos</option>' +
           '<option value="fijo"' + (reg.modo === 'fijo' ? ' selected' : '') + '>Fijo</option>' +
@@ -35601,8 +35607,9 @@ async function asgRender() {
 }
 
 function asgOnModo(fuente) {
-  const modo = document.querySelector('[data-asg-modo="' + fuente + '"]')?.value;
-  const fijo = document.querySelector('[data-asg-fijo="' + fuente + '"]');
+  // CSS.escape: una fuente con comillas rompería el selector y el desplegable no respondería.
+  const modo = document.querySelector('[data-asg-modo="' + CSS.escape(fuente) + '"]')?.value;
+  const fijo = document.querySelector('[data-asg-fijo="' + CSS.escape(fuente) + '"]');
   if (fijo) fijo.style.visibility = modo === 'fijo' ? 'visible' : 'hidden';
 }
 
@@ -37905,7 +37912,7 @@ function plnTarjeta(t) {
     '<div style="display:flex;gap:6px;flex-shrink:0">' +
       (suya ? '<button class="btn-ghost sm" onclick="' + (t.formato === 'html' ? 'plnDisenar' : 'plnEditor') + '(\'' + esc(t.id) + '\')">Editar</button>' : '') +
       '<button class="btn-ghost sm" onclick="plnDuplicar(\'' + esc(t.id) + '\')">Duplicar</button>' +
-      (suya ? '<button class="btn-ghost sm" style="color:var(--danger,#B91C1C)" onclick="plnBorrar(\'' + esc(t.id) + '\',\'' + esc(t.nombre) + '\')">Borrar</button>' : '') +
+      (suya ? '<button class="btn-ghost sm" style="color:var(--danger,#B91C1C)" onclick="plnBorrar(\'' + esc(t.id) + '\',' + escJsAttr(t.nombre) + ')">Borrar</button>' : '') +
     '</div>' +
   '</div>';
 }
@@ -38774,7 +38781,7 @@ function plnTarjetaWa(r) {
     '</div>' +
     '<div style="display:flex;gap:6px;flex-shrink:0">' +
       '<button class="btn-ghost sm" onclick="qrEditarDesdePlantillas(\'' + esc(r.id) + '\')">Editar</button>' +
-      '<button class="btn-ghost sm" style="color:var(--danger,#B91C1C)" onclick="qrBorrarDesdePlantillas(\'' + esc(r.id) + '\',\'' + esc(r.titulo) + '\')">Borrar</button>' +
+      '<button class="btn-ghost sm" style="color:var(--danger,#B91C1C)" onclick="qrBorrarDesdePlantillas(\'' + esc(r.id) + '\',' + escJsAttr(r.titulo) + ')">Borrar</button>' +
     '</div>' +
   '</div>';
 }
@@ -38958,7 +38965,7 @@ function cmpWExcluirPintar() {
     listas.map(id => '<span class="tag-chip">' + esc(nombreLista(id)) +
       ' <span style="cursor:pointer;font-weight:700" onclick="cmpWExcluirQuitar(\'lista\',\'' + esc(id) + '\')">×</span></span>').join('') +
     etiquetas.map(t => '<span class="tag-chip">' + icn('tag', 10) + ' ' + esc(t) +
-      ' <span style="cursor:pointer;font-weight:700" onclick="cmpWExcluirQuitar(\'tag\',\'' + esc(t) + '\')">×</span></span>').join('');
+      ' <span style="cursor:pointer;font-weight:700" onclick="cmpWExcluirQuitar(\'tag\',' + escJsAttr(t) + ')">×</span></span>').join('');
 
   const disponibles = _cmpLists.filter(l => !listas.includes(l.id));
   const tagsDisponibles = (typeof crmTags !== 'undefined' ? crmTags : []).map(t => t.name || t).filter(t => !etiquetas.includes(t));
@@ -39077,7 +39084,7 @@ function lstTarjeta(l) {
       '<div style="font-size:11.5px;color:var(--muted2);margin-top:5px" id="lst-n-' + esc(l.id) + '">Contando…</div>' +
     '</div>' +
     '<div style="display:flex;gap:6px;flex-shrink:0">' +
-      '<button class="btn-ghost sm" style="color:var(--danger,#B91C1C)" onclick="lstBorrar(\'' + esc(l.id) + '\',\'' + esc(l.name) + '\')">Borrar</button>' +
+      '<button class="btn-ghost sm" style="color:var(--danger,#B91C1C)" onclick="lstBorrar(\'' + esc(l.id) + '\',' + escJsAttr(l.name) + ')">Borrar</button>' +
     '</div>' +
   '</div>';
 }
@@ -39289,8 +39296,8 @@ async function lpRender() {
       '<div class="lp-item-acc">' +
         (p.published ? '<button class="btn-ghost sm" onclick="lpCopiar(\'' + esc(p.slug) + '\')">Copiar enlace</button>' : '') +
         '<button class="btn-ghost sm" onclick="lpAbrir(\'' + esc(p.id) + '\')">Editar</button>' +
-        '<button class="btn-ghost sm" onclick="lpDuplicar(\'' + esc(p.id) + '\',\'' + esc(p.title).replace(/'/g, '&#39;') + '\')" title="Crear una copia para probar otra versión">Duplicar</button>' +
-        '<button class="btn-ghost sm" onclick="lpBorrar(\'' + esc(p.id) + '\',\'' + esc(p.title) + '\')" title="Borrar">' + ICONO_PAPELERA + '</button>' +
+        '<button class="btn-ghost sm" onclick="lpDuplicar(\'' + esc(p.id) + '\',' + escJsAttr(p.title) + ')" title="Crear una copia para probar otra versión">Duplicar</button>' +
+        '<button class="btn-ghost sm" onclick="lpBorrar(\'' + esc(p.id) + '\',' + escJsAttr(p.title) + ')" title="Borrar">' + ICONO_PAPELERA + '</button>' +
       '</div>' +
     '</div>';
   }).join('') + '</div>';
