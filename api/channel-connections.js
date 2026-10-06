@@ -243,9 +243,14 @@ export default async function handler(req) {
     // mensajes se PUEDEN leer. Sin el permiso instagram_manage_messages la
     // conexión «funcionaba» —la página quedaba suscrita— y Meta no entregaba ni
     // un mensaje directo: el canal parecía vivo y estaba sordo.
+    // La lectura va con tope de 8 s: con @acuarius.app Meta tardó 29,5 s en
+    // contestar «Timeout», la función se cortaba a los 25 y el navegador se
+    // quedaba en «Conectando…» sin conectar nada. Un tope agotado no prueba que
+    // falte el permiso, así que no bloquea.
     if (channel === 'instagram') {
       const prueba = await fetch(
-        `https://graph.facebook.com/v19.0/${encodeURIComponent(page_id)}/conversations?platform=instagram&limit=1&access_token=${pagina.access_token}`
+        `https://graph.facebook.com/v19.0/${encodeURIComponent(page_id)}/conversations?platform=instagram&limit=1&access_token=${pagina.access_token}`,
+        { signal: AbortSignal.timeout(8000) }
       ).then(r => r.json()).catch(e => ({ error: { message: String(e && e.message || e) } }));
       if (prueba?.error && errorBloqueaInstagram(prueba.error)) return jsonResp(errorMensajesInstagram(prueba.error), 400);
       // Otro error (tiempo agotado por historial grande, error desconocido de
@@ -255,6 +260,23 @@ export default async function handler(req) {
 
     const externalId = channel === 'instagram' ? String(ig.id) : String(page_id);
     const nombre = channel === 'instagram' ? ('@' + (ig.username || pagina.name)) : pagina.name;
+
+    // Una página es un canal de UNA sola cuenta de Acuarius (índice único por
+    // canal + id): el webhook no sabría a quién entregarle el mensaje. Si ya la
+    // tiene otra, se dice así —antes salía el error crudo de la base— y no se
+    // toca la suscripción, que es de la página y la comparten.
+    const ajena = await fetch(
+      `${SUPABASE_URL}/rest/v1/channel_connections?channel=eq.${channel}&external_id=eq.${encodeURIComponent(externalId)}` +
+      `&user_id=neq.${encodeURIComponent(userId)}&select=id&limit=1`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    if (ajena?.length) {
+      return jsonResp({
+        error: (channel === 'instagram' ? 'Esa cuenta de Instagram' : 'Esa página') +
+          ' ya está conectada como canal en otra cuenta de Acuarius, y sus mensajes llegan allá. ' +
+          'Desconéctala en esa cuenta o escríbenos a soporte para moverla.',
+      }, 409);
+    }
 
     // Suscribir la página a la app. Si esto falla, la conexión se ve bien en la
     // UI pero Meta no entrega ni un mensaje — así que no se puede tragar el
