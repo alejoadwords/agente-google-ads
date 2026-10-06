@@ -235,18 +235,22 @@ Párrafo común que abre todas (Meta valora que se repita el contexto):
 > they can pick which one to connect. Many of our users are agencies whose clients own
 > separate portfolios, so without this list they cannot tell which assets belong to which
 > client. We only read the list of portfolios and their assets; we do not modify them.
+> Shown in the video in the Facebook dialog, where only the user's own portfolio is selected.
 
 ### pages_show_list
 
 > We use `pages_show_list` to show the user the Facebook Pages they administer, so they
 > can choose which one to connect to the Acuarius inbox. Only the Pages the user
-> explicitly selects are connected.
+> explicitly selects are connected. Shown in the video in the Facebook dialog ("only
+> current Pages", one Page selected) and again when connecting Messenger in Marketing →
+> Fuentes → "Configurar canales", where the user picks the Page from that list.
 
 ### pages_read_engagement
 
 > We use `pages_read_engagement` to read the basic identity of the connected Page — name,
 > id and profile picture — so the user can see which Page a conversation belongs to inside
-> the inbox. This matters for agencies handling several Pages at once.
+> the inbox. This matters for agencies handling several Pages at once. Shown in the video
+> in the connected channels and in each conversation of the inbox.
 
 ### pages_manage_metadata
 
@@ -270,6 +274,9 @@ Párrafo común que abre todas (Meta valora que se repita el contexto):
 > We use `instagram_basic` to read the identity of the Instagram professional account
 > linked to the Page the user connects — its id, username and profile picture — so the
 > user can pick it and see, inside the inbox, which account a conversation belongs to.
+> We also read the profile name of the person who writes, so the conversation shows who
+> they are. Shown in the video when connecting Instagram and when the direct message
+> arrives in the inbox with the sender's name.
 
 ### instagram_manage_messages
 

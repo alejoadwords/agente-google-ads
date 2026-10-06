@@ -1,53 +1,13 @@
 # Textos para pegar en App Review (Uso permitido)
 
-Uno por permiso. Copia el bloque completo de cada uno. Van en inglés, como pide Meta.
-
-## ads_read
-
-```
-Acuarius is a marketing and CRM platform for small and medium businesses in Latin America. Business owners connect their own Meta assets to manage their advertising and customer conversations from a single workspace, assisted by AI agents.
-
-We use ads_read to show the advertising performance of the ad account the user connects, in Marketing → Ad platforms: each campaign with its spend, impressions and clicks, next to what happened with those leads inside the user's CRM (how many arrived, how many were won, the real cost per lead). The same data powers the "Diagnosis" tab, which flags campaigns that are active but not delivering, ads that were rejected, a cost per lead far above the account average, a low click-through rate or a high frequency. Without this permission the screen has nothing to show. Seen in the video on the Campaigns and Diagnosis tabs.
-
-Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
-```
-
-## ads_management
-
-```
-Acuarius is a marketing and CRM platform for small and medium businesses in Latin America. Business owners connect their own Meta assets to manage their advertising and customer conversations from a single workspace, assisted by AI agents.
-
-We use ads_management for one action only: **pausing** a campaign. Every active campaign in the Campaigns tab has a "Pausar" (pause) button, and the Diagnosis tab offers the same action when a campaign keeps spending without bringing any lead into the user's CRM. The user presses it, confirms, and the campaign is paused in Meta. We never activate campaigns, change budgets or delete anything: pausing stops spend, it never creates it, and turning a campaign back on is left to the user in Ads Manager. Shown in the video on the Campaigns tab.
-
-Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
-```
-
-## business_management
-
-```
-Acuarius is a marketing and CRM platform for small and medium businesses in Latin America. Business owners connect their own Meta assets to manage their advertising and customer conversations from a single workspace, assisted by AI agents.
-
-We use business_management to list the business portfolios the user has access to, so they can pick which one to connect. Many of our users are agencies whose clients own separate portfolios, so without this list they cannot tell which assets belong to which client. We only read the list of portfolios and their assets; we do not modify them.
-
-Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
-```
+Uno por permiso, en el orden en que salen en el formulario. Copia el bloque completo. Van en inglés, como pide Meta.
 
 ## pages_show_list
 
 ```
 Acuarius is a marketing and CRM platform for small and medium businesses in Latin America. Business owners connect their own Meta assets to manage their advertising and customer conversations from a single workspace, assisted by AI agents.
 
-We use pages_show_list to show the user the Facebook Pages they administer, so they can choose which one to connect to the Acuarius inbox. Only the Pages the user explicitly selects are connected.
-
-Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
-```
-
-## pages_read_engagement
-
-```
-Acuarius is a marketing and CRM platform for small and medium businesses in Latin America. Business owners connect their own Meta assets to manage their advertising and customer conversations from a single workspace, assisted by AI agents.
-
-We use pages_read_engagement to read the basic identity of the connected Page — name, id and profile picture — so the user can see which Page a conversation belongs to inside the inbox. This matters for agencies handling several Pages at once.
+We use pages_show_list to show the user the Facebook Pages they administer, so they can choose which one to connect to the Acuarius inbox. Only the Pages the user explicitly selects are connected. Shown in the video in the Facebook dialog ("only current Pages", one Page selected) and again when connecting Messenger in Marketing → Fuentes → "Configurar canales", where the user picks the Page from that list.
 
 Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
 ```
@@ -72,12 +32,12 @@ We use pages_messaging to receive the messages people send to the user's Page an
 Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
 ```
 
-## instagram_basic
+## business_management
 
 ```
 Acuarius is a marketing and CRM platform for small and medium businesses in Latin America. Business owners connect their own Meta assets to manage their advertising and customer conversations from a single workspace, assisted by AI agents.
 
-We use instagram_basic to read the identity of the Instagram professional account linked to the Page the user connects — its id, username and profile picture — so the user can pick it and see, inside the inbox, which account a conversation belongs to.
+We use business_management to list the business portfolios the user has access to, so they can pick which one to connect. Many of our users are agencies whose clients own separate portfolios, so without this list they cannot tell which assets belong to which client. We only read the list of portfolios and their assets; we do not modify them. Shown in the video in the Facebook dialog, where only the user's own portfolio is selected.
 
 Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
 ```
@@ -92,16 +52,56 @@ We use instagram_manage_messages to receive the direct messages people send to t
 Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
 ```
 
-## public_profile
+## ads_read
 
 ```
 Acuarius is a marketing and CRM platform for small and medium businesses in Latin America. Business owners connect their own Meta assets to manage their advertising and customer conversations from a single workspace, assisted by AI agents.
 
-We use public_profile only to identify the person who connects their Meta account to Acuarius (their name and Facebook user id), so the connection appears under the right user in Settings → Integrations. We do not use it for anything else.
+We use ads_read to show the advertising performance of the ad account the user connects, in Marketing → Ad platforms: each campaign with its spend, impressions and clicks, next to what happened with those leads inside the user's CRM (how many arrived, how many were won, the real cost per lead). The same data powers the "Diagnosis" tab, which flags campaigns that are active but not delivering, ads that were rejected, a cost per lead far above the account average, a low click-through rate or a high frequency. Without this permission the screen has nothing to show. Seen in the video on the Campaigns and Diagnosis tabs.
 
 Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
 ```
 
+## pages_read_engagement
+
+```
+Acuarius is a marketing and CRM platform for small and medium businesses in Latin America. Business owners connect their own Meta assets to manage their advertising and customer conversations from a single workspace, assisted by AI agents.
+
+We use pages_read_engagement to read the basic identity of the connected Page — name, id and profile picture — so the user can see which Page a conversation belongs to inside the inbox. This matters for agencies handling several Pages at once. Shown in the video in the connected channels and in each conversation of the inbox.
+
+Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
+```
+
+## ads_management
+
+```
+Acuarius is a marketing and CRM platform for small and medium businesses in Latin America. Business owners connect their own Meta assets to manage their advertising and customer conversations from a single workspace, assisted by AI agents.
+
+We use ads_management for one action only: **pausing** a campaign. Every active campaign in the Campaigns tab has a "Pausar" (pause) button, and the Diagnosis tab offers the same action when a campaign keeps spending without bringing any lead into the user's CRM. The user presses it, confirms, and the campaign is paused in Meta. We never activate campaigns, change budgets or delete anything: pausing stops spend, it never creates it, and turning a campaign back on is left to the user in Ads Manager. Shown in the video on the Campaigns tab.
+
+Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
+```
+
+## instagram_basic
+
+```
+Acuarius is a marketing and CRM platform for small and medium businesses in Latin America. Business owners connect their own Meta assets to manage their advertising and customer conversations from a single workspace, assisted by AI agents.
+
+We use instagram_basic to read the identity of the Instagram professional account linked to the Page the user connects — its id, username and profile picture — so the user can pick it and see, inside the inbox, which account a conversation belongs to. We also read the profile name of the person who writes, so the conversation shows who they are. Shown in the video when connecting Instagram and when the direct message arrives in the inbox with the sender's name.
+
+Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html
+```
+
+## public_profile
+
+Solo pide marcar la casilla de confirmación.
+
+## pages_messaging — instrucciones para reproducir
+
+```
+1. Sign in at https://app.acuarius.app with the test account given in the reviewer instructions. 2. Settings (gear icon) → Integrations → Meta Ads → "Conectar con Meta", and complete the Facebook dialog selecting one Page. 3. Marketing → Fuentes → "Configurar canales" → Messenger → "Conectar" → choose "Mi equipo" and the Page. 4. From a Facebook account with a role on the app, send a message to that Page. 5. Open Conversaciones: the message appears with the sender's name. Type a reply and press "Enviar": it is delivered to the person in Messenger.
+```
+
 ## Video
 
-El mismo video en todos: «App review Meta - Acuarius.mp4» (7:37). Si piden el minuto: Facebook y permisos 0:40–1:40 · Campañas y Diagnóstico hasta ~3:00 · Pausar ~3:10 · Canales y mensajes desde ~4:30 · Desconectar al final.
+El mismo en todos: «App review Meta - Acuarius.mp4» (7:37, 37 MB).
