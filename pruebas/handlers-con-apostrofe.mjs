@@ -161,6 +161,59 @@ await caso('Escape en un campo de la ficha deja el valor como estaba (lfEditarCa
 `);
 
 ok(errores.length === previos, 'ningún error de página durante la prueba', errores.slice(previos).join(' | '));
+
+// La vista previa de datos manuales del dashboard pintaba clave y valor tal cual.
+await caso('Datos manuales del dashboard se ven como texto, no como HTML', `
+  dashManualData = { '<b>k</b>': '<img src=x onerror="window.__xss=1">' };
+  dashRenderManualTags();
+  const t = document.querySelector('#dash-manual-tags .dash-manual-tag span');
+  if (!t.querySelector('b,img') && t.textContent.includes('<img')) llegado.push(NOMBRE);
+`);
+
+// ── 2b. El dashboard PÚBLICO ──────────────────────────────────────────────
+// Lo abre el cliente de la agencia con un enlace. Datos manuales, nombres de
+// campaña (vienen de Google o Meta) y textos de la IA se pintaban con
+// innerHTML sin escapar: un <img onerror> corría en el navegador de quien lo abre.
+console.log('\n2b. Dashboard público');
+{
+  const MALO = '<img src=x onerror="window.__xss=(window.__xss||0)+1">';
+  const pub = await nav.newPage();
+  const errPub = [];
+  pub.on('pageerror', (e) => errPub.push(e.message));
+  await pub.route('**/*', (r) => {
+    const u = new URL(r.request().url());
+    // Sin Chart.js, render() revienta en el primer gráfico y el catch enseña
+    // la pantalla de error: la prueba pasaría sin haber pintado nada.
+    if (/chart\.js/.test(u.pathname)) return r.fulfill({ contentType: 'text/javascript',
+      body: 'window.Chart = function () { return { destroy() {}, update() {} }; };' });
+    if (u.host !== 'acuarius.test') return r.abort();
+    if (u.pathname === '/api/dashboard') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      client_name: 'Cliente', period: 'last_30', date_from: '2026-09-01', date_to: '2026-09-30', cached_at: new Date().toISOString(),
+      platforms: [{ platform: 'google_ads', spend: 100, clicks: 10, impressions: 100, conversions: 1, ctr: 0.1, cpc: 10, roas: 2,
+        campaigns: [{ name: MALO, spend: 100, clicks: 10, conversions: 1, ctr: 0.1, cpc: 10 }] }],
+      insights: { observaciones: [MALO], alertas: [], recomendaciones: [] },
+      manual_data: { [MALO]: MALO },
+    }) });
+    const f = PUB + u.pathname;
+    if (!existsSync(f)) return r.fulfill({ status: 404, body: '' });
+    r.fulfill({ body: readFileSync(f), contentType: 'text/html' });
+  });
+  await pub.goto('http://acuarius.test/dashboard.html?id=prueba', { waitUntil: 'load' });
+  await pub.waitForTimeout(800);
+  const r = await pub.evaluate(() => ({
+    xss: window.__xss || 0,
+    imgs: document.querySelectorAll('#manual-grid img, #insights-grid img, #campaigns-tbody img').length,
+    manual: document.getElementById('manual-grid')?.textContent || '',
+    campanas: document.getElementById('campaigns-tbody')?.textContent || '',
+    ia: document.getElementById('insights-grid')?.textContent || '',
+  }));
+  ok(r.manual && r.campanas && r.ia, 'la página llegó a pintar los datos', JSON.stringify(r));
+  ok(r.xss === 0 && r.imgs === 0, 'ningún HTML de los datos se ejecuta', 'xss=' + r.xss + ' imgs=' + r.imgs);
+  ok(r.manual.includes('<img') && r.campanas.includes('<img') && r.ia.includes('<img'),
+    'datos manuales, campañas e insights se leen tal cual se escribieron');
+  ok(!errPub.length, 'la página pinta sin errores', errPub.join(' | '));
+  await pub.close();
+}
 await nav.close();
 
 // ── 3. Guardia estática ───────────────────────────────────────────────────

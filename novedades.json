@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-06-dashboard-texto-tal-cual",
+      "fecha": "2026-10-06",
+      "tipo": "arreglo",
+      "titulo": "El dashboard de tu cliente muestra los textos tal cual",
+      "texto": "Los datos manuales, los nombres de campaña y las observaciones de la IA del dashboard que compartes con tu cliente se muestran exactamente como están escritos. Antes, un texto con símbolos como «<» o «>» podía verse cortado o descuadrar la página."
+    },
+    {
       "id": "2026-10-06-pauta-y-ficha-botones",
       "fecha": "2026-10-06",
       "tipo": "arreglo",

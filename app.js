@@ -2482,7 +2482,7 @@ function dashRenderManualTags() {
   const wrap = document.getElementById('dash-manual-tags');
   wrap.innerHTML = Object.entries(dashManualData).map(([k, v]) => `
     <div class="dash-manual-tag">
-      <span><strong>${k}:</strong> ${v}</span>
+      <span><strong>${esc(String(k))}:</strong> ${esc(String(v))}</span>
       <button onclick="dashRemoveManual(${escJsAttr(k)})">×</button>
     </div>
   `).join('');

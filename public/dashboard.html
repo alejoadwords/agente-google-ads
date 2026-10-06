@@ -252,6 +252,12 @@
 
 <script>
 const $ = id => document.getElementById(id);
+// Esta página es PÚBLICA: la abre el cliente de la agencia con el enlace. Todo
+// texto que no escribimos nosotros —datos manuales, nombres de campaña que
+// vienen de Google o Meta, lo que redacta la IA— pasa por aquí antes de ir a
+// innerHTML. Sin esto, un «<» en un nombre descuadra la tabla, y un <img onerror>
+// en un dato manual corre código en el navegador de quien abre el enlace.
+const esc = t => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 let dashData = null;
 let donutChart = null;
 let lineChart = null;
@@ -478,7 +484,7 @@ function render(d) {
       return `
         <tr>
           <td><span class="plat-tag ${c.platTag}">${c.platTag === 'google' ? 'Google' : 'Meta'}</span></td>
-          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name || '—'}</td>
+          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name || '—')}</td>
           <td><strong>${fmtCurrency(c.spend, 0)}</strong></td>
           <td>${fmtNum(c.clicks)}</td>
           <td>${fmtNum(c.conversions)}</td>
@@ -505,7 +511,7 @@ function render(d) {
     $('insights-grid').innerHTML = blocks.filter(b => ins[b.key]?.length).map(b => `
       <div class="insight-block ${b.cls}">
         <div class="insight-block-title">${b.icon} ${b.title}</div>
-        ${ins[b.key].map(item => `<div class="insight-item">${item}</div>`).join('')}
+        ${ins[b.key].map(item => `<div class="insight-item">${esc(item)}</div>`).join('')}
       </div>
     `).join('');
   }
@@ -515,8 +521,8 @@ function render(d) {
     $('manual-section').style.display = 'block';
     $('manual-grid').innerHTML = Object.entries(manual).map(([k, v]) => `
       <div class="manual-item">
-        <div class="manual-item-label">${k}</div>
-        <div class="manual-item-val">${v}</div>
+        <div class="manual-item-label">${esc(k)}</div>
+        <div class="manual-item-val">${esc(v)}</div>
       </div>
     `).join('');
   }
