@@ -100,29 +100,37 @@ export default async function handler(req) {
     });
   }
 
-  // PATCH ?avisos=1 — marcar como vistas. PostgREST no sabe fusionar un JSON, así
-  // que hay que leer cada metadata y volver a escribirla entera: escribir solo
-  // {leida_at} borraría el actor y el destinatario.
+  // PATCH ?avisos=1&id=… — marcar UNA nota como vista. PostgREST no sabe
+  // fusionar un JSON, así que hay que leer la metadata y volver a escribirla
+  // entera: escribir solo {leida_at} borraría el actor y el destinatario.
+  //
+  // Antes esto marcaba TODAS de golpe y la web lo llamaba con solo abrir la
+  // campana: una nota que no se alcanzó a leer desaparecía igual. Ahora una
+  // nota solo sale de la campana cuando la persona le da clic, y por eso sin
+  // `id` se rechaza —también a una pestaña vieja que siga pidiendo el borrado
+  // en bloque—.
   if (req.method === 'PATCH' && url.searchParams.get('avisos') === '1') {
+    const id = url.searchParams.get('id') || '';
+    if (!/^[0-9a-zA-Z-]{1,64}$/.test(id)) {
+      return jsonResp({ error: 'Falta la nota que se leyó: las notas se marcan una por una.' }, 400);
+    }
     const q = `${SUPABASE_URL}/rest/v1/lead_activities`
-      + `?user_id=eq.${encodeURIComponent(userId)}&type=eq.nota`
+      + `?id=eq.${encodeURIComponent(id)}`
+      + `&user_id=eq.${encodeURIComponent(userId)}&type=eq.nota`
       + `&metadata->>para=eq.${encodeURIComponent(actorId)}`
-      + `&metadata->>leida_at=is.null`
-      + `&select=id,metadata&limit=50`;
+      + `&select=id,metadata&limit=1`;
     const r = await fetch(q, { headers: sbHeaders() });
     if (!r.ok) return jsonResp({ error: await r.text() }, 500);
-    const filas = (await r.json()) || [];
-    const ahora = new Date().toISOString();
-    let marcadas = 0;
-    for (const f of filas) {
-      const ok = await fetch(`${SUPABASE_URL}/rest/v1/lead_activities?id=eq.${f.id}`, {
-        method: 'PATCH',
-        headers: sbHeaders(),
-        body: JSON.stringify({ metadata: { ...(f.metadata || {}), leida_at: ahora } }),
-      }).then(x => x.ok).catch(() => false);
-      if (ok) marcadas++;
-    }
-    return jsonResp({ marcadas });
+    const f = ((await r.json()) || [])[0];
+    if (!f) return jsonResp({ error: 'Esa nota no es tuya o ya no existe.' }, 404);
+    if (f.metadata?.leida_at) return jsonResp({ marcadas: 0, ya_leida: true });
+    const w = await fetch(`${SUPABASE_URL}/rest/v1/lead_activities?id=eq.${encodeURIComponent(f.id)}`, {
+      method: 'PATCH',
+      headers: sbHeaders(),
+      body: JSON.stringify({ metadata: { ...(f.metadata || {}), leida_at: new Date().toISOString() } }),
+    });
+    if (!w.ok) return jsonResp({ error: 'No se pudo marcar la nota: ' + await w.text() }, 500);
+    return jsonResp({ marcadas: 1 });
   }
 
   // GET — list activities for a lead

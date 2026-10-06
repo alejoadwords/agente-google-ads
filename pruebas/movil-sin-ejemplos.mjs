@@ -123,7 +123,9 @@ console.log('\nLa barra de arriba: tres puertas y ninguna muerta\n');
   // Los avisos son los MISMOS que la campana de la web, no una segunda lista.
   chk('los avisos salen de crmAvisos, no de una copia',
       /typeof crmAvisos !== 'undefined'/.test(codigo) && !/var AVISOS =/.test(codigo));
-  chk('y se marcan leídos por el camino de la web', /crmAvisosMarcarLeidos\(\)/.test(codigo));
+  chk('y cada uno se marca leído por el camino de la web', /crmAvisoMarcarLeido\(avisoId\)/.test(codigo));
+  // Nada de «marcar todos»: un aviso solo sale cuando se toca y se abre su lead.
+  chk('no hay botón que se lleve todos los avisos', !/leerAvisos|crmAvisosMarcarLeidos/.test(codigo));
 }
 
 console.log('\nSin sesión se dice, no se finge un fallo\n');

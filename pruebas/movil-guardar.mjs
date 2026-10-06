@@ -91,6 +91,9 @@ function montar({ responde = { ok: true, datos: {} } } = {}) {
   };
 
   const fetchAuth = async (ruta, opts = {}) => {
+    // Al cargar, el móvil pregunta si la cuenta tiene agente de voz para
+    // pintar el menú. Es una lectura, no un guardado: no cuenta aquí.
+    if (String(ruta).startsWith('/api/agente-voz') && !opts.method) return { ok: true, status: 200, json: async () => ({ activo: false }) };
     llamadas.push({ ruta, metodo: opts.method, cuerpo: opts.body ? JSON.parse(opts.body) : null });
     if (responde.explota) throw new Error('sin red');
     return {

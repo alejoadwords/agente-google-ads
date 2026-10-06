@@ -84,7 +84,7 @@ function conNotas(n) {
     trozo('function crmAvisosPanel(', '\n}\n') + '\n}\n',
     // Lo que sale a la red se sustituye; el pintado es lo que se mira.
     'var crmAvisoAbrir = function(){};',
-    'var crmAvisosMarcarLeidos = function(){};',
+    'var crmAvisoMarcarLeido = function(){ return Promise.resolve(true); };',
   ].join('\n');
 
   const s = document.createElement('script');

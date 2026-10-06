@@ -2026,32 +2026,46 @@ async function abrirAvisos(){
       : '<div class="vacio">No se pudieron traer tus avisos.</div>';
     return;
   }
-  caja.innerHTML = av.length ? (av.map(function(a){
+  // Cada aviso se toca para abrir su lead, y solo entonces sale de la lista.
+  // Antes había un botón que se llevaba todos de golpe, también
+  // los que no se alcanzaron a leer.
+  caja.innerHTML = av.length ? (
+      '<div class="ac" style="margin:0 2px 8px">Toca un aviso para abrir su lead. Se queda aquí hasta que lo revises.</div>'
+    + av.map(function(a){
       var t = String(a.texto || '');
-      return '<div class="aviso-fila">'
+      var cuando = a.created_at && typeof crmHace === 'function' ? crmHace(a.created_at) : '';
+      return '<button class="aviso-fila" style="display:block;width:100%;text-align:left;font:inherit;cursor:pointer" '
+        + 'onclick="M.abrirAviso(\''+esc(a.id)+'\',\''+esc(a.lead_id)+'\')">'
         + '<div class="at">'+esc(a.autor || 'Alguien')+(a.lead ? ' · '+esc(a.lead) : '')+'</div>'
         + '<div class="ab">'+esc(t)+'</div>'
-        + (a.cuando ? '<div class="ac">'+esc(a.cuando)+'</div>' : '')
-        + '</div>';
-    }).join('')
-    // Marcarlos leídos es una DECISIÓN, no un efecto de haber abierto la hoja:
-    // quien la abre de paso, en la calle, no quiere perder el aviso.
-    + '<button class="bbtn" onclick="M.leerAvisos()">Marcar como leídos</button>')
+        + (cuando ? '<div class="ac">'+esc(cuando)+'</div>' : '')
+        + '</button>';
+    }).join(''))
     : '<div class="vacio">No tienes avisos sin leer.</div>';
   pintarPunto();
 }
 
-async function leerAvisos(){
-  // El mismo camino que la campana de la web: así el número de aquí y el de
-  // allá no pueden quedarse diciendo cosas distintas.
-  if (typeof crmAvisosMarcarLeidos !== 'function') {
-    chicharra('No se pudo marcar como leídos.', 'mal');
+// Abrir un aviso = abrir su lead y, solo si se abrió, marcarlo leído. Es el
+// mismo camino que la campana de la web (crmAvisoMarcarLeido), para que el
+// número de aquí y el de allá no puedan decir cosas distintas.
+async function abrirAviso(avisoId, leadId){
+  toque(12);
+  var esta = false;
+  var lista = LEADS || [];
+  for (var i=0;i<lista.length;i++) if (String(lista[i].id) === String(leadId)) esta = true;
+  if (!esta) {
+    chicharra('Ese lead es de otro cliente o no está en tu lista. El aviso sigue aquí.', 'mal');
     return;
   }
-  toque(12);
-  try { await crmAvisosMarcarLeidos(); }
-  catch (e) { chicharra('No se pudo marcar como leídos.', 'mal'); return; }
   cerrarBarra('hoja-avisos');
+  abrirLead(leadId);
+  if (typeof crmAvisoMarcarLeido !== 'function') {
+    chicharra('No se pudo marcar el aviso como leído.', 'mal');
+    return;
+  }
+  var ok = false;
+  try { ok = await crmAvisoMarcarLeido(avisoId); } catch (e) { ok = false; }
+  if (!ok) chicharra('No se pudo marcar el aviso como leído; sigue en Avisos.', 'mal');
   pintarPunto();
   pintarPulso();
 }
@@ -3469,7 +3483,7 @@ function movilMontar(opciones){
     editarCampo: editarCampo,
     enviarMsg: enviarMsg,
     filtrar: filtrar,
-    leerAvisos: leerAvisos,
+    abrirAviso: abrirAviso,
     marcar: marcar,
     meter: meter,
     nuevoLead: nuevoLead,

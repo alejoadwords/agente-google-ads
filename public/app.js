@@ -20489,8 +20489,9 @@ function crmAvisosPanel() {
         (mudo ? 'Activar sonido' : 'Silenciar') + '</button>' +
     '</div>' +
     '<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:2px 2px 8px">Notas para ti</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);padding:0 2px 10px">Haz clic en una nota para abrir su lead. Se queda aquí hasta que la revises.</div>' +
     crmAvisos.map(a =>
-      '<div onclick="crmAvisoAbrir(\'' + esc(a.lead_id) + '\')" style="cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:9px;padding:11px 12px;margin-bottom:8px;background:var(--bg)">' +
+      '<div onclick="crmAvisoAbrir(\'' + esc(a.id) + '\',\'' + esc(a.lead_id) + '\')" title="Abrir el lead y marcar la nota como leída" style="cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:9px;padding:11px 12px;margin-bottom:8px;background:var(--bg)">' +
         '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:5px">' +
           '<span style="font-size:12.5px;font-weight:700;color:var(--text)">' + esc(a.lead || 'Lead') + '</span>' +
           (a.empresa ? '<span style="font-size:11px;color:var(--muted2)">' + esc(a.empresa) + '</span>' : '') +
@@ -20502,31 +20503,63 @@ function crmAvisosPanel() {
       '</div>'
     ).join('');
 
-  // Ya las vio: se apaga el contador, pero siguen en pantalla hasta que cierre.
-  crmAvisosMarcarLeidos();
+  // Abrir la campana NO las marca. Antes sí, y una nota que se vio de pasada
+  // —o que ni se alcanzó a leer— desaparecía para siempre. Cada nota se queda
+  // hasta que la persona le da clic y abre su lead (crmAvisoAbrir).
 }
 
-function crmAvisoAbrir(leadId) {
+// Una nota sale de la campana solo cuando su lead se abre de verdad: si es de
+// otro cliente y no se puede abrir, sigue ahí hasta que la revise.
+function crmAvisoAbrir(avisoId, leadId) {
   closeAlertsPanel();
   navGo('crm');
-  setTimeout(() => crmIrALeadODecirlo(leadId), 260);
+  setTimeout(() => {
+    if (crmIrALeadODecirlo(leadId)) crmAvisoMarcarLeido(avisoId);
+  }, 260);
 }
 
 // crmOpenDetail() se calla si el lead no está cargado, y eso pasa de verdad: el
 // aviso puede ser de un lead de OTRO cliente del que no estás viendo ahora. Sin
 // esto, pulsar el aviso no haría absolutamente nada y parecería que se rompió.
 function crmIrALeadODecirlo(leadId) {
-  if (!leadId) return;
-  if (crmLeads.some(l => l.id === leadId)) { crmOpenDetail(leadId); return; }
+  if (!leadId) return false;
+  if (crmLeads.some(l => l.id === leadId)) { crmOpenDetail(leadId); return true; }
   showToast('Ese lead pertenece a otro cliente. Cámbialo en el selector de arriba para abrirlo.', 'info');
+  return false;
 }
 
-async function crmAvisosMarcarLeidos() {
-  const antes = crmAvisos.length;
-  if (!antes) return;
-  crmAvisos = []; crmAvisosPorLead = {};
-  if (typeof refrescarCampana === 'function') refrescarCampana();
-  try { await fetchAuth('/api/lead-activities?avisos=1', { method: 'PATCH' }); } catch {}
+/**
+ * Marca UNA nota como leída: la que se acaba de abrir. Es el mismo camino para
+ * la web y el móvil, para que la campana de los dos diga lo mismo.
+ *
+ * Se quita de la lista al momento, y si el servidor no la marca vuelve a
+ * ponerse y se dice: una nota que desaparece aquí y reaparece mañana sin
+ * explicación es peor que un aviso de error.
+ */
+async function crmAvisoMarcarLeido(avisoId) {
+  const aviso = crmAvisos.find(a => String(a.id) === String(avisoId));
+  if (!aviso) return true;
+  const quitar = () => {
+    crmAvisos = crmAvisos.filter(a => a !== aviso);
+    crmAvisosPorLead = {};
+    crmAvisos.forEach(a => { crmAvisosPorLead[a.lead_id] = (crmAvisosPorLead[a.lead_id] || 0) + 1; });
+    _avisosVistos = crmAvisos.length;   // que bajar no se confunda con «llegó algo»
+    if (typeof refrescarCampana === 'function') refrescarCampana();
+  };
+  quitar();
+  try {
+    const r = await fetchAuth('/api/lead-activities?avisos=1&id=' + encodeURIComponent(avisoId), { method: 'PATCH', reintentable: true });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'HTTP ' + r.status);
+    return true;
+  } catch (e) {
+    console.warn('crmAvisoMarcarLeido', e);
+    crmAvisos = [aviso, ...crmAvisos];
+    crmAvisosPorLead[aviso.lead_id] = (crmAvisosPorLead[aviso.lead_id] || 0) + 1;
+    _avisosVistos = crmAvisos.length;
+    if (typeof refrescarCampana === 'function') refrescarCampana();
+    showToast('No se pudo marcar la nota como leída; sigue en la campana.', 'error');
+    return false;
+  }
 }
 
 // ── CIERRE DE OPORTUNIDAD (ganada / perdida) ──────────────────────────────────
