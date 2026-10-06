@@ -47,6 +47,8 @@ Data is shown only to the account owner and the teammates they invite. It is nev
 ```
 Acuarius is a marketing and CRM platform for small and medium businesses in Latin America. Business owners connect their own Meta assets to manage their advertising and customer conversations from a single workspace, assisted by AI agents.
 
+We request this permission on behalf of other Instagram business accounts: our customers are businesses that connect their own Instagram professional accounts to Acuarius, and we process their messages only to run their inbox. We do not use it for an account of our own.
+
 We use instagram_manage_messages to receive the direct messages people send to the user's Instagram professional account and to send the replies the user writes in our inbox, or that an AI agent the user configures and can switch off writes for them. This is the same inbox the user already uses for Messenger and WhatsApp. We respect the 24-hour messaging window and never send promotional messages outside it. Shown in the video when a direct message arrives and is answered from the inbox.
 
 Data is shown only to the account owner and the teammates they invite. It is never sold, never shared with third parties for advertising, and never used to train AI models. The user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes → "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access can also be removed from the user's own Facebook settings. Our privacy policy describes how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"): https://app.acuarius.app/privacy.html

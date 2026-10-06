@@ -280,6 +280,10 @@ Párrafo común que abre todas (Meta valora que se repita el contexto):
 
 ### instagram_manage_messages
 
+> We request this permission on behalf of other Instagram business accounts: our customers
+> are businesses that connect their own Instagram professional accounts to Acuarius, and
+> we process their messages only to run their inbox. We do not use it for an account of our own.
+>
 > We use `instagram_manage_messages` to receive the direct messages people send to the
 > user's Instagram professional account and to send the replies the user writes in our
 > inbox, or that an AI agent the user configures and can switch off writes for them.
