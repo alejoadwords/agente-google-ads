@@ -10551,6 +10551,7 @@ function irA(destino) {
     try {
       switch (destino) {
         case 'academia':      openAcademia(); break;
+        case 'partners':      partnersAbrir(); break;
         case 'integraciones': openSettings(); setTimeout(() => { try { switchSettingsTab('integraciones'); } catch {} }, 220); break;
         case 'ajustes-equipo': openSettings(); setTimeout(() => { try { switchSettingsTab('equipo'); } catch {} }, 220); break;
         case 'tareas':        navGo('crm'); setTimeout(() => crmSetView('tareas'), 150); break;
@@ -38039,6 +38040,382 @@ function elegirAguaP({ titulo, texto, opciones }) {
     ov.querySelectorAll('[data-i]').forEach(b => b.onclick = () => cerrar(opciones[Number(b.dataset.i)].valor));
     document.body.appendChild(ov);
     ov.querySelector('[data-i]')?.focus();
+  });
+}
+
+// ── PROGRAMA DE PARTNERS ─────────────────────────────────────────────────────
+// Un Partner se postula, el equipo lo aprueba, recibe su enlace /registro/<slug>
+// y gana un % de cada pago de licencia de las cuentas que trae mientras sigan
+// pagando. Liquida una vez al mes subiendo su factura. Servidor: api/partners.js
+// y api/_partners.js. El equipo (ADMIN_EMAILS) ve además «Administrar».
+let ptnYo = null, ptnTab = 'panel', ptnSel = new Set(), ptnCache = {};
+
+const ptnUSD = n => Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD';
+const ptnFecha = f => f ? new Date(f).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+const PTN_ESTADO_CUENTA = { activa: ['Activa', 'var(--success)'], prueba: ['En prueba', 'var(--blue)'], desactivada: ['Desactivada', 'var(--muted)'], eliminada: ['Eliminada', 'var(--muted2)'] };
+const PTN_ESTADO_COM = { disponible: 'Disponible', en_liquidacion: 'En liquidación', pagada: 'Pagada', anulada: 'Anulada' };
+const PTN_ESTADO_LIQ = { solicitada: ['Solicitada', 'var(--warning)'], pagada: ['Pagada', 'var(--success)'], rechazada: ['Devuelta', 'var(--danger)'] };
+
+function ptnChip(texto, color) {
+  return '<span class="ptn-chip" style="color:' + color + ';border-color:' + color + '">' + esc(texto) + '</span>';
+}
+
+async function ptnApi(qs, body) {
+  const r = await fetchAuth('/api/partners' + (qs ? '?' + qs : ''), body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || ('Error ' + r.status));
+  return d;
+}
+
+async function partnersAbrir(tab) {
+  document.getElementById('ptn-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'ptn-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:980px;height:min(90vh,760px)">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Programa de Partners</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Recomienda Acuarius y gana una comisión cada mes por las licencias que traigas.</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="can-tabs" id="ptn-tabs" style="display:none"></div>' +
+    '<div class="auto-modal-body" id="ptn-cuerpo"><div style="color:var(--muted);font-size:12.5px">Cargando…</div></div>' +
+  '</div>';
+  document.body.appendChild(ov);
+  try {
+    ptnYo = await ptnApi('vista=yo');
+  } catch (e) {
+    document.getElementById('ptn-cuerpo').innerHTML = '<div style="color:var(--danger);font-size:12.5px">No se pudo cargar: ' + esc(e.message) + '</div>';
+    return;
+  }
+  const aprobado = ptnYo.partner?.estado === 'aprobado';
+  ptnTab = tab || (aprobado ? 'panel' : (ptnYo.es_admin && !ptnYo.partner ? 'admin' : 'inicio'));
+  ptnPintarTabs();
+  ptnRender();
+}
+
+function ptnPintarTabs() {
+  const box = document.getElementById('ptn-tabs');
+  if (!box) return;
+  const aprobado = ptnYo.partner?.estado === 'aprobado';
+  const tabs = aprobado
+    ? [['panel', 'Panel'], ['cuentas', 'Cuentas'], ['comisiones', 'Comisiones'], ['perfil', 'Mi perfil']]
+    : [['inicio', 'El programa']];
+  if (ptnYo.es_admin) tabs.push(['admin', 'Administrar']);
+  box.style.display = tabs.length > 1 ? '' : 'none';
+  box.innerHTML = tabs.map(([k, t]) => '<button class="can-tab' + (ptnTab === k ? ' act' : '') + '" onclick="ptnIr(\'' + k + '\')">' + t + '</button>').join('');
+}
+
+function ptnIr(tab) { ptnTab = tab; ptnSel = new Set(); ptnPintarTabs(); ptnRender(); }
+
+async function ptnRender() {
+  const box = document.getElementById('ptn-cuerpo');
+  if (!box) return;
+  const f = { inicio: ptnHtmlInicio, panel: ptnHtmlPanel, cuentas: ptnHtmlCuentas, comisiones: ptnHtmlComisiones, perfil: ptnHtmlPerfil, admin: ptnHtmlAdmin }[ptnTab];
+  if (!f) return;
+  box.innerHTML = '<div style="color:var(--muted);font-size:12.5px">Cargando…</div>';
+  try { box.innerHTML = await f(); }
+  catch (e) { box.innerHTML = '<div style="color:var(--danger);font-size:12.5px">No se pudo cargar: ' + esc(e.message) + '</div>'; }
+}
+
+// ── Postulación ──────────────────────────────────────────────────────────────
+function ptnCampos(p) {
+  p = p || {};
+  const campo = (id, label, valor, ph, extra) => '<label class="ptn-campo"><span>' + label + '</span>' +
+    '<input id="ptn-f-' + id + '" class="ptn-input" value="' + esc(valor || '') + '" placeholder="' + esc(ph || '') + '"' + (extra || '') + '></label>';
+  const area = (id, label, valor, ph) => '<label class="ptn-campo ptn-ancho"><span>' + label + '</span>' +
+    '<textarea id="ptn-f-' + id + '" class="ptn-input" rows="3" placeholder="' + esc(ph || '') + '">' + esc(valor || '') + '</textarea></label>';
+  const cs = v => (v || []).join(', ');
+  return '<div class="ptn-form">' +
+    campo('nombre_comercial', 'Nombre comercial *', p.nombre_comercial, 'Tu empresa o marca') +
+    campo('sitio_web', 'Sitio web', p.sitio_web, 'tuagencia.com') +
+    campo('correo', 'Correo de contacto *', p.correo || (window.Clerk?.user?.primaryEmailAddress?.emailAddress || ''), 'tu@empresa.com', ' type="email"') +
+    campo('whatsapp', 'WhatsApp', p.whatsapp, '+57 300 000 0000') +
+    campo('paises', 'Países donde trabajas', cs(p.paises), 'Colombia, México, Perú') +
+    campo('sectores', 'Sectores en los que eres especialista', cs(p.sectores), 'Inmobiliaria, Salud, Educación') +
+    campo('servicios', 'Servicios que ofreces', cs(p.servicios), 'Implementación CRM, Campañas de pago') +
+    area('propuesta', 'Cuéntanos cómo traerías clientes', p.propuesta, 'Tu experiencia, a quién le vendes, cuántos clientes podrías traer…') +
+  '</div>';
+}
+
+function ptnLeerCampos() {
+  const v = id => (document.getElementById('ptn-f-' + id)?.value || '').trim();
+  return {
+    nombre_comercial: v('nombre_comercial'), sitio_web: v('sitio_web'), correo: v('correo'), whatsapp: v('whatsapp'),
+    paises: v('paises'), sectores: v('sectores'), servicios: v('servicios'), propuesta: v('propuesta'),
+    datos_pago: document.getElementById('ptn-f-datos_pago') ? v('datos_pago') : undefined,
+  };
+}
+
+function ptnHtmlInicio() {
+  const p = ptnYo.partner;
+  const pct = 20;
+  const explica = '<div class="ptn-hero">' +
+    '<div class="ptn-hero-pct">' + pct + '%</div>' +
+    '<div><div style="font-weight:800;font-size:var(--fs-md)">de cada pago de licencia, cada mes</div>' +
+    '<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:4px">Recibes un enlace propio para registrar clientes. Cada cuenta que entra por ahí queda a tu nombre, ' +
+    'y ganas el ' + pct + ' % de lo que paga por su licencia (Pro o Agency) mientras siga pagando. Una vez al mes solicitas tu liquidación subiendo tu factura.</div></div>' +
+  '</div>';
+  if (p?.estado === 'postulado') {
+    return explica + '<div class="ptn-aviso">Tu postulación está <b>en revisión</b>. Te escribimos a ' + esc(p.correo) + ' en cuanto la aprobemos.</div>';
+  }
+  if (p?.estado === 'pausado') {
+    return explica + '<div class="ptn-aviso">Tu cuenta de Partner está <b>pausada</b>. Escríbenos a ceo@acuarius.app si tienes dudas.</div>';
+  }
+  return explica +
+    (p?.estado === 'rechazado' ? '<div class="ptn-aviso">Tu postulación anterior no fue aprobada' + (p.notas_admin ? ': ' + esc(p.notas_admin) : '') + '. Puedes volver a postularte.</div>' : '') +
+    '<div style="font-weight:800;margin:18px 0 10px">Postúlate</div>' + ptnCampos(p) +
+    '<div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="btn-pri" onclick="ptnPostular(this)">Enviar postulación</button></div>';
+}
+
+async function ptnPostular(btn) {
+  btn.disabled = true;
+  try {
+    await ptnApi('', { accion: 'postular', ...ptnLeerCampos() });
+    showToast('Postulación enviada. Te avisamos cuando la revisemos.', 'success');
+    ptnYo = await ptnApi('vista=yo');
+    ptnRender();
+  } catch (e) { showToast(e.message, 'error'); btn.disabled = false; }
+}
+
+// ── Panel ────────────────────────────────────────────────────────────────────
+async function ptnHtmlPanel() {
+  const d = await ptnApi('vista=panel');
+  const kpi = (t, v, sub) => '<div class="ptn-kpi"><div class="ptn-kpi-t">' + t + '</div><div class="ptn-kpi-v">' + v + '</div>' + (sub ? '<div class="ptn-kpi-s">' + sub + '</div>' : '') + '</div>';
+  return '<div class="ptn-enlace">' +
+      '<div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Tu enlace de registro</div>' +
+      '<div class="ptn-enlace-url" id="ptn-enlace">' + esc(d.enlace || 'Se crea al aprobarte') + '</div></div>' +
+      (d.enlace ? '<button class="btn-pri sm" onclick="ptnCopiar(this)">' + icn('copy', 13) + ' Copiar</button>' : '') +
+    '</div>' +
+    '<div class="ptn-kpis">' +
+      kpi('Cuentas activas', d.cuentas.activas, 'pagando su licencia') +
+      kpi('En prueba', d.cuentas.prueba, 'pueden convertirse') +
+      kpi('Desactivadas', d.cuentas.desactivadas, 'sin plan de pago') +
+      kpi('MRR que traes', ptnUSD(d.mrr_usd), 'al mes, de tus cuentas activas') +
+      kpi('Tu comisión', d.comision_pct + ' %', 'de cada pago de licencia') +
+      kpi('Disponible para liquidar', ptnUSD(d.comisiones.disponibles), '<a href="#" onclick="ptnIr(\'comisiones\');return false">Solicitar liquidación</a>') +
+      kpi('En liquidación', ptnUSD(d.comisiones.en_liquidacion), 'esperando el pago') +
+      kpi('Cobrado · 12 meses', ptnUSD(d.comisiones.pagadas_12m), 'comisiones pagadas') +
+    '</div>';
+}
+
+function ptnCopiar(btn) {
+  const t = document.getElementById('ptn-enlace')?.textContent || '';
+  navigator.clipboard.writeText(t).then(() => { btn.innerHTML = icn('check', 13) + ' Copiado'; })
+    .catch(() => showToast('No se pudo copiar. Selecciona el enlace y cópialo a mano.', 'error'));
+}
+
+// ── Cuentas ──────────────────────────────────────────────────────────────────
+async function ptnHtmlCuentas() {
+  const { cuentas } = await ptnApi('vista=cuentas');
+  if (!cuentas.length) return emptyAgua('users', 'Todavía no has traído cuentas', 'Comparte tu enlace de registro: cada cuenta que se cree por ahí aparece aquí.');
+  return '<div class="ptn-tabla-caja"><table class="ptn-tabla"><thead><tr>' +
+    '<th>Cuenta</th><th>Plan</th><th>Estado</th><th>Registro</th><th>Último pago</th><th class="num">MRR</th><th class="num">Has ganado</th></tr></thead><tbody>' +
+    cuentas.map(c => {
+      const [et, col] = PTN_ESTADO_CUENTA[c.estado] || [c.estado, 'var(--muted)'];
+      return '<tr><td><div style="font-weight:700">' + esc(c.nombre || c.correo || 'Cuenta') + '</div><div class="ptn-sub">' + esc(c.correo || '') + '</div></td>' +
+        '<td>' + esc({ pro: 'Pro', agency: 'Agency', trial: 'Prueba', free: 'Gratis' }[c.plan] || c.plan) + '</td>' +
+        '<td>' + ptnChip(et, col) + '</td><td>' + ptnFecha(c.registrada_at) + '</td><td>' + ptnFecha(c.ultimo_cobro_at) + '</td>' +
+        '<td class="num">' + ptnUSD(c.mrr_usd) + '</td><td class="num">' + ptnUSD(c.comision_total_usd) + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+// ── Comisiones ───────────────────────────────────────────────────────────────
+async function ptnHtmlComisiones() {
+  const d = await ptnApi('vista=comisiones');
+  ptnCache.comisiones = d.comisiones;
+  const disp = d.comisiones.filter(c => c.estado === 'disponible');
+  const aviso = '<div class="ptn-aviso">Solicita tu liquidación <b>hasta el día 10 de cada mes</b>, con tu factura por el total. La pagamos ese mismo mes.</div>';
+  const tabla = d.comisiones.length
+    ? '<div class="ptn-tabla-caja"><table class="ptn-tabla"><thead><tr><th style="width:28px"></th><th>Cuenta</th><th>Pago</th><th>Fecha</th><th class="num">Cobrado</th><th class="num">Comisión</th><th>Estado</th></tr></thead><tbody>' +
+      d.comisiones.map(c => {
+        const neg = Number(c.comision_usd) < 0;
+        const elegible = c.estado === 'disponible' && !neg;
+        return '<tr><td>' + (elegible ? '<input type="checkbox" ' + (ptnSel.has(String(c.id)) ? 'checked ' : '') + 'onchange="ptnElegir(\'' + c.id + '\', this.checked)">' : '') + '</td>' +
+          '<td style="font-weight:700">' + esc(c.cuenta) + '</td>' +
+          '<td>' + esc(neg ? (c.tipo === 'contracargo' ? 'Contracargo' : 'Reembolso') : ({ pro: 'Licencia Pro', agency: 'Licencia Agency' }[c.plan] || 'Licencia')) + '</td>' +
+          '<td>' + ptnFecha(c.cobrado_at) + '</td>' +
+          '<td class="num">' + Number(c.monto_cobrado).toLocaleString('es-CO') + ' ' + esc(c.moneda) + '</td>' +
+          '<td class="num" style="font-weight:700;color:' + (neg ? 'var(--danger)' : 'var(--text)') + '">' + ptnUSD(c.comision_usd) + '</td>' +
+          '<td>' + esc(PTN_ESTADO_COM[c.estado] || c.estado) + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+    : emptyAgua('chart', 'Aún no hay comisiones', 'Aparecen aquí en cuanto una de tus cuentas paga su licencia.');
+  const liq = d.liquidaciones.length
+    ? '<div style="font-weight:800;margin:22px 0 10px">Tus liquidaciones</div><div class="ptn-tabla-caja"><table class="ptn-tabla"><thead><tr><th>Solicitada</th><th class="num">Total</th><th>Comisiones</th><th>Estado</th><th>Factura</th></tr></thead><tbody>' +
+      d.liquidaciones.map(l => {
+        const [et, col] = PTN_ESTADO_LIQ[l.estado] || [l.estado, 'var(--muted)'];
+        return '<tr><td>' + ptnFecha(l.solicitada_at) + '</td><td class="num" style="font-weight:700">' + ptnUSD(l.total_usd) + '</td><td>' + l.n_comisiones + '</td>' +
+          '<td>' + ptnChip(et, col) + (l.referencia_pago ? '<div class="ptn-sub">Ref. ' + esc(l.referencia_pago) + '</div>' : '') + (l.nota_admin ? '<div class="ptn-sub">' + esc(l.nota_admin) + '</div>' : '') + '</td>' +
+          '<td><a href="#" onclick="ptnVerFactura(' + l.id + ');return false">Ver</a></td></tr>';
+      }).join('') + '</tbody></table></div>' : '';
+  return aviso + '<div id="ptn-barra"></div>' + tabla + liq + (disp.length ? '' : '');
+}
+
+function ptnElegir(id, si) {
+  si ? ptnSel.add(String(id)) : ptnSel.delete(String(id));
+  const barra = document.getElementById('ptn-barra');
+  if (!barra) return;
+  const coms = ptnCache.comisiones || [];
+  const negativos = coms.filter(c => c.estado === 'disponible' && Number(c.comision_usd) < 0);
+  const elegidas = coms.filter(c => ptnSel.has(String(c.id)));
+  if (!elegidas.length) { barra.innerHTML = ''; return; }
+  const total = [...elegidas, ...negativos].reduce((s, c) => s + Number(c.comision_usd), 0);
+  barra.innerHTML = '<div class="ptn-barra">' +
+    '<div><b>' + elegidas.length + '</b> ' + (elegidas.length === 1 ? 'comisión elegida' : 'comisiones elegidas') +
+      (negativos.length ? ' · se ' + (negativos.length === 1 ? 'descuenta 1 reembolso' : 'descuentan ' + negativos.length + ' reembolsos') : '') + '</div>' +
+    '<div class="ptn-barra-total">' + ptnUSD(total) + '</div>' +
+    '<button class="btn-pri sm" ' + (total > 0 ? '' : 'disabled ') + 'onclick="ptnLiquidar(' + total.toFixed(2) + ')">Solicitar liquidación</button>' +
+  '</div>';
+}
+
+function ptnLiquidar(total) {
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.innerHTML = '<div class="auto-modal" style="max-width:460px">' +
+    '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">Solicitar liquidación</div><button class="btn-ghost sm" data-x>&#10005;</button></div>' +
+    '<div class="auto-modal-body">' +
+      '<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px">Adjunta tu factura por <b style="color:var(--text)">' + ptnUSD(total) + '</b> a nombre de Acuarius. Te pagamos a los datos de pago de tu perfil.</div>' +
+      '<label class="ptn-campo ptn-ancho"><span>Factura (PDF, JPG o PNG) *</span><input type="file" id="ptn-factura" accept="application/pdf,image/jpeg,image/png" class="ptn-input"></label>' +
+      '<label class="ptn-campo ptn-ancho" style="margin-top:10px"><span>Nota (opcional)</span><textarea id="ptn-nota" class="ptn-input" rows="2"></textarea></label>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" data-x>Cancelar</button><button class="btn-pri sm" id="ptn-enviar">Enviar solicitud</button></div></div>';
+  ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => ov.remove());
+  document.body.appendChild(ov);
+  ov.querySelector('#ptn-enviar').onclick = async (ev) => {
+    const btn = ev.currentTarget;
+    const file = ov.querySelector('#ptn-factura').files?.[0];
+    if (!file) { showToast('Adjunta tu factura.', 'error'); return; }
+    if (file.size > 10 * 1024 * 1024) { showToast('La factura pesa más de 10 MB.', 'error'); return; }
+    btn.disabled = true; btn.textContent = 'Subiendo…';
+    try {
+      const s = await ptnApi('', { accion: 'subir_factura', tipo: file.type });
+      const up = await fetch(s.subir_a, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      if (!up.ok) throw new Error('No se pudo subir la factura (' + up.status + ')');
+      await ptnApi('', { accion: 'liquidar', ids: [...ptnSel], factura_ruta: s.ruta, factura_nombre: file.name, nota: ov.querySelector('#ptn-nota').value });
+      ov.remove();
+      ptnSel = new Set();
+      showToast('Solicitud enviada. Te avisamos por correo cuando la paguemos.', 'success');
+      ptnRender();
+    } catch (e) { showToast(e.message, 'error'); btn.disabled = false; btn.textContent = 'Enviar solicitud'; }
+  };
+}
+
+async function ptnVerFactura(id) {
+  try { const d = await ptnApi('vista=factura&id=' + encodeURIComponent(id)); window.open(d.url, '_blank', 'noopener'); }
+  catch (e) { showToast(e.message, 'error'); }
+}
+
+// ── Mi perfil ────────────────────────────────────────────────────────────────
+function ptnHtmlPerfil() {
+  const p = ptnYo.partner || {};
+  return ptnCampos(p) +
+    '<label class="ptn-campo ptn-ancho" style="margin-top:12px"><span>Datos de pago *</span>' +
+    '<textarea id="ptn-f-datos_pago" class="ptn-input" rows="3" placeholder="Banco, tipo y número de cuenta, titular y documento — o tu correo de PayPal">' + esc(p.datos_pago || '') + '</textarea></label>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-top:6px">Los usamos solo para pagarte tus liquidaciones.</div>' +
+    '<div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="btn-pri" onclick="ptnGuardarPerfil(this)">Guardar</button></div>';
+}
+
+async function ptnGuardarPerfil(btn) {
+  btn.disabled = true;
+  try {
+    await ptnApi('', { accion: 'perfil', ...ptnLeerCampos() });
+    ptnYo = await ptnApi('vista=yo');
+    showToast('Perfil guardado', 'success');
+  } catch (e) { showToast(e.message, 'error'); }
+  btn.disabled = false;
+}
+
+// ── Administrar (equipo de Acuarius) ─────────────────────────────────────────
+async function ptnHtmlAdmin() {
+  const d = await ptnApi('vista=admin');
+  ptnCache.admin = d;
+  const PE = { postulado: ['Por revisar', 'var(--warning)'], aprobado: ['Aprobado', 'var(--success)'], rechazado: ['Rechazado', 'var(--danger)'], pausado: ['Pausado', 'var(--muted)'] };
+  const pend = d.liquidaciones.filter(l => l.estado === 'solicitada');
+  const liq = '<div style="font-weight:800;margin-bottom:10px">Liquidaciones por pagar (' + pend.length + ')</div>' +
+    (pend.length ? '<div class="ptn-tabla-caja"><table class="ptn-tabla"><thead><tr><th>Partner</th><th>Solicitada</th><th class="num">Total</th><th>Datos de pago</th><th>Factura</th><th></th></tr></thead><tbody>' +
+      pend.map(l => {
+        const p = d.partners.find(x => x.user_id === l.partner_user_id) || {};
+        return '<tr><td style="font-weight:700">' + esc(l.partner) + (l.nota_partner ? '<div class="ptn-sub">' + esc(l.nota_partner) + '</div>' : '') + '</td><td>' + ptnFecha(l.solicitada_at) + '</td>' +
+          '<td class="num" style="font-weight:800">' + ptnUSD(l.total_usd) + '</td><td class="ptn-sub" style="white-space:pre-wrap;max-width:220px">' + esc(p.datos_pago || '—') + '</td>' +
+          '<td><a href="#" onclick="ptnVerFactura(' + l.id + ');return false">Ver</a></td>' +
+          '<td style="white-space:nowrap"><button class="btn-pri sm" onclick="ptnPagar(' + l.id + ')">Marcar pagada</button> <button class="btn-ghost sm" onclick="ptnDevolver(' + l.id + ')">Devolver</button></td></tr>';
+      }).join('') + '</tbody></table></div>' : '<div class="ptn-sub" style="margin-bottom:6px">No hay liquidaciones pendientes.</div>');
+  const parts = '<div style="font-weight:800;margin:22px 0 10px">Partners (' + d.partners.length + ')</div>' +
+    (d.partners.length ? '<div class="ptn-tabla-caja"><table class="ptn-tabla"><thead><tr><th>Partner</th><th>Estado</th><th class="num">Cuentas</th><th class="num">Comisión</th><th class="num">Por liquidar</th><th class="num">Pagado</th><th></th></tr></thead><tbody>' +
+      d.partners.map(p => {
+        const [et, col] = PE[p.estado] || [p.estado, 'var(--muted)'];
+        const acc = p.estado === 'aprobado'
+          ? '<button class="btn-ghost sm" onclick="ptnDecidir(\'' + esc(p.user_id) + '\',\'pausado\')">Pausar</button> <button class="btn-ghost sm" onclick="ptnCambiarPct(\'' + esc(p.user_id) + '\',' + Number(p.comision_pct) + ')">Cambiar %</button>'
+          : '<button class="btn-pri sm" onclick="ptnDecidir(\'' + esc(p.user_id) + '\',\'aprobado\')">Aprobar</button>' + (p.estado === 'postulado' ? ' <button class="btn-ghost sm" onclick="ptnDecidir(\'' + esc(p.user_id) + '\',\'rechazado\')">Rechazar</button>' : '');
+        return '<tr><td><div style="font-weight:700">' + esc(p.nombre_comercial) + '</div><div class="ptn-sub">' + esc(p.correo) + (p.whatsapp ? ' · ' + esc(p.whatsapp) : '') + '</div>' +
+          (p.sitio_web ? '<div class="ptn-sub">' + esc(p.sitio_web) + '</div>' : '') +
+          (p.propuesta && p.estado === 'postulado' ? '<div class="ptn-sub" style="white-space:pre-wrap;margin-top:4px">' + esc(p.propuesta) + '</div>' : '') +
+          (p.slug ? '<div class="ptn-sub">/registro/' + esc(p.slug) + '</div>' : '') + '</td>' +
+          '<td>' + ptnChip(et, col) + '</td><td class="num">' + p.cuentas + '</td><td class="num">' + Number(p.comision_pct) + ' %</td>' +
+          '<td class="num">' + ptnUSD(p.disponible_usd) + '</td><td class="num">' + ptnUSD(p.pagado_usd) + '</td><td style="white-space:nowrap">' + acc + '</td></tr>';
+      }).join('') + '</tbody></table></div>' : emptyAgua('users', 'Nadie se ha postulado todavía', 'Cuando alguien se postule te llega un correo y aparece aquí.'));
+  return liq + parts;
+}
+
+async function ptnDecidir(userId, estado) {
+  const nombres = { aprobado: 'Aprobar', rechazado: 'Rechazar', pausado: 'Pausar' };
+  const p = ptnCache.admin?.partners.find(x => x.user_id === userId) || {};
+  let notas;
+  if (estado === 'rechazado') {
+    notas = await pedirTextoAguaP({ titulo: 'Rechazar a ' + (p.nombre_comercial || 'este Partner'), texto: 'El motivo se le muestra si vuelve a entrar al programa. Puedes dejarlo vacío.', confirmar: 'Rechazar' });
+    if (notas === null) return;
+  } else if (!await confirmarAguaP({
+    titulo: '¿' + nombres[estado] + ' a ' + (p.nombre_comercial || 'este Partner') + '?',
+    texto: estado === 'aprobado' ? 'Recibe su enlace de registro y un correo de bienvenida. Desde ese momento gana su comisión por las cuentas que traiga.' : 'Deja de acumular comisiones por cobros nuevos hasta que lo vuelvas a aprobar. Lo ya ganado se mantiene.',
+    confirmar: nombres[estado],
+  })) return;
+  try { await ptnApi('', { accion: 'decidir', user_id: userId, estado, ...(notas !== undefined ? { notas_admin: notas } : {}) }); showToast('Listo', 'success'); ptnRender(); }
+  catch (e) { showToast(e.message, 'error'); }
+}
+
+async function ptnCambiarPct(userId, actual) {
+  const v = await pedirTextoAguaP({ titulo: 'Comisión de este Partner', texto: 'Porcentaje sobre cada pago de licencia (1 a 50). Aplica a los cobros nuevos.', valor: String(actual), confirmar: 'Guardar' });
+  if (v === null) return;
+  try { await ptnApi('', { accion: 'decidir', user_id: userId, estado: 'aprobado', comision_pct: Number(String(v).replace(',', '.')) }); showToast('Comisión actualizada', 'success'); ptnRender(); }
+  catch (e) { showToast(e.message, 'error'); }
+}
+
+async function ptnPagar(id) {
+  const ref = await pedirTextoAguaP({ titulo: 'Marcar la liquidación como pagada', texto: 'Referencia de la transferencia o del pago. Se la enviamos al Partner en el correo de confirmación.', confirmar: 'Marcar pagada' });
+  if (ref === null) return;
+  try { await ptnApi('', { accion: 'pagar', id, referencia: ref }); showToast('Liquidación pagada. Le avisamos al Partner.', 'success'); ptnRender(); }
+  catch (e) { showToast(e.message, 'error'); }
+}
+
+async function ptnDevolver(id) {
+  const nota = await pedirTextoAguaP({ titulo: 'Devolver la solicitud', texto: 'Qué debe corregir (por ejemplo, la factura). Sus comisiones vuelven a quedar disponibles para que la envíe de nuevo.', confirmar: 'Devolver' });
+  if (nota === null) return;
+  try { await ptnApi('', { accion: 'rechazar_liquidacion', id, nota }); showToast('Solicitud devuelta', 'success'); ptnRender(); }
+  catch (e) { showToast(e.message, 'error'); }
+}
+
+// Pedir un texto con nuestra cara (nunca prompt()). Devuelve el texto o null.
+function pedirTextoAguaP({ titulo, texto, valor, confirmar }) {
+  return new Promise(res => {
+    const ov = document.createElement('div');
+    ov.className = 'auto-modal-overlay';
+    let hecho = false;
+    const cerrar = v => { if (hecho) return; hecho = true; document.removeEventListener('keydown', tecla, true); ov.remove(); res(v); };
+    const tecla = e => { if (e.key === 'Escape') cerrar(null); if (e.key === 'Enter' && !e.shiftKey && e.target.tagName === 'INPUT') { e.preventDefault(); cerrar(ov.querySelector('input').value.trim()); } };
+    document.addEventListener('keydown', tecla, true);
+    ov.addEventListener('mousedown', e => { if (e.target === ov) cerrar(null); });
+    ov.innerHTML = '<div class="auto-modal" style="max-width:440px">' +
+      '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">' + esc(titulo) + '</div><button class="btn-ghost sm" data-x>&#10005;</button></div>' +
+      '<div class="auto-modal-body">' + (texto ? '<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:10px">' + esc(texto) + '</div>' : '') +
+      '<input class="ptn-input" style="width:100%" value="' + esc(valor || '') + '"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" data-x>Cancelar</button><button class="btn-pri sm" data-ok>' + esc(confirmar || 'Aceptar') + '</button></div></div>';
+    ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => cerrar(null));
+    ov.querySelector('[data-ok]').onclick = () => cerrar(ov.querySelector('input').value.trim());
+    document.body.appendChild(ov);
+    ov.querySelector('input').focus();
   });
 }
 

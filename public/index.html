@@ -361,6 +361,33 @@ textarea.cmpw-input{font-family:var(--font);font-size:13px;line-height:1.55;resi
 .auto-modal{background:var(--bg);border-radius:18px;width:100%;max-width:640px;max-height:90vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);animation:scaleInCard var(--dur-base) var(--ease)}
 .auto-modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0}
 .auto-modal-body{flex:1;overflow-y:auto;padding:20px 22px}
+#ptn-tabs{overflow-x:auto;scrollbar-width:none}#ptn-tabs .can-tab{white-space:nowrap;flex-shrink:0}
+.ptn-hero{display:flex;gap:18px;align-items:center;padding:18px 20px;border:1px solid var(--border);border-radius:14px;background:var(--panel);margin-bottom:14px}
+.ptn-hero-pct{font-size:44px;font-weight:900;color:var(--blue);letter-spacing:-.03em;line-height:1;flex-shrink:0}
+.ptn-aviso{padding:11px 14px;border-radius:10px;background:var(--blue-lt);color:var(--text);font-size:12.5px;line-height:1.55;margin-bottom:12px}
+.ptn-form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ptn-campo{display:flex;flex-direction:column;gap:5px;font-size:11.5px;font-weight:700;color:var(--muted)}
+.ptn-ancho{grid-column:1/-1}
+.ptn-input{font:inherit;font-size:13px;font-weight:400;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:9px 11px;outline:none;box-sizing:border-box}
+.ptn-input:focus{border-color:var(--blue)}
+.ptn-enlace{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:12px;background:var(--panel);margin-bottom:14px}
+.ptn-enlace-url{font-size:13.5px;font-weight:700;color:var(--text);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ptn-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.ptn-kpi{padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+.ptn-kpi-t{font-size:11.5px;font-weight:700;color:var(--muted)}
+.ptn-kpi-v{font-size:var(--fs-lg);font-weight:900;color:var(--text);margin-top:6px;letter-spacing:-.02em}
+.ptn-kpi-s{font-size:11px;color:var(--muted2);margin-top:3px}
+.ptn-tabla-caja{border:1px solid var(--border);border-radius:12px;overflow-x:auto}
+.ptn-tabla{width:100%;border-collapse:collapse;font-size:12.5px}
+.ptn-tabla th{text-align:left;font-size:10.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:9px 12px;background:var(--panel);border-bottom:1px solid var(--border);white-space:nowrap}
+.ptn-tabla td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--text)}
+.ptn-tabla tr:last-child td{border-bottom:none}
+.ptn-tabla .num{text-align:right;white-space:nowrap}
+.ptn-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.ptn-chip{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 8px;border:1px solid;border-radius:20px;white-space:nowrap}
+.ptn-barra{display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--blue-md);background:var(--blue-lt);border-radius:12px;margin-bottom:12px;font-size:12.5px}
+.ptn-barra-total{margin-left:auto;font-size:var(--fs-md);font-weight:900;color:var(--blue)}
+@media (max-width:760px){.ptn-kpis{grid-template-columns:1fr 1fr}.ptn-form{grid-template-columns:1fr}.ptn-hero{flex-direction:column;align-items:flex-start}}
 .elegir-op{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;padding:11px 14px;margin-bottom:8px;border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--text);font:inherit;cursor:pointer;transition:border-color var(--dur-fast)}
 .elegir-op:hover,.elegir-op:focus-visible{border-color:var(--text);outline:none}
 .elegir-op b{font-size:13px}
@@ -4309,6 +4336,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div onclick="showView('academia')" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;color:var(--muted);transition:all .15s;border:1px solid transparent" onmouseover="this.style.background='var(--sidebar2)';this.style.color='var(--text)'" onmouseout="this.style.background='';this.style.color='var(--muted)'">
         <div style="width:22px;height:22px;border-radius:6px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10L12 5 2 10l10 5 10-5zM6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg></div>
         <span style="flex:1">academia</span>
+      </div>
+
+      <!-- Partners -->
+      <div onclick="partnersAbrir()" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;color:var(--muted);transition:all .15s;border:1px solid transparent" onmouseover="this.style.background='var(--sidebar2)';this.style.color='var(--text)'" onmouseout="this.style.background='';this.style.color='var(--muted)'">
+        <div style="width:22px;height:22px;border-radius:6px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
+        <span style="flex:1">partners</span>
       </div>
 
       <!-- Configuración -->

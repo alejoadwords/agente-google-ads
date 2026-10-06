@@ -75,6 +75,7 @@ export const CADA = {
   'cron-trials': 24 * 60,        // 0 13 * * *
   'cron-ventana': 60,
   'cron-seguimiento': 10,       // */10; fuera de horario también late (fueraDeHora)
+  'cron-partners': 60,          // 17 * * * * — comisiones de Partners
 };
 
 // Los que solo corren de lunes a viernes. Su silencio se mide en minutos
@@ -110,6 +111,7 @@ export const DESDE = '2026-09-23T16:00:00Z';
 // código nuevo. Un aviso que sale el día de estrenar por estrenar es el que
 // enseña a ignorar los avisos.
 export const DESDE_POR_CRON = {
+  'cron-partners': '2026-10-06T23:00:00Z',
   'cron-catalogo': '2026-09-28T22:00:00Z',
   'cron-conectores': '2026-09-27T17:00:00Z',
   'cron-integridad': '2026-09-27T17:00:00Z',

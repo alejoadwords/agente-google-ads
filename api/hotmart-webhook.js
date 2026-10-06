@@ -269,6 +269,30 @@ async function sb(path, method = 'GET', body = null, prefer = 'return=representa
   return { status: res.status, data: text ? JSON.parse(text) : null };
 }
 
+// ── Registro de cobros de licencia (programa de Partners) ────────────────────
+// Cada cobro de licencia —y cada reembolso o contracargo— queda en `cobros`,
+// que es de donde salen las comisiones de los Partners (api/_partners.js).
+// `billing` no sirve para eso: solo se escribe si la cuenta tiene fila espejo en
+// `users`, y en la práctica casi nunca la tiene. El índice único por
+// (pasarela, transaccion, tipo) hace que un aviso repetido de Hotmart
+// (APPROVED + COMPLETE, o un reintento) no cuente dos veces.
+// Un fallo aquí NO corta la activación del plan, pero tampoco es silencioso:
+// una comisión que no se anota es plata que se le deja de pagar a un Partner.
+async function anotarCobro(fila) {
+  try {
+    if (!fila.transaccion) throw new Error('el aviso no trae número de transacción');
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/cobros?on_conflict=pasarela,transaccion,tipo`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({ pasarela: 'hotmart', ...fila }),
+    });
+    if (!r.ok) throw new Error('Supabase ' + r.status + ': ' + (await r.text()).slice(0, 200));
+  } catch (e) {
+    console.error('[hotmart-webhook] no se pudo anotar el cobro:', e.message);
+    await avisarFalloActivacion({ email: fila.correo, productName: fila.producto, motivo: 'No se pudo anotar el cobro para comisiones de Partners: ' + e.message, extra: JSON.stringify(fila) }).catch(() => {});
+  }
+}
+
 export default async function handler(req, res) {
   // ── CORS ──
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -627,19 +651,33 @@ export default async function handler(req, res) {
 
   // ── Cancelación: desactivar en Clerk (fuente de verdad de la app) ────────
   if (eventosCancelacion.includes(eventType)) {
-    let clerkOk = false;
+    let clerkOk = false, clerkIdCancel = null;
     try {
       const clerkUser = await clerkFindUserByEmail(email);
+      clerkIdCancel = clerkUser?.id || null;
       if (clerkUser) clerkOk = await clerkSetPlan(clerkUser.id, 'free');
     } catch (e) { console.error('[hotmart-webhook] Clerk cancel error:', e.message); }
+    // Un reembolso o contracargo devuelve plata: la comisión que generó ese
+    // cobro se descuenta. Cancelar la suscripción NO devuelve nada: solo deja
+    // de haber cobros futuros, y lo ya cobrado sigue comisionando.
+    if (eventType === 'PURCHASE_REFUNDED' || eventType === 'PURCHASE_CHARGEBACK') {
+      await anotarCobro({
+        transaccion: transactionId, tipo: eventType === 'PURCHASE_REFUNDED' ? 'reembolso' : 'contracargo',
+        evento: eventType, user_id: clerkIdCancel, correo: email.toLowerCase(), producto: data?.product?.name || null, plan,
+        periodo: esAnual(data) ? 'anual' : 'mensual',
+        monto: Number(data?.purchase?.price?.value) || 0,
+        moneda: (data?.purchase?.price?.currency_value || 'USD').toUpperCase(),
+      });
+    }
     if (usuario) await sb(`/billing?user_id=eq.${encodeURIComponent(usuario.id)}`, 'PATCH', { status: 'cancelled' }, 'return=minimal');
     return res.status(200).json({ received: true, action: 'cancelled', clerkUpdated: clerkOk });
   }
 
   // ── Activación: Clerk publicMetadata.plan es lo que la app lee ───────────
-  let clerkOk = false;
+  let clerkOk = false, clerkIdActivo = null;
   try {
     const clerkUser = await clerkFindUserByEmail(email);
+    clerkIdActivo = clerkUser?.id || null;
     if (clerkUser) clerkOk = await clerkSetPlan(clerkUser.id, plan);
     else await avisarFalloActivacion({ email, productName, motivo: 'No hay cuenta en Clerk con ese email', extra: 'Plan que deberia tener: ' + plan });
   } catch (e) { console.error('[hotmart-webhook] Clerk activate error:', e.message); }
@@ -658,6 +696,17 @@ export default async function handler(req, res) {
   const moneda  = (precioPagado > 0 && monedaPagada) ? monedaPagada : 'USD';
 
   const capi = await enviarConversionMeta({ email, valor: importe, moneda, transactionId, plan });
+
+  // El cobro, para las comisiones de los Partners. Solo con precio real: un
+  // aviso sin importe (una reactivación sin pago) no genera comisión.
+  if (precioPagado > 0) {
+    await anotarCobro({
+      transaccion: transactionId, tipo: 'cobro', evento: eventType,
+      user_id: clerkIdActivo, correo: email.toLowerCase(), producto: data?.product?.name || null, plan,
+      periodo: anual ? 'anual' : 'mensual', monto: precioPagado, moneda,
+      cobrado_at: data?.purchase?.approved_date ? new Date(data.purchase.approved_date).toISOString() : ahora.toISOString(),
+    });
+  }
 
   if (usuario) {
     // Resetear créditos mensuales de video al renovar

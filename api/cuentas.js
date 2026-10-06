@@ -186,6 +186,23 @@ export default async function handler(req) {
         method: 'PATCH', headers: sbH(),
         body: JSON.stringify({ registros: (filas[0].registros || 0) + 1, updated_at: new Date().toISOString() }),
       });
+      // Si el dueño del enlace es un Partner aprobado, la cuenta queda a su
+      // nombre para las comisiones (api/_partners.js). Primer toque: una cuenta
+      // ya referida no cambia de Partner. Un fallo aquí no tumba el alta, pero
+      // se anota: es una comisión que el Partner dejaría de cobrar.
+      try {
+        const ps = await sbGet(`partners?user_id=eq.${encodeURIComponent(filas[0].user_id)}&estado=eq.aprobado&select=user_id`);
+        if (ps.length) {
+          const rr = await fetch(`${SUPABASE_URL}/rest/v1/partner_referidos?on_conflict=referido_user_id`, {
+            method: 'POST', headers: { ...sbH(), Prefer: 'resolution=ignore-duplicates,return=minimal' },
+            body: JSON.stringify({ referido_user_id: yo, partner_user_id: filas[0].user_id, slug, correo: correoPrincipal(u) || null, nombre: nombreDe(u) || null }),
+          });
+          if (!rr.ok) throw new Error('Supabase ' + rr.status + ': ' + (await rr.text()).slice(0, 150));
+        }
+      } catch (e) {
+        console.error('[cuentas] no se pudo atribuir la cuenta al Partner:', e.message);
+        try { const { registrarError } = await import('./_registro-errores.js'); await registrarError({ origen: 'api', donde: 'cuentas/atribuir-partner', usuario: yo, error: e.message }); } catch {}
+      }
       return jsonResp({ ok: true });
     } catch (e) {
       return jsonResp({ error: 'No se pudo registrar el origen: ' + e.message }, 502);
