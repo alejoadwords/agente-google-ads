@@ -284,9 +284,11 @@ Párrafo común que abre todas (Meta valora que se repita el contexto):
 
 > Data is shown only to the account owner and the teammates they invite. It is never sold,
 > never shared with third parties for advertising, and never used to train AI models. The
-> user can revoke access at any time from Settings → Integrations → Disconnect, or from
-> their own Facebook security settings; we delete the access token immediately and stop
-> receiving data. Our privacy policy describes this in section 5:
+> user can revoke access at any time: disconnecting Meta in Settings → Integrations deletes
+> its access token, and disconnecting a Page or Instagram account in Marketing → Fuentes →
+> "Configurar canales" deletes its token and unsubscribes the Page from our webhook. Access
+> can also be removed from the user's own Facebook settings. Our privacy policy describes
+> how we handle data received from Meta in section 5 ("Datos que recibimos de Meta"):
 > https://app.acuarius.app/privacy.html
 
 ## 4. El video de demostración (lo que más rechazos causa)

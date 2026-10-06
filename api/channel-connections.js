@@ -306,6 +306,37 @@ export default async function handler(req) {
     return jsonResp({ connection: rows[0] }, 201);
   }
 
+  // Messenger e Instagram de una misma página comparten UNA suscripción (la de
+// la página): solo se quita cuando no queda ningún canal de esa página. El id de
+// la página es el external_id en Messenger; en Instagram se le pregunta al token,
+// que es de la página. No corta el borrado si Meta falla: se anota y sigue.
+async function paginaDeCanal(c) {
+  if (c.channel === 'messenger') return { pagina: String(c.external_id), token: await descifrar(c.access_token) };
+  if (c.channel !== 'instagram' || !c.access_token) return null;
+  const token = await descifrar(c.access_token);
+  const yo = await fetch(`https://graph.facebook.com/v19.0/me?fields=id&access_token=${encodeURIComponent(token)}`,
+    { signal: AbortSignal.timeout(6000) }).then(r => r.json()).catch(() => null);
+  return yo?.id ? { pagina: String(yo.id), token } : null;
+}
+async function desuscribirSiEsElUltimo(userId, canal) {
+  try {
+    if (!['messenger', 'instagram'].includes(canal.channel) || !canal.access_token) return;
+    const esta = await paginaDeCanal(canal);
+    if (!esta?.pagina || !esta.token) return;
+    const otros = await fetch(
+      `${SUPABASE_URL}/rest/v1/channel_connections?user_id=eq.${encodeURIComponent(userId)}&channel=in.(messenger,instagram)&id=neq.${encodeURIComponent(canal.id)}&select=id,channel,external_id,access_token`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    for (const o of otros || []) {
+      const suya = await paginaDeCanal(o).catch(() => null);
+      if (suya?.pagina === esta.pagina) return;
+    }
+    const r = await fetch(`https://graph.facebook.com/v19.0/${encodeURIComponent(esta.pagina)}/subscribed_apps?access_token=${encodeURIComponent(esta.token)}`,
+      { method: 'DELETE', signal: AbortSignal.timeout(6000) }).then(x => x.json()).catch(e => ({ error: { message: String(e?.message || e) } }));
+    if (!r?.success) console.warn('[channel-connections] no se pudo desuscribir la página', esta.pagina, r?.error?.message);
+  } catch (e) { console.warn('[channel-connections] desuscribir:', e?.message || e); }
+}
+
   // «merge-duplicates» sin on_conflict no fusiona nada: PostgREST usa la clave
 // primaria y aquí es un uuid generado, así que nunca choca. Reconectar un canal
 // creaba OTRA fila —dos conexiones al mismo número, una muerta— o chocaba con un
@@ -448,7 +479,7 @@ async function guardarConexion(userId, channel, externalId, campos) {
     const purgar = url.searchParams.get('purga') === '1';
 
     const mio = await fetch(
-      `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}&select=id`,
+      `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}&select=id,channel,external_id,access_token`,
       { headers: sb() }
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     if (!mio?.length) return jsonResp({ error: 'Canal no encontrado' }, 404);
@@ -477,6 +508,11 @@ async function guardarConexion(userId, channel, externalId, campos) {
           { method: 'DELETE', headers: sb() });
       }
     }
+
+    // Antes de soltar el token: si es el último canal de esa página, se le quita
+    // la suscripción a la app. Prometemos a Meta que desconectar desuscribe, y
+    // hasta ahora la página seguía mandándonos mensajes que nadie recibía.
+    await desuscribirSiEsElUltimo(userId, mio[0]);
 
     const del = await fetch(
       `${SUPABASE_URL}/rest/v1/channel_connections?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}`,
