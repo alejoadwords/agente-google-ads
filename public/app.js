@@ -40354,13 +40354,13 @@ function pautaPintarConexiones(d) {
       ? '<div class="pauta-conx-nota ojo"><b>Falta decir qué cuenta publicitaria leer.</b><br>' +
         'Autorizaste el acceso, pero no elegiste cuál de tus cuentas es la de este cliente.</div>' +
         '<div id="pauta-cuentas-' + x.id + '"><button class="btn-pri" onclick="pautaCargarCuentas(' +
-        JSON.stringify(String(x.id)) + ')">Elegir la cuenta</button></div>'
+        escJsAttr(x.id) + ')">Elegir la cuenta</button></div>'
       : '<div class="pauta-conx-cifras una">' +
           '<div><b>' + x.campanas + '</b><span>campañas con inversión en el período</span></div>' +
         '</div>' +
         (x.error ? '<div class="pauta-conx-nota mal">' + esc(x.error) + '</div>' : '') +
         '<div class="pauta-conx-cambiar"><button class="pauta-link" onclick="pautaCargarCuentas(' +
-        JSON.stringify(String(x.id)) + ')">Cambiar de cuenta</button>' +
+        escJsAttr(x.id) + ')">Cambiar de cuenta</button>' +
         '<div id="pauta-cuentas-' + x.id + '"></div></div>'),
     '<div class="pauta-conx-btns">' +
       '<button class="btn-ghost" onclick="' + (x.red === 'google' ? 'connectGoogleAds()' : 'connectMetaAds()') + '">Volver a conectar</button>' +
@@ -41957,7 +41957,7 @@ async function pautaCargarCuentas(conexionId) {
             esc(c.nombre) + '</option>').join('') +
         '</select>' +
         pautaSelectorCliente(conexionId) +
-        '<button class="btn-pri" onclick="pautaGuardarConexion(' + JSON.stringify(String(conexionId)) + ')">Guardar</button>' +
+        '<button class="btn-pri" onclick="pautaGuardarConexion(' + escJsAttr(conexionId) + ')">Guardar</button>' +
       '</div>';
   } catch (e) {
     caja.innerHTML = '<div class="pauta-conx-nota mal">' + esc(e.message) + '</div>';
@@ -42014,7 +42014,7 @@ function pautaPintarCartera(d) {
   }
 
   const fila = (x) =>
-    '<tr class="pauta-fila" onclick="pautaEntrarCliente(' + JSON.stringify(x.client_id) + ')" tabindex="0">' +
+    '<tr class="pauta-fila" onclick="pautaEntrarCliente(' + escJsAttr(x.client_id) + ')" tabindex="0">' +
       '<td class="pauta-td"><b>' + esc(x.cliente) + '</b></td>' +
       '<td class="pauta-td">' + (x.redes.length ? x.redes.map(pautaRedChip).join(' ') : '<span style="color:var(--muted2)">sin conectar</span>') + '</td>' +
       // Con un permiso caducado la celda va en BLANCO, nunca en cero: un cero
@@ -42180,7 +42180,7 @@ async function pautaDetalle(clave) {
         '</tr></thead><tbody>' +
         d.leads.slice(0, 60).map(l =>
           '<tr><td class="pauta-td"><a href="#" onclick="event.preventDefault();document.getElementById(\'pauta-panel\').remove();crmOpenDetail(' +
-            JSON.stringify(l.id) + ')" style="font-weight:600;color:var(--text);text-decoration:none">' + esc(l.nombre || 'Sin nombre') + '</a></td>' +
+            escJsAttr(l.id) + ')" style="font-weight:600;color:var(--text);text-decoration:none">' + esc(l.nombre || 'Sin nombre') + '</a></td>' +
           '<td class="pauta-td">' + esc(l.etapa_etiqueta || l.etapa || '—') + '</td>' +
           '<td class="pauta-td" style="color:var(--muted)">' + esc(l.responsable || 'Sin asignar') + '</td>' +
           '<td class="pauta-td" style="color:var(--muted)">' + esc(l.conjunto || '—') + '</td>' +
@@ -43830,8 +43830,10 @@ function lfEditarCampo(campo, ev) {
     'onblur="lfGuardarCampo(\'' + campo + '\', this.value)" ' +
     // Enter guarda y Escape deja las cosas como estaban: sin esto, la única
     // salida era hacer clic fuera y no se sabía si había guardado.
+    // escJsAttr y no JSON.stringify a secas: sus comillas dobles cortaban el
+    // atributo en «this.value=» y cada tecla lanzaba «Unexpected token '}'».
     'onkeydown="if(event.key===\'Enter\'){this.blur()}else if(event.key===\'Escape\'){this.value=' +
-      JSON.stringify(String(actual)) + ';this.blur()}">';
+      escJsAttr(actual) + ';this.blur()}">';
   const inp = celda.querySelector('input');
   inp.focus();
   inp.select();

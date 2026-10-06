@@ -141,6 +141,24 @@ await caso('Etiqueta excluida de una campaña (cmpWExcluirQuitar)', `
   cmpWExcluirPintar();
   c.querySelector('span[onclick]').click();
 `);
+// La edición en línea de la ficha. Su onkeydown llevaba JSON.stringify a secas:
+// las comillas dobles cortaban el atributo en «this.value=» y CADA tecla lanzaba
+// «Unexpected token '}'» (error_log, 28-09). Enter y Escape no hacían nada.
+await caso('Escape en un campo de la ficha deja el valor como estaba (lfEditarCampo)', `
+  // Un <input> de una línea descarta los saltos de línea por sí solo: el
+  // valor de prueba va sin ellos para medir el handler y no al navegador.
+  const valor = NOMBRE.split(String.fromCharCode(10)).join(' ');
+  lfLead = { id: 'x', email: valor };
+  window.lfGuardarCampo = () => {};
+  const celda = document.createElement('div'); document.body.appendChild(celda);
+  lfEditarCampo('email', { currentTarget: celda });
+  const inp = celda.querySelector('input');
+  inp.value = 'otra cosa';
+  inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  if (inp.value === valor) llegado.push(NOMBRE);
+  else llegado.push(inp.value);
+  celda.remove();
+`);
 
 ok(errores.length === previos, 'ningún error de página durante la prueba', errores.slice(previos).join(' | '));
 await nav.close();
@@ -161,6 +179,22 @@ APP.split('\n').forEach((linea, i) => {
 });
 ok(!sospechosos.length, 'ningún handler mete un nombre con esc() entre comillas simples',
   '\n      ' + sospechosos.join('\n      '));
+
+// JSON.stringify a secas dentro de on…="…": sus comillas dobles cierran el
+// atributo y el handler queda a medias, con CUALQUIER valor, no solo con los
+// raros. Pasó en el copiloto, en la ficha y en seis botones de Pauta. Se mira
+// también la línea anterior, porque la concatenación suele partirse en dos.
+console.log('\n4. Sin JSON.stringify crudo dentro de un handler');
+const crudos = [];
+for (const f of ['app.js', 'movil-app.js']) {
+  const L = readFileSync(PUB + '/' + f, 'utf8').split('\n');
+  L.forEach((l, i) => {
+    if (!l.includes('JSON.stringify(')) return;
+    const ctx = (i ? L[i - 1] : '') + '\n' + l;
+    if (/on[a-z]+=\\?"/.test(ctx) && !/esc\(JSON\.stringify|&quot;/.test(l)) crudos.push(f + ':' + (i + 1));
+  });
+}
+ok(!crudos.length, 'ningún handler lleva JSON.stringify sin escapar (usar escJsAttr)', crudos.join(', '));
 
 console.log(mal ? `\n${mal} fallo(s)` : '\nTodo bien');
 process.exit(mal ? 1 : 0);

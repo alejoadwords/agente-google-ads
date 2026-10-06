@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-06-pauta-y-ficha-botones",
+      "fecha": "2026-10-06",
+      "tipo": "arreglo",
+      "titulo": "Elegir la cuenta publicitaria en Pauta ya funciona",
+      "texto": "En Pauta, los botones «Elegir la cuenta», «Cambiar de cuenta» y «Guardar», el clic en la fila de cada cliente y el nombre de cada lead en el detalle de una campaña no hacían nada. Ya responden. Y al editar un dato directamente en la ficha del lead, Enter guarda y Escape deja el valor como estaba."
+    },
+    {
       "id": "2026-10-06-nombres-con-apostrofe",
       "fecha": "2026-10-06",
       "tipo": "arreglo",
