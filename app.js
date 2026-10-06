@@ -24762,10 +24762,25 @@ async function crmLoadInbox(filterStatus) {
   } catch(e) { console.error('crmLoadInbox', e); }
 }
 
+// Logo pequeño de la red sobre la inicial del contacto, para saber de un
+// vistazo de dónde viene cada conversación sin abrirla.
+const INBOX_CANAL_SVG = {
+  messenger: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5C6.6 2.5 2.5 6.4 2.5 11.4c0 2.7 1.2 5 3.2 6.6v3.5l3.3-1.8c.9.3 1.9.4 3 .4 5.4 0 9.5-3.9 9.5-8.7S17.4 2.5 12 2.5zm1 11.7-2.4-2.6-4.7 2.6 5.2-5.5 2.5 2.6 4.6-2.6-5.2 5.5z"/></svg>',
+  instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r="1" fill="currentColor" stroke="none"/></svg>',
+  whatsapp: '<svg viewBox="0 0 24 24"><path d="M12 2.8a9.2 9.2 0 0 0-7.9 13.9L2.8 21.2l4.6-1.2A9.2 9.2 0 1 0 12 2.8z" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8.6 7.4c-.3 0-.8.1-1.1.6-.4.5-1 1.2-.4 2.9.6 1.6 2.4 3.9 5.1 5 2.3.9 2.8.6 3.4.4.6-.2 1.3-.9 1.4-1.6.1-.4 0-.6-.3-.7l-1.9-.9c-.3-.1-.5 0-.7.2l-.8.9c-.2.2-.4.2-.6.1-1.3-.6-2.4-1.6-3-2.7-.1-.2 0-.4.1-.5l.6-.7c.2-.2.2-.4.1-.6l-.9-2c-.1-.3-.3-.4-.6-.4z" fill="currentColor"/></svg>',
+  tiktok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M13.5 3.5v11a3.5 3.5 0 1 1-3.5-3.5"/><path d="M13.5 3.5c.4 2.4 2.2 4.1 4.6 4.3"/></svg>',
+  webchat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>',
+};
+const INBOX_CANAL_NOMBRE = { messenger: 'Messenger', instagram: 'Instagram', whatsapp: 'WhatsApp', tiktok: 'TikTok', webchat: 'Chat web' };
+function inboxIconoCanal(canal) {
+  const svg = INBOX_CANAL_SVG[canal];
+  if (!svg) return '';
+  return '<span class="inbox-canal ' + canal + '" title="' + INBOX_CANAL_NOMBRE[canal] + '">' + svg + '</span>';
+}
+
 function inboxRenderList() {
   const list = document.getElementById('crm-inbox-conv-list');
   if (!list) return;
-  const channelIcons = { messenger: '💬', instagram: '📷', whatsapp: '📱', tiktok: '🎵' };
   if (inboxConversations.length === 0) {
     list.innerHTML = '<div style="padding:20px;text-align:center;font-size:12px;color:var(--muted)">Sin conversaciones aún. Los mensajes de tus canales conectados aparecerán aquí.</div>';
     return;
@@ -24774,7 +24789,7 @@ function inboxRenderList() {
     const name = conv.contact_name || conv.contact_phone || conv.contact_id || 'Desconocido';
     const time = conv.last_message_at ? timeAgo(conv.last_message_at) : '';
     return `<div class="crm-inbox-conv-item${inboxActiveConvId === conv.id ? ' active' : ''}" onclick="inboxOpenConv('${esc(conv.id)}')">
-      <div class="crm-inbox-conv-avatar">${name.charAt(0).toUpperCase()}</div>
+      <div class="crm-inbox-conv-avatar">${esc(name.charAt(0).toUpperCase())}${inboxIconoCanal(conv.channel)}</div>
       <div style="display:flex;flex-direction:column;flex:1;min-width:0">
         <div class="crm-inbox-conv-info">
           <div class="crm-inbox-conv-name">${esc(name)}</div>
@@ -24785,7 +24800,6 @@ function inboxRenderList() {
         <div class="crm-inbox-conv-time">${time}</div>
         ${inboxInsigniaVentana(conv)}
         ${conv.unread_count > 0 ? `<div class="crm-inbox-unread">${conv.unread_count}</div>` : ''}
-        <div class="crm-inbox-channel-dot ${conv.channel}" title="${conv.channel}"></div>
       </div>
     </div>`;
   }).join('');
@@ -24819,7 +24833,10 @@ async function inboxOpenConv(convId) {
 
   const name = conv.contact_name || conv.contact_phone || conv.contact_id || 'Desconocido';
   const channelLabels = { messenger: 'Messenger', instagram: 'Instagram', whatsapp: 'WhatsApp', tiktok: 'TikTok' };
-  const statusLabels = { bot: 'Bot activo', human: 'Escalado', resolved: 'Resuelto' };
+  // «Escalado» solo tiene sentido si había un agente que pasó la conversación a
+  // una persona. En un canal atendido por «Mi equipo» la conversación nace en
+  // human sin que nadie escalara nada: ahí es atención manual.
+  const statusLabels = { bot: 'Agente IA activo', human: conv.agent_id ? 'Escalado' : 'Manual', resolved: 'Resuelto' };
 
   const chat = document.getElementById('crm-inbox-chat');
   chat.innerHTML = `
@@ -24830,7 +24847,7 @@ async function inboxOpenConv(convId) {
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         ${!conv.lead_id ? `<button class="crm-conv-link-btn" style="width:auto;padding:5px 10px;border-style:solid" onclick="inboxToPipeline('${esc(conv.id)}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Pasar al pipeline</button>` : ''}
-        <button class="crm-inbox-status-btn ${conv.status}" onclick="inboxCycleStatus('${esc(conv.id)}','${esc(conv.status)}')">${esc(statusLabels[conv.status] || conv.status)}</button>
+        <button class="crm-inbox-status-btn ${conv.status}" title="Cambiar el estado" onclick="inboxCycleStatus('${esc(conv.id)}','${esc(conv.status)}')">${esc(statusLabels[conv.status] || conv.status)}</button>
       </div>
     </div>
     <div class="crm-inbox-messages" id="inbox-msgs">
@@ -25857,7 +25874,12 @@ function inboxAvisoEnvio(msg) {
 }
 
 async function inboxCycleStatus(convId, current) {
-  const next = current === 'bot' ? 'human' : current === 'human' ? 'resolved' : 'bot';
+  // Sin agente, «bot» dejaría la conversación esperando a alguien que no
+  // existe: se alterna entre manual y resuelta.
+  const conv = inboxConversations.find(c => c.id === convId);
+  const next = !conv?.agent_id
+    ? (current === 'resolved' ? 'human' : 'resolved')
+    : current === 'bot' ? 'human' : current === 'human' ? 'resolved' : 'bot';
   // Pasar una conversación a «la atiendo yo» y que no se guarde significa
   // que el agente sigue respondiendo por encima del comercial.
   const rEstado = await fetchAuth('/api/chat-conversations', {

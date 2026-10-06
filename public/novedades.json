@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-05-inbox-icono-canal",
+      "fecha": "2026-10-05",
+      "tipo": "mejora",
+      "titulo": "En el inbox ves de qué red viene cada conversación",
+      "texto": "Cada conversación de la lista lleva el logo pequeño de su canal —WhatsApp, Instagram, Messenger, TikTok o chat web— sin tener que abrirla. Y las conversaciones de canales que atiende tu equipo dicen «Manual» en vez de «Escalado», porque ningún agente las pasó a nadie."
+    },
+    {
       "id": "2026-10-05-elegir-canal",
       "fecha": "2026-10-05",
       "tipo": "mejora",

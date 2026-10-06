@@ -29,6 +29,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
+  /* Colores de marca de los canales: son los de cada red, no cambian con el tema */
+  --marca-messenger:#0084FF;--marca-instagram:#E1306C;--marca-whatsapp:#25D366;--marca-tiktok:#111111;--marca-sobre:#FFFFFF;
   /* Brand blues */
   --blue:#1E2BCC;--blue-h:#1520B0;--blue-mid:#3D52E5;
   --blue-lt:#EEF0FD;--blue-md:#C5CAF8;--blue-dim:rgba(30,43,204,.07);
@@ -3551,7 +3553,10 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .crm-inbox-conversations{flex:1;overflow-y:auto}
 .crm-inbox-conv-item{padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;display:flex;gap:10px;align-items:flex-start}
 .crm-inbox-conv-item:hover,.crm-inbox-conv-item.active{background:var(--sidebar)}
-.crm-inbox-conv-avatar{width:36px;height:36px;border-radius:10px;background:var(--sidebar2);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;font-weight:700;color:var(--muted)}
+.crm-inbox-conv-avatar{width:36px;height:36px;border-radius:10px;background:var(--sidebar2);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;position:relative;font-weight:700;color:var(--muted)}
+.inbox-canal{position:absolute;right:-5px;bottom:-5px;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg);background:var(--muted);color:var(--marca-sobre)}
+.inbox-canal svg{width:10px;height:10px;display:block}
+.inbox-canal.messenger{background:var(--marca-messenger)}.inbox-canal.instagram{background:var(--marca-instagram)}.inbox-canal.whatsapp{background:var(--marca-whatsapp)}.inbox-canal.tiktok{background:var(--marca-tiktok)}.inbox-canal.webchat{background:var(--blue)}
 .crm-inbox-conv-info{flex:1;min-width:0}
 .crm-inbox-conv-name{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .crm-inbox-conv-preview{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
@@ -5975,8 +5980,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="crm-inbox-list">
         <div class="crm-inbox-filters">
           <button class="crm-inbox-filter-btn active" onclick="inboxSetFilter('all',this)">Todos</button>
-          <button class="crm-inbox-filter-btn" onclick="inboxSetFilter('bot',this)">Bot activo</button>
-          <button class="crm-inbox-filter-btn" onclick="inboxSetFilter('human',this)">Escalados</button>
+          <button class="crm-inbox-filter-btn" onclick="inboxSetFilter('bot',this)">Agente IA</button>
+          <button class="crm-inbox-filter-btn" onclick="inboxSetFilter('human',this)">Manual y escalados</button>
           <button class="crm-inbox-filter-btn" onclick="inboxSetFilter('resolved',this)">Resueltos</button>
         </div>
         <div class="crm-inbox-conversations" id="crm-inbox-conv-list"></div>
