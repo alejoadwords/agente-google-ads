@@ -108,6 +108,19 @@ async function marcarEscribiendo(channel, connection, messageId) {
 // "Contacto messenger" y el comercial recibe una ficha sin nombre.
 async function nombreDelContacto(connection, contactId) {
   if (!connection?.access_token || !contactId) return null;
+  // Instagram sí deja leer el perfil de quien te escribió: /{igsid} con el token
+  // de la página contesta en menos de un segundo. Las conversaciones de abajo
+  // no sirven aquí: con una cuenta de mucho historial (@acuarius.app) Meta tarda
+  // ~30 s y devuelve «Timeout», y el contacto se quedaba con su id por nombre.
+  if (connection.channel === 'instagram') {
+    const p = await fetch(
+      `https://graph.facebook.com/v19.0/${encodeURIComponent(contactId)}?fields=name,username&access_token=${connection.access_token}`,
+      { signal: AbortSignal.timeout(6000) }
+    ).then(r => r.json()).catch(() => null);
+    if (p?.error) console.warn('[meta] no se pudo leer el perfil de Instagram:', String(p.error.message).slice(0, 120));
+    const n = p?.name || (p?.username ? '@' + p.username : null);
+    return n ? String(n).slice(0, 120) : null;
+  }
   // Consultar /{psid} directamente devuelve "Object does not exist" salvo con
   // acceso avanzado. El nombre sí sale por las conversaciones de la página,
   // que es lo mismo que ve cualquiera en la bandeja de Meta.

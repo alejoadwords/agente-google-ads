@@ -24772,6 +24772,13 @@ const INBOX_CANAL_SVG = {
   webchat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>',
 };
 const INBOX_CANAL_NOMBRE = { messenger: 'Messenger', instagram: 'Instagram', whatsapp: 'WhatsApp', tiktok: 'TikTok', webchat: 'Chat web' };
+// El id de Messenger o Instagram es un número largo que no le dice nada a
+// nadie: mientras no haya nombre, se dice de qué red es el contacto.
+function inboxNombreContacto(conv) {
+  return conv.contact_name || conv.contact_phone ||
+    (INBOX_CANAL_NOMBRE[conv.channel] ? 'Contacto de ' + INBOX_CANAL_NOMBRE[conv.channel] : conv.contact_id) || 'Desconocido';
+}
+
 function inboxIconoCanal(canal) {
   const svg = INBOX_CANAL_SVG[canal];
   if (!svg) return '';
@@ -24786,7 +24793,7 @@ function inboxRenderList() {
     return;
   }
   list.innerHTML = inboxConversations.map(conv => {
-    const name = conv.contact_name || conv.contact_phone || conv.contact_id || 'Desconocido';
+    const name = inboxNombreContacto(conv);
     const time = conv.last_message_at ? timeAgo(conv.last_message_at) : '';
     return `<div class="crm-inbox-conv-item${inboxActiveConvId === conv.id ? ' active' : ''}" onclick="inboxOpenConv('${esc(conv.id)}')">
       <div class="crm-inbox-conv-avatar">${esc(name.charAt(0).toUpperCase())}${inboxIconoCanal(conv.channel)}</div>
@@ -24831,7 +24838,7 @@ async function inboxOpenConv(convId) {
   const data = await res.json();
   const messages = data.messages || [];
 
-  const name = conv.contact_name || conv.contact_phone || conv.contact_id || 'Desconocido';
+  const name = inboxNombreContacto(conv);
   const channelLabels = { messenger: 'Messenger', instagram: 'Instagram', whatsapp: 'WhatsApp', tiktok: 'TikTok' };
   // «Escalado» solo tiene sentido si había un agente que pasó la conversación a
   // una persona. En un canal atendido por «Mi equipo» la conversación nace en
