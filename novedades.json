@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-05-archivar-conversaciones",
+      "fecha": "2026-10-05",
+      "tipo": "nuevo",
+      "titulo": "Archiva conversaciones del inbox",
+      "texto": "Con el botón «Archivar» de cada conversación la sacas de la bandeja sin borrar nada. Quedan en el filtro «Archivadas», de donde puedes devolverlas cuando quieras, y si el contacto vuelve a escribir regresan solas a la bandeja."
+    },
+    {
       "id": "2026-10-05-inbox-icono-canal",
       "fecha": "2026-10-05",
       "tipo": "mejora",

@@ -2021,7 +2021,8 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // cliente acabara de escribir.
   await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
     method: 'PATCH', headers: sb(),
-    body: JSON.stringify({ last_inbound_at: new Date().toISOString() }),
+    // Si estaba archivada, vuelve a la bandeja: el cliente escribió otra vez.
+    body: JSON.stringify({ last_inbound_at: new Date().toISOString(), archivada_at: null }),
   }).catch(() => {});
 
   // ── El cupo del mes ────────────────────────────────────────────────────────

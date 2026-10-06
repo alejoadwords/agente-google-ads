@@ -129,6 +129,10 @@ export default async function handler(req) {
     const leadId = url.searchParams.get('lead_id');
     let query = `${SUPABASE_URL}/rest/v1/chat_conversations?user_id=eq.${userId}${filtroCanales}&select=*&order=last_message_at.desc&limit=50`;
     if (status) query += `&status=eq.${encodeURIComponent(status)}`;
+    // La bandeja esconde las archivadas; la ficha de un lead (lead_id) las ve
+    // todas, porque ahí se busca su historial, no lo pendiente.
+    if (url.searchParams.get('archivadas') === '1') query += '&archivada_at=not.is.null';
+    else if (!leadId) query += '&archivada_at=is.null';
     if (channel) query += `&channel=eq.${encodeURIComponent(channel)}`;
     if (agentId) query += `&agent_id=eq.${encodeURIComponent(agentId)}`;
     if (leadId) query += `&lead_id=eq.${encodeURIComponent(leadId)}`;
@@ -232,11 +236,15 @@ export default async function handler(req) {
   if (req.method === 'PUT') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
-    const { id, status, unread_count } = body;
+    const { id, status, unread_count, archivada } = body;
     if (!id) return jsonResp({ error: 'Falta id' }, 400);
     const update = {};
     if (status) update.status = status;
     if (unread_count !== undefined) update.unread_count = unread_count;
+    // Archivar no borra nada: la saca de la bandeja hasta que el cliente vuelva
+    // a escribir (el motor la desarchiva con el mensaje nuevo).
+    if (archivada !== undefined) update.archivada_at = archivada ? new Date().toISOString() : null;
+    if (!Object.keys(update).length) return jsonResp({ error: 'Nada que cambiar' }, 400);
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${id}&user_id=eq.${userId}`,
       { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(update) }

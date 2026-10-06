@@ -24752,7 +24752,7 @@ async function agDisconnectChannel(connId, agentId) {
 async function crmLoadInbox(filterStatus) {
   if (filterStatus) inboxFilter = filterStatus;
   try {
-    let qs = inboxFilter === 'all' ? '' : `&status=${inboxFilter}`;
+    let qs = inboxFilter === 'all' ? '' : inboxFilter === 'archivadas' ? '&archivadas=1' : `&status=${inboxFilter}`;
     const res = await fetchAuth(`/api/chat-conversations?${qs}`);
     if (!res.ok) throw new Error();
     const data = await res.json();
@@ -24855,6 +24855,7 @@ async function inboxOpenConv(convId) {
       <div style="display:flex;align-items:center;gap:8px">
         ${!conv.lead_id ? `<button class="crm-conv-link-btn" style="width:auto;padding:5px 10px;border-style:solid" onclick="inboxToPipeline('${esc(conv.id)}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Pasar al pipeline</button>` : ''}
         <button class="crm-inbox-status-btn ${conv.status}" title="Cambiar el estado" onclick="inboxCycleStatus('${esc(conv.id)}','${esc(conv.status)}')">${esc(statusLabels[conv.status] || conv.status)}</button>
+        <button class="btn-ghost sm" style="display:inline-flex;align-items:center;gap:5px" title="${conv.archivada_at ? 'Devolver a la bandeja' : 'Sacarla de la bandeja. No se borra: vuelve sola si el contacto escribe otra vez'}" onclick="inboxArchivar('${esc(conv.id)}', ${conv.archivada_at ? 'false' : 'true'})">${icn('archivar', 13)} ${conv.archivada_at ? 'Desarchivar' : 'Archivar'}</button>
       </div>
     </div>
     <div class="crm-inbox-messages" id="inbox-msgs">
@@ -25899,6 +25900,26 @@ async function inboxCycleStatus(convId, current) {
   }
   if (conv) conv.status = next;
   await inboxOpenConv(convId);
+}
+
+// Archivar no borra: la conversación sale de la bandeja y queda en el filtro
+// «Archivadas». Si el contacto vuelve a escribir, el servidor la desarchiva.
+async function inboxArchivar(convId, archivar) {
+  const r = await fetchAuth('/api/chat-conversations', {
+    method: 'PUT',
+    body: JSON.stringify({ id: convId, archivada: archivar }),
+  });
+  if (!r.ok) {
+    showToast('No se pudo ' + (archivar ? 'archivar' : 'desarchivar') + ': ' + (await motivoDelFallo(r, 'archivar')).message, 'error');
+    return;
+  }
+  showToast(archivar ? 'Conversación archivada' : 'Conversación de vuelta en la bandeja', 'success');
+  inboxActiveConvId = null;
+  const chat = document.getElementById('crm-inbox-chat');
+  if (chat) chat.innerHTML = '<div class="crm-inbox-empty">' +
+    '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--muted2)"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>' +
+    'Selecciona una conversación</div>';
+  await crmLoadInbox();
 }
 
 function inboxUpdateBadge() {
@@ -27998,6 +28019,7 @@ function seoGeoExportReport() {
 // ── SET DE ÍCONOS SVG (un solo lenguaje: stroke 2, esquinas redondas) ─────────
 // Reemplaza los emojis funcionales de la UI. Uso: icn('alert', 14)
 const ICN_PATHS = {
+  archivar: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
   movil: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
   dots: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
