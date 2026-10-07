@@ -7649,7 +7649,7 @@ function refrescarCampana() {
   const btn   = document.getElementById('alerts-btn');
   const badge = document.getElementById('alerts-badge');
   if (!btn || !badge) return;
-  const notas = (typeof crmAvisos !== 'undefined' && crmAvisos) ? crmAvisos.length : 0;
+  const notas = ((typeof crmAvisos !== 'undefined' && crmAvisos) ? crmAvisos.length : 0) + (ptnPendientes || []).length;
   btn.style.display = 'flex';
   if (notas > 0) {
     badge.style.display = 'flex';
@@ -20398,7 +20398,7 @@ function campanaEstaMuda() {
  * aprende a ignorar en dos días.
  */
 function campanaAvisarNuevos() {
-  const ahora = crmAvisos.length;
+  const ahora = crmAvisos.length + (ptnPendientes || []).length;
   if (_avisosVistos === null) { _avisosVistos = ahora; return; }
   if (ahora > _avisosVistos) {
     campanaSonar();
@@ -20450,8 +20450,25 @@ async function avisosActivarPushDesdeBarra(btn) {
   avisosCerrarBarraPush();
 }
 
+// Pendientes del programa de Partners para el equipo (postulaciones y
+// liquidaciones). Si la cuenta no es del equipo, se pregunta una vez por
+// sesión y no más: cada consulta le cuesta al servidor una llamada a Clerk.
+// `var` y no `let`: la campana se pinta desde código que va antes en el archivo.
+var ptnPendientes = [];
+async function ptnPendientesCargar() {
+  try { if (sessionStorage.getItem('ptn_no_admin') === '1') return; } catch {}
+  try {
+    const r = await fetchAuth('/api/partners?vista=pendientes');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.es_admin) { try { sessionStorage.setItem('ptn_no_admin', '1'); } catch {} ptnPendientes = []; return; }
+    ptnPendientes = d.pendientes || [];
+  } catch (e) { console.warn('ptnPendientesCargar', e); }
+}
+
 async function crmAvisosCargar() {
   try {
+    await ptnPendientesCargar();
     const r = await fetchAuth('/api/lead-activities?avisos=1');
     if (!r.ok) return;
     const d = await r.json();
@@ -20484,7 +20501,19 @@ function crmHace(iso) {
 function crmAvisosPanel() {
   const cont = document.getElementById('notas-list');
   if (!cont) return;
-  if (!crmAvisos.length) { cont.innerHTML = ''; return; }
+  if (!crmAvisos.length && !ptnPendientes.length) { cont.innerHTML = ''; return; }
+  // Lo del programa de Partners va arriba: son decisiones que esperan al equipo.
+  const ptnHtml = ptnPendientes.length
+    ? '<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:2px 2px 8px">Programa de Partners</div>' +
+      ptnPendientes.map(p =>
+        '<div onclick="closeAlertsPanel();partnersAbrir(\'admin\')" title="Abrir Administrar Partners" style="cursor:pointer;border:1px solid var(--border);border-left:3px solid ' + (p.tipo === 'liquidacion' ? 'var(--success)' : 'var(--warning)') + ';border-radius:9px;padding:11px 12px;margin-bottom:8px;background:var(--bg)">' +
+          '<div style="font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:4px">' + esc(p.titulo || 'Partner') + '</div>' +
+          '<div style="font-size:12.5px;color:var(--text)">' + esc(p.texto || '') + '</div>' +
+          '<div style="font-size:10.5px;color:var(--muted2);margin-top:7px">' + crmHace(p.fecha) + '</div>' +
+        '</div>').join('') +
+      '<div style="height:8px"></div>'
+    : '';
+  if (!crmAvisos.length) { cont.innerHTML = ptnHtml; return; }
 
   // El interruptor del sonido vive AQUÍ y no en Configuración: quien quiere
   // callarlo está mirando la campana en ese momento, no buscando un ajuste.
@@ -20495,6 +20524,7 @@ function crmAvisosPanel() {
         'title="' + (mudo ? 'La campana está en silencio' : 'Silenciar el sonido de la campana') + '">' +
         (mudo ? 'Activar sonido' : 'Silenciar') + '</button>' +
     '</div>' +
+    ptnHtml +
     '<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:2px 2px 8px">Notas para ti</div>' +
     '<div style="font-size:11.5px;color:var(--muted);padding:0 2px 10px">Haz clic en una nota para abrir su lead. Se queda aquí hasta que la revises.</div>' +
     crmAvisos.map(a =>
@@ -38371,7 +38401,7 @@ async function ptnDecidir(userId, estado) {
     texto: estado === 'aprobado' ? 'Recibe su enlace de registro y un correo de bienvenida. Desde ese momento gana su comisión por las cuentas que traiga.' : 'Deja de acumular comisiones por cobros nuevos hasta que lo vuelvas a aprobar. Lo ya ganado se mantiene.',
     confirmar: nombres[estado],
   })) return;
-  try { await ptnApi('', { accion: 'decidir', user_id: userId, estado, ...(notas !== undefined ? { notas_admin: notas } : {}) }); showToast('Listo', 'success'); ptnRender(); }
+  try { await ptnApi('', { accion: 'decidir', user_id: userId, estado, ...(notas !== undefined ? { notas_admin: notas } : {}) }); showToast('Listo', 'success'); ptnRender(); ptnRefrescarCampana(); }
   catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -38385,15 +38415,22 @@ async function ptnCambiarPct(userId, actual) {
 async function ptnPagar(id) {
   const ref = await pedirTextoAguaP({ titulo: 'Marcar la liquidación como pagada', texto: 'Referencia de la transferencia o del pago. Se la enviamos al Partner en el correo de confirmación.', confirmar: 'Marcar pagada' });
   if (ref === null) return;
-  try { await ptnApi('', { accion: 'pagar', id, referencia: ref }); showToast('Liquidación pagada. Le avisamos al Partner.', 'success'); ptnRender(); }
+  try { await ptnApi('', { accion: 'pagar', id, referencia: ref }); showToast('Liquidación pagada. Le avisamos al Partner.', 'success'); ptnRender(); ptnRefrescarCampana(); }
   catch (e) { showToast(e.message, 'error'); }
 }
 
 async function ptnDevolver(id) {
   const nota = await pedirTextoAguaP({ titulo: 'Devolver la solicitud', texto: 'Qué debe corregir (por ejemplo, la factura). Sus comisiones vuelven a quedar disponibles para que la envíe de nuevo.', confirmar: 'Devolver' });
   if (nota === null) return;
-  try { await ptnApi('', { accion: 'rechazar_liquidacion', id, nota }); showToast('Solicitud devuelta', 'success'); ptnRender(); }
+  try { await ptnApi('', { accion: 'rechazar_liquidacion', id, nota }); showToast('Solicitud devuelta', 'success'); ptnRender(); ptnRefrescarCampana(); }
   catch (e) { showToast(e.message, 'error'); }
+}
+
+// Tras decidir o pagar, la campana deja de mostrar lo ya atendido (sin sonar).
+async function ptnRefrescarCampana() {
+  await ptnPendientesCargar();
+  _avisosVistos = (typeof crmAvisos !== 'undefined' ? crmAvisos.length : 0) + ptnPendientes.length;
+  if (typeof refrescarCampana === 'function') refrescarCampana();
 }
 
 // Pedir un texto con nuestra cara (nunca prompt()). Devuelve el texto o null.

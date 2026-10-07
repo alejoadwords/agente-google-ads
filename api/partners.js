@@ -12,6 +12,7 @@
 //
 // Del equipo (ADMIN_EMAILS, comprobado contra Clerk en cada petición):
 //   GET  ?vista=admin           partners por estado y liquidaciones pendientes
+//   GET  ?vista=pendientes      lo que la campana del equipo debe avisar
 //   POST {accion:'decidir', user_id, estado, comision_pct, notas_admin}
 //   POST {accion:'pagar', id, referencia}       marca una liquidación como pagada
 //   POST {accion:'rechazar_liquidacion', id, nota}   devuelve sus comisiones a disponibles
@@ -35,6 +36,7 @@ const BUCKET = 'partners-facturas';
 const APP = 'https://app.acuarius.app';
 const json = (d, status = 200) => new Response(JSON.stringify(d), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 
+const usd = n => Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD';
 const lista = v => (Array.isArray(v) ? v : String(v || '').split(','))
   .map(x => String(x).trim()).filter(Boolean).slice(0, 30).map(x => x.slice(0, 60));
 const texto = (v, max) => { const t = String(v ?? '').trim(); return t ? t.slice(0, max) : null; };
@@ -100,6 +102,20 @@ export default async function handler(req) {
 
       if (vista === 'yo') {
         return json({ partner: partner || null, es_admin: await esAdmin(), enlace: partner?.slug ? `${APP}/registro/${partner.slug}` : null });
+      }
+
+      // Lo que la campana del equipo tiene que avisar: postulaciones por revisar
+      // y liquidaciones por pagar. A quien no es del equipo se le contesta que
+      // no lo es, y la app deja de preguntar en esa sesión.
+      if (vista === 'pendientes') {
+        if (!(await esAdmin())) return json({ es_admin: false, pendientes: [] });
+        const posts = await sb('/partners?estado=eq.postulado&select=user_id,nombre_comercial,creado_at&order=creado_at.desc') || [];
+        const liqs = await sb('/partner_liquidaciones?estado=eq.solicitada&select=id,partner_user_id,total_usd,solicitada_at&order=solicitada_at.desc') || [];
+        const noms = liqs.length ? Object.fromEntries((await sb(`/partners?user_id=in.(${[...new Set(liqs.map(l => encodeURIComponent(l.partner_user_id)))].join(',')})&select=user_id,nombre_comercial`) || []).map(p => [p.user_id, p.nombre_comercial])) : {};
+        return json({ es_admin: true, pendientes: [
+          ...posts.map(p => ({ id: 'post-' + p.user_id, tipo: 'postulacion', titulo: p.nombre_comercial, texto: 'Se postuló como Partner', fecha: p.creado_at })),
+          ...liqs.map(l => ({ id: 'liq-' + l.id, tipo: 'liquidacion', titulo: noms[l.partner_user_id] || 'Partner', texto: 'Pide su liquidación de ' + usd(l.total_usd), fecha: l.solicitada_at })),
+        ] });
       }
 
       if (vista === 'admin') {
@@ -244,8 +260,8 @@ export default async function handler(req) {
         await sb(`/partner_liquidaciones?id=eq.${liq.id}`, { method: 'DELETE' });
         return json({ error: 'Otra solicitud tomó alguna de estas comisiones. Recarga la página.' }, 409);
       }
-      await avisarEquipo(`Liquidación de Partner: ${partner.nombre_comercial} · ${total.toFixed(2)} USD`, 'Un Partner pide su liquidación',
-        `<p><b>${esc(partner.nombre_comercial)}</b> solicita <b>${total.toFixed(2)} USD</b> por ${dentro.length} comisiones.</p><p>Datos de pago:</p><p style="white-space:pre-wrap">${esc(partner.datos_pago)}</p>`);
+      await avisarEquipo(`Liquidación de Partner: ${partner.nombre_comercial} · ${usd(total)}`, 'Un Partner pide su liquidación',
+        `<p><b>${esc(partner.nombre_comercial)}</b> solicita <b>${usd(total)}</b> por ${dentro.length} comisiones.</p><p>Datos de pago:</p><p style="white-space:pre-wrap">${esc(partner.datos_pago)}</p>`);
       return json({ ok: true, liquidacion: liq });
     }
 
@@ -301,9 +317,9 @@ export default async function handler(req) {
         body: JSON.stringify(pagar ? { estado: 'pagada' } : { estado: 'disponible', liquidacion_id: null }) });
       const [p] = await sb(`/partners?user_id=eq.${encodeURIComponent(l.partner_user_id)}&select=correo,nombre_comercial`) || [];
       if (p?.correo) {
-        await correo('partners', p.correo, pagar ? `Pagamos tu liquidación de ${Number(l.total_usd).toFixed(2)} USD` : 'Tu solicitud de liquidación necesita un ajuste', emailHtml({
+        await correo('partners', p.correo, pagar ? `Pagamos tu liquidación de ${usd(l.total_usd)}` : 'Tu solicitud de liquidación necesita un ajuste', emailHtml({
           titulo: pagar ? 'Liquidación pagada' : 'Revisa tu solicitud de liquidación',
-          intro: pagar ? `Te pagamos ${Number(l.total_usd).toFixed(2)} USD por ${l.n_comisiones} comisiones.` : 'Tus comisiones volvieron a quedar disponibles para que la envíes de nuevo.',
+          intro: pagar ? `Te pagamos ${usd(l.total_usd)} por ${l.n_comisiones} comisiones.` : 'Tus comisiones volvieron a quedar disponibles para que la envíes de nuevo.',
           cuerpo: (body.referencia && pagar ? `<p>Referencia del pago: <b>${esc(body.referencia)}</b></p>` : '') + (body.nota ? `<p style="white-space:pre-wrap">${esc(body.nota)}</p>` : ''),
           cta: { texto: 'Ver mis comisiones', url: APP + '/?ir=partners' },
           pie: 'Equipo de Soporte — Acuarius',
