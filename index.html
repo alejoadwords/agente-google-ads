@@ -4039,10 +4039,15 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 /* Mientras está encendida, la aplicación de siempre se esconde ENTERA. Dejar
    las dos vivas a la vez haría que los atajos de teclado, los focos y los
    temporizadores de la de escritorio siguieran corriendo por debajo. */
-body.modo-movil > *:not(#movil-host):not(#movil-oferta){display:none !important}
+/* La franja de soporte NO entra en ese «entera»: escondida, quien entra a un
+   cliente desde el teléfono no tenía cómo volver a su cuenta (06-10-2026). */
+body.modo-movil > *:not(#movil-host):not(#movil-oferta):not(#soporte-banner){display:none !important}
 body.modo-movil{overflow:hidden}
 #movil-host[hidden]{display:none}
 #movil-host{position:fixed;inset:0;z-index:9500;background:var(--bg)}
+/* Con la franja arriba, el móvil empieza debajo de ella y no detrás. La altura
+   la escribe soporteBanner(), porque cambia al partirse el texto en dos líneas. */
+body.con-soporte #movil-host{top:var(--soporte-alto,0px)}
 /* La franja que ofrece probarla. Abajo, donde llega el pulgar, y por encima de
    todo menos del propio móvil. */
 #movil-oferta{

@@ -160,7 +160,11 @@ function soporteBanner() {
     + '<button class="sb-soporte-btn" onclick="soporteVolver(this)">Volver a mi cuenta</button>';
   document.body.appendChild(b);
   document.body.classList.add('con-soporte');
-  const ajustar = () => { document.body.style.paddingTop = b.offsetHeight + 'px'; };
+  const ajustar = () => {
+    document.body.style.paddingTop = b.offsetHeight + 'px';
+    // La versión móvil va en una capa fija que no mira el padding del body.
+    document.documentElement.style.setProperty('--soporte-alto', b.offsetHeight + 'px');
+  };
   ajustar();
   window.addEventListener('resize', ajustar);
   const pintar = () => {

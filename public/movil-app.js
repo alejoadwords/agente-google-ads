@@ -2120,6 +2120,13 @@ function abrirPerfil(){
       + (y.correo ? '<span>'+esc(y.correo)+'</span>' : '')
       + (y.plan ? '<span class="perfil-plan">'+esc(PLAN_NOM[y.plan] || y.plan)+'</span>' : '')
       + '</div></div>'
+    + (estoyEnSoporte()
+      ? '<div class="lista"><button class="mfila soporte" onclick="M.volverDeSoporte(this)">'
+        + '<span class="micono">'+icn('salir',18)+'</span>'
+        + '<span class="cuerpo"><span class="mt">Volver a mi cuenta</span>'
+        + '<span class="ms">Estás dentro de la cuenta de un cliente</span></span>'
+        + '<span class="chev">'+icn('arrow',18)+'</span></button></div>'
+      : '')
     + '<div class="lista">'
       + '<button class="mfila" onclick="M.abrirModulo(\'academia\')">'
         + '<span class="micono">'+icn('star',18)+'</span>'
@@ -2168,6 +2175,25 @@ function volverEscritorio(){
   // Sin el enganche —el boceto suelto— no hay a dónde volver, y decirlo es
   // mejor que un botón que no responde.
   chicharra('Esta es la vista de prueba: no hay versión de escritorio detrás.', 'mal');
+}
+
+// Entrar a un cliente como soporte es cosa de la web (enSoporte/soporteVolver
+// viven en app.js). En el boceto suelto no existen y aquí no se ofrece nada.
+function estoyEnSoporte(){
+  try { return typeof enSoporte === 'function' && !!enSoporte(); } catch (e) { return false; }
+}
+function volverDeSoporte(btn){
+  if (typeof soporteVolver !== 'function') { chicharra('No se pudo volver desde aquí. Cierra sesión y entra con tu cuenta.', 'mal'); return; }
+  toque();
+  var mt = btn && btn.querySelector('.mt');
+  if (btn) btn.disabled = true;
+  if (mt) mt.textContent = 'Volviendo…';
+  // Si sale bien la página se va; si no, soporteVolver ofrece cerrar sesión y
+  // el botón tiene que quedar usable otra vez.
+  Promise.resolve(soporteVolver()).then(function(){
+    if (btn) btn.disabled = false;
+    if (mt) mt.textContent = 'Volver a mi cuenta';
+  });
 }
 
 function cerrarSesion(){
@@ -3522,7 +3548,7 @@ function movilMontar(opciones){
     guardarNota: guardarNota, guardarCampo: guardarCampo, crearLead: crearLead, elegirCampana: elegirCampana,
     reintentarModulo: reintentarModulo,
     llamar: llamar, whatsapp: whatsapp,
-    abrirMenu: abrirMenu, abrirAvisos: abrirAvisos, abrirPerfil: abrirPerfil,
+    abrirMenu: abrirMenu, abrirAvisos: abrirAvisos, abrirPerfil: abrirPerfil, volverDeSoporte: volverDeSoporte,
     abrirVoz: abrirVoz, vozProbar: vozProbar, vozVer: vozVer,
     cerrarBarra: cerrarBarra, volverEscritorio: volverEscritorio, cerrarSesion: cerrarSesion,
     abrirClientes: abrirClientes, elegirCliente: elegirCliente,

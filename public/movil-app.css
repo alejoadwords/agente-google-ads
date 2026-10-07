@@ -515,6 +515,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
    que se lamenta si se toca por error. */
 .mfila.salir .mt{color:var(--danger)}
 .mfila.salir .micono{color:var(--danger)}
+/* En soporte, volver a la cuenta propia va primero y en el color de la franja. */
+.mfila.soporte .mt,.mfila.soporte .micono{color:var(--warning)}
 
 /* ── Avisos ── */
 .aviso-fila{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rlg);
