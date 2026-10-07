@@ -27,7 +27,7 @@ import { soporteDe } from './_soporte-sesion.js';
 import { emailHtml, esc } from './_email-layout.js';
 import { enviarResend } from './_correo.js';
 import {
-  sb, sbH, PCT_POR_DEFECTO, ESTADOS_PARTNER, mensualDe, armarLiquidacion, estadoCuenta, slugDesde,
+  sb, sbH, PCT_POR_DEFECTO, ESTADOS_PARTNER, mrrDe, armarLiquidacion, estadoCuenta, slugDesde,
   tasaUSD, clerkUsuario, clerkUsuarios, correoPrincipal, nombreDe, admins,
 } from './_partners.js';
 
@@ -161,7 +161,7 @@ export default async function handler(req) {
         const refs = await sb(`/partner_referidos?partner_user_id=eq.${encodeURIComponent(yo)}&select=*&order=creado_at.desc`) || [];
         const usuarios = refs.length ? await clerkUsuarios(refs.map(r => r.referido_user_id)) : {};
         const ids = refs.map(r => r.referido_user_id);
-        const cobros = ids.length ? (await sb(`/cobros?user_id=in.(${ids.map(encodeURIComponent).join(',')})&tipo=eq.cobro&select=user_id,monto,moneda,periodo,cobrado_at&order=cobrado_at.desc`) || []) : [];
+        const cobros = ids.length ? (await sb(`/cobros?user_id=in.(${ids.map(encodeURIComponent).join(',')})&tipo=eq.cobro&select=user_id,plan,tipo,monto,moneda,periodo,cobrado_at&order=cobrado_at.desc`) || []) : [];
         const coms = await sb(`/partner_comisiones?partner_user_id=eq.${encodeURIComponent(yo)}&select=referido_user_id,comision_usd,estado,cobrado_at`) || [];
         const tasas = {};
         for (const m of new Set(cobros.map(c => c.moneda))) { try { tasas[m] = await tasaUSD(m); } catch { tasas[m] = 0; } }
@@ -175,7 +175,7 @@ export default async function handler(req) {
             id: r.referido_user_id, nombre: nombreDe(u) || r.nombre || '', correo: correoPrincipal(u) || r.correo || '',
             plan: meta.plan || 'free', estado, registrada_at: r.creado_at,
             ultimo_cobro_at: ultimo?.cobrado_at || null,
-            mrr_usd: estado === 'activa' && ultimo ? mensualDe(ultimo, tasas[ultimo.moneda]) : 0,
+            mrr_usd: estado === 'activa' ? mrrDe(cobros.filter(c => c.user_id === r.referido_user_id), tasas) : 0,
             comision_total_usd: Math.round(susComs.reduce((s, c) => s + Number(c.comision_usd), 0) * 100) / 100,
           };
         });
@@ -313,7 +313,7 @@ export default async function handler(req) {
         await avisarPartner(p.user_id, 'aprobado', '¡Ya eres Partner de Acuarius!', 'Tu enlace para registrar clientes ya está listo en tu panel.');
         await correo('partners', p.correo, '¡Ya eres Partner de Acuarius!', emailHtml({
           titulo: 'Te damos la bienvenida al programa de Partners',
-          intro: `Ganas el ${Number(cambios.comision_pct || p.comision_pct)} % de cada pago de licencia de las cuentas que traigas, mientras sigan pagando.`,
+          intro: `Ganas el ${Number(cambios.comision_pct || p.comision_pct)} % de lo que pagan por su licencia —el plan más sus usuarios y contactos adicionales— las cuentas que traigas, mientras sigan pagando.`,
           cuerpo: `<p>Tu enlace para registrar clientes:</p><p><b>${esc(enlace)}</b></p><p>Las cuentas que se registren por ahí quedan a tu nombre. Desde tu panel ves cuántas tienes, cuánto has ganado y solicitas tu liquidación cada mes.</p>`,
           cta: { texto: 'Abrir mi panel de Partner', url: APP + '/?ir=partners' },
           pie: 'Equipo de Soporte — Acuarius',

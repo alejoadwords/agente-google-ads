@@ -3,9 +3,11 @@
 // Reglas (decididas por Alejandro el 06-10-2026):
 //   · Se postulan y Acuarius aprueba. Solo un Partner APROBADO acumula.
 //   · Una cuenta que llegó por su enlace /registro/<slug> es suya para siempre.
-//   · Gana su % (20 por defecto) de cada cobro de LICENCIA (Pro o Agency,
-//     mensual o anual) mientras la cuenta siga pagando. Complementos (SMS,
-//     contactos, usuarios extra) no comisionan: el webhook ni los anota.
+//   · Gana su % (20 por defecto) de la LICENCIA completa de la cuenta —el plan
+//     Pro o Agency más sus usuarios y contactos adicionales—, mensual o anual,
+//     mientras siga pagando (ampliado a usuarios y contactos el 06-10-2026).
+//     SMS, mensajes del agente y créditos de video NO comisionan: tienen costo
+//     directo para nosotros. Qué cuenta lo dice CONCEPTOS_COMISIONABLES.
 //   · Sobre lo cobrado de verdad, convertido a USD si se pagó en otra moneda.
 //   · Un reembolso o contracargo descuenta lo que ese cobro generó.
 //   · Se liquida una vez al mes: el Partner elige comisiones y sube su factura.
@@ -43,6 +45,34 @@ export function comisionDe(cobro, pct, tasa) {
 }
 
 /** Lo que una cuenta aporta al mes en USD, a partir de su último cobro. */
+/**
+ * Qué conceptos de `cobros.plan` generan comisión. Es la regla para TODAS las
+ * pasarelas: Hotmart anota cada producto por separado; Stripe, cuando llegue,
+ * debe anotar cada línea de licencia de la factura con uno de estos valores
+ * (o el plan con el total de esas líneas) y dejar fuera SMS y mensajes IA.
+ */
+export const CONCEPTOS_COMISIONABLES = ['pro', 'agency', 'usuarios', 'contactos'];
+export const esComisionable = (concepto) => CONCEPTOS_COMISIONABLES.includes(concepto);
+
+/**
+ * Lo que una cuenta aporta al mes: el último cobro de cada concepto (el plan,
+ * los usuarios, los contactos) llevado a mensual. `cobros` de UNA cuenta,
+ * del más reciente al más antiguo.
+ */
+export function mrrDe(cobros, tasas) {
+  const visto = new Set();
+  let total = 0;
+  for (const c of cobros || []) {
+    if (c.tipo && c.tipo !== 'cobro') continue;
+    if (!esComisionable(c.plan)) continue;
+    const grupo = (c.plan === 'pro' || c.plan === 'agency') ? 'plan' : c.plan;
+    if (visto.has(grupo)) continue;
+    visto.add(grupo);
+    total += mensualDe(c, tasas[c.moneda]);
+  }
+  return r2(total);
+}
+
 export function mensualDe(cobro, tasa) {
   if (!cobro || !(tasa > 0)) return 0;
   const usd = Number(cobro.monto) / tasa;
@@ -131,6 +161,7 @@ export async function acumular() {
     if (hechas.has(c.id)) continue;
     const ref = porUsuario[c.user_id] || porCorreo[(c.correo || '').toLowerCase()];
     if (!ref) continue;
+    if (!esComisionable(c.plan)) continue;
     // Solo lo cobrado DESPUÉS de llegar por el enlace.
     if (Date.parse(c.cobrado_at) < Date.parse(ref.creado_at) - 86400e3) continue;
     let tasa;

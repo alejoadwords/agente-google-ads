@@ -293,6 +293,27 @@ async function anotarCobro(fila) {
   }
 }
 
+// Usuarios y contactos adicionales también son licencia (decidido el
+// 06-10-2026): el Partner cobra su % de la factura completa de la cuenta, no
+// solo del plan base. En Hotmart son productos aparte, así que cada uno anota
+// su propio cobro. `concepto` va en cobros.plan ('usuarios' | 'contactos').
+// SMS, mensajes del agente y créditos de video NO pasan por aquí.
+async function anotarComplemento({ data, eventType, email, clerkId, concepto, transactionId }) {
+  const devolucion = eventType === 'PURCHASE_REFUNDED' || eventType === 'PURCHASE_CHARGEBACK';
+  if (eventType === 'SUBSCRIPTION_CANCELLATION') return;   // cancelar no devuelve nada
+  const monto = Number(data?.purchase?.price?.value) || 0;
+  if (!devolucion && !(monto > 0)) return;
+  await anotarCobro({
+    transaccion: transactionId,
+    tipo: devolucion ? (eventType === 'PURCHASE_REFUNDED' ? 'reembolso' : 'contracargo') : 'cobro',
+    evento: eventType, user_id: clerkId || null, correo: (email || '').toLowerCase(),
+    producto: data?.product?.name || null, plan: concepto,
+    periodo: esAnual(data) ? 'anual' : 'mensual', monto,
+    moneda: (data?.purchase?.price?.currency_value || 'USD').toUpperCase(),
+    ...(devolucion ? {} : { cobrado_at: data?.purchase?.approved_date ? new Date(data.purchase.approved_date).toISOString() : new Date().toISOString() }),
+  });
+}
+
 export default async function handler(req, res) {
   // ── CORS ──
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -557,6 +578,8 @@ export default async function handler(req, res) {
     let clerkOk = false;
     try {
       const clerkUser = await clerkFindUserByEmail(email);
+      // Antes del «no existe»: el cobro se anota igual, por correo.
+      await anotarComplemento({ data, eventType, email, clerkId: clerkUser?.id, concepto: 'usuarios', transactionId });
       if (!clerkUser) {
         await avisarFalloActivacion({ email, productName, motivo: 'No hay cuenta en Clerk con ese email (complemento sin aplicar)' });
         return res.status(200).json({ received: true, action: 'user_not_found', email });
@@ -594,6 +617,7 @@ export default async function handler(req, res) {
     let clerkOk = false;
     try {
       const clerkUser = await clerkFindUserByEmail(email);
+      await anotarComplemento({ data, eventType, email, clerkId: clerkUser?.id, concepto: 'contactos', transactionId });
       if (!clerkUser) {
         await avisarFalloActivacion({ email, productName, motivo: 'No hay cuenta en Clerk con ese email (complemento sin aplicar)' });
         return res.status(200).json({ received: true, action: 'user_not_found', email });

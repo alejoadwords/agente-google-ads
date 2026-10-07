@@ -3,7 +3,7 @@
 // Lo que no puede fallar sin que nadie se entere: cuánto se le paga a un
 // Partner. Un error aquí es plata de más o de menos, todos los meses.
 
-import { comisionDe, mensualDe, armarLiquidacion, estadoCuenta, slugDesde } from '../api/_partners.js';
+import { comisionDe, mensualDe, mrrDe, esComisionable, armarLiquidacion, estadoCuenta, slugDesde } from '../api/_partners.js';
 import { validarDatos } from '../api/partners.js';
 
 let mal = 0;
@@ -30,6 +30,24 @@ console.log('\nAporte mensual de una cuenta');
 ok(mensualDe({ monto: 99, periodo: 'mensual' }, 1) === 99, 'mensual = lo cobrado');
 ok(mensualDe({ monto: 1188, periodo: 'anual' }, 1) === 99, 'anual = lo cobrado / 12');
 ok(mensualDe(null, 1) === 0, 'sin cobros, cero');
+
+console.log('\nQué comisiona');
+ok(esComisionable('pro') && esComisionable('agency'), 'el plan comisiona');
+ok(esComisionable('usuarios') && esComisionable('contactos'), 'usuarios y contactos adicionales también (factura completa)');
+ok(!esComisionable('sms') && !esComisionable(null), 'SMS o un concepto desconocido no');
+{
+  // Del más reciente al más antiguo: renovó el plan y tiene usuarios y contactos.
+  const cobros = [
+    { tipo: 'cobro', plan: 'agency', monto: 99, moneda: 'USD', periodo: 'mensual' },
+    { tipo: 'cobro', plan: 'usuarios', monto: 45, moneda: 'USD', periodo: 'mensual' },
+    { tipo: 'cobro', plan: 'contactos', monto: 60, moneda: 'USD', periodo: 'mensual' },
+    { tipo: 'cobro', plan: 'pro', monto: 39, moneda: 'USD', periodo: 'mensual' },        // plan viejo: ya no cuenta
+    { tipo: 'cobro', plan: 'usuarios', monto: 18, moneda: 'USD', periodo: 'mensual' },   // usuarios viejos
+    { tipo: 'cobro', plan: 'sms', monto: 22, moneda: 'USD', periodo: 'mensual' },
+  ];
+  ok(mrrDe(cobros, { USD: 1 }) === 204, 'el MRR suma el último cobro de cada concepto: 99 + 45 + 60', mrrDe(cobros, { USD: 1 }));
+  ok(mrrDe([{ tipo: 'cobro', plan: 'agency', monto: 2040, moneda: 'USD', periodo: 'anual' }], { USD: 1 }) === 170, 'anual se reparte en 12');
+}
 
 console.log('\nArmar una liquidación');
 {

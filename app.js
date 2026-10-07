@@ -38219,7 +38219,7 @@ function ptnHtmlInicio() {
     '<div class="ptn-hero-pct">' + pct + '%</div>' +
     '<div><div style="font-weight:800;font-size:var(--fs-md)">de cada pago de licencia, cada mes</div>' +
     '<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:4px">Recibes un enlace propio para registrar clientes. Cada cuenta que entra por ahí queda a tu nombre, ' +
-    'y ganas el ' + pct + ' % de lo que paga por su licencia (Pro o Agency) mientras siga pagando. Una vez al mes solicitas tu liquidación subiendo tu factura.</div></div>' +
+    'y ganas el ' + pct + ' % de lo que paga por su licencia (el plan Pro o Agency más sus usuarios y contactos adicionales) mientras siga pagando. Una vez al mes solicitas tu liquidación subiendo tu factura.</div></div>' +
   '</div>';
   if (p?.estado === 'postulado') {
     return explica + '<div class="ptn-aviso">Tu postulación está <b>en revisión</b>. Te escribimos a ' + esc(p.correo) + ' en cuanto la aprobemos.</div>';
@@ -38300,7 +38300,7 @@ async function ptnHtmlComisiones() {
         const elegible = c.estado === 'disponible' && !neg;
         return '<tr><td>' + (elegible ? '<input type="checkbox" ' + (ptnSel.has(String(c.id)) ? 'checked ' : '') + 'onchange="ptnElegir(\'' + c.id + '\', this.checked)">' : '') + '</td>' +
           '<td style="font-weight:700">' + esc(c.cuenta) + '</td>' +
-          '<td>' + esc(neg ? (c.tipo === 'contracargo' ? 'Contracargo' : 'Reembolso') : ({ pro: 'Licencia Pro', agency: 'Licencia Agency' }[c.plan] || 'Licencia')) + '</td>' +
+          '<td>' + esc(neg ? (c.tipo === 'contracargo' ? 'Contracargo' : 'Reembolso') : ({ pro: 'Licencia Pro', agency: 'Licencia Agency', usuarios: 'Usuarios adicionales', contactos: 'Contactos adicionales' }[c.plan] || 'Licencia')) + '</td>' +
           '<td>' + ptnFecha(c.cobrado_at) + '</td>' +
           '<td class="num">' + Number(c.monto_cobrado).toLocaleString('es-CO') + ' ' + esc(c.moneda) + '</td>' +
           '<td class="num" style="font-weight:700;color:' + (neg ? 'var(--danger)' : 'var(--text)') + '">' + ptnUSD(c.comision_usd) + '</td>' +
