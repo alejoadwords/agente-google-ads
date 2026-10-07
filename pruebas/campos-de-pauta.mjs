@@ -24,7 +24,10 @@ const meta = camposDePauta({
 chk('lee campaign_name', meta['Campaña'] === 'Arké 55 · Clientes potenciales');
 chk('lee adset_name', meta['Conjunto'] === 'Bogotá 25-45');
 chk('lee ad_name', meta['Anuncio'] === 'Video fachada v2');
-chk('lee platform', meta['Plataforma'] === 'instagram');
+// La plataforma sale con el nombre de Acuarius (instagram es Meta, ver
+// normPlataforma en api/_gclid.js) y la red concreta queda en «Fuente del anuncio».
+chk('lee platform', meta['Plataforma'] === 'Meta');
+chk('y conserva la red concreta', meta['Fuente del anuncio'] === 'instagram');
 
 const esp = camposDePauta({ 'campaña': 'Lanzamiento', conjunto: 'Frío', anuncio: 'Carrusel' });
 chk('acepta los nombres en español', esp['Campaña'] === 'Lanzamiento' && esp['Conjunto'] === 'Frío' && esp['Anuncio'] === 'Carrusel');

@@ -14,6 +14,9 @@ export default async function handler(req) {
   if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
     return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
   }
+  // La entrada, aparte de la salida: sin ella no se distingue «Vercel no lo
+  // llamó» de «lo llamó y se murió a mitad».
+  await latir('cron-partners', { empezo: new Date().toISOString() });
   try {
     const r = await acumular();
     await latir('cron-partners', r, r.sinTasa ? r.sinTasa + ' cobros sin tasa de cambio: se reintentan' : null);
