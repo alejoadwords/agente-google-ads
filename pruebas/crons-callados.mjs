@@ -9,7 +9,7 @@
 // prueba vigila al vigilante: un aviso que salta cuando no debe se deja de
 // leer, y entonces no sirve para nada el día que sí importa.
 
-import { callados, CADA, tolerancia, DESDE, DESDE_POR_CRON, desdeDe, SOLO_ENTRE_SEMANA, minutosHabiles } from '../api/_latido.js';
+import { callados, atascados, latir, ATASCO_MIN, CADA, tolerancia, DESDE, DESDE_POR_CRON, desdeDe, SOLO_ENTRE_SEMANA, minutosHabiles } from '../api/_latido.js';
 
 let mal = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) mal++; };
@@ -232,6 +232,44 @@ ok(minutosHabiles('no es una fecha', '2026-09-23T10:00:00Z') === 0,
   const DOS_DIAS_DESPUES = new Date('2026-09-29T17:10:00Z');
   ok(callados(viejosAlDia, DOS_DIAS_DESPUES).some(c => c.cron === 'cron-retention'),
      'y a las 48 horas sin latir, cron-retention sí sale');
+}
+
+// ── Entró y no salió ────────────────────────────────────────────────────────
+//
+// La marca de entrada pisaba la misma `ultima_vez` que la salida: un cron que
+// se moría a mitad en CADA vuelta seguía pareciendo vivo. Ahora la entrada va
+// a `ultima_entrada` y `atascados()` avisa del que entró y no salió.
+{
+  const fila = (cron, entro, salio) => ({ cron, ultima_entrada: entro, ultima_vez: salio });
+  ok(atascados([fila('cron-tasks', hace(ATASCO_MIN + 5), hace(24 * 60))], MIERCOLES).some(c => c.cron === 'cron-tasks'),
+     'entró hace más de ' + ATASCO_MIN + ' min y no salió → atascado');
+  ok(atascados([fila('cron-tasks', hace(2), hace(24 * 60))], MIERCOLES).length === 0,
+     'si entró hace dos minutos, está corriendo: no se avisa');
+  ok(atascados([fila('cron-tasks', hace(60), hace(59))], MIERCOLES).length === 0,
+     'si salió después de entrar, terminó bien');
+  ok(atascados([fila('cron-tasks', null, hace(10))], MIERCOLES).length === 0,
+     'sin marca de entrada todavía (filas de antes del cambio) no se inventa nada');
+  ok(atascados([fila('cron-que-ya-no-existe', hace(600), hace(900))], MIERCOLES).length === 0,
+     'y solo se mira a los que se vigilan');
+
+  // Lo que escribe latir(): la entrada NO puede tocar ultima_vez, o el
+  // vigilante vuelve a quedar ciego.
+  const enviados = [];
+  const antes = { f: globalThis.fetch, u: process.env.SUPABASE_URL, k: process.env.SUPABASE_SERVICE_KEY };
+  process.env.SUPABASE_URL = 'https://x.supabase.co'; process.env.SUPABASE_SERVICE_KEY = 'k';
+  globalThis.fetch = async (u, o) => { enviados.push(JSON.parse(o.body)); return { ok: true }; };
+  await latir('cron-tasks', { empezo: new Date().toISOString() });
+  await latir('cron-tasks', { enviados: 3 });
+  await latir('cron-tasks', { error: true }, 'se cayó');
+  globalThis.fetch = antes.f;
+  if (antes.u === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = antes.u;
+  if (antes.k === undefined) delete process.env.SUPABASE_SERVICE_KEY; else process.env.SUPABASE_SERVICE_KEY = antes.k;
+  const [ent, sal, fal] = enviados;
+  ok(ent && ent.ultima_entrada && !('ultima_vez' in ent) && !('ultimo_resultado' in ent),
+     'la entrada escribe ultima_entrada y no toca ultima_vez ni el resultado');
+  ok(sal && sal.ultima_vez && !('ultima_entrada' in sal) && sal.ultimo_resultado.enviados === 3,
+     'la salida escribe ultima_vez y el resultado');
+  ok(fal && fal.ultimo_fallo && fal.motivo_fallo === 'se cayó', 'y un fallo deja su marca');
 }
 
 process.exit(mal ? 1 : 0);

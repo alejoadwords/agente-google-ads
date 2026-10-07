@@ -25,14 +25,20 @@ const KEY = () => process.env.SUPABASE_SERVICE_KEY;
  */
 export async function latir(cron, resultado, fallo) {
   if (!SB() || !KEY()) return;
-  const fila = {
-    cron,
-    ultima_vez: new Date().toISOString(),
-    ultimo_resultado: resultado ?? null,
-  };
+  // La marca de ENTRADA ({ empezo }) va a su propia columna y no toca
+  // `ultima_vez`. Antes pisaba la misma fila que la salida, así que un cron
+  // que se moría a mitad en cada vuelta seguía refrescando `ultima_vez` y el
+  // vigilante lo daba por vivo: la marca se escribía y nadie la leía.
+  // (En una fila nueva `ultima_vez` toma now() por defecto: el primer turno
+  // de un cron recién estrenado no puede salir como atascado.)
+  const entrada = resultado && typeof resultado === 'object'
+    && Object.keys(resultado).length === 1 && 'empezo' in resultado;
+  const fila = entrada
+    ? { cron, ultima_entrada: new Date().toISOString() }
+    : { cron, ultima_vez: new Date().toISOString(), ultimo_resultado: resultado ?? null };
   // El fallo se guarda aparte del último resultado: si mañana va bien, quiero
   // seguir viendo cuándo fue la última vez que se rompió.
-  if (fallo) { fila.ultimo_fallo = fila.ultima_vez; fila.motivo_fallo = String(fallo).slice(0, 300); }
+  if (fallo && !entrada) { fila.ultimo_fallo = fila.ultima_vez; fila.motivo_fallo = String(fallo).slice(0, 300); }
   try {
     // `on_conflict` obligatorio: sin él el segundo latido de cada cron sería
     // un 409 y la tabla se quedaría congelada en la primera ejecución.
@@ -189,6 +195,34 @@ export function callados(latidos, ahora = new Date()) {
     }
     const callado = calladoEn(cron, l.ultima_vez, ahora);
     if (callado > tolerancia(minutos)) fuera.push({ cron, desde: l.ultima_vez, minutos: Math.round(callado) });
+  }
+  return fuera;
+}
+
+// Ningún cron dura tanto: el más largo tiene maxDuration de 120 s y los edge
+// que mantienen viva la respuesta no pasan de 300 s. Si a los quince minutos
+// de entrar todavía no ha salido, no está «tardando»: se murió a mitad.
+export const ATASCO_MIN = 15;
+
+/**
+ * Los que entraron y no salieron: `ultima_entrada` posterior a `ultima_vez`
+ * y con más de ATASCO_MIN minutos. Es lo único que distingue «Vercel no lo
+ * llamó» (eso lo caza `callados`) de «lo llamó y se murió a mitad».
+ *
+ * A los frecuentes (cada 5 o 10 minutos) una muerte suelta se la tapa la
+ * siguiente entrada antes de los quince minutos; si mueren SIEMPRE, su
+ * `ultima_vez` deja de avanzar y salen por `callados`. Donde esto importa es
+ * en los diarios: sin esto, una vuelta muerta tardaba 30 horas en avisar.
+ */
+export function atascados(latidos, ahora = new Date()) {
+  const fuera = [];
+  for (const l of latidos || []) {
+    if (!(l.cron in CADA) || !l.ultima_entrada) continue;
+    const entro = new Date(l.ultima_entrada).getTime();
+    const salio = l.ultima_vez ? new Date(l.ultima_vez).getTime() : 0;
+    if (entro <= salio) continue;
+    const minutos = (new Date(ahora).getTime() - entro) / 60000;
+    if (minutos > ATASCO_MIN) fuera.push({ cron: l.cron, entro: l.ultima_entrada, minutos: Math.round(minutos) });
   }
   return fuera;
 }

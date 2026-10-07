@@ -12,7 +12,7 @@ export const config = { runtime: 'edge' };
 
 import { emailHtml, bloque, esc, RESPONDER_A } from './_email-layout.js';
 import { enviarResend } from './_correo.js';
-import { latir, callados } from './_latido.js';
+import { latir, callados, atascados } from './_latido.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -39,7 +39,7 @@ export default async function handler(req) {
   // nadie mira. El 23-09-2026 el resumen diario de tareas no salió y no había
   // forma de saberlo hasta que un asesor lo reportó. Esto lo convierte en un
   // error normal, que sale por el mismo aviso que todo lo demás.
-  const latidos = await fetch(`${SUPABASE_URL}/rest/v1/cron_latidos?select=cron,ultima_vez`, { headers: cab })
+  const latidos = await fetch(`${SUPABASE_URL}/rest/v1/cron_latidos?select=cron,ultima_vez,ultima_entrada`, { headers: cab })
     .then(r => (r.ok ? r.json() : null)).catch(() => null);
   if (latidos) {
     for (const c of callados(latidos)) {
@@ -52,6 +52,20 @@ export default async function handler(req) {
             ? `${c.cron} lleva ${c.minutos} minutos sin ejecutarse`
             : `${c.cron} no se ha ejecutado nunca desde que se vigila`,
           p_detalle: c.desde ? 'último latido: ' + c.desde : null,
+          p_usuario: null,
+        }),
+      }).catch(() => {});
+    }
+    // Entró y no salió: se murió a mitad (timeout, proceso caído). Antes la
+    // marca de entrada se escribía y nadie la miraba.
+    for (const c of atascados(latidos)) {
+      await fetch(`${SUPABASE_URL}/rest/v1/rpc/registrar_error`, {
+        method: 'POST', headers: cab,
+        body: JSON.stringify({
+          p_firma: 'cron-atascado-' + c.cron,
+          p_origen: 'cron', p_donde: c.cron,
+          p_mensaje: `${c.cron} empezó hace ${c.minutos} minutos y no terminó`,
+          p_detalle: 'entró: ' + c.entro + ' · sin latido de salida después',
           p_usuario: null,
         }),
       }).catch(() => {});
