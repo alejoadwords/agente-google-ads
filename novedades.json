@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-06-pagina-partners",
+      "fecha": "2026-10-06",
+      "tipo": "nuevo",
+      "titulo": "El programa de Partners ya tiene su página",
+      "texto": "En acuarius.app/partners está todo el programa: cómo funciona, cuánto puedes ganar con el 20 % de cada licencia y las preguntas frecuentes. El botón para postularte te lleva directo a tu panel de Partners, aunque tengas que iniciar sesión primero.",
+      "accion": {
+        "texto": "Ver Partners",
+        "ir": "partners"
+      }
+    },
+    {
       "id": "2026-10-06-movil-ficha-y-campanas",
       "fecha": "2026-10-06",
       "tipo": "arreglo",

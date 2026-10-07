@@ -440,6 +440,10 @@ async function initAuth(){
     clerkInstance=window.Clerk;
     clerkInstance.__pk='pk_live_Y2xlcmsuYWN1YXJpdXMuYXBwJA';
     if(!clerkInstance.user){
+      // A dónde iba (?ir=partners desde acuarius.app/partners, un enlace de un
+      // correo…): se guarda para retomarlo al volver del login o del registro.
+      // Sin esto, quien llegaba sin sesión acababa en el inicio.
+      try { const ir = new URLSearchParams(location.search).get('ir'); if (ir && /^[a-z-]{2,40}$/.test(ir)) sessionStorage.setItem('acuarius_ir_pendiente', ir); } catch {}
       window.location.href='/login.html';
       return false;
     }
@@ -18088,7 +18092,13 @@ async function crmLoadStages() {
 // con los mismos destinos que las novedades. Se lee y se limpia al cargar.
 const _irPorUrl = (() => { try { return new URLSearchParams(location.search).get('ir'); } catch { return null; } })();
 function irDeLaUrl() {
-  if (!_irPorUrl) return;
+  if (!_irPorUrl) {
+    // Lo que quedó pendiente antes de pasar por el login o el registro.
+    let pendiente = null;
+    try { pendiente = sessionStorage.getItem('acuarius_ir_pendiente'); sessionStorage.removeItem('acuarius_ir_pendiente'); } catch {}
+    if (pendiente && /^[a-z-]{2,40}$/.test(pendiente)) irA(pendiente);
+    return;
+  }
   // Lo que trae la vuelta de Google al dar el permiso de audiencias se guarda
   // ANTES de limpiar la URL: si no, la pestaña nunca se entera (audCargar).
   try { window._audGooglePorUrl = new URLSearchParams(location.search).get('audiencias_google'); } catch {}
