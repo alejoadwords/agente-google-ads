@@ -31,6 +31,8 @@ let sonadas = 0;
 const fn = new Function('estado', `
   let _avisosVistos = estado.vistos;
   let crmAvisos = estado.avisos;
+  // Desde 086b664 la campana suma también los avisos del programa de Partners.
+  let ptnPendientes = estado.ptn || [];
   const campanaSonar = () => estado.sonar();
   const document = { getElementById: () => null };
   ${texto}
@@ -38,9 +40,9 @@ const fn = new Function('estado', `
   return _avisosVistos;
 `);
 
-const correr = (vistos, cuantos) => {
+const correr = (vistos, cuantos, ptn = 0) => {
   sonadas = 0;
-  const r = fn({ vistos, avisos: new Array(cuantos).fill(0), sonar: () => { sonadas++; } });
+  const r = fn({ vistos, avisos: new Array(cuantos).fill(0), ptn: new Array(ptn).fill(0), sonar: () => { sonadas++; } });
   return { sonadas, vistos: r };
 };
 
@@ -51,6 +53,7 @@ ok(correr(2, 2).sonadas === 0, 'no suena si el número no cambió');
 ok(correr(3, 1).sonadas === 0, 'ni cuando BAJA, que es leerlas: leer no es un aviso');
 ok(correr(1, 4).sonadas === 1, 'y llegan tres de golpe, suena una vez, no tres');
 ok(correr(null, 3).vistos === 3, 'la primera pasada solo toma nota del punto de partida');
+ok(correr(2, 2, 1).sonadas === 1, 'un aviso de Partners nuevo también suena');
 
 // ── Se puede callar, y el ajuste está a mano ───────────────────────────
 ok(/function campanaMuda\(callar\)/.test(app) && /function campanaEstaMuda\(\)/.test(app),
