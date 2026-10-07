@@ -68,6 +68,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .cab{position:sticky;top:0;z-index:10;background:var(--bg-card);border-bottom:1px solid var(--border);
   padding:10px 16px;display:flex;align-items:center;gap:10px;min-height:52px}
 .hoja > .cab{padding-top:calc(10px + env(safe-area-inset-top))}
+/* En soporte la franja va encima y ya se queda con el hueco del notch: el
+   móvil empieza debajo de ella y no tiene que reservarlo otra vez. */
+body.con-soporte .barra{padding-top:8px}
+body.con-soporte .vista{top:52px}
+body.con-soporte .hoja > .cab{padding-top:10px}
 .cab h1{margin:0;font-size:var(--fs-lg);font-weight:700;letter-spacing:-.3px}
 .cab .sub{color:var(--muted);font-size:var(--fs-xs);margin-top:1px}
 .volver{border:0;background:none;padding:6px;margin:-6px 0 -6px -6px;color:var(--blue);display:flex;

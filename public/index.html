@@ -3701,7 +3701,7 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 
 /* ── Sesión de soporte (api/cuentas.js) ── el banner no se cierra: mientras
    esté abierta la cuenta de un cliente, tiene que verse siempre. */
-#soporte-banner{position:fixed;top:0;left:0;right:0;z-index:9800;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 16px;background:var(--warning);color:#fff;font-family:var(--font);font-size:var(--fs-sm);box-shadow:var(--shadow-md)}
+#soporte-banner{position:fixed;top:0;left:0;right:0;z-index:9800;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:calc(8px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 8px max(16px,env(safe-area-inset-left));background:var(--warning);color:#fff;font-family:var(--font);font-size:var(--fs-sm);box-shadow:var(--shadow-md)}
 #soporte-banner strong{font-weight:800}
 .sb-soporte-ico{display:flex}
 .sb-soporte-txt{flex:1;min-width:200px;line-height:1.35}
@@ -3712,7 +3712,13 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 /* El relleno de arriba lo fija soporteBanner() con la altura REAL del banner:
    con un número fijo, en un teléfono el banner ocupa dos o tres líneas y tapa
    la cabecera. */
-@media(max-width:640px){.sb-soporte-extra{display:none}#soporte-banner{padding:7px 12px;gap:8px}}
+@media(max-width:640px){.sb-soporte-extra{display:none}#soporte-banner{padding:calc(7px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 7px max(12px,env(safe-area-inset-left));gap:8px}}
+/* El hueco del notch lo absorbe la franja, que es lo que queda arriba del
+   todo. La cabecera de debajo ya no toca el borde: si guardara también su
+   hueco, quedaría una banda vacía entre las dos. (Hasta 480 px la cabecera
+   no lo reserva, así que ahí no hay nada que quitar.) */
+@media(min-width:481px) and (max-width:768px){body.con-soporte .hdr{padding-top:0;height:52px}}
+@media(min-width:769px){body.con-soporte .hdr{padding-top:0;height:54px}}
 /* Clerk pinta su propio botón flotante de suplantación, en inglés y encima del
    contenido. El banner de arriba ya dice lo mismo y trae el regreso correcto. */
 .cl-impersonationFab{display:none!important}

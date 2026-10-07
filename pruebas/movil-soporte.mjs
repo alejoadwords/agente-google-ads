@@ -56,5 +56,18 @@ console.log('\nLa hoja «Tu cuenta» ofrece volver\n');
   chk('la fila tiene su estilo', /\.mfila\.soporte/.test(css));
 }
 
+console.log('\nEl hueco del notch lo absorbe la franja, una sola vez\n');
+{
+  const franja = (html.match(/#soporte-banner\{[^}]*\}/) || [''])[0];
+  chk('la franja reserva el hueco de arriba', /padding:calc\(8px \+ env\(safe-area-inset-top\)\)/.test(franja), franja);
+  chk('también en teléfono', /#soporte-banner\{padding:calc\(7px \+ env\(safe-area-inset-top\)\)/.test(html));
+  // Si el móvil lo reservara también, quedaría una banda vacía bajo la franja.
+  for (const sel of ['.barra', '.vista', '.hoja > .cab']) {
+    chk(`en soporte, ${sel} no lo reserva otra vez`,
+        new RegExp('body\\.con-soporte ' + sel.replace(/[.>]/g, (c) => '\\' + c) + '\\{[^}]*\\d+px\\}').test(css));
+  }
+  chk('ni la cabecera de la web', /body\.con-soporte \.hdr\{padding-top:0/.test(html));
+}
+
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en verde\n');
 process.exit(fallos ? 1 : 0);
