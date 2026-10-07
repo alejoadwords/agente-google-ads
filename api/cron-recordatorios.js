@@ -312,6 +312,9 @@ export default async function handler(req, res) {
   } catch (e) {
     const { registrarError } = await import('./_registro-errores.js');
     await registrarError({ origen: 'cron', donde: 'cron-recordatorios', error: e }).catch(() => {});
+    // El fallo también late: sin esto la fila se queda con {empezo} y sin
+    // ultimo_fallo, y el cron parece vivo aunque se muera en cada vuelta.
+    await latido('cron-recordatorios', { error: true }, String(e?.message || e));
     return res.status(500).json({ error: String(e?.message || e) });
   }
 }

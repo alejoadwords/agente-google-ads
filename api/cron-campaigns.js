@@ -691,6 +691,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, processed, closed, tandas, ms: Date.now() - T0 });
   } catch (e) {
     console.error('[cron-campaigns] error:', e);
+    // El fallo también late: sin esto la fila se queda con {empezo} y sin
+    // ultimo_fallo, y el cron parece vivo aunque se muera en cada vuelta.
+    await latir('cron-campaigns', { error: true }, e?.message || String(e));
     return res.status(500).json({ error: e.message });
   }
 }

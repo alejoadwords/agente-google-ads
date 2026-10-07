@@ -1017,6 +1017,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, enqueued, processed });
   } catch (e) {
     console.error('[cron-automations] error:', e);
+    // El fallo también late: sin esto la fila se queda con {empezo} y sin
+    // ultimo_fallo, y el cron parece vivo aunque se muera en cada vuelta.
+    await latir('cron-automations', { error: true }, e?.message || String(e));
     return res.status(500).json({ error: e.message });
   }
 }

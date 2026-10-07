@@ -200,6 +200,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, scanned, expired, reminded, vencidos, avisados, de_equipo: deEquipo, sin_fecha: sinFecha, rne });
   } catch (e) {
     console.error('[cron-trials] error:', e.message);
+    // El fallo también late: sin esto la fila se queda con {empezo} y sin
+    // ultimo_fallo, y el cron parece vivo aunque se muera en cada vuelta.
+    await latir('cron-trials', { error: true }, e?.message || String(e));
     return res.status(500).json({ error: e.message });
   }
 }
