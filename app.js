@@ -34155,7 +34155,16 @@ function rangoIni(r, tope) {
   if (esRangoLibre(r)) return r.desde;
   return r ? Date.now() - r * 86400000 : (tope ? Date.now() - tope * 86400000 : 0);
 }
-function rangoFin(r) { return esRangoLibre(r) ? r.hasta : Date.now(); }
+// Los rangos «últimos N días» terminan al FINAL de hoy, no en este instante:
+// el cierre de una venta se guarda a las 12:00 del día elegido (para que la
+// zona horaria no lo corra de fecha), y con «ahora» como final una venta
+// cerrada hoy no salía en el reporte hasta pasado el mediodía.
+function rangoFin(r) {
+  if (esRangoLibre(r)) return r.hasta;
+  const fin = new Date();
+  fin.setHours(23, 59, 59, 999);
+  return fin.getTime();
+}
 // Días que cubre el rango, para las gráficas por día.
 function rangoDias(r, porDefecto) {
   // 'hasta' son las 23:59:59 del último día, así que la diferencia ya cubre el
