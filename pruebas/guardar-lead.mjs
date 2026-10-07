@@ -46,6 +46,13 @@ const resp = (status, cuerpo) => ({
 
 const codigo = [
   trozo('async function crmSaveLead()', '\n// ── Panel de detalle'),
+  // Desde que se pide la campaña al guardar, crmSaveLead consulta la fuente
+  // y la atribución: se cargan las funciones de verdad, no imitaciones, para
+  // que la prueba se entere si esa regla cambia.
+  trozo('let crmCampSel = null;', '\nasync function crmCampCargar'),
+  trozo('function crmCampCampos()', '\n// ── Modal crear/editar'),
+  trozo('function fuenteLabel(key)', '\nasync function crmLoadSources'),
+  'var crmSources = [{ key: "meta_ads", label: "Meta Ads" }];',
   'var crmEditingId = "l1", crmLeads = [{ id: "l1" }], agencyActiveClientId = null;',
   'var crmPipelineActivo = null, crmPipelineId = null, crmStages = [];',
   'function crmNormalizarTelefono() {} function crmCloseModal() {} function crmRender() {}',
@@ -87,6 +94,20 @@ console.log('\nSin cuerpo que leer, tampoco se queda mudo\n');
       /502/.test(aviso.textContent), JSON.stringify(aviso.textContent));
   // Los 5xx ya los anota fetchAuth: anotarlos otra vez sería duplicar.
   chk('y un 5xx no se anota dos veces', anotados.length === 0, JSON.stringify(anotados));
+}
+
+console.log('\nCon fuente de pauta y sin campaña, no se guarda\n');
+{
+  let llamadas = 0;
+  const antes = globalThis.fetchAuth;
+  globalThis.fetchAuth = async () => { llamadas++; return resp(200, {}); };
+  campos['crm-f-source'] = { value: 'meta_ads', classList: { add() {}, remove() {} }, focus() {} };
+  aviso.textContent = '';
+  await crmSaveLead();
+  chk('pide la campaña', /campaña/.test(aviso.textContent), JSON.stringify(aviso.textContent));
+  chk('y no llega al servidor', llamadas === 0, String(llamadas));
+  campos['crm-f-source'].value = '';
+  globalThis.fetchAuth = antes;
 }
 
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');

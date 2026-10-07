@@ -29,7 +29,11 @@ console.log('\nLo que llega de un anuncio de Google\n');
   const conId = camposDePauta({ gclid: 'x', campaignid: '22458899', utm_source: 'google', utm_campaign: 'Search - general 2026' });
   chk('el ID de campaña llega al campo que lee el reporte', conId['ID de campaña'] === '22458899');
   chk('y el nombre también', conId['Campaña'] === 'Search - general 2026');
-  chk('la plataforma declarada gana sobre la deducida', conId['Plataforma'] === 'google');
+  // Desde 41bcfa6 la plataforma se guarda con el nombre de Acuarius
+  // (utm_source=google/adwords → «Google»), que es lo que agrupa el reporte;
+  // lo que escribió el anunciante no se pierde: queda en «Fuente del anuncio».
+  chk('la plataforma sale con el nombre de Acuarius', conId['Plataforma'] === 'Google', conId['Plataforma']);
+  chk('y lo que declaró el anunciante se conserva', conId['Fuente del anuncio'] === 'google', conId['Fuente del anuncio']);
 
   chk('wbraid y gbraid también son Google',
       camposDePauta({ wbraid: 'a' })['Plataforma'] === 'Google' &&

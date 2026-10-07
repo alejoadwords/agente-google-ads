@@ -201,6 +201,10 @@ function montar({ responde = { ok: true, datos: {} } } = {}) {
   return { raiz, doc, llamadas, chicharras, fetchAuth, elemento, plantar, plantarVarios, registro };
 }
 
+// Al montar, la app ya pregunta GET /api/agente-voz para decidir si el menú
+// enseña el agente de voz (05-10-2026). Esa lectura es legítima y no tiene
+// nada que ver con agendar: las pruebas de «no se llama a nadie» vacían
+// `e.llamadas` justo antes de la acción y cuentan solo lo que ella provoca.
 function correr(e) {
   const g = { addEventListener() {}, removeEventListener() {}, scrollTo() {}, matchMedia: () => ({ matches: true }) };
   const win = new Proxy(g, { has: () => true, get: (t, k) => t[k], set: (t, k, v) => (t[k] = v, true) });
@@ -350,6 +354,7 @@ const unLead = (extra) => Object.assign({
   g.__pruebas.modoReal();
   g.__pruebas.abrirLead(unLead());
   sheetCita(e, { cuando: '' });
+  e.llamadas.length = 0;
   g.M.crearCita(true);
   await esperar(); await esperar();
   chk('sin fecha no se llama a nadie', e.llamadas.length === 0, String(e.llamadas.length));
@@ -363,6 +368,7 @@ const unLead = (extra) => Object.assign({
   g.__pruebas.abrirLead(unLead());
   sheetCita(e);
   e.registro['#sh-cita'].value = '   ';
+  e.llamadas.length = 0;
   g.M.crearCita(true);
   await esperar(); await esperar();
   chk('sin título tampoco', e.llamadas.length === 0, String(e.llamadas.length));
@@ -419,6 +425,7 @@ console.log('\nLo que el calendario no pudo hacer se dice\n');
   g.movilMontar({});
   g.__pruebas.abrirLead(unLead());
   sheetCita(e);
+  e.llamadas.length = 0;
   g.M.crearCita(true);
   await esperar(); await esperar();
   chk('en muestra no se llama a nadie', e.llamadas.length === 0, String(e.llamadas.length));
@@ -646,6 +653,7 @@ console.log('\nCancelar borra de verdad, y avisa antes de qué se pierde\n');
   g.movilMontar({});
   g.__pruebas.ponerCitas([unaCita()]);
   g.M.abrirCitaAcciones(0);
+  e.llamadas.length = 0;
   g.M.cancelarCita();
   await esperar(); await esperar();
   chk('en muestra no se llama a nadie', e.llamadas.length === 0, String(e.llamadas.length));
