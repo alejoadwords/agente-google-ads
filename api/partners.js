@@ -70,6 +70,13 @@ async function correo(donde, para, asunto, html) {
 const avisarEquipo = (asunto, titulo, cuerpo) =>
   correo('partners', admins(), asunto, emailHtml({ titulo, intro: '', cuerpo, cta: { texto: 'Abrir Partners', url: APP + '/?ir=partners' } }));
 
+/** Un aviso para la campana del Partner. No corta lo que se estaba haciendo. */
+async function avisarPartner(userId, tipo, titulo, texto) {
+  try {
+    await sb('/partner_avisos', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify({ partner_user_id: userId, tipo, titulo, texto }) });
+  } catch (e) { console.error('[partners] no se pudo crear el aviso', tipo, e.message); }
+}
+
 /** Un slug libre para su enlace, a partir del nombre comercial. */
 async function slugLibre(base) {
   const b = slugDesde(base) || 'partner';
@@ -108,11 +115,13 @@ export default async function handler(req) {
       // y liquidaciones por pagar. A quien no es del equipo se le contesta que
       // no lo es, y la app deja de preguntar en esa sesión.
       if (vista === 'pendientes') {
-        if (!(await esAdmin())) return json({ es_admin: false, pendientes: [] });
+        // Los avisos propios del Partner (aprobación, pagos) van a su campana.
+        const avisos = partner ? (await sb(`/partner_avisos?partner_user_id=eq.${encodeURIComponent(yo)}&leido_at=is.null&select=id,tipo,titulo,texto,creado_at&order=creado_at.desc&limit=20`) || []) : [];
+        if (!(await esAdmin())) return json({ es_admin: false, es_partner: !!partner, pendientes: [], avisos });
         const posts = await sb('/partners?estado=eq.postulado&select=user_id,nombre_comercial,creado_at&order=creado_at.desc') || [];
         const liqs = await sb('/partner_liquidaciones?estado=eq.solicitada&select=id,partner_user_id,total_usd,solicitada_at&order=solicitada_at.desc') || [];
         const noms = liqs.length ? Object.fromEntries((await sb(`/partners?user_id=in.(${[...new Set(liqs.map(l => encodeURIComponent(l.partner_user_id)))].join(',')})&select=user_id,nombre_comercial`) || []).map(p => [p.user_id, p.nombre_comercial])) : {};
-        return json({ es_admin: true, pendientes: [
+        return json({ es_admin: true, es_partner: !!partner, avisos, pendientes: [
           ...posts.map(p => ({ id: 'post-' + p.user_id, tipo: 'postulacion', titulo: p.nombre_comercial, texto: 'Se postuló como Partner', fecha: p.creado_at })),
           ...liqs.map(l => ({ id: 'liq-' + l.id, tipo: 'liquidacion', titulo: noms[l.partner_user_id] || 'Partner', texto: 'Pide su liquidación de ' + usd(l.total_usd), fecha: l.solicitada_at })),
         ] });
@@ -206,6 +215,13 @@ export default async function handler(req) {
     if (await soporteDe(sesion)) return json({ error: 'Esto lo hace el propio Partner desde su cuenta.' }, 403);
     const body = await req.json().catch(() => ({}));
 
+    if (body.accion === 'aviso_leido') {
+      await sb(`/partner_avisos?id=eq.${encodeURIComponent(body.id)}&partner_user_id=eq.${encodeURIComponent(yo)}&leido_at=is.null`, {
+        method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ leido_at: new Date().toISOString() }),
+      });
+      return json({ ok: true });
+    }
+
     if (body.accion === 'postular' || body.accion === 'perfil') {
       const v = validarDatos(body);
       if (v.error) return json({ error: v.error }, 400);
@@ -294,8 +310,9 @@ export default async function handler(req) {
       await sb(`/partners?user_id=eq.${encodeURIComponent(p.user_id)}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify(cambios) });
       if (body.estado === 'aprobado' && p.estado !== 'aprobado') {
         const enlace = `${APP}/registro/${cambios.slug || p.slug}`;
+        await avisarPartner(p.user_id, 'aprobado', '¡Ya eres Partner de Acuarius!', 'Tu enlace para registrar clientes ya está listo en tu panel.');
         await correo('partners', p.correo, '¡Ya eres Partner de Acuarius!', emailHtml({
-          titulo: 'Bienvenido al programa de Partners',
+          titulo: 'Te damos la bienvenida al programa de Partners',
           intro: `Ganas el ${Number(cambios.comision_pct || p.comision_pct)} % de cada pago de licencia de las cuentas que traigas, mientras sigan pagando.`,
           cuerpo: `<p>Tu enlace para registrar clientes:</p><p><b>${esc(enlace)}</b></p><p>Las cuentas que se registren por ahí quedan a tu nombre. Desde tu panel ves cuántas tienes, cuánto has ganado y solicitas tu liquidación cada mes.</p>`,
           cta: { texto: 'Abrir mi panel de Partner', url: APP + '/?ir=partners' },
@@ -315,6 +332,9 @@ export default async function handler(req) {
       }) });
       await sb(`/partner_comisiones?liquidacion_id=eq.${l.id}`, { method: 'PATCH', prefer: 'return=minimal',
         body: JSON.stringify(pagar ? { estado: 'pagada' } : { estado: 'disponible', liquidacion_id: null }) });
+      await avisarPartner(l.partner_user_id, pagar ? 'pagada' : 'devuelta',
+        pagar ? 'Pagamos tu liquidación de ' + usd(l.total_usd) : 'Tu solicitud de liquidación necesita un ajuste',
+        pagar ? (body.referencia ? 'Referencia: ' + texto(body.referencia, 200) : 'Revisa tu cuenta de pago.') : (texto(body.nota, 300) || 'Tus comisiones volvieron a quedar disponibles.'));
       const [p] = await sb(`/partners?user_id=eq.${encodeURIComponent(l.partner_user_id)}&select=correo,nombre_comercial`) || [];
       if (p?.correo) {
         await correo('partners', p.correo, pagar ? `Pagamos tu liquidación de ${usd(l.total_usd)}` : 'Tu solicitud de liquidación necesita un ajuste', emailHtml({

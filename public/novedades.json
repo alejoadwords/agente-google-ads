@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-06-campana-del-partner",
+      "fecha": "2026-10-06",
+      "tipo": "mejora",
+      "titulo": "Los Partners reciben sus avisos en la campana",
+      "texto": "Cuando te aprueban como Partner, o cuando pagamos o devolvemos una liquidación, además del correo te llega un aviso a la campana. Al abrirlo vas directo a tu panel."
+    },
+    {
       "id": "2026-10-06-campana-partners",
       "fecha": "2026-10-06",
       "tipo": "mejora",

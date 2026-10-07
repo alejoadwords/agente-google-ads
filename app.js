@@ -20450,20 +20450,34 @@ async function avisosActivarPushDesdeBarra(btn) {
   avisosCerrarBarraPush();
 }
 
-// Pendientes del programa de Partners para el equipo (postulaciones y
-// liquidaciones). Si la cuenta no es del equipo, se pregunta una vez por
-// sesión y no más: cada consulta le cuesta al servidor una llamada a Clerk.
+// Lo del programa de Partners que va a la campana: al equipo, postulaciones y
+// liquidaciones por atender; al Partner, sus avisos (aprobación, pagos). A
+// quien no es ninguna de las dos cosas se le pregunta una vez por sesión y no
+// más: cada consulta le cuesta al servidor una llamada a Clerk.
 // `var` y no `let`: la campana se pinta desde código que va antes en el archivo.
 var ptnPendientes = [];
 async function ptnPendientesCargar() {
-  try { if (sessionStorage.getItem('ptn_no_admin') === '1') return; } catch {}
+  try { if (sessionStorage.getItem('ptn_sin_avisos') === '1') return; } catch {}
   try {
     const r = await fetchAuth('/api/partners?vista=pendientes');
     if (!r.ok) return;
     const d = await r.json();
-    if (!d.es_admin) { try { sessionStorage.setItem('ptn_no_admin', '1'); } catch {} ptnPendientes = []; return; }
-    ptnPendientes = d.pendientes || [];
+    if (!d.es_admin && !d.es_partner) { try { sessionStorage.setItem('ptn_sin_avisos', '1'); } catch {} ptnPendientes = []; return; }
+    ptnPendientes = [
+      ...(d.avisos || []).map(a => ({ id: 'av-' + a.id, tipo: 'aviso', avisoId: a.id, titulo: a.titulo, texto: a.texto, fecha: a.creado_at })),
+      ...(d.pendientes || []),
+    ];
   } catch (e) { console.warn('ptnPendientesCargar', e); }
+}
+
+// Un aviso propio del Partner sale de la campana al abrirlo.
+async function ptnAvisoAbrir(avisoId) {
+  closeAlertsPanel();
+  ptnPendientes = ptnPendientes.filter(p => p.avisoId !== avisoId);
+  _avisosVistos = (typeof crmAvisos !== 'undefined' ? crmAvisos.length : 0) + ptnPendientes.length;
+  if (typeof refrescarCampana === 'function') refrescarCampana();
+  partnersAbrir();
+  try { await ptnApi('', { accion: 'aviso_leido', id: avisoId }); } catch (e) { console.warn('ptnAvisoAbrir', e); }
 }
 
 async function crmAvisosCargar() {
@@ -20506,7 +20520,7 @@ function crmAvisosPanel() {
   const ptnHtml = ptnPendientes.length
     ? '<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:2px 2px 8px">Programa de Partners</div>' +
       ptnPendientes.map(p =>
-        '<div onclick="closeAlertsPanel();partnersAbrir(\'admin\')" title="Abrir Administrar Partners" style="cursor:pointer;border:1px solid var(--border);border-left:3px solid ' + (p.tipo === 'liquidacion' ? 'var(--success)' : 'var(--warning)') + ';border-radius:9px;padding:11px 12px;margin-bottom:8px;background:var(--bg)">' +
+        '<div onclick="' + (p.tipo === 'aviso' ? 'ptnAvisoAbrir(' + Number(p.avisoId) + ')' : 'closeAlertsPanel();partnersAbrir(\'admin\')') + '" title="' + (p.tipo === 'aviso' ? 'Abrir mi panel de Partner' : 'Abrir Administrar Partners') + '" style="cursor:pointer;border:1px solid var(--border);border-left:3px solid ' + (p.tipo === 'liquidacion' || p.tipo === 'aviso' ? 'var(--success)' : 'var(--warning)') + ';border-radius:9px;padding:11px 12px;margin-bottom:8px;background:var(--bg)">' +
           '<div style="font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:4px">' + esc(p.titulo || 'Partner') + '</div>' +
           '<div style="font-size:12.5px;color:var(--text)">' + esc(p.texto || '') + '</div>' +
           '<div style="font-size:10.5px;color:var(--muted2);margin-top:7px">' + crmHace(p.fecha) + '</div>' +
@@ -38203,6 +38217,8 @@ async function ptnPostular(btn) {
   btn.disabled = true;
   try {
     await ptnApi('', { accion: 'postular', ...ptnLeerCampos() });
+    // Ahora tiene fila de Partner: su campana debe volver a preguntar.
+    try { sessionStorage.removeItem('ptn_sin_avisos'); } catch {}
     showToast('Postulación enviada. Te avisamos cuando la revisemos.', 'success');
     ptnYo = await ptnApi('vista=yo');
     ptnRender();

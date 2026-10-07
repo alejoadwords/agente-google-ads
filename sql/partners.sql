@@ -123,3 +123,18 @@ values ('partners-facturas', 'partners-facturas', false, 10485760,
 on conflict (id) do nothing;
 
 notify pgrst, 'reload schema';
+
+-- Avisos para la campana del Partner: aprobación, liquidación pagada o devuelta.
+-- Se quedan hasta que los abre (leido_at).
+create table if not exists public.partner_avisos (
+  id                bigint generated always as identity primary key,
+  partner_user_id   text not null references public.partners(user_id) on delete cascade,
+  tipo              text not null,                    -- aprobado | pagada | devuelta
+  titulo            text not null,
+  texto             text,
+  leido_at          timestamptz,
+  creado_at         timestamptz not null default now()
+);
+create index if not exists partner_avisos_pendientes_idx on public.partner_avisos (partner_user_id) where leido_at is null;
+alter table public.partner_avisos enable row level security;
+notify pgrst, 'reload schema';
