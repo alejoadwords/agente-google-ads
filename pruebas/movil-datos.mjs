@@ -278,5 +278,43 @@ console.log('\nLas etapas son las de cada tablero, con sus nombres\n');
   chk('si falla un tablero, null: nunca mitad reales y mitad inventadas', d2.etapas === null, JSON.stringify(d2.etapas));
 }
 
+console.log('\nUna traductora con reloj nunca va suelta a .map\n');
+{
+  // `.map(aConversacion)` le pasa el ÍNDICE como segundo argumento y la
+  // traductora lo toma como «ahora»: todas las conversaciones decían «ahora»,
+  // también la de hace seis días, y ninguna cita salía como pasada.
+  const { readFileSync } = await import('node:fs');
+  const fuente = readFileSync(new URL('../public/movil-datos.js', import.meta.url), 'utf8');
+  const conReloj = [...fuente.matchAll(/export function (a[A-Z]\w*)\([^)]*ahora/g)].map(m => m[1]);
+  const sueltas = conReloj.filter(f => new RegExp('\\.map\\(' + f + '\\)').test(fuente));
+  chk('ninguna de ' + conReloj.join(', ') + ' se pasa suelta', conReloj.length >= 4 && !sueltas.length, sueltas.join(', '));
+  chk('ni la de los módulos', !/\.map\(def\.mapa\)/.test(fuente));
+  const hace6 = new Date(Date.now() - 6 * 86400000).toISOString();
+  const d = await cargarTodo(async (ruta) => ({ ok: true, json: async () => (
+    ruta.startsWith('/api/chat-conversations') ? { conversations: [{ id: 'c', last_message_at: hace6 }] } : {}) }), {});
+  chk('y una conversación de hace 6 días dice «hace 6 d»', d.convs && d.convs[0] && d.convs[0].cuando === 'hace 6 d', d.convs && d.convs[0] && d.convs[0].cuando);
+}
+
+console.log('\nLas aperturas de las campañas son las de verdad\n');
+{
+  const { aCampana, aperturasReales, cargarModulo } = await import('../public/movil-datos.js');
+  // Lo que de verdad guarda el motor de campañas: sin aperturas ni clics.
+  const delMotor = { id: 'c1', name: 'Octubre', channel: 'email', status: 'sent', stats: { sent: 10, total: 10, failed: 0, skipped: 0 } };
+  const sinContar = aCampana(delMotor);
+  chk('sin aperturas contadas no se inventa un «Abiertos 0 %»', sinContar.res && !('Abiertos' in sinContar.res) && !('Clics' in sinContar.res), JSON.stringify(sinContar.res));
+  const lista = [JSON.parse(JSON.stringify(delMotor))];
+  const pedidas = [];
+  await aperturasReales(async (ruta) => { pedidas.push(ruta); return { ok: true, json: async () => ({ sent: 10, opened: 4 }) }; }, lista);
+  chk('se cuentan donde las cuenta la web', pedidas[0] === '/api/campaigns?stats=1&id=c1', pedidas[0]);
+  chk('y la campaña dice su 40 %', aCampana(lista[0]).res.Abiertos === 40, JSON.stringify(aCampana(lista[0]).res));
+  const mod = await cargarModulo(async (ruta) => ruta.includes('stats=1')
+    ? { ok: false, status: 500, json: async () => ({}) }
+    : { ok: true, json: async () => ({ campaigns: [JSON.parse(JSON.stringify(delMotor))] }) }, 'campanas');
+  chk('si no se pudieron contar, la campaña sale igual pero sin la barra', mod && mod.length === 1 && !('Abiertos' in (mod[0].res || {})), JSON.stringify(mod));
+  const { readFileSync } = await import('node:fs');
+  const app = readFileSync(new URL('../public/movil-app.js', import.meta.url), 'utf8');
+  chk('las cifras no usan la clase de la barra superior', !/class="barra"/.test(app.slice(app.indexOf('function filaItem'), app.indexOf('function filaItem') + 900)));
+}
+
 console.log(fallos ? `\n${fallos} fallo(s)\n` : '\nTodo en orden\n');
 process.exit(fallos ? 1 : 0);

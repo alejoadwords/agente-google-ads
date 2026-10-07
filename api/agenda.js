@@ -11,6 +11,22 @@ import { soloSusLeads } from './_perfiles.js';
 import { getGcalToken, gcalEventBody, gcalRequest, gcalEnSuCalendario } from './_gcal.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
+// Inicio y fin del día de hoy en la zona `tz` (la del navegador), en ms.
+// Sin zona, o con una que Intl no conoce, la de Bogotá: es donde está casi
+// toda la base de clientes, y equivocarse de zona es peor que no tenerla.
+export function limitesDeHoy(tz, ahora = Date.now()) {
+  let zona = 'America/Bogota';
+  try { if (tz) { new Intl.DateTimeFormat('en-US', { timeZone: tz }); zona = tz; } } catch {}
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: zona, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(ahora)).map(x => [x.type, x.value]));
+  // Cuánto se separa esa zona de UTC en este instante.
+  const desfase = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(ahora / 1000) * 1000;
+  const inicio = Date.UTC(+p.year, +p.month - 1, +p.day) - desfase;
+  return { inicio, fin: inicio + 86400000 - 1 };
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -204,8 +220,14 @@ export default async function handler(req) {
     //
     // Es el mismo criterio que ya usaban la fecha de cierre del lead y el chip
     // del tablero: se compara el día, no el reloj.
-    const inicioDeHoy = new Date(); inicioDeHoy.setHours(0, 0, 0, 0);
-    const finDeHoy = new Date(); finDeHoy.setHours(23, 59, 59, 999);
+    //
+    // Y el día es el de QUIEN MIRA, no el del servidor. La función corre en
+    // UTC: con `setHours(0)` de aquí, desde las 7 p. m. de Colombia «hoy» ya
+    // era mañana —las tareas de mañana salían en Hoy y las de hoy en Vencidas,
+    // todas las noches (06-10-2026). El navegador manda su zona en `tz`.
+    const { inicio: inicioDeHoyMs, fin: finDeHoyMs } = limitesDeHoy(url.searchParams.get('tz'));
+    const inicioDeHoy = new Date(inicioDeHoyMs);
+    const finDeHoy = new Date(finDeHoyMs);
     const out = { vencidas: [], hoy: [], proximas: [] };
 
     for (const t of tareas || []) {

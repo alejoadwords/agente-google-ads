@@ -20029,7 +20029,7 @@ async function crmTareasCargar() {
       ? '&client_id=' + encodeURIComponent(agencyActiveClientId) : '';
     // 90 dias es el tope del endpoint. Sin `mias=1`: en la tarjeta interesa la
     // proxima tarea del lead, la lleve quien la lleve.
-    const d = await fetchAuth('/api/agenda?tareas=1&dias=90' + cid).then(r => r.json());
+    const d = await fetchAuth('/api/agenda?tareas=1&dias=90' + cid + zonaQS()).then(r => r.json());
     crmTareasCrudas = d;
     const mapa = {};
     ['vencidas', 'hoy', 'proximas'].forEach(k => (d[k] || []).forEach(t => {
@@ -20478,6 +20478,12 @@ async function ptnAvisoAbrir(avisoId) {
   if (typeof refrescarCampana === 'function') refrescarCampana();
   partnersAbrir();
   try { await ptnApi('', { accion: 'aviso_leido', id: avisoId }); } catch (e) { console.warn('ptnAvisoAbrir', e); }
+}
+
+// La zona horaria del navegador, para que el servidor (que corre en UTC) corte
+// «hoy» donde lo corta quien mira. Ver limitesDeHoy() en api/agenda.js.
+function zonaQS() {
+  try { return '&tz=' + encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || ''); } catch { return ''; }
 }
 
 async function crmAvisosCargar() {
@@ -35992,7 +35998,7 @@ async function tarRender() {
     const cid = typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId
       ? '&client_id=' + encodeURIComponent(agencyActiveClientId) : '';
     const dias = TAR_DIAS_POR_RANGO[tarFiltro.cuando] ?? 14;
-    tarData = await fetchAuth('/api/agenda?tareas=1&dias=' + dias + (tarSoloMias ? '&mias=1' : '') + cid).then(r => r.json());
+    tarData = await fetchAuth('/api/agenda?tareas=1&dias=' + dias + (tarSoloMias ? '&mias=1' : '') + cid + zonaQS()).then(r => r.json());
   } catch {
     view.innerHTML = '<div style="font-size:12.5px;color:#B91C1C">No se pudieron cargar las tareas.</div>';
     return;

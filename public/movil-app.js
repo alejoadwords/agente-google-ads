@@ -320,7 +320,8 @@ function pintarLeads(){
     return '<button class="lead" onclick="M.abrirLead(\''+l.id+'\')">'
       + '<span class="ini">'+esc(l.nom[0])+'</span>'
       + '<span class="cuerpo"><span class="nom">'+esc(l.nom)+'</span>'
-      + '<span class="meta">'+(variosTableros() ? esc(nombreDelTablero(l.pipeline))+' · ' : '')+esc(l.origen)+' · '+esc(l.hace)+'</span></span>'
+      + '<span class="meta">'+(variosTableros() ? esc(nombreDelTablero(l.pipeline))+' · ' : '')
+      + (l.empresa ? esc(l.empresa)+' · ' : '')+esc(fuenteTxt(l.origen))+' · '+esc(l.hace)+'</span></span>'
       + '<span class="chip '+esc(l.etapa)+'">'+esc(etiquetaEtapa(l.etapa, l.pipeline))+'</span></button>';
   }).join('') : '<div class="vacio">Ningún contacto con ese filtro.</div>';
 }
@@ -402,6 +403,16 @@ function marcar(i,el){
 
 // ── Ficha ───────────────────────────────────────────────────────────────────
 var leadAbierto = null;
+
+// La fuente se guarda como clave («meta_ads») y así sirve para agrupar el
+// informe; a la vista va su nombre. Se pregunta a fuenteLabel() de la web, que
+// conoce también las fuentes propias de la cuenta, para que las dos digan lo
+// mismo. Suelto (sin app.js) basta con quitar los guiones bajos.
+function fuenteTxt(k){
+  try { if (typeof fuenteLabel === 'function') return fuenteLabel(k); } catch (e) {}
+  return String(k || '').replace(/_/g, ' ');
+}
+
 function abrirLead(id){
   var l = null;
   // Comparado como CADENA: el id llega del `onclick` y ahí todo es texto, así
@@ -416,7 +427,7 @@ function abrirLead(id){
   h.className = 'hoja'; h.id = 'hoja-lead';
   h.innerHTML =
     '<div class="cab"><button class="volver" onclick="M.cerrarLead()">'+icn('arrow',24)+'</button>'
-    + '<div><h1>'+esc(l.nom)+'</h1><div class="sub">'+esc(l.origen)+' · '+esc(l.hace)+'</div></div></div>'
+    + '<div><h1>'+esc(l.nom)+'</h1><div class="sub">'+(l.empresa ? esc(l.empresa)+' · ' : '')+esc(fuenteTxt(l.origen))+' · '+esc(l.hace)+'</div></div></div>'
     + '<div class="acciones">'
     // Estos dos vibraban y nada más. Un botón de llamar que no marca es la
     // razón por la que uno saca el teléfono: es LA acción del módulo.
@@ -1587,8 +1598,11 @@ function abrirMas(){
 function filaItem(x){
   var res = '';
   if (x.res) {
-    res = '<div class="barras">' + Object.keys(x.res).map(function(k){
-      return '<div class="barra"><div class="bt">'+esc(k)+'</div><div class="bv">'+x.res[k]+'%</div>'
+    // `cbarra` y no `barra`: `.barra` es la barra superior fija de la app, y
+    // con su `position:absolute;top:0` cada cifra se iba arriba y tapaba el
+    // título de la hoja (06-10-2026).
+    res = '<div class="cbarras">' + Object.keys(x.res).map(function(k){
+      return '<div class="cbarra"><div class="bt">'+esc(k)+'</div><div class="bv">'+x.res[k]+'%</div>'
            + '<div class="bl"><i style="width:'+x.res[k]+'%"></i></div></div>';
     }).join('') + '</div>';
   }
@@ -2710,7 +2724,7 @@ function fichaQuien(l){
     ['Email',          l.email],
     ['Teléfono',       l.tel],
     ['Valor',          l.valor],
-    ['Fuente',         l.origen],
+    ['Fuente',         fuenteTxt(l.origen)],
     ['Campaña',        l.campana],
     ['Página',         l.pagina],
     ['Cierre esperado',l.cierre],
@@ -2851,6 +2865,9 @@ function fichaPasado(l){
       }).join('')
     + '</div></div>';
 }
+// El estado de la propuesta llega en inglés (`viewed`): el mismo que pinta la web.
+var ESTADO_PROPUESTA = { draft:'Borrador', sent:'Enviada', viewed:'Vista', accepted:'Aceptada', paid:'Pagada', rejected:'Rechazada' };
+
 // Las mismas cajas que la tercera columna de la web.
 function fichaFalta(l){
   var caja = function(tit, filas, vacio, accion){
@@ -2898,15 +2915,17 @@ function fichaFalta(l){
     + (filasAutos === null
         ? de('Automatizaciones', null, null, '')
         : caja('Automatizaciones', filasAutos, 'Ninguna en curso.'))
+    // Los nombres de /api/campaigns?lead_id=: `nombre`, `cuando`, `reaccion`.
+    // Se leían `name` y `sent_at`, que no vienen, y salía «Campaña» sin fecha.
     + de('Campañas', d.campanas, function(e){
-        return [cuandoFue(e.sent_at || e.created_at), (e.name || e.campaign_name || 'Campaña')
-          + (e.opened_at ? ' · abierta' : '')];
+        return [cuandoFue(e.cuando), (e.nombre || 'Campaña')
+          + (e.reaccion ? ' · ' + String(e.reaccion).toLowerCase() : '')];
       }, 'No ha recibido campañas.')
     + (d.nps === null || d.nps === undefined
         ? caja('Satisfacción', [], 'Todavía no se le ha encuestado.')
         : caja('Satisfacción', [[String(d.nps.nota) + '/10', d.nps.comentario || d.nps.categoria || 'Sin comentario']], ''))
     + de('Propuestas', d.props, function(x){
-        return [cuandoFue(x.created_at), (x.title || 'Propuesta') + (x.status ? ' · ' + x.status : '')];
+        return [cuandoFue(x.created_at), (x.title || 'Propuesta') + (x.status ? ' · ' + (ESTADO_PROPUESTA[x.status] || x.status) : '')];
       }, 'Ninguna propuesta enviada.')
     + de('Conversaciones', d.convs, function(c){
         return [c.canal, c.cuando + ' · ' + (c.quien === 'bot' ? 'la atiende el agente' : 'la atiendes tú')];
@@ -3360,6 +3379,15 @@ function pintarSubtitulos(){
          + (h ? h + ' para hoy' : '');
   })());
   s('agenda', cuenta(CITAS, '1 cita', '{n} citas', 'no se pudo traer'));
+  // La fecha del Pulso también venía escrita en el marcado («jueves 24, 9:12»,
+  // la del boceto): con datos reales decía un día que no es hoy. Solo el boceto
+  // la conserva, porque sus ejemplos hablan de ese jueves.
+  var cuando = movilRaiz().querySelector('.pulso-cab .cuando');
+  if (cuando && MODO !== 'ejemplo') {
+    var ahora = new Date();
+    cuando.textContent = ahora.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric' }).replace(/,/g, '')
+      + ', ' + ahora.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
+  }
   s('bandeja', CONVS === null ? (MODO === 'cargando' ? 'trayendo…' : 'no se pudieron traer') : (function(){
     var n = CONVS.filter(function(c){ return c.nolei > 0; }).length;
     return n ? n + (n === 1 ? ' sin leer' : ' sin leer') : 'todo leído';

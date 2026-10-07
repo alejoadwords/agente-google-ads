@@ -78,6 +78,12 @@ export function diaSuelto(v) {
  * Los campos de pauta viven en `custom_fields` y los pone `camposDePauta()`
  * en el servidor; aquí solo se leen por su nombre exacto.
  */
+// La zona del teléfono, para que el servidor corte «hoy» donde lo corta quien
+// mira (ver limitesDeHoy() en api/agenda.js).
+function zona() {
+  try { return '&tz=' + encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || ''); } catch { return ''; }
+}
+
 export function aLead(l, ahora = Date.now()) {
   const cf = l.custom_fields || {};
   return {
@@ -261,11 +267,17 @@ export function aCampana(c, ahora = Date.now()) {
     sub: canal + ' · ' + cuenta,
     // Los porcentajes solo cuando hay base para calcularlos: un «0 %» sobre
     // cero envíos se lee como una campaña que fracasó.
-    res: (s.sent > 0) ? {
-      Entregados: Math.round(((s.delivered != null ? s.delivered : s.sent) / s.sent) * 100),
-      Abiertos: Math.round(((s.opened || 0) / s.sent) * 100),
-      Clics: Math.round(((s.clicked || 0) / s.sent) * 100),
-    } : null,
+    //
+    // Y solo las cifras que se conocen. El motor de campañas guarda enviados,
+    // fallidos y omitidos, NUNCA aperturas ni clics: el móvil leía `opened` y
+    // `clicked` de ahí y enseñaba «Abiertos 0 %» en todas las campañas de todos
+    // los clientes. Las aperturas las pone aperturasReales() desde los eventos,
+    // como la web; si no se pudieron contar, la barra no sale.
+    res: (s.sent > 0) ? Object.fromEntries([
+      ['Entregados', s.delivered != null ? Math.round((s.delivered / s.sent) * 100) : null],
+      ['Abiertos', s.opened != null ? Math.round((s.opened / s.sent) * 100) : null],
+      ['Clics', s.clicked != null ? Math.round((s.clicked / s.sent) * 100) : null],
+    ].filter(([, v]) => v !== null)) : null,
   };
 }
 
@@ -356,7 +368,8 @@ export function aVideo(v) {
 export function aApertura(c) {
   const s = c.stats || {};
   const base = s.delivered != null ? s.delivered : s.sent;
-  const pct = base > 0 ? Math.round(((s.opened || 0) / base) * 100) : null;
+  // Sin aperturas contadas no hay porcentaje: ver aperturasReales().
+  const pct = base > 0 && s.opened != null ? Math.round((s.opened / base) * 100) : null;
   return {
     nom: c.name || 'Sin nombre',
     // Sin base no hay porcentaje. Un «0 %» sobre cero entregados se lee como
@@ -411,7 +424,7 @@ export function aAgente(a) {
  */
 export const MODULOS_API = {
   chatbots: { ruta: '/api/chat-agents',  clave: 'agents',      mapa: aAgente },
-  campanas: { ruta: '/api/campaigns',    clave: 'campaigns',   mapa: aCampana },
+  campanas: { ruta: '/api/campaigns',    clave: 'campaigns',   mapa: aCampana, aperturas: true },
   listas:   { ruta: '/api/lead-lists',   clave: 'lists',       mapa: aLista },
   autos:    { ruta: '/api/automations',  clave: 'automations', mapa: aAutomatizacion },
   fuentes:  { ruta: '/api/lead-sources', clave: 'sources',     mapa: aFuente },
@@ -422,12 +435,31 @@ export const MODULOS_API = {
   // La academia es del catálogo, no de la cuenta: ni lleva alcance de cliente
   // ni devuelve un objeto con clave — el cuerpo ES la lista.
   academia: { ruta: '/api/academia-admin', clave: null, mapa: aVideo, sinCliente: true },
-  aperturas:{ ruta: '/api/campaigns',    clave: 'campaigns',   mapa: aApertura, filtro: esAperturaVisible },
+  aperturas:{ ruta: '/api/campaigns',    clave: 'campaigns',   mapa: aApertura, filtro: esAperturaVisible, aperturas: true },
   // La parrilla viene anidada: {data:{parrillas:[…]}}. La ruta con punto evita
   // un caso especial por cada endpoint que envuelve su lista.
   studio:   { ruta: '/api/social-studio', clave: 'data.parrillas', mapa: aParrilla },
   ajustes:  { ruta: '/api/team',         clave: 'members',     mapa: aMiembro, sinCliente: true },
 };
+
+/**
+ * Las aperturas de verdad, del mismo sitio que la web: `?stats=1&id=` cruza
+ * los envíos con los eventos de apertura y clic. Se escriben en `stats.opened`
+ * de cada campaña de correo ya enviada; la que no se pudo contar se queda sin
+ * el dato (y sin barra), nunca con un cero. Las 15 más recientes bastan para
+ * una pantalla de teléfono.
+ */
+export async function aperturasReales(fetchAuth, campanas) {
+  const contables = campanas.filter(esAperturaVisible).slice(0, 15);
+  await Promise.all(contables.map(async (c) => {
+    try {
+      const r = await fetchAuth('/api/campaigns?stats=1&id=' + encodeURIComponent(c.id));
+      if (!r || !r.ok) return;
+      const d = await r.json();
+      if (Number.isFinite(d.opened)) c.stats = { ...(c.stats || {}), opened: d.opened };
+    } catch { /* sin el dato, sin barra */ }
+  }));
+}
 
 export async function cargarModulo(fetchAuth, id, { clientId } = {}) {
   const def = MODULOS_API[id];
@@ -445,7 +477,11 @@ export async function cargarModulo(fetchAuth, id, { clientId } = {}) {
     // Si la clave no viene, es que la respuesta no tiene la forma esperada. Eso
     // es «no se pudo mirar», no «no hay nada».
     if (!Array.isArray(lista)) return null;
-    return (def.filtro ? lista.filter(def.filtro) : lista).map(def.mapa);
+    if (def.aperturas) await aperturasReales(fetchAuth, lista);
+    // Con flecha y no pasando def.mapa suelta: map pasa el ÍNDICE como segundo
+    // argumento, y las traductoras lo toman como «ahora». Con el reloj en 0, 1,
+    // 2… todo salía «ahora» y nada como pasado (06-10-2026).
+    return (def.filtro ? lista.filter(def.filtro) : lista).map((x) => def.mapa(x));
   } catch { return null; }
 }
 
@@ -494,7 +530,7 @@ export async function cargarHilo(fetchAuth, convId) {
 
 export const ETIQUETA_HITO = {
   nota: 'Nota', llamada: 'Llamada', email: 'Email', reunion: 'Reunión',
-  tarea: 'Tarea', stage_change: 'Etapa', creacion: 'Creado',
+  tarea: 'Tarea', stage_change: 'Etapa', creacion: 'Creado', visita: 'Visita',
 };
 
 export function aHito(a) {
@@ -524,20 +560,23 @@ export async function cargarFicha(fetchAuth, leadId, { clientId } = {}) {
   };
   const [hitos, agenda, autos, campanas, nps, props, convs] = await Promise.all([
     uno('/api/lead-activities' + q, (d) => (d.activities || []).map(aHito)),
-    uno('/api/agenda' + q, (d) => d.actividades || d.items || []),
+    // `activities`, que es lo que devuelve /api/agenda. Se leía `actividades`
+    // y la ficha del teléfono nunca enseñó una tarea ni una cita de nadie.
+    uno('/api/agenda' + q, (d) => d.activities || []),
     uno('/api/automations' + q, (d) => ({ pendientes: d.pendientes || [], hechas: d.hechas || [] })),
     uno('/api/campaigns' + q, (d) => d.envios || []),
     uno('/api/nps' + q, (d) => d.encuesta || null),
     uno('/api/proposals' + q, (d) => d.proposals || []),
-    uno('/api/chat-conversations' + q, (d) => (d.conversations || []).map(aConversacion)),
+    uno('/api/chat-conversations' + q, (d) => (d.conversations || []).map((c) => aConversacion(c))),
   ]);
   return {
     hitos: hitos ? hitos.sort((a, b) => b.marca - a.marca) : null,
     // La agenda devuelve tareas Y citas juntas: separarlas aquí evita que una
     // reserva del propio cliente aparezca como un pendiente que alguien se
     // apuntó, que es el mismo fallo que ya tuvimos en la pantalla de Tareas.
-    tareas: agenda ? agenda.filter((a) => !esCita(a)).map((a) => aTarea(a)) : null,
-    citas: agenda ? agenda.filter(esCita).map(aCita) : null,
+    // Solo las pendientes: la caja es «lo que falta», y una hecha no falta.
+    tareas: agenda ? agenda.filter((a) => !esCita(a) && !a.done).map((a) => aTarea(a)) : null,
+    citas: agenda ? agenda.filter(esCita).map((a) => aCita(a)) : null,
     autos, campanas, nps, props, convs,
   };
 }
@@ -602,7 +641,9 @@ export async function cargarTodo(fetchAuth, { clientId } = {}) {
     //
     // Y la clasificación la hace el SERVIDOR. Recalcularla aquí era garantizar
     // que los dos números se separaran al primer cambio de criterio.
-    uno('/api/agenda?tareas=1' + q, (d) => d && Array.isArray(d.vencidas) ? d : null),
+    // Con la zona del teléfono: el servidor corre en UTC y, sin ella, desde las
+    // 7 p. m. de Colombia «hoy» ya era mañana.
+    uno('/api/agenda?tareas=1' + q + zona(), (d) => d && Array.isArray(d.vencidas) ? d : null),
 
     // El calendario, solo para las citas: `?tareas=1` recorta a los próximos
     // días y una cita de dentro de un mes desaparecería de la agenda.
@@ -616,7 +657,9 @@ export async function cargarTodo(fetchAuth, { clientId } = {}) {
     uno('/api/agenda?from=' + encodeURIComponent(desdeHoy().toISOString())
         + '&to=' + encodeURIComponent(hastaEnUnMesYMedio().toISOString()) + q,
         (d) => d.activities || []),
-    uno('/api/chat-conversations?' + q.slice(1), (d) => (d.conversations || d.convs || []).map(aConversacion)),
+    // Con flecha: pasada suelta a map, aConversacion recibía el índice como «ahora» y
+    // todas las conversaciones decían «ahora», también la de hace seis días.
+    uno('/api/chat-conversations?' + q.slice(1), (d) => (d.conversations || d.convs || []).map((c) => aConversacion(c))),
     // Una cuenta puede tener varios tableros —Certain tiene cuatro, y sus
     // leads viven en «Arriendo», no en el principal—. Sin poder elegir, el
     // móvil enseña todo revuelto o el tablero equivocado.
@@ -641,7 +684,7 @@ export async function cargarTodo(fetchAuth, { clientId } = {}) {
       ? deCesta(tareas.vencidas, 'vencida')
           .concat(deCesta(tareas.hoy, 'hoy'), deCesta(tareas.proximas, 'proxima'))
       : null,
-    citas: actividades ? actividades.filter(esCita).map(aCita) : null,
+    citas: actividades ? actividades.filter(esCita).map((a) => aCita(a)) : null,
     convs,
   };
 }

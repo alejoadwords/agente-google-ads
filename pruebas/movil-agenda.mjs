@@ -188,6 +188,9 @@ function montar({ responde = { ok: true, datos: {} } } = {}) {
     // `traeCuerpo` aparte de `cuerpo`: `JSON.stringify(null)` es la cadena
     // 'null', y al parsearla vuelve a ser null — idéntico a no mandar nada.
     // Sin esta marca, «el DELETE no lleva cuerpo» daba verde igual.
+    // Al cargar, el móvil pregunta si la cuenta tiene agente de voz para
+    // pintar el menú. Es una lectura, no un guardado: no cuenta aquí.
+    if (String(ruta).startsWith('/api/agente-voz') && !opts.method) return { ok: true, status: 200, json: async () => ({ activo: false }) };
     llamadas.push({ ruta, metodo: opts.method, traeCuerpo: opts.body !== undefined,
                     cuerpo: opts.body ? JSON.parse(opts.body) : null });
     if (responde.explota) throw new Error('sin red');

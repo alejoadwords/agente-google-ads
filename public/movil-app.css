@@ -364,12 +364,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:va
 .estado-chip.enviada{background:var(--blue-lt);color:var(--blue)}
 
 /* ── Barras de resultado ── */
-.barras{display:flex;gap:10px;margin-top:8px}
-.barra{flex:1}
-.barra .bt{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.4px}
-.barra .bv{font-weight:700;font-size:var(--fs-md);margin-top:1px}
-.barra .bl{height:4px;border-radius:2px;background:var(--bg-subtle);margin-top:5px;overflow:hidden}
-.barra .bl i{display:block;height:100%;background:var(--blue);border-radius:2px}
+.cbarras{display:flex;gap:10px;margin-top:8px}
+.cbarra{flex:1}
+.cbarra .bt{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.4px}
+.cbarra .bv{font-weight:700;font-size:var(--fs-md);margin-top:1px}
+.cbarra .bl{height:4px;border-radius:2px;background:var(--bg-subtle);margin-top:5px;overflow:hidden}
+.cbarra .bl i{display:block;height:100%;background:var(--blue);border-radius:2px}
 
 /* ── Aviso de «esto se edita en el escritorio» ── */
 .solo-escritorio{margin:12px;padding:14px;border-radius:var(--rlg);background:var(--bg-subtle);

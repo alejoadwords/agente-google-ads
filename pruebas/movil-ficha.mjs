@@ -53,12 +53,16 @@ console.log('\nCada caja viaja por su cuenta\n');
       { type: 'nota', content: 'Llamé y no contestó', created_at: '2026-09-20T10:00:00Z' },
       { type: 'creacion', content: 'Entró por el formulario', created_at: '2026-09-10T08:00:00Z' },
     ] }),
-    '/api/agenda': ok({ actividades: [
+    // Las formas REALES del servidor: `activities` en la agenda y
+    // `nombre`/`cuando`/`reaccion` en campañas. El simulacro usaba las claves
+    // que esperaba el código, y por eso daba verde con la ficha vacía.
+    '/api/agenda': ok({ activities: [
       { id: 't1', type: 'task', title: 'Llamar', due_at: '2026-09-30T15:00:00Z' },
+      { id: 't2', type: 'task', title: 'Ya hecha', due_at: '2026-09-20T15:00:00Z', done: true },
       { id: 'm1', type: 'meeting', title: 'Visita', due_at: '2026-09-28T14:00:00Z' },
     ] }),
     '/api/automations': ok({ pendientes: [{ nombre: 'Seguimiento' }], hechas: [] }),
-    '/api/campaigns': ok({ envios: [{ name: 'Octubre', sent_at: '2026-09-01T10:00:00Z' }] }),
+    '/api/campaigns': ok({ envios: [{ nombre: 'Octubre', cuando: '2026-09-01T10:00:00Z', reaccion: 'Abierto' }] }),
     '/api/nps': ok({ encuesta: { nota: 9, comentario: 'Excelente' } }),
     '/api/proposals': ok({ proposals: [{ title: 'Penthouse', status: 'sent' }] }),
     '/api/chat-conversations': ok({ conversations: [{ id: 'c1', channel: 'whatsapp', status: 'human' }] }),
@@ -69,13 +73,19 @@ console.log('\nCada caja viaja por su cuenta\n');
   chk('y cada hito dice de qué tipo es', /^Nota: /.test(d.hitos[0].que), d.hitos[0].que);
   // La agenda devuelve tareas Y citas juntas: mezclarlas convertía una reserva
   // del propio cliente en un pendiente que alguien se apuntó.
-  chk('las tareas y las citas vienen separadas',
-      d.tareas.length === 1 && d.citas.length === 1, JSON.stringify([d.tareas.length, d.citas.length]));
+  chk('las tareas y las citas vienen separadas, y la hecha no cuenta como pendiente',
+      d.tareas.length === 1 && d.citas.length === 1 && d.tareas[0].t === 'Llamar', JSON.stringify([d.tareas.length, d.citas.length]));
   chk('la automatización en curso llega', d.autos.pendientes.length === 1);
   chk('la campaña también', d.campanas.length === 1);
   chk('la encuesta con su nota', d.nps && d.nps.nota === 9);
   chk('la propuesta', d.props.length === 1);
   chk('y la conversación', d.convs.length === 1 && d.convs[0].canal === 'whatsapp');
+
+  // Y la pantalla lee los nombres que de verdad trae cada caja.
+  const j = codigo.indexOf('function fichaFalta');
+  const ff = codigo.slice(j, codigo.indexOf('\n}\n', j));
+  chk('la campaña se pinta con su nombre y su fecha', /e\.nombre/.test(ff) && /cuandoFue\(e\.cuando\)/.test(ff));
+  chk('la propuesta dice su estado en español', /ESTADO_PROPUESTA\[x\.status\]/.test(ff) && /viewed:'Vista'/.test(codigo));
 }
 
 console.log('\nQue falle una caja no apaga las demás\n');

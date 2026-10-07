@@ -24,8 +24,10 @@ let mal = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) mal++; };
 
 // ── El servidor reparte por día ────────────────────────────────────────
-ok(/const inicioDeHoy = new Date\(\); inicioDeHoy\.setHours\(0, 0, 0, 0\);/.test(agenda),
-   'el servidor calcula el inicio del día');
+// En la zona de quien mira, no con el reloj UTC del servidor: ver
+// pruebas/hoy-en-su-zona.mjs.
+ok(/const inicioDeHoy = new Date\(inicioDeHoyMs\);/.test(agenda) && /limitesDeHoy\(url\.searchParams\.get\('tz'\)\)/.test(agenda),
+   'el servidor calcula el inicio del día, en la zona de quien mira');
 ok(/else if \(vence < inicioDeHoy\.getTime\(\)\) out\.vencidas\.push/.test(agenda),
    'y solo va a «vencidas» lo de un día anterior');
 ok(!/vence < ahora\) out\.vencidas/.test(agenda),
