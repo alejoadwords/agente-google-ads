@@ -582,9 +582,13 @@ export default async function handler(req, contexto) {
     if ((existing || []).some(m => m.member_email === email)) return jsonResp({ error: 'Ese email ya está en tu equipo' }, 400);
     if (1 + (existing || []).length >= seats) {
       return jsonResp({
+        // El mensaje sale de PLAN_SEATS, no de memoria: decía «Tu plan incluye
+        // 1 usuario» también a una cuenta Pro que ya tenía sus 3 ocupados.
         error: planCuenta === 'agency' || planCuenta === 'agencia'
           ? 'Alcanzaste los ' + seats + ' usuarios de tu plan. Amplía tu equipo con usuarios adicionales.'
-          : 'Tu plan incluye 1 usuario. Los equipos son parte del plan Agency.',
+          : seats <= 1
+            ? 'Tu plan incluye 1 usuario. Para trabajar en equipo pasa a Pro (' + PLAN_SEATS.pro + ' usuarios) o Agency (' + PLAN_SEATS.agency + ').'
+            : 'Alcanzaste los ' + seats + ' usuarios de tu plan. Con Agency tu equipo llega a ' + PLAN_SEATS.agency + '.',
         upgrade: planCuenta !== 'agency' && planCuenta !== 'agencia',
         seats_full: true,
       }, 403);

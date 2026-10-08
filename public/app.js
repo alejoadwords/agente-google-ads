@@ -33236,7 +33236,7 @@ async function teamInvite() {
         client_id: (document.getElementById('cfg-team-cliente') || {}).value || null,
       }),
     }).then(r => r.json());
-    if (d.upgrade) { closeSettings(); openUpgradeFlow('Los equipos con varios usuarios son parte del plan Agency.'); return; }
+    if (d.upgrade) { closeSettings(); openUpgradeFlow(esc(d.error || 'Tu plan no tiene más usuarios disponibles.')); return; }
     if (d.seats_full) {
       if (confirm(d.error + '\n\n¿Quieres agregar usuarios adicionales a tu plan? ($10/mes por usuario)')) {
         window.open('https://pay.hotmart.com/D106852996L', '_blank');
@@ -35629,7 +35629,7 @@ async function papeleraRestaurar(id, btn) {
 const ASG_FUENTES_LABEL = {
   default: 'Cualquier otra fuente', whatsapp: 'WhatsApp', messenger: 'Messenger',
   instagram: 'Instagram', tiktok: 'TikTok', formulario: 'Formularios web',
-  externa: 'Webhook externo', meta_lead_ads: 'Meta Lead Ads', hotmart: 'Hotmart',
+  webhook: 'Webhook externo', meta_lead_ads: 'Meta Lead Ads', hotmart: 'Hotmart',
   importacion: 'Importación', manual: 'Creados a mano',
 };
 let asgData = null;

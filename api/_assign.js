@@ -28,6 +28,17 @@ function sb() {
   };
 }
 
+// Nombres viejos de una fuente → el que se guarda hoy en leads.source.
+// La regla «Webhook externo» se guardaba con la clave 'externa', pero el
+// webhook guarda los leads con source 'webhook': la regla nunca se aplicaba y
+// esos leads caían en «Cualquier otra fuente». Hay cuentas con la regla vieja
+// guardada, así que se traduce al leer en vez de reescribir su blob.
+const ALIAS_FUENTE = { externa: 'webhook' };
+export function claveFuente(fuente) {
+  const k = String(fuente || 'default').toLowerCase().slice(0, 40);
+  return ALIAS_FUENTE[k] || k;
+}
+
 export function normalizarRegla(raw) {
   const r = raw && typeof raw === 'object' ? raw : {};
   const modo = MODOS.includes(r.modo) ? r.modo : 'off';
@@ -64,7 +75,13 @@ export async function getReglas(userId) {
   const blob = await leerBlob(userId);
   const reglas = blob.reglas || {};
   const out = {};
-  for (const k of Object.keys(reglas)) out[k] = normalizarRegla(reglas[k]);
+  // La clave vieja solo cuenta si no hay una nueva: la nueva es la que el
+  // dueño guardó después, a sabiendas.
+  for (const k of Object.keys(reglas)) {
+    const c = claveFuente(k);
+    if (c !== k && reglas[c]) continue;
+    out[c] = normalizarRegla(reglas[k]);
+  }
   // 'default' cubre cualquier fuente sin regla propia
   if (!out.default) out.default = { ...DEFAULT_REGLA };
   return out;
@@ -73,7 +90,9 @@ export async function getReglas(userId) {
 export async function saveReglas(userId, reglas) {
   const blob = await leerBlob(userId);
   const limpias = {};
-  for (const k of Object.keys(reglas || {})) limpias[String(k).slice(0, 40)] = normalizarRegla(reglas[k]);
+  // Se guarda con la clave nueva: al primer guardado desde la pantalla, la
+  // regla vieja 'externa' desaparece del blob.
+  for (const k of Object.keys(reglas || {})) limpias[claveFuente(k)] = normalizarRegla(reglas[k]);
   return guardarBlob(userId, { ...blob, reglas: limpias });
 }
 
@@ -128,7 +147,7 @@ export async function siguienteComercial(userId, fuente, entre = null, forzarTur
   // nada y para que la ficha dijera «Sin asignar» teniendo un único dueño.
   if (!equipo.length) return await duenoComoComercial(userId);
 
-  const clave = String(fuente || 'default').toLowerCase().slice(0, 40);
+  const clave = claveFuente(fuente);
   const blob = await leerBlob(userId);
 
   // Una regla de destino de un conector YA dijo cómo repartir esta rama, y con
@@ -139,7 +158,9 @@ export async function siguienteComercial(userId, fuente, entre = null, forzarTur
   // dueño es un lead que nadie llama.
   if (!forzarTurnos) {
     const reglas = blob.reglas || {};
-    const regla = normalizarRegla(reglas[clave] || reglas.default);
+    // Si la cuenta solo tiene la regla con la clave vieja, también vale.
+    const vieja = Object.keys(ALIAS_FUENTE).find(v => ALIAS_FUENTE[v] === clave && reglas[v]);
+    const regla = normalizarRegla(reglas[clave] || (vieja && reglas[vieja]) || reglas.default);
     if (regla.modo === 'off') return null;
 
     if (regla.modo === 'fijo') {

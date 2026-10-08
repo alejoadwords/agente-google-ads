@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-08-webhook-reparto",
+      "fecha": "2026-10-08",
+      "tipo": "arreglo",
+      "titulo": "Los leads que llegan por webhook ya se reparten",
+      "texto": "La regla de reparto «Webhook externo» no se estaba aplicando y esos leads caían en «Cualquier otra fuente». Además, los que entraban por el webhook de una automatización no se asignaban a nadie ni creaban la tarea de primer contacto. Ahora entran como cualquier otro lead: se reparten según tus reglas, el comercial recibe su aviso y su tarea, y disparan tus automatizaciones de «Lead creado». Si ya tenías configurada la regla, se respeta tal cual."
+    },
+    {
       "id": "2026-10-07-ventas-de-hoy",
       "fecha": "2026-10-07",
       "tipo": "arreglo",
