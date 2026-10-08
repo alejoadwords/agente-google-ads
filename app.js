@@ -8825,8 +8825,12 @@ function renderStudio() {
   const filters = document.getElementById('studio-filters');
 
   // Banner de import reciente
+  // Abrir el Studio lo dibuja dos veces: al mostrarse y otra cuando llega la
+  // parrilla de la cuenta (studioSincronizar). Si cada dibujo borrara el aviso,
+  // el segundo se lo llevaba a la fracción de segundo de aparecer. Solo se quita
+  // al llegar otro import o si la parrilla activa ya no es la importada.
   const existingBanner = document.getElementById('studio-import-banner');
-  if (existingBanner) existingBanner.remove();
+  if (existingBanner && (window._studioJustImported || existingBanner.dataset.parrilla !== (active?.id || ''))) existingBanner.remove();
   if (window._studioJustImported && posts.length > 0) {
     const count = window._studioJustImported;
     window._studioJustImported = null;
@@ -8834,7 +8838,8 @@ function renderStudio() {
     if (studioWrap) {
       const banner = document.createElement('div');
       banner.id = 'studio-import-banner';
-      banner.style.cssText = 'display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#EEF0FD,#F0F4FF);border:1.5px solid var(--blue-md);border-radius:10px;padding:12px 16px;margin:0 24px 8px;animation:fadeIn .4s ease';
+      banner.dataset.parrilla = active?.id || '';
+      banner.style.cssText = 'display:flex;align-items:center;gap:12px;background:var(--blue-lt);border:1.5px solid var(--blue-md);border-radius:10px;padding:12px 16px;margin:0 24px 8px;animation:fadeIn .4s ease';
       banner.innerHTML = '<span style="font-size:20px">🎉</span><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--blue)">' + count + ' posts importados · parrilla "' + esc(active?.name || '') + '"</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Haz clic en cualquier tarjeta para editar, generar imágenes y marcar como listo</div></div><button onclick="document.getElementById(\'studio-import-banner\')?.remove()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px;line-height:1">×</button>';
       const filterBar = document.getElementById('studio-filters');
       if (filterBar) filterBar.after(banner);
