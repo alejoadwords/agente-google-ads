@@ -318,12 +318,28 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
       pay.onclick = function () { mpPay(pay, p); };
       cta.appendChild(pay);
     } else if (p.payment_link) {
-      var payL = document.createElement('a');
-      payL.className = 'btn btn-pay'; payL.target = '_blank'; payL.rel = 'noopener';
-      payL.href = p.payment_link; payL.textContent = '💳 Aceptar y pagar';
-      payL.onclick = function () { fetch('/api/proposals?public_token=' + token + '&action=accept', { method: 'POST' }).catch(function () {}); };
+      // Con link propio (Wompi, Stripe…) también se firma primero. Antes este
+      // botón mandaba una aceptación sin firma que el servidor rechaza: el
+      // cliente pagaba, pero la propuesta seguía «Enviada» y al vendedor no le
+      // llegaba ningún aviso.
+      var payL = document.createElement('button');
+      payL.className = 'btn btn-pay'; payL.textContent = '💳 Aceptar y pagar';
+      payL.onclick = function () { abrirFirma(p, function () { abrirPagoPropio(p); }); };
       cta.appendChild(payL);
     }
+  }
+
+  // El link se abre cuando la firma ya quedó registrada, es decir, después de
+  // una petición: algunos navegadores bloquean esa ventana nueva por no venir
+  // directo de un clic. Si la bloquean, se va al pago en esta misma pestaña,
+  // y si el link no es una dirección web, el botón «Completar el pago» que deja
+  // renderCta() sigue a la vista.
+  function abrirPagoPropio(p) {
+    var link = String(p.payment_link || '').trim();
+    if (!/^https?:\/\//i.test(link)) return;
+    var w = window.open(link, '_blank');
+    if (w) { try { w.opener = null; } catch (e) {} return; }
+    window.location.href = link;
   }
 })();
 </script>
