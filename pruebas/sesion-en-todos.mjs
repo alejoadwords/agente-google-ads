@@ -154,10 +154,15 @@ console.log('\nLa regla de los módulos compartidos\n');
   const NODE_COMPROBADAS = [   // desplegadas y comprobadas el 28-09-2026
     'admin.js', 'generate-image.js', 'geo-rank.js', 'google-ads.js', 'meta-ads.js',
     'refresh-google-token.js', 'refresh-meta-token.js', 'report.js', 'seo-rank.js',
-    'social-publish.js', 'video-credits.js', 'video-gen.js',
+    'video-credits.js', 'video-gen.js',
     // 29-09-2026: pasó a pedir sesión; comprobada en producción al desplegarla
     // (sin sesión responde 401 con el motivo, no un 500 del build).
     'list-accounts.js',
+    // 08-10-2026: pasó a pedir sesión en 608a7bf. Comprobada en producción el
+    // mismo día: POST sin sesión → 401 JSON «No autorizado», GET → 405. El
+    // import de _sesion.js resuelve desde Node.
+    'upload-media.js',
+    // social-publish.js salió de aquí en 608a7bf: pasó a edge.
   ];
   const noEdge = conSesion.filter((f) => !leer(f).includes("runtime: 'edge'"));
   const sinComprobar = noEdge.filter((f) => !NODE_COMPROBADAS.includes(f));
