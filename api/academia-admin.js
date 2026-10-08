@@ -37,8 +37,11 @@ export default async function handler(req) {
 
   // ── GET: público, no requiere auth ──────────────────────────────────────
   if (req.method === 'GET') {
+    // Los retirados (retirado_at) no se borran: se dejan de enseñar. Así se
+    // retiraron el 08-10-2026 los seis videos de los agentes de marketing
+    // apagados, para devolverlos con un `retirado_at = null` si vuelven.
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/academia_videos?select=*&order=category_order.asc,order_index.asc`,
+      `${SUPABASE_URL}/rest/v1/academia_videos?select=*&retirado_at=is.null&order=category_order.asc,order_index.asc`,
       { headers: sbHeaders() }
     );
     if (!res.ok) {
