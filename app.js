@@ -18156,7 +18156,7 @@ function crmAbrirLeadPendiente() {
   if (!_leadPorUrl) return;
   const id = _leadPorUrl;
   _leadPorUrl = null;
-  setTimeout(() => { try { crmIrALeadODecirlo(id); } catch (e) { console.warn('lead de la url', e); } }, 120);
+  setTimeout(() => { crmIrALeadODecirlo(id).catch(e => console.warn('lead de la url', e)); }, 120);
 }
 
 async function crmLoadLeads() {
@@ -20585,18 +20585,53 @@ function crmAvisosPanel() {
 function crmAvisoAbrir(avisoId, leadId) {
   closeAlertsPanel();
   navGo('crm');
-  setTimeout(() => {
-    if (crmIrALeadODecirlo(leadId)) crmAvisoMarcarLeido(avisoId);
+  setTimeout(async () => {
+    if (await crmIrALeadODecirlo(leadId)) crmAvisoMarcarLeido(avisoId);
   }, 260);
 }
 
-// crmOpenDetail() se calla si el lead no está cargado, y eso pasa de verdad: el
-// aviso puede ser de un lead de OTRO cliente del que no estás viendo ahora. Sin
-// esto, pulsar el aviso no haría absolutamente nada y parecería que se rompió.
-function crmIrALeadODecirlo(leadId) {
+// crmOpenDetail() solo encuentra los leads del tablero que está en pantalla.
+// Con un cliente activo se carga UN proceso, así que la nota de un lead de
+// Venta, pulsada mirando Arriendo, no lo encontraba — y se le decía a la
+// persona que el lead «pertenece a otro cliente», que era falso (le pasó a
+// Certain el 08-10-2026). Ahora se pregunta por el lead y, si es de otro
+// proceso del mismo cliente, se cambia a ese tablero y se abre.
+async function crmIrALeadODecirlo(leadId) {
   if (!leadId) return false;
+  // Recién entrando al CRM los leads todavía vienen en camino.
+  for (let i = 0; i < 40 && !crmLeadsLoaded; i++) await new Promise(r => setTimeout(r, 200));
   if (crmLeads.some(l => l.id === leadId)) { crmOpenDetail(leadId); return true; }
-  showToast('Ese lead pertenece a otro cliente. Cámbialo en el selector de arriba para abrirlo.', 'info');
+
+  let lead = null;
+  try {
+    const r = await fetchAuth('/api/leads?id=' + encodeURIComponent(leadId));
+    if (r.status === 404) {
+      showToast('Ese lead ya no existe o no está a tu cargo.', 'info');
+      return false;
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    lead = (await r.json()).lead;
+  } catch (e) {
+    console.warn('crmIrALeadODecirlo', e);
+    showToast('No se pudo abrir ese lead. Inténtalo de nuevo en un momento.', 'error');
+    return false;
+  }
+
+  const clienteActivo = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  if (clienteActivo && lead.client_id && lead.client_id !== clienteActivo) {
+    showToast('Ese lead pertenece a otro cliente. Cámbialo en el selector de arriba para abrirlo.', 'info');
+    return false;
+  }
+  const proceso = lead.pipeline_id && (crmPipelines || []).find(p => p.id === lead.pipeline_id);
+  if (proceso && (proceso.id !== crmPipelineId || crmTodosActivo())) {
+    await pipeCambiar(proceso.id);
+    if (crmLeads.some(l => l.id === leadId)) {
+      showToast('Te llevamos al tablero ' + (proceso.name || '') + ', donde está este lead.', 'info');
+      crmOpenDetail(leadId);
+      return true;
+    }
+  }
+  showToast('No encontramos ese lead en tus tableros. Búscalo por su nombre: ' + (lead.name || ''), 'error');
   return false;
 }
 
@@ -33248,7 +33283,7 @@ async function teamInvite() {
         client_id: (document.getElementById('cfg-team-cliente') || {}).value || null,
       }),
     }).then(r => r.json());
-    if (d.upgrade) { closeSettings(); openUpgradeFlow('Los equipos con varios usuarios son parte del plan Agency.'); return; }
+    if (d.upgrade) { closeSettings(); openUpgradeFlow(esc(d.error || 'Tu plan no tiene más usuarios disponibles.')); return; }
     if (d.seats_full) {
       if (confirm(d.error + '\n\n¿Quieres agregar usuarios adicionales a tu plan? ($10/mes por usuario)')) {
         window.open('https://pay.hotmart.com/D106852996L', '_blank');
@@ -35791,7 +35826,7 @@ async function papeleraRestaurar(id, btn) {
 const ASG_FUENTES_LABEL = {
   default: 'Cualquier otra fuente', whatsapp: 'WhatsApp', messenger: 'Messenger',
   instagram: 'Instagram', tiktok: 'TikTok', formulario: 'Formularios web',
-  externa: 'Webhook externo', meta_lead_ads: 'Meta Lead Ads', hotmart: 'Hotmart',
+  webhook: 'Webhook externo', meta_lead_ads: 'Meta Lead Ads', hotmart: 'Hotmart',
   importacion: 'Importación', manual: 'Creados a mano',
 };
 let asgData = null;

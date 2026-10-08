@@ -306,7 +306,9 @@ export async function intakeLead(userId, clientId, data) {
       value: data.value ? parseFloat(String(data.value).replace(/[^\d.]/g, '')) || null : null,
       stage: data.stage || 'nuevo',
       stage_position: Date.now(),
-      source: data.source || 'externa',
+      // 'webhook' y no 'externa': es la clave con la que se configura la
+      // regla de reparto «Webhook externo».
+      source: data.source || 'webhook',
       tags: leadTags,
       notes: noteLine,
       ...(cfEntrada && Object.keys(cfEntrada).length ? { custom_fields: cfEntrada } : {}),

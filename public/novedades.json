@@ -9,6 +9,20 @@
       "texto": "En el paso de configuración del importador ahora decides a quién quedan los contactos nuevos: según tu regla de reparto, todos a un asesor, repartidos en turnos entre varios asesores, o sin asignar. Cada asesor recibe un solo correo al final con cuántos le tocaron. Además, ya puedes arrastrar el archivo .xlsx o .csv directamente al importador, y al eliminar un lead te recordamos que queda 30 días en la Papelera por si necesitas restaurarlo."
     },
     {
+      "id": "2026-10-08-nota-abre-su-tablero",
+      "fecha": "2026-10-08",
+      "tipo": "arreglo",
+      "titulo": "Las notas de la campana abren su lead aunque esté en otro tablero",
+      "texto": "Si te dejaban una nota sobre un lead de otro tablero (por ejemplo, de Venta mientras mirabas Arriendo), al hacer clic salía el aviso de que el lead era de otro cliente y no se abría. Ahora te llevamos al tablero correcto y se abre su ficha."
+    },
+    {
+      "id": "2026-10-08-webhook-reparto",
+      "fecha": "2026-10-08",
+      "tipo": "arreglo",
+      "titulo": "Los leads que llegan por webhook ya se reparten",
+      "texto": "La regla de reparto «Webhook externo» no se estaba aplicando y esos leads caían en «Cualquier otra fuente». Además, los que entraban por el webhook de una automatización no se asignaban a nadie ni creaban la tarea de primer contacto. Ahora entran como cualquier otro lead: se reparten según tus reglas, el comercial recibe su aviso y su tarea, y disparan tus automatizaciones de «Lead creado». Si ya tenías configurada la regla, se respeta tal cual."
+    },
+    {
       "id": "2026-10-08-resena-whatsapp",
       "fecha": "2026-10-08",
       "tipo": "arreglo",

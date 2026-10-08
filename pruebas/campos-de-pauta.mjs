@@ -59,7 +59,8 @@ chk('camposDePauta se exporta', /export function camposDePauta/.test(intake));
 // ── 3. El webhook por token lo pasa ──────────────────────────────────────────
 const hook = leer('api/hook/[token].js');
 chk('el hook importa camposDePauta', /import \{[^}]*camposDePauta[^}]*\} from '\.\.\/_lead-intake\.js'/.test(hook));
-chk('el hook extrae la pauta del payload', /camposDePauta\(gBody\)/.test(hook));
+// Las dos vías (genérica y de automatización) mapean con datosDelPayload.
+chk('el hook extrae la pauta del payload', /camposDePauta\(body\)/.test(hook) && (hook.match(/datosDelPayload\(reqBody\)/g) || []).length === 2);
 chk('el hook la pasa al intake', /mapped\.custom_fields = \{ \.\.\.\(mapped\.custom_fields \|\| \{\}\), \.\.\.pauta \}/.test(hook));
 
 // ── 4. El webhook de Meta la pide a Graph ────────────────────────────────────

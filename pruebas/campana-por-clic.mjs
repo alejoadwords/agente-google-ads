@@ -35,7 +35,16 @@ ok(!/leerAvisos|Marcar como leídos/.test(movil), 'el móvil ya no tiene botón 
 
 console.log('\nClic en una nota marca esa, y solo si su lead abrió\n');
 ok(/crmAvisoAbrir\(\\'' \+ esc\(a\.id\) \+ '\\',\\'' \+ esc\(a\.lead_id\)/.test(panel), 'cada nota de la web lleva su id');
-ok(/if \(crmIrALeadODecirlo\(leadId\)\) crmAvisoMarcarLeido\(avisoId\)/.test(app), 'la web marca solo si el lead se abrió');
+ok(/if \(await crmIrALeadODecirlo\(leadId\)\) crmAvisoMarcarLeido\(avisoId\)/.test(app), 'la web marca solo si el lead se abrió');
+{
+  // Una nota de un lead de OTRO PROCESO del mismo cliente no es «de otro
+  // cliente»: se cambia de tablero y se abre (Certain, 08-10-2026).
+  const ir = (app.match(/async function crmIrALeadODecirlo[\s\S]*?\n}\n/) || [''])[0];
+  ok(/fetchAuth\('\/api\/leads\?id='/.test(ir), 'si no está en el tablero, pregunta por el lead');
+  ok(/pipeCambiar\(proceso\.id\)/.test(ir), 'y cambia al tablero donde está');
+  ok(ir.indexOf('lead.client_id !== clienteActivo') > 0 && ir.indexOf('lead.client_id !== clienteActivo') < ir.indexOf('pertenece a otro cliente'), '«otro cliente» solo si de verdad es de otro cliente');
+  ok(/!crmLeadsLoaded/.test(ir), 'espera a que carguen los leads antes de buscar');
+}
 const abrirAviso = cuerpo(movil, 'async function abrirAviso(');
 ok(/M\.abrirAviso\(/.test(movil) && /abrirAviso: abrirAviso/.test(movil), 'cada aviso del móvil se toca');
 ok(abrirAviso.indexOf('if (!esta)') > -1 && abrirAviso.indexOf('if (!esta)') < abrirAviso.indexOf('crmAvisoMarcarLeido(avisoId)'),
