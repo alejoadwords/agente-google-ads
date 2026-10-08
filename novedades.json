@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-08-seo-cupo-del-mes",
+      "fecha": "2026-10-08",
+      "tipo": "mejora",
+      "titulo": "Proyecto SEO: ves cuántas consultas te quedan este mes",
+      "texto": "En las pestañas Keywords y GEO · IAs del Proyecto SEO ahora ves cuántas consultas de posiciones en Google y cuántas consultas a IAs te quedan este mes, y cuántas usa cada actualización antes de lanzarla. El contador se reinicia el día 1. Si se acaban a mitad de una actualización de posiciones, se guardan las que alcanzaron a consultarse y te decimos cuáles quedaron pendientes. Además, quitamos de esta pantalla los botones que dependían del chat con los agentes de IA, que está en pausa."
+    },
+    {
       "id": "2026-10-08-todo-abre-la-ficha",
       "fecha": "2026-10-08",
       "tipo": "mejora",

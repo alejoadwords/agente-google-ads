@@ -572,6 +572,12 @@ textarea.seop-input{resize:vertical;min-height:70px}
 .seop-check.done .seop-check-text{text-decoration:line-through;color:var(--muted2)}
 .seop-addbar{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
 .seop-addbar .seop-input{flex:1;min-width:220px}
+.seop-cupo{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--r);padding:7px 11px;margin:-4px 0 14px}
+.seop-cupo svg{flex-shrink:0}
+.seop-cupo strong{color:var(--text);font-variant-numeric:tabular-nums}
+.seop-cupo.warn{color:var(--warning);background:var(--warning-bg);border-color:transparent}
+.seop-cupo.danger{color:var(--danger);background:var(--danger-bg);border-color:transparent}
+.seop-cupo.warn strong,.seop-cupo.danger strong{color:inherit}
 [data-theme="dark"] .seop-delta.up{background:rgba(16,185,129,.15)}
 [data-theme="dark"] .seop-delta.down{background:rgba(239,68,68,.15)}
 

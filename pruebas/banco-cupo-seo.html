@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Cupo del Proyecto SEO</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  Banco de la tira de cupo del Proyecto SEO (posiciones y GEO) y de la
+  pantalla con los agentes apagados.
+
+  Carga el CSS de public/index.html y las funciones seo* de public/app.js tal
+  cual. Lo único falso es el estado del cupo y el proyecto de ejemplo.
+
+  Arrancar con:  node pruebas/servidor-boceto.mjs
+  y abrir        http://localhost:4173/pruebas/banco-cupo-seo.html
+-->
+<style id="estilos-reales"></style>
+<style>
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle,#F7F8FC);color:var(--text,#0D0F1C);padding:22px 20px 80px}
+  .zona{max-width:900px;margin:0 auto 30px}
+  .zona h2{margin:0 0 8px;font-size:13px;color:var(--muted,#5A607A);font-weight:600}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:var(--text,#111);color:#fff;padding:9px 14px;
+    display:flex;gap:10px;align-items:center;justify-content:center;font-size:12px;z-index:9000;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:7px;padding:5px 10px;font-family:inherit;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="zonas"></div>
+<div class="banco">
+  <button onclick="document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')">Claro / oscuro</button>
+  <button onclick="document.body.style.maxWidth = document.body.style.maxWidth ? '' : '390px'">Ancho de móvil</button>
+  <span>Estados del cupo con el CSS y las funciones de verdad · agentes apagados</span>
+</div>
+<script>
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+  document.getElementById('estilos-reales').textContent = (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+  const trozo = (desde, hasta) => {
+    const i = js.indexOf(desde);
+    if (i < 0) throw new Error('No encontré en app.js: ' + desde);
+    const j = js.indexOf(hasta, i);
+    return js.slice(i, j > i ? j : js.length);
+  };
+  const codigo =
+    trozo('function esc(t)', '\n') + '\n' + trozo('function escJsAttr(v)', '\n') + '\n' +
+    trozo('const ICN_PATHS = {', '// ── AUTOMATIZACIONES DEL CRM') +
+    trozo('let seoProject = null;', '// ── SET DE ÍCONOS SVG');
+  const stubs = `const AGENTES_ACTIVOS = false; function fetchAuth(){ return new Promise(()=>{}); }
+    function dbLoadProfile(){ return null } function dbSaveProfile(){} function showView(){}`;
+  new Function(stubs + codigo + `
+    const mes = seoMonthKey();
+    window.pintar = function (titulo, cupo, tab, conHistorial) {
+      seoCupo = cupo; seoTab = tab;
+      seoProject = { domain: 'acuarius.app', brand: 'Acuarius', country: 'co', competitors: [],
+        keywords: ['crm para inmobiliarias', 'software de leads', 'crm whatsapp'].map((kw, i) => ({ kw, history: { [mes]: { pos: 4 + i * 7 } } })),
+        geoQueries: [{ q: '¿Cuál es el mejor CRM para inmobiliarias?' }, { q: 'Recomiéndame un CRM con WhatsApp' }],
+        geoHistory: conHistorial ? { [mes]: { checkedAt: Date.now(), engines: { claude:{active:true}, gemini:{active:true}, chatgpt:{active:true}, perplexity:{active:true} },
+          results: [] } } : {}, actions: [] };
+      const z = document.createElement('div'); z.className = 'zona';
+      z.innerHTML = '<h2>' + titulo + '</h2><div id="seop-setup"></div><div id="seop-main"></div>';
+      document.getElementById('zonas').appendChild(z);
+      seoRenderProject();
+      z.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+    };
+  `)();
+  const pro = (g, p) => ({ plan: 'pro', geo: { cupo: 200, usados: 200 - g, restante: g }, posiciones: { cupo: 500, usados: 500 - p, restante: p } });
+  pintar('1 · Keywords · cupo normal (Pro, 420 de 500)', pro(160, 420), 'keywords');
+  pintar('2 · Keywords · queda poco (60 de 500) → ámbar', pro(160, 60), 'keywords');
+  pintar('3 · Keywords · agotado → rojo', pro(160, 0), 'keywords');
+  pintar('4 · Keywords · cargando', null, 'keywords');
+  pintar('5 · Keywords · no se pudo contar', { geo: { error: true }, posiciones: { error: true } }, 'keywords');
+  pintar('6 · GEO · cupo normal (este reporte usa 8)', pro(160, 420), 'geo');
+  pintar('7 · GEO · no alcanza para el reporte (quedan 5, usa 8) → rojo', pro(5, 420), 'geo');
+  pintar('8 · GEO · Agency (compartidas entre clientes)', { plan: 'agency', geo: { cupo: 1000, usados: 40, restante: 960 }, posiciones: { cupo: 3000, usados: 0, restante: 3000 } }, 'geo', true);
+  pintar('9 · Competencia · sin botón del agente', pro(160, 420), 'competencia');
+  pintar('10 · On-page · sin barra de auditoría', pro(160, 420), 'onpage');
+  pintar('11 · Contenido · sin «Generar artículo»', pro(160, 420), 'contenido');
+})().catch(e => {
+  document.body.insertAdjacentHTML('afterbegin', '<pre style="color:#DC2626;white-space:pre-wrap">' + e.message + '\n' + e.stack + '</pre>');
+});
+</script>
+</body>
+</html>

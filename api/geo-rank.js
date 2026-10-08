@@ -9,6 +9,8 @@
 // La sesión se verifica con el módulo común, que lee las cabeceras de las
 // dos formas: `Headers` en edge y objeto plano en Node.
 import { verificarSesion, anotarSesion } from './_sesion.js';
+import { costoDe } from './_uso-ia.js';
+import { cuentaDe, estadoSeo, apuntarSeo } from './_cupo-seo.js';
 
 const MAX_QUERIES = 10;
 
@@ -37,7 +39,8 @@ async function isPaidOrAdmin(req) {
   if (!sesion.id) { await anotarSesion(sesion, 'geo-rank'); return { ok: false, plan: 'free' }; }
   const payload = sesion.datos;
   const plan = payload.public_metadata?.plan || payload.publicMetadata?.plan || 'free';
-  if (PAID_PLANS.includes(plan)) return { ok: true, plan };
+  const userId = sesion.id;
+  if (PAID_PLANS.includes(plan)) return { ok: true, plan, userId };
   // Bypass admin: verificar email real via Clerk (el JWT no siempre lo trae)
   if (payload.sub && process.env.CLERK_SECRET_KEY) {
     try {
@@ -48,7 +51,7 @@ async function isPaidOrAdmin(req) {
       // Clerk dejó de mandar public_metadata en el token de sesión (v2): el plan
       // real se lee aquí, si no todo usuario de pago quedaba como "free".
       const realPlan = u.public_metadata?.plan;
-      if (PAID_PLANS.includes(realPlan)) return { ok: true, plan: realPlan };
+      if (PAID_PLANS.includes(realPlan)) return { ok: true, plan: realPlan, userId };
 
       // Y si no es de pago, puede ser MIEMBRO de una cuenta que sí lo es: el
       // plan es del DUEÑO, no de quien abre la pantalla. Sin esto, los siete
@@ -62,10 +65,10 @@ async function isPaidOrAdmin(req) {
         });
         const dueno = await rd.json();
         const planDueno = dueno?.public_metadata?.plan;
-        if (PAID_PLANS.includes(planDueno)) return { ok: true, plan: planDueno };
+        if (PAID_PLANS.includes(planDueno)) return { ok: true, plan: planDueno, userId };
       }
       const email = (u.email_addresses?.[0]?.email_address || '').toLowerCase();
-      if (ADMIN_EMAILS.includes(email)) return { ok: true, plan: 'admin' };
+      if (ADMIN_EMAILS.includes(email)) return { ok: true, plan: 'admin', userId };
     } catch {}
   }
   return { ok: false, plan };
@@ -77,6 +80,19 @@ const ENGINES = {
   chatgpt:    { label: 'ChatGPT',    env: 'OPENAI_API_KEY' },
   perplexity: { label: 'Perplexity', env: 'PERPLEXITY_API_KEY' },
 };
+
+// USD por millón de tokens, precios de lista. Claude usa la tabla de _uso-ia.
+// Perplexity cobra además una tarifa fija por petición (contexto de búsqueda bajo).
+// No es para facturar: es para que «cuánto cuesta esta cuenta» incluya el GEO.
+const TARIFAS = {
+  gemini:     { in: 0.30, out: 2.50, fija: 0 },
+  chatgpt:    { in: 0.15, out: 0.60, fija: 0 },
+  perplexity: { in: 1,    out: 1,    fija: 0.005 },
+};
+function tarifa(motor, tin, tout) {
+  const t = TARIFAS[motor];
+  return ((tin || 0) * t.in + (tout || 0) * t.out) / 1e6 + t.fija;
+}
 
 const SYSTEM_PROMPT = (country) =>
   'Eres un asistente útil. Responde en español para un usuario de ' + (country || 'Latinoamérica') +
@@ -96,7 +112,11 @@ async function askClaude(query, country) {
   });
   const d = await r.json();
   if (d.error) throw new Error(d.error.message || 'Claude error');
-  return (d.content || []).map(c => c.text || '').join(' ');
+  return {
+    text: (d.content || []).map(c => c.text || '').join(' '),
+    costo: costoDe('claude-sonnet-5', d.usage || {}),
+    tokensIn: d.usage?.input_tokens, tokensOut: d.usage?.output_tokens,
+  };
 }
 
 async function askGemini(query, country) {
@@ -111,7 +131,14 @@ async function askGemini(query, country) {
   });
   const d = await r.json();
   if (d.error) throw new Error(d.error.message || 'Gemini error');
-  return (d.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join(' ');
+  // El razonamiento de 2.5 Flash se cobra como salida.
+  const u = d.usageMetadata || {};
+  const salida = (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0);
+  return {
+    text: (d.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join(' '),
+    costo: tarifa('gemini', u.promptTokenCount, salida),
+    tokensIn: u.promptTokenCount, tokensOut: salida,
+  };
 }
 
 async function askOpenAI(query, country) {
@@ -126,7 +153,11 @@ async function askOpenAI(query, country) {
   });
   const d = await r.json();
   if (d.error) throw new Error(d.error.message || 'OpenAI error');
-  return d.choices?.[0]?.message?.content || '';
+  return {
+    text: d.choices?.[0]?.message?.content || '',
+    costo: tarifa('chatgpt', d.usage?.prompt_tokens, d.usage?.completion_tokens),
+    tokensIn: d.usage?.prompt_tokens, tokensOut: d.usage?.completion_tokens,
+  };
 }
 
 async function askPerplexity(query, country) {
@@ -141,7 +172,11 @@ async function askPerplexity(query, country) {
   });
   const d = await r.json();
   if (d.error) throw new Error(d.error.message || 'Perplexity error');
-  return d.choices?.[0]?.message?.content || '';
+  return {
+    text: d.choices?.[0]?.message?.content || '',
+    costo: tarifa('perplexity', d.usage?.prompt_tokens, d.usage?.completion_tokens),
+    tokensIn: d.usage?.prompt_tokens, tokensOut: d.usage?.completion_tokens,
+  };
 }
 
 const ASK = { claude: askClaude, gemini: askGemini, chatgpt: askOpenAI, perplexity: askPerplexity };
@@ -198,6 +233,7 @@ export default async function handler(req, res) {
       upgrade: true,
     });
   }
+  const cuenta = await cuentaDe(gate.userId);
 
   const { queries, domain, brand, competitors, country } = req.body || {};
   if (!Array.isArray(queries) || !queries.length) return res.status(400).json({ error: 'queries requeridas' });
@@ -210,20 +246,57 @@ export default async function handler(req, res) {
 
   const batch = queries.slice(0, MAX_QUERIES).map(q => String(q).trim()).filter(Boolean);
 
+  // ── Cupo del mes ──
+  // Un reporte a medias no se hace: la visibilidad por motor saldría calculada
+  // sobre la mitad de las preguntas y parecería un dato completo. O cabe
+  // entero o se explica cuánto falta.
+  const necesarias = batch.length * active.length;
+  const cupo = await estadoSeo(cuenta, 'geo', gate.plan);
+  if (cupo.error) {
+    // No se pudo contar: se deja pasar (frenar a un cliente por un mal minuto
+    // de Supabase es peor) pero queda en el log.
+    console.error('[geo-rank] no se pudo leer el cupo de', cuenta, '— se deja pasar');
+  } else if (necesarias > cupo.restante) {
+    return res.status(429).json({
+      error: cupo.restante === 0
+        ? `Usaste las ${cupo.cupo} consultas a IAs de este mes. El contador se reinicia el día 1.`
+        : `Este reporte necesita ${necesarias} consultas a IAs (${batch.length} ${batch.length === 1 ? 'pregunta' : 'preguntas'} × ${active.length} IAs) y te quedan ${cupo.restante} este mes. Quita preguntas o espera al día 1.`,
+      sinCupo: true,
+      cupo,
+    });
+  }
+
   try {
     const tasks = [];
     batch.forEach(q => active.forEach(engine => {
       tasks.push(
         ASK[engine](q, country)
-          .then(text => ({ query: q, engine, ...analyzeMention(text, domain, brand, competitors) }))
+          .then(r => ({ query: q, engine, _gasto: r, ...analyzeMention(r.text, domain, brand, competitors) }))
           .catch(e => ({ query: q, engine, error: String(e.message || e).slice(0, 200) }))
       );
     }));
-    const results = await Promise.all(tasks);
+    const crudos = await Promise.all(tasks);
+
+    // Se apunta ANTES de responder: si el registro fuera después, un segundo
+    // clic rápido vería el contador viejo.
+    const registradas = crudos.filter(r => !r.error).length;
+    await apuntarSeo({
+      cuenta, actorId: gate.userId, tipo: 'geo',
+      filas: crudos.map(r => ({
+        ok: !r.error,
+        detalle: 'geo:' + r.engine,
+        costo: r._gasto?.costo,
+        tokensIn: r._gasto?.tokensIn,
+        tokensOut: r._gasto?.tokensOut,
+      })),
+    });
+    const results = crudos.map(({ _gasto, ...r }) => r);
     return res.json({
       results,
       engines: enginesStatus,
       truncated: queries.length > MAX_QUERIES ? queries.length - MAX_QUERIES : 0,
+      cupo: cupo.error ? { error: true, cupo: cupo.cupo }
+        : { cupo: cupo.cupo, usados: cupo.usados + registradas, restante: Math.max(0, cupo.restante - registradas) },
     });
   } catch (err) {
     console.error('geo-rank error:', err);

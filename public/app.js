@@ -26620,6 +26620,9 @@ function showWelcomeConnect() {
 // Abre un agente, espera su saludo inicial y envía un mensaje automáticamente.
 // Reutilizado por la auditoría inicial, el Pulso y los deep-links.
 async function openAgentAndAsk(agentKey, prompt) {
+  // Con los agentes apagados, showView('chat') manda a Inicio sin decir nada:
+  // el botón parecía roto. Si algún camino olvidado llega aquí, que se vea por qué.
+  if (!AGENTES_ACTIVOS) { showToast('El chat con los agentes de IA está en pausa por ahora.', 'info'); return; }
   await openAgent(agentKey);
   // Esperar a que el agente termine su saludo inicial
   await new Promise(res => setTimeout(res, 800));
@@ -27567,6 +27570,56 @@ function seoSparkline(history) {
 
 function seoCountryName(code) { const c = SEO_COUNTRIES.find(x => x[0] === code); return c ? c[1] : code; }
 
+// ── Cupo del mes (posiciones y GEO) ──
+// Lo cuenta el servidor sobre ai_usage; aquí solo se pinta. Es de la CUENTA,
+// no del cliente de agencia, así que no se invalida al cambiar de cliente.
+// null = cargando · { sinPlan } = plan free (los botones ya llevan a mejorar)
+// · { error } = no se pudo preguntar, y se dice: nunca se pinta como «te quedan N».
+let seoCupo = null;
+async function seoCupoCargar() {
+  try {
+    const r = await fetchAuth('/api/seo-rank?action=cupo');
+    const d = await r.json().catch(() => null);
+    if (r.status === 403 && d?.upgrade) seoCupo = { sinPlan: true };
+    else if (!r.ok || !d) seoCupo = { error: true };
+    else seoCupo = d;
+  } catch { seoCupo = { error: true }; }
+  if (seoProject && document.getElementById('seop-tab-content')) seoRenderProject();
+}
+// El servidor devuelve el cupo actualizado tras cada consulta: se usa ese y no
+// se vuelve a preguntar.
+function seoCupoActualizar(tipo, c) {
+  if (!c) return;
+  if (!seoCupo || seoCupo.sinPlan || seoCupo.error) seoCupo = {};
+  seoCupo[tipo] = c;
+}
+function seoCupoLinea(tipo, necesarias) {
+  if (seoCupo?.sinPlan) return '';
+  const nombre = tipo === 'geo' ? 'consultas a IAs' : 'consultas de posiciones';
+  if (!seoCupo) return '<div class="seop-cupo"><span>Consultando cuántas ' + nombre + ' te quedan este mes…</span></div>';
+  const c = seoCupo[tipo];
+  if (!c || c.error) {
+    return '<div class="seop-cupo warn">' + icn('alert', 12) + '<span>No se pudo consultar cuántas ' + nombre +
+      ' te quedan este mes. Puedes seguir consultando; vuelve a abrir la pantalla para ver el contador.</span></div>';
+  }
+  const falta = necesarias > c.restante;
+  const cls = (c.restante === 0 || falta) ? ' danger' : (c.restante < c.cupo * 0.2 ? ' warn' : '');
+  const n = (x) => Number(x).toLocaleString('es-CO');
+  let txt = c.restante === 0
+    ? 'Usaste las <strong>' + n(c.cupo) + '</strong> ' + nombre + ' de este mes'
+    : 'Te quedan <strong>' + n(c.restante) + '</strong> de ' + n(c.cupo) + ' ' + nombre + ' este mes';
+  const uso = seoCupoUsoTexto(tipo, necesarias);
+  if (uso) txt += ' · ' + uso;
+  if (seoCupo.plan === 'agency' || seoCupo.plan === 'agencia') txt += ' · compartidas entre todos tus clientes';
+  txt += ' · se reinicia el día 1';
+  return '<div class="seop-cupo' + cls + '">' + (cls ? icn('alert', 12) : '') + '<span>' + txt + '</span></div>';
+}
+function seoCupoUsoTexto(tipo, n) {
+  if (!n) return '';
+  const k = Number(n).toLocaleString('es-CO');
+  return tipo === 'geo' ? 'este reporte usa ' + k : 'actualizar todas usa ' + k;
+}
+
 async function openSeoProject() {
   showView('seo-project');
   const scope = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
@@ -27576,6 +27629,7 @@ async function openSeoProject() {
     if (p && p.domain) seoProject = p;
   }
   seoRenderProject();
+  seoCupoCargar();
   // Chequeo mensual automático: si el mes cambió desde la última consulta, actualizar
   if (seoProject && seoProject.keywords?.length) {
     const lastMonth = seoProject.lastCheck ? seoMonthKey(new Date(seoProject.lastCheck)) : null;
@@ -27603,7 +27657,7 @@ function seoRenderSetup(editing) {
         '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
       '</div>' +
       '<h2 style="font-size:19px;font-weight:800;margin:0 0 6px">' + (editing ? 'Editar proyecto SEO' : 'Crea tu proyecto SEO') + '</h2>' +
-      '<p style="font-size:13px;color:var(--muted);margin:0 0 20px;line-height:1.55">Seguimiento mensual de posiciones reales en Google, competencia, acciones on-page y contenido — todo con tu agente SEO.</p>' +
+      '<p style="font-size:13px;color:var(--muted);margin:0 0 20px;line-height:1.55">Seguimiento mensual de posiciones reales en Google, competencia, acciones on-page y contenido, en un solo lugar.</p>' +
       '<div class="seop-field"><label class="seop-label">Dominio del sitio</label><input class="seop-input" id="seop-f-domain" type="text" placeholder="ejemplo.com" value="' + esc(p.domain || '') + '"></div>' +
       '<div class="seop-field"><label class="seop-label">Nombre de marca (para detectar menciones en IAs)</label><input class="seop-input" id="seop-f-brand" type="text" placeholder="ej: Acuarius" value="' + esc(p.brand || '') + '"></div>' +
       '<div class="seop-field"><label class="seop-label">País / mercado</label><select class="seop-input" id="seop-f-country">' +
@@ -27703,9 +27757,11 @@ function seoRenderKeywordsTab() {
     '<div class="seop-addbar">' +
       '<input class="seop-input" id="seop-add-kw" type="text" placeholder="Añadir keywords (separadas por coma)" onkeydown="if(event.key===\'Enter\')seoAddKeywords()">' +
       '<button class="seop-btn" onclick="seoAddKeywords()">+ Añadir</button>' +
-      '<button class="seop-btn" onclick="seoResearchKeywords()">' + icn('search', 12) + ' Investigar con el agente</button>' +
+      (AGENTES_ACTIVOS ? '<button class="seop-btn" onclick="seoResearchKeywords()">' + icn('search', 12) + ' Investigar con el agente</button>' : '') +
     '</div>';
-  if (!kws.length) return addbar + emptyAgua('search', 'Tu proyecto empieza con una keyword', 'Añádelas a mano o deja que el agente investigue tu mercado y las importe con un clic.');
+  if (!kws.length) return addbar + emptyAgua('search', 'Tu proyecto empieza con una keyword',
+    AGENTES_ACTIVOS ? 'Añádelas a mano o deja que el agente investigue tu mercado y las importe con un clic.'
+      : 'Añade las búsquedas por las que quieres aparecer en Google, separadas por coma.');
 
   const rows = kws.map((k, i) => {
     const cur = k.history?.[m]?.pos || null;
@@ -27728,12 +27784,12 @@ function seoRenderKeywordsTab() {
       '<td>' + seoSparkline(k.history) + '</td>' +
       '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">' + (url ? esc(url.replace(/^https?:\/\/(www\.)?/, '')) : '—') + '</td>' +
       '<td style="white-space:nowrap">' +
-        '<button class="seop-row-btn" title="Generar contenido para esta keyword" onclick="seoGenerateContent(' + i + ')">' + icn('edit', 12) + '</button>' +
+        (AGENTES_ACTIVOS ? '<button class="seop-row-btn" title="Generar contenido para esta keyword" onclick="seoGenerateContent(' + i + ')">' + icn('edit', 12) + '</button>' : '') +
         '<button class="seop-row-btn" title="Eliminar" onclick="seoDeleteKeyword(' + i + ')">✕</button>' +
       '</td>' +
     '</tr>';
   }).join('');
-  return addbar +
+  return addbar + seoCupoLinea('posiciones', kws.length) +
     '<div class="seop-scroll"><table class="seop-table">' +
       '<tr><th>Keyword</th><th>Posición</th><th>Mes anterior</th><th>Mejor</th><th>Cambio</th><th>Tendencia</th><th>URL que posiciona</th><th></th></tr>' +
       rows +
@@ -27772,6 +27828,7 @@ async function seoUpdatePositions(quiet) {
   const btn = document.getElementById('seop-refresh-btn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Consultando Google...'; }
   const m = seoMonthKey();
+  let actualizadas = 0, sinCupo = 0, mensajeCupo = '';
   try {
     const all = seoProject.keywords.map(k => k.kw);
     for (let i = 0; i < all.length; i += 30) {
@@ -27787,19 +27844,33 @@ async function seoUpdatePositions(quiet) {
         openUpgradeFlow('El seguimiento mensual de posiciones reales en Google es parte del plan Pro.');
         return;
       }
-      if (data.error) throw new Error(data.error);
+      seoCupoActualizar('posiciones', data.cupo);
+      // Sin cupo: se guarda lo que ya se consultó y se avisa SIEMPRE, también
+      // en el chequeo automático — si no, el cliente creería que todas sus
+      // keywords están al día.
+      if (data.sinCupo) {
+        sinCupo = data.sinCupo + Math.max(0, all.length - i - chunk.length);
+        if (data.error && !(data.results || []).length) { mensajeCupo = data.error; }
+      } else if (data.error) throw new Error(data.error);
       (data.results || []).forEach(res => {
         const k = seoProject.keywords.find(x => x.kw === res.keyword);
         if (!k || res.error) return;
         k.history = k.history || {};
         k.history[m] = { pos: res.position, url: res.url, checkedAt: Date.now() };
         k.top = res.topResults || [];
+        actualizadas++;
       });
+      if (sinCupo) break;
     }
-    seoProject.lastCheck = Date.now();
+    if (actualizadas) seoProject.lastCheck = Date.now();
     await seoSaveProject();
     seoRenderProject();
-    if (!quiet) showToast('✅ Posiciones actualizadas (' + seoProject.keywords.length + ' keywords)', 'success');
+    if (sinCupo) {
+      alert(mensajeCupo
+        ? mensajeCupo + (actualizadas ? '\n\nSe actualizaron ' + actualizadas + ' keywords; ' : '\n\n') + sinCupo + ' quedaron sin actualizar.'
+        : 'Se acabaron las consultas de posiciones de este mes: se actualizaron ' + actualizadas + ' keywords y ' + sinCupo +
+          ' quedaron sin actualizar. El contador se reinicia el día 1.');
+    } else if (!quiet) showToast('✅ Posiciones actualizadas (' + actualizadas + ' keywords)', 'success');
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualizar posiciones'; }
     if (!quiet) alert('Error consultando posiciones: ' + (e.message || e));
@@ -27824,7 +27895,7 @@ function seoRenderCompetenciaTab() {
   const header =
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
       '<div style="font-size:12.5px;color:var(--muted)">Dominios que aparecen en el top 5 de Google para tus keywords' + (declared.size ? ' · declarados: ' + esc([...declared].join(', ')) : '') + '</div>' +
-      '<button class="seop-btn primary" onclick="seoAnalyzeCompetition()">' + icn('bot', 12) + ' Analizar con el agente</button>' +
+      (AGENTES_ACTIVOS ? '<button class="seop-btn primary" onclick="seoAnalyzeCompetition()">' + icn('bot', 12) + ' Analizar con el agente</button>' : '') +
     '</div>';
   if (!sorted.length) return header + emptyAgua('users', 'La competencia se revela con datos', 'Actualiza las posiciones primero — esta tabla se construye con los resultados reales de Google para tus keywords.');
   const rows = sorted.map(([dom, s]) =>
@@ -27854,7 +27925,7 @@ function seoAnalyzeCompetition() {
 // ── Tab: On-page y acciones ──
 function seoRenderOnpageTab() {
   const actions = seoProject.actions || [];
-  const auditBar =
+  const auditBar = !AGENTES_ACTIVOS ? '' :
     '<div class="seop-addbar">' +
       '<input class="seop-input" id="seop-audit-url" type="text" placeholder="URL a auditar, ej: https://' + esc(seoProject.domain) + '/servicios">' +
       '<button class="seop-btn primary" onclick="seoAuditPage()">' + icn('search', 12) + ' Auditar con el agente</button>' +
@@ -27875,7 +27946,9 @@ function seoRenderOnpageTab() {
           '<button class="seop-row-btn" onclick="seoDeleteAction(' + i + ')">✕</button>' +
         '</div>'
       ).join('')
-    : emptyAgua('check', 'Tu checklist on-page vive aquí', 'Audita una página con el agente y guarda sus acciones, o añádelas a mano.');
+    : emptyAgua('check', 'Tu checklist on-page vive aquí', AGENTES_ACTIVOS
+        ? 'Audita una página con el agente y guarda sus acciones, o añádelas a mano.'
+        : 'Anota los cambios pendientes en tus páginas (títulos, descripciones, encabezados) y márcalos al terminarlos.');
   return auditBar + addAction + list;
 }
 
@@ -27922,16 +27995,16 @@ function seoRenderContenidoTab() {
   const header =
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
       '<div style="font-size:12.5px;color:var(--muted)">Oportunidades de contenido — tus keywords con más recorrido, priorizadas</div>' +
-      '<button class="seop-btn primary" onclick="seoContentPlan()">' + icn('file', 12) + ' Plan de contenido con el agente</button>' +
+      (AGENTES_ACTIVOS ? '<button class="seop-btn primary" onclick="seoContentPlan()">' + icn('file', 12) + ' Plan de contenido con el agente</button>' : '') +
     '</div>';
   if (!kws.length) return header + emptyAgua('edit', 'Contenido que posiciona', 'Añade keywords al proyecto para ver las oportunidades de contenido priorizadas por recorrido.');
   const rows = kws.map(k => {
     const pos = k.history?.[m]?.pos;
     const idx = seoProject.keywords.indexOf(k);
     return '<tr><td>' + esc(k.kw) + '</td><td class="seop-pos">' + (pos ? '#' + pos : '100+') + '</td>' +
-      '<td><button class="seop-btn" style="padding:5px 11px;font-size:11px" onclick="seoGenerateContent(' + idx + ')">' + icn('edit', 11) + ' Generar artículo</button></td></tr>';
+      (AGENTES_ACTIVOS ? '<td><button class="seop-btn" style="padding:5px 11px;font-size:11px" onclick="seoGenerateContent(' + idx + ')">' + icn('edit', 11) + ' Generar artículo</button></td>' : '') + '</tr>';
   }).join('');
-  return header + '<div class="seop-scroll"><table class="seop-table" style="min-width:480px"><tr><th>Keyword</th><th>Posición</th><th></th></tr>' + rows + '</table></div>';
+  return header + '<div class="seop-scroll"><table class="seop-table" style="min-width:480px"><tr><th>Keyword</th><th>Posición</th>' + (AGENTES_ACTIVOS ? '<th></th>' : '') + '</tr>' + rows + '</table></div>';
 }
 
 function seoGenerateContent(i) {
@@ -27957,7 +28030,7 @@ function seoResearchKeywords() {
 function seoImportKeywords(msgId) {
   const list = (window._seoKwImports || {})[msgId];
   if (!list || !seoProject) {
-    if (!seoProject) alert('Primero crea tu proyecto SEO (agente SEO → Proyecto SEO).');
+    if (!seoProject) alert('Primero crea tu proyecto SEO en Marketing › Proyecto SEO.');
     return;
   }
   seoAddKeywords(list.join('|'));
@@ -28011,12 +28084,17 @@ function seoRenderGeoTab() {
     '<div class="seop-addbar">' +
       '<input class="seop-input" id="seop-geo-add" type="text" placeholder="Añadir consulta, ej: ¿cuál es la mejor plataforma de reservas VIP para hoteles?" onkeydown="if(event.key===\'Enter\')seoGeoAddQuery()">' +
       '<button class="seop-btn" onclick="seoGeoAddQuery()">+ Añadir</button>' +
-      '<button class="seop-btn" onclick="seoGeoGenerateQueries()">' + icn('search', 12) + ' Generar con el agente</button>' +
+      (AGENTES_ACTIVOS ? '<button class="seop-btn" onclick="seoGeoGenerateQueries()">' + icn('search', 12) + ' Generar con el agente</button>' : '') +
     '</div>';
 
   if (!queries.length) {
-    return header + emptyAgua('bot', '¿Te mencionan las IAs?', 'Añade las preguntas que haría tu cliente ideal ("¿cuál es la mejor…?", "recomiéndame…") o pide al agente que las genere. Máximo 10 por reporte.');
+    return header + emptyAgua('bot', '¿Te mencionan las IAs?', 'Añade las preguntas que haría tu cliente ideal ("¿cuál es la mejor…?", "recomiéndame…")' +
+      (AGENTES_ACTIVOS ? ' o pide al agente que las genere' : '') + '. Máximo 10 por reporte.');
   }
+  // Antes del primer reporte no se sabe cuántos motores responden: se cuenta
+  // con los cuatro, que es lo que hay configurado hoy.
+  const motoresReporte = hist ? activeEngines.length : Object.keys(GEO_ENGINE_META).length;
+  const cupoGeo = seoCupoLinea('geo', queries.length * motoresReporte);
 
   // Share of voice por motor (mes actual y anterior)
   const sov = (h, engine) => {
@@ -28067,7 +28145,7 @@ function seoRenderGeoTab() {
 
   const lastCheck = hist?.checkedAt ? '<div style="font-size:11px;color:var(--muted2);margin-top:12px">Última consulta: ' + new Date(hist.checkedAt).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · las respuestas de las IAs varían — el reporte captura una muestra mensual</div>' : '';
 
-  return header + statsRow + table + lastCheck;
+  return header + cupoGeo + statsRow + table + lastCheck;
 }
 
 async function seoGeoAddQuery(text) {
@@ -28118,7 +28196,14 @@ async function seoGeoUpdate() {
       openUpgradeFlow('El reporte GEO (posicionamiento en ChatGPT, Claude, Gemini y Perplexity) es parte del plan Pro.');
       return;
     }
+    if (data.sinCupo) {
+      seoCupoActualizar('geo', data.cupo);
+      seoRenderProject();
+      alert(data.error);
+      return;
+    }
     if (data.error) throw new Error(data.error);
+    seoCupoActualizar('geo', data.cupo);
     seoProject.geoHistory = seoProject.geoHistory || {};
     seoProject.geoHistory[seoMonthKey()] = { checkedAt: Date.now(), engines: data.engines, results: data.results };
     await seoSaveProject();
@@ -28140,7 +28225,7 @@ function seoGeoGenerateQueries() {
 function seoImportGeoQueries(msgId) {
   const list = (window._geoQImports || {})[msgId];
   if (!list || !seoProject) {
-    if (!seoProject) alert('Primero crea tu proyecto SEO (agente SEO → Proyecto SEO).');
+    if (!seoProject) alert('Primero crea tu proyecto SEO en Marketing › Proyecto SEO.');
     return;
   }
   seoGeoAddQuery(list.join('|'));

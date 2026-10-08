@@ -7,9 +7,12 @@
 // La sesión se verifica con el módulo común, que lee las cabeceras de las
 // dos formas: `Headers` en edge y objeto plano en Node.
 import { verificarSesion, anotarSesion } from './_sesion.js';
+import { cuentaDe, estadoSeo, apuntarSeo } from './_cupo-seo.js';
 
 const SERPER_KEY = process.env.SERPER_API_KEY;
 const MAX_KEYWORDS = 30; // tope por request para acotar costo
+// Serper: 2 créditos por keyword con num=100, ~1 USD por 1.000 créditos.
+const COSTO_KEYWORD = 0.002;
 
 // A qué cuenta pertenece quien pregunta. Un miembro del equipo hereda el plan
 // de su dueño: es la regla del producto y aquí se estaba ignorando.
@@ -36,7 +39,8 @@ async function isPaidOrAdmin(req) {
   if (!sesion.id) { await anotarSesion(sesion, 'seo-rank'); return { ok: false, plan: 'free' }; }
   const payload = sesion.datos;
   const plan = payload.public_metadata?.plan || payload.publicMetadata?.plan || 'free';
-  if (PAID_PLANS.includes(plan)) return { ok: true, plan };
+  const userId = sesion.id;
+  if (PAID_PLANS.includes(plan)) return { ok: true, plan, userId };
   // Bypass admin: verificar email real via Clerk (el JWT no siempre lo trae)
   if (payload.sub && process.env.CLERK_SECRET_KEY) {
     try {
@@ -47,7 +51,7 @@ async function isPaidOrAdmin(req) {
       // Clerk dejó de mandar public_metadata en el token de sesión (v2): el plan
       // real se lee aquí, si no todo usuario de pago quedaba como "free".
       const realPlan = u.public_metadata?.plan;
-      if (PAID_PLANS.includes(realPlan)) return { ok: true, plan: realPlan };
+      if (PAID_PLANS.includes(realPlan)) return { ok: true, plan: realPlan, userId };
 
       // Y si no es de pago, puede ser MIEMBRO de una cuenta que sí lo es: el
       // plan es del DUEÑO, no de quien abre la pantalla. Sin esto, los siete
@@ -61,10 +65,10 @@ async function isPaidOrAdmin(req) {
         });
         const dueno = await rd.json();
         const planDueno = dueno?.public_metadata?.plan;
-        if (PAID_PLANS.includes(planDueno)) return { ok: true, plan: planDueno };
+        if (PAID_PLANS.includes(planDueno)) return { ok: true, plan: planDueno, userId };
       }
       const email = (u.email_addresses?.[0]?.email_address || '').toLowerCase();
-      if (ADMIN_EMAILS.includes(email)) return { ok: true, plan: 'admin' };
+      if (ADMIN_EMAILS.includes(email)) return { ok: true, plan: 'admin', userId };
     } catch {}
   }
   return { ok: false, plan };
@@ -113,9 +117,24 @@ async function rankOne(keyword, domain, gl, hl) {
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // GET ?action=cupo — lo que le queda a la cuenta este mes, de posiciones y de
+  // GEO a la vez (una sola consulta a Clerk para pintar las dos pestañas).
+  // Si no se pudo contar, ese tipo viene con `error: true` y la pantalla lo dice.
+  if (req.method === 'GET' && req.query?.action === 'cupo') {
+    const g = await isPaidOrAdmin(req);
+    if (!g.ok) return res.status(403).json({ error: 'El Proyecto SEO es parte del plan Pro.', upgrade: true });
+    const cta = await cuentaDe(g.userId);
+    const [posiciones, geo] = await Promise.all([
+      estadoSeo(cta, 'posiciones', g.plan),
+      estadoSeo(cta, 'geo', g.plan),
+    ]);
+    return res.status(200).json({ plan: g.plan, posiciones, geo });
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   if (!SERPER_KEY) {
@@ -134,16 +153,45 @@ export default async function handler(req, res) {
   if (!Array.isArray(keywords) || !keywords.length) return res.status(400).json({ error: 'keywords requeridas' });
   if (!domain) return res.status(400).json({ error: 'domain requerido' });
 
-  const batch = keywords.slice(0, MAX_KEYWORDS).map(k => String(k).trim()).filter(Boolean);
+  let batch = keywords.slice(0, MAX_KEYWORDS).map(k => String(k).trim()).filter(Boolean);
+
+  // ── Cupo del mes ──
+  // A diferencia del GEO, aquí sí sirve hacer una parte: cada keyword es un
+  // dato completo por sí misma. Se consultan las que caben y se dice cuántas
+  // quedaron fuera (`sinCupo`), para que la pantalla no las dé por actualizadas.
+  const cuenta = await cuentaDe(gate.userId);
+  const cupo = await estadoSeo(cuenta, 'posiciones', gate.plan);
+  let sinCupo = 0;
+  if (cupo.error) {
+    console.error('[seo-rank] no se pudo leer el cupo de', cuenta, '— se deja pasar');
+  } else if (batch.length > cupo.restante) {
+    sinCupo = batch.length - cupo.restante;
+    batch = batch.slice(0, cupo.restante);
+    if (!batch.length) {
+      return res.status(429).json({
+        error: `Usaste las ${cupo.cupo} consultas de posiciones de este mes. El contador se reinicia el día 1.`,
+        sinCupo, cupo,
+      });
+    }
+  }
 
   try {
     const results = await Promise.all(batch.map(k =>
       rankOne(k, domain, gl, hl).catch(e => ({ keyword: k, error: String(e.message || e) }))
     ));
+    // Se apunta antes de responder, o un segundo clic vería el contador viejo.
+    const registradas = results.filter(r => !r.error).length;
+    await apuntarSeo({
+      cuenta, actorId: gate.userId, tipo: 'posiciones',
+      filas: results.map(r => ({ ok: !r.error, detalle: 'serper', costo: COSTO_KEYWORD })),
+    });
     return res.json({
       results,
-      creditsUsed: batch.length * 2, // num=100 cuesta 2 créditos en Serper
+      creditsUsed: registradas * 2, // num=100 cuesta 2 créditos en Serper
       truncated: keywords.length > MAX_KEYWORDS ? keywords.length - MAX_KEYWORDS : 0,
+      sinCupo,
+      cupo: cupo.error ? { error: true, cupo: cupo.cupo }
+        : { cupo: cupo.cupo, usados: cupo.usados + registradas, restante: Math.max(0, cupo.restante - registradas) },
     });
   } catch (err) {
     console.error('seo-rank error:', err);
