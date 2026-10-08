@@ -299,15 +299,16 @@ console.log('\nSi la petición salió sin token, se reintenta\n');
 
   // El escenario del fallo: la sesión llega TARDE. El primer intento sale sin
   // token, el servidor contesta 401 y hasta ahora nadie reintentaba.
-  const correr = async ({ sesionLlegaTarde }) => {
+  const correr = async ({ sesionLlegaTarde, sesionCerrada = false, aProposito = false }) => {
     const peticiones = [];
-    let haySesion = !sesionLlegaTarde;
+    const avisos = [];
+    let haySesion = !sesionLlegaTarde && !sesionCerrada;
     const entorno = {
       getAuthHeaders: async ({ fresh } = {}) => (haySesion
         ? { 'Content-Type': 'application/json', Authorization: 'Bearer token' + (fresh ? '-fresco' : '') }
         : { 'Content-Type': 'application/json' }),
       // Esperar a la sesión es justo lo que la deja llegar.
-      clerkReady: async () => { haySesion = true; return true; },
+      clerkReady: async () => { if (!sesionCerrada) haySesion = true; return !sesionCerrada; },
       // El objeto es fijo y lo que cambia es `session`: pasarlo por un getter
       // del entorno no servía —`new Function` lo evalúa UNA vez, al construir
       // el ámbito— y entonces la sesión nunca llegaba, por el banco y no por
@@ -316,7 +317,8 @@ console.log('\nSi la petición salió sin token, se reintenta\n');
       sessionToken: null,
       errRegistrar: () => {},
       cuentaSuspendida: () => {},
-      sesionVencida: () => {},
+      sesionVencida: (m) => avisos.push(m || 'vencida'),
+      _saliendoAProposito: aProposito,
       document: { hidden: false },
       _paginaSeVa: false,
       fetch: async (url, opts) => {
@@ -329,7 +331,7 @@ console.log('\nSi la petición salió sin token, se reintenta\n');
     const nombres = Object.keys(entorno);
     const f = new Function(...nombres, src + '\n; return _fetchAuthRaw;');
     const res = await f(...nombres.map((n) => entorno[n]))('/api/pauta');
-    return { peticiones, estado: res.status };
+    return { peticiones, estado: res.status, avisos };
   };
 
   const tarde = await correr({ sesionLlegaTarde: true });
@@ -344,6 +346,20 @@ console.log('\nSi la petición salió sin token, se reintenta\n');
   const aTiempo = await correr({ sesionLlegaTarde: false });
   ok(aTiempo.peticiones.length === 1,
      'y si la sesión ya estaba, no se reintenta de más', JSON.stringify(aTiempo.peticiones));
+  ok(tarde.avisos.length === 0 && aTiempo.avisos.length === 0,
+     'y ninguno de los dos avisa de nada', JSON.stringify([tarde.avisos, aTiempo.avisos]));
+
+  // HBSB, 08-10-2026: la sesión se cerró con la pestaña abierta. La petición
+  // sale sin token, el servidor solo puede decir «No autorizado» —no sabe que
+  // había una sesión— y la ficha se quedaba muda: historial vacío, nada se
+  // guardaba. Aquí sí se sabe que no hay sesión, así que se avisa.
+  const cerrada = await correr({ sesionCerrada: true });
+  ok(cerrada.estado === 401 && cerrada.avisos.length === 1,
+     'si la sesión se cerró, el 401 sin token avisa «vuelve a entrar»', JSON.stringify(cerrada.avisos));
+  ok(/se cerró/.test(cerrada.avisos[0] || ''), 'y dice que la sesión se cerró', String(cerrada.avisos[0]));
+  const saliendo = await correr({ sesionCerrada: true, aProposito: true });
+  ok(saliendo.avisos.length === 0,
+     'pero no cuando la persona cerró sesión a propósito', JSON.stringify(saliendo.avisos));
 }
 {
   const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');

@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-08-sesion-cerrada-avisa",
+      "fecha": "2026-10-08",
+      "tipo": "arreglo",
+      "titulo": "Si tu sesión se cierra, Acuarius te lo dice",
+      "texto": "Si tu sesión se cerraba con la página abierta (por ejemplo, porque alguien cambió la contraseña de la cuenta), la ficha del lead seguía en pantalla pero el historial salía vacío, el responsable aparecía como «ya no está en el equipo» y nada se guardaba, sin ningún aviso. Ahora aparece una barra arriba con el botón «Volver a entrar», y si el historial no se puede cargar lo dice en vez de mostrarlo vacío. Tus datos nunca se perdieron."
+    },
+    {
       "id": "2026-10-08-academia-sin-agentes",
       "fecha": "2026-10-08",
       "tipo": "mejora",

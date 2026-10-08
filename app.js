@@ -448,6 +448,19 @@ async function initAuth(){
       return false;
     }
     limpiarSiCambioLaCuenta(clerkInstance.user.id);
+    // La sesión puede cerrarse con la pestaña abierta: alguien cambió la
+    // clave con «cerrar las demás sesiones», cerró sesión en todos los
+    // dispositivos o la sesión caducó. Pasa sobre todo cuando varias personas
+    // comparten un usuario. La pantalla seguía con lo que tenía cargado y cada
+    // petición salía sin credenciales: el historial decía «Sin actividad
+    // registrada», el dueño salía como «ya no está en el equipo» y nada se
+    // guardaba, sin una palabra de por qué (HBSB, 08-10-2026). Se avisa en el
+    // momento en que Clerk se entera, no al primer fallo.
+    try {
+      clerkInstance.addListener(({ session }) => {
+        if (!session && !_saliendoAProposito) sesionVencida('Tu sesión se cerró. Vuelve a entrar para seguir.');
+      });
+    } catch (e) { /* sin el aviso temprano queda el de fetchAuth */ }
     try { sessionToken = await clerkInstance.session.getToken(); } catch(e){}
     userPlan = clerkInstance.user.publicMetadata?.plan || 'free';
     // Prueba Pro de 14 días: 'trial' vigente se comporta como Pro; vencida como free
@@ -584,7 +597,7 @@ function ocultarAgentes() {
     });
 }
 alDOMListo(ocultarAgentes);
-async function logout(){if(clerkInstance){await clerkInstance.signOut();window.location.href='/login.html'}}
+async function logout(){if(clerkInstance){_saliendoAProposito=true;await clerkInstance.signOut();window.location.href='/login.html'}}
 
 // ── THEME ──
 function initTheme() {
@@ -1037,6 +1050,12 @@ async function _fetchAuthRaw(url, opts = {}) {
       const d = await res.clone().json();
       if (d && d.sesion_vencida) sesionVencida(d.error);
     } catch {}
+    // Si la petición salió SIN token y ni esperando apareció una sesión, el
+    // servidor solo puede decir «No autorizado»: no sabe que había una sesión
+    // y se cerró. Aquí sí se sabe, así que se dice.
+    if (!(clerkInstance && clerkInstance.session) && !_saliendoAProposito) {
+      sesionVencida('Tu sesión se cerró. Vuelve a entrar para seguir.');
+    }
   }
 
   // Los fallos del servidor SÍ se reportan. El 401 y el 403 no: son permisos,
@@ -22815,15 +22834,21 @@ async function actBorrar(id, leadId) {
 // panel lo enseña compacto y la ficha a página completa como una línea de
 // tiempo. Traer el dato es lo mismo; dibujarlo, no.
 let _crmActividadesLead = [];
+// Si la última carga falló. Una lista vacía por error se pintaba igual que un
+// lead sin historia —«Sin actividad registrada»— y hacía creer que se había
+// borrado todo cuando solo no se pudo leer.
+let _crmActividadesFallo = false;
 
 async function crmTraerActividades(leadId) {
   try {
     const res = await fetchAuth(`/api/lead-activities?lead_id=${encodeURIComponent(leadId)}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     _crmActividadesLead = (await res.json()).activities || [];
+    _crmActividadesFallo = false;
   } catch (e) {
     console.error('crmTraerActividades', e);
     _crmActividadesLead = [];
+    _crmActividadesFallo = true;
   }
   return _crmActividadesLead;
 }
@@ -22834,7 +22859,9 @@ async function crmLoadActivities(leadId) {
   try {
     const acts = await crmTraerActividades(leadId);
     if (acts.length === 0) {
-      list.innerHTML = `<div style="font-size:12px;color:var(--muted)">Sin actividad registrada.</div>`;
+      list.innerHTML = _crmActividadesFallo
+        ? `<div style="font-size:12px;color:var(--danger)">No se pudo cargar el historial. No se ha perdido nada: recarga la página para volver a intentarlo.</div>`
+        : `<div style="font-size:12px;color:var(--muted)">Sin actividad registrada.</div>`;
       return;
     }
     const typeLabels = { nota: 'Nota', llamada: 'Llamada', email: 'Email', reunion: 'Reunión', tarea: 'Tarea', stage_change: 'Etapa', creacion: 'Creado' };
@@ -44739,8 +44766,10 @@ function lfOpcionesResponsable(l) {
   }
   // Quien lo lleva puede no estar en la lista —un miembro dado de baja—, y sin
   // esto el desplegable enseñaría «Sin asignar» sobre un lead que sí lo está.
+  // Sin sesión no se sabe quién es «yo», y el dueño salía como dado de baja
+  // sobre sus propios leads. Ahí solo se pone el nombre, sin veredicto.
   if (l.assigned_to && !opts.some(o => o.id === l.assigned_to)) {
-    opts.push({ id: l.assigned_to, name: (l.assigned_name || 'Otra persona') + ' (ya no está en el equipo)' });
+    opts.push({ id: l.assigned_to, name: (l.assigned_name || 'Otra persona') + (miId ? ' (ya no está en el equipo)' : '') });
   }
   return opts;
 }
@@ -44914,6 +44943,10 @@ function lfHistorial() {
   const todo = _crmActividadesLead || [];
   const acts = lfFiltro === 'todo' ? todo : todo.filter(a => a.type === lfFiltro);
   if (!acts.length) {
+    if (!todo.length && _crmActividadesFallo) {
+      return '<div class="lf-vacio" style="color:var(--danger)">No se pudo cargar el historial. ' +
+        'No se ha perdido nada: recarga la página para volver a intentarlo.</div>';
+    }
     return '<div class="lf-vacio">' +
       (todo.length ? 'Nada de ese tipo todavía.' : 'Sin actividad registrada.') + '</div>';
   }
@@ -45887,13 +45920,36 @@ let _yaAvisadoSuspendida = false;
 // existe. Lo único que hay que hacer es volver a entrar, así que se dice.
 //
 // Una sola vez: al abrir una pantalla salen diez peticiones a la vez.
+//
+// Es una barra fija con botón y no un toast: el toast se iba a los pocos
+// segundos y la persona seguía trabajando en una pantalla que ya no guardaba
+// nada. Mientras la sesión no vuelva, la barra se queda.
 let _yaAvisadoVencida = false;
+// logout() y la cuenta suspendida cierran la sesión a propósito: eso no se avisa.
+let _saliendoAProposito = false;
 function sesionVencida(mensaje) {
   if (_yaAvisadoVencida) return;
   _yaAvisadoVencida = true;
   try {
-    showToast(mensaje || 'Tu sesión venció. Vuelve a entrar para seguir.', 'error');
+    const barra = document.createElement('div');
+    barra.id = 'sesion-cerrada';
+    barra.setAttribute('role', 'alert');
+    barra.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99998;display:flex;align-items:center;' +
+      'justify-content:center;gap:14px;flex-wrap:wrap;padding:10px 16px;background:var(--danger-bg);' +
+      'color:var(--danger);border-bottom:1px solid var(--danger);font-family:var(--font);' +
+      'font-size:var(--fs-sm);font-weight:600;box-shadow:var(--shadow-md)';
+    barra.innerHTML = '<span>' + esc(mensaje || 'Tu sesión venció. Vuelve a entrar para seguir.') +
+      ' Lo que hagas ahora no se guardará.</span>' +
+      '<button class="btn-pri sm" onclick="sesionVolverAEntrar()">Volver a entrar</button>';
+    document.body.appendChild(barra);
   } catch (e) { /* si ni el aviso se puede pintar, al menos no se rompe nada */ }
+}
+
+// Sin sesión, logout() llamaría a signOut sobre nada; se va directo al login.
+async function sesionVolverAEntrar() {
+  _saliendoAProposito = true;
+  try { if (clerkInstance && clerkInstance.session) await clerkInstance.signOut(); } catch (e) {}
+  window.location.href = '/login.html';
 }
 
 function cuentaSuspendida(mensaje) {
@@ -45913,7 +45969,7 @@ function cuentaSuspendida(mensaje) {
     '</div>';
   document.body.appendChild(ov);
   // La sesión se cierra después de que lo lea, no en el mismo instante.
-  setTimeout(() => { try { clerkInstance?.signOut(); } catch (e) {} }, 8000);
+  setTimeout(() => { _saliendoAProposito = true; try { clerkInstance?.signOut(); } catch (e) {} }, 8000);
 }
 
 // ── Versión nueva publicada ──────────────────────────────────────────────────
