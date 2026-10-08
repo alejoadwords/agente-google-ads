@@ -9,6 +9,24 @@
       "texto": "La regla de reparto «Webhook externo» no se estaba aplicando y esos leads caían en «Cualquier otra fuente». Además, los que entraban por el webhook de una automatización no se asignaban a nadie ni creaban la tarea de primer contacto. Ahora entran como cualquier otro lead: se reparten según tus reglas, el comercial recibe su aviso y su tarea, y disparan tus automatizaciones de «Lead creado». Si ya tenías configurada la regla, se respeta tal cual."
     },
     {
+      "id": "2026-10-08-resena-whatsapp",
+      "fecha": "2026-10-08",
+      "tipo": "arreglo",
+      "titulo": "«Pedir reseña» por WhatsApp ya manda el mensaje con tu enlace",
+      "texto": "El paso «Pedir reseña» con canal WhatsApp salía sin texto ni enlace. Ahora el cliente recibe tu mensaje con el enlace a tu ficha de Google. Y si no se puede enviar (por ejemplo, porque el cliente no te escribió en las últimas 24 horas), el historial de la automatización y la ficha del lead dicen por qué, en vez de darlo por enviado."
+    },
+    {
+      "id": "2026-10-08-propuestas-pagar-firma",
+      "fecha": "2026-10-08",
+      "tipo": "arreglo",
+      "titulo": "«Aceptar y pagar» ya deja la propuesta aceptada",
+      "texto": "Si tu propuesta tiene tu propio link de pago (Wompi, Stripe u otro), tu cliente ahora firma primero y luego pasa al pago. Antes podía pagar sin que la propuesta quedara como aceptada y no te llegaba el aviso por correo.",
+      "accion": {
+        "texto": "Ver Propuestas",
+        "ir": "propuestas"
+      }
+    },
+    {
       "id": "2026-10-07-ventas-de-hoy",
       "fecha": "2026-10-07",
       "tipo": "arreglo",
