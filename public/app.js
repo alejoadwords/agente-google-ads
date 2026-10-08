@@ -20596,25 +20596,32 @@ function crmAvisoAbrir(avisoId, leadId) {
 // persona que el lead «pertenece a otro cliente», que era falso (le pasó a
 // Certain el 08-10-2026). Ahora se pregunta por el lead y, si es de otro
 // proceso del mismo cliente, se cambia a ese tablero y se abre.
-async function crmIrALeadODecirlo(leadId) {
+async function crmIrALeadODecirlo(leadId, leadSuelto) {
   if (!leadId) return false;
+  // Desde Inicio u otra pantalla fuera del CRM, primero se entra al CRM: la
+  // ficha es una vista suya.
+  const vistaCrm = document.getElementById('view-crm');
+  if (vistaCrm && !vistaCrm.classList.contains('active') && typeof navGo === 'function') navGo('crm');
   // Recién entrando al CRM los leads todavía vienen en camino.
   for (let i = 0; i < 40 && !crmLeadsLoaded; i++) await new Promise(r => setTimeout(r, 200));
-  if (crmLeads.some(l => l.id === leadId)) { crmOpenDetail(leadId); return true; }
+  const cargado = crmLeads.find(l => l.id === leadId);
+  if (cargado) { await lfAbrir(cargado); return true; }
 
-  let lead = null;
-  try {
-    const r = await fetchAuth('/api/leads?id=' + encodeURIComponent(leadId));
-    if (r.status === 404) {
-      showToast('Ese lead ya no existe o no está a tu cargo.', 'info');
+  let lead = leadSuelto && leadSuelto.id === leadId && leadSuelto.pipeline_id !== undefined ? leadSuelto : null;
+  if (!lead) {
+    try {
+      const r = await fetchAuth('/api/leads?id=' + encodeURIComponent(leadId));
+      if (r.status === 404) {
+        showToast('Ese lead ya no existe o no está a tu cargo.', 'info');
+        return false;
+      }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      lead = (await r.json()).lead;
+    } catch (e) {
+      console.warn('crmIrALeadODecirlo', e);
+      showToast('No se pudo abrir ese lead. Inténtalo de nuevo en un momento.', 'error');
       return false;
     }
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    lead = (await r.json()).lead;
-  } catch (e) {
-    console.warn('crmIrALeadODecirlo', e);
-    showToast('No se pudo abrir ese lead. Inténtalo de nuevo en un momento.', 'error');
-    return false;
   }
 
   const clienteActivo = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
@@ -20627,7 +20634,7 @@ async function crmIrALeadODecirlo(leadId) {
     await pipeCambiar(proceso.id);
     if (crmLeads.some(l => l.id === leadId)) {
       showToast('Te llevamos al tablero ' + (proceso.name || '') + ', donde está este lead.', 'info');
-      crmOpenDetail(leadId);
+      await lfAbrir(crmLeads.find(l => l.id === leadId));
       return true;
     }
   }
@@ -22126,7 +22133,16 @@ async function motivoDelFallo(res, accion) {
 // los leads de todo el cliente y el tablero muestra un pipeline a la vez, así
 // que sin esto la mitad de los enlaces de sus listas no abrían nada — y encima
 // en silencio, porque la función se limitaba a volver sin decir palabra.
-async function crmOpenDetail(leadId, leadSuelto) {
+// Desde el 08-10-2026 el panel lateral NO se abre (decisión de Alejandro):
+// cualquier enlace a un lead —inbox, Pulso, tareas, voz, duplicados, informes,
+// campana— abre la ficha grande. crmOpenDetail se queda como nombre de entrada
+// para no tocar cada llamada; el panel viejo vive en crmPanelLateralViejo y no
+// lo llama nadie.
+function crmOpenDetail(leadId, leadSuelto) {
+  return crmAbrirFicha(leadId, leadSuelto);
+}
+
+async function crmPanelLateralViejo(leadId, leadSuelto) {
   const lead = crmLeads.find(l => l.id === leadId) || leadSuelto;
   if (!lead) return;
   crmDetailLead = lead;
@@ -44297,14 +44313,13 @@ const LF_TIPOS = {
  * Abre la ficha. Recibe el id y no el lead entero: así vale igual desde el
  * tablero, desde la lista y desde una URL pegada en un chat.
  */
-async function crmAbrirFicha(leadId) {
-  const lead = (crmLeads || []).find(l => l.id === leadId);
-  if (!lead) {
-    // Puede venir de una URL y no estar en la vista actual (otro proceso, otro
-    // cliente). Decirlo es mejor que abrir una ficha en blanco.
-    showToast('Ese lead no está en la vista actual. Cambia de proceso o de cliente para verlo.', 'error');
-    return;
-  }
+async function crmAbrirFicha(leadId, leadSuelto) {
+  return crmIrALeadODecirlo(leadId, leadSuelto);
+}
+
+/** Pinta la ficha de un lead que YA está en `crmLeads` (lo resuelve crmIrALeadODecirlo). */
+async function lfAbrir(lead) {
+  const leadId = lead.id;
   lfLead = lead;
   // Las acciones que ya existen —agendar, propuesta, consultor, nota, mover de
   // proceso— trabajan sobre `crmDetailLead`. Apuntarlo al mismo lead es lo que

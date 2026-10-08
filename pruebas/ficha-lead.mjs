@@ -67,9 +67,11 @@ console.log('\nUn clic en el lead abre la ficha\n');
   chk('los botones de la tarjeta no arrastran a la ficha',
       ['Llamar', 'WhatsApp', 'Email'].every(b =>
         new RegExp('crm-card-act-btn[^>]*onclick="event\\.stopPropagation\\(\\)[^>]*' + b).test(js)));
-  chk('el panel sigue existiendo para los leads sueltos',
-      /async function crmOpenDetail\(leadId, leadSuelto\)/.test(js) &&
-      /crmOpenDetail\(id, lead\)/.test(js));
+  // Desde el 08-10-2026 todo enlace a un lead abre la FICHA, nunca el panel
+  // lateral (decisión de Alejandro): crmOpenDetail solo reenvía.
+  chk('todo enlace a un lead abre la ficha, nunca el panel',
+      /function crmOpenDetail\(leadId, leadSuelto\) \{\s*return crmAbrirFicha\(leadId, leadSuelto\);/.test(js) &&
+      (js.match(/crmPanelLateralViejo\(/g) || []).length === 1);
 }
 
 console.log('\nEl panel sigue siendo el sitio para mirar rápido\n');
@@ -212,8 +214,8 @@ console.log('\nSe puede editar el contacto\n');
 
 console.log('\nLo que no puede fallar callado\n');
 {
-  chk('un lead que no está en la vista lo dice, no abre una ficha vacía',
-      /no está en la vista actual/.test(bloque));
+  chk('un lead que no está en la vista se busca y, si no aparece, se dice',
+      /No encontramos ese lead en tus tableros/.test(js) && /async function lfAbrir\(lead\)/.test(js));
   chk('sin actividad se dice, no se queda en blanco', /Sin actividad registrada/.test(bloque));
   chk('sin tareas también', /Ninguna tarea pendiente/.test(bloque));
   chk('y si fallan las conversaciones no se queda en «Cargando…» para siempre',
