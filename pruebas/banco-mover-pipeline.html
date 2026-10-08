@@ -62,7 +62,9 @@ var crmDetailLead = null;
 function conLead(etapa, admin) {
   window._miPerfil = { gestiona_equipo: admin !== false, perfil: admin === false ? 'ventas' : 'admin' };
   crmDetailLead = { id: 'l1', name: 'Camila Restrepo', stage: etapa, pipeline_id: 'p1', client_id: null };
-  crmPintarProceso(crmDetailLead);
+  // crmPintarProceso() era del panel lateral, que se borró el 08-10-2026; en
+  // la app el botón lo pone la ficha. Aquí basta con el botón para abrir el modal.
+  document.getElementById('crm-d-proceso').innerHTML = '<button onclick="crmMoverProcesoAbrir()">Cambiar</button>';
   document.getElementById('crm-mover-overlay')?.remove();
 }
 

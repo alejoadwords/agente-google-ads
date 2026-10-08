@@ -8035,7 +8035,9 @@ function openSocialConnectionsModal() {
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:24px 28px 20px;border-bottom:1px solid var(--border)">' +
         '<div>' +
           '<div style="font-size:20px;font-weight:800;color:var(--text);letter-spacing:-.3px">Conectar redes sociales</div>' +
-          '<div style="font-size:14px;color:var(--muted);margin-top:4px">Publica directamente desde el Studio</div>' +
+          // Publicar desde aquí pide pages_manage_posts e instagram_content_publish, que
+          // Meta aún no aprueba (REVISION-META.md): no se promete lo que no funciona.
+          '<div style="font-size:14px;color:var(--muted);margin-top:4px">La publicación directa se habilita cuando Meta apruebe la app. Mientras tanto, descarga tus posts y publícalos.</div>' +
         '</div>' +
         '<button style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 6px;border-radius:8px" onclick="document.getElementById(\'social-conn-modal\')?.remove()">×</button>' +
       '</div>' +
@@ -8067,7 +8069,7 @@ function openPublishModal(postId) {
   const igAcct  = igAccts[0] || null;
   const fbAcct  = fbAccts[0] || null;
 
-  const hasMedia  = !!(post.imageBase64 || post.videoUrl);
+  const hasMedia  = !!(postTieneImagen(post) || post.videoUrl);
   const isCarousel = !!(post.format === 'carrusel' && post.carouselImages && post.carouselImages.length > 1);
 
   const igIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
@@ -8857,7 +8859,7 @@ function renderStudio() {
   const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
   setEl('stat-total', posts.length);
   setEl('stat-listos', posts.filter(p => p.status === 'listo').length);
-  setEl('stat-imagenes', posts.filter(p => p.imageBase64).length);
+  setEl('stat-imagenes', posts.filter(postTieneImagen).length);
   setEl('stat-publicados', posts.filter(p => p.status === 'publicado').length);
 
   if (studioCurrentView === 'calendar') {
@@ -8987,21 +8989,109 @@ function renderStreamCalendar(posts, grid) {
   grid.innerHTML = html;
 }
 
-function studioGenerateParrilla(prompt, wizardName) {
-  window._studioWizardName = wizardName || null;
+// El asistente llama a /api/chat por su cuenta. Antes pasaba por sendMsg(), que
+// corta si el chat de agentes no está activo (onDone): con AGENTES_ACTIVOS=false
+// no se llamaba a la IA y «Creando tu parrilla…» se quedaba girando para siempre.
+async function studioGenerateParrilla(prompt, wizardName) {
+  if (window._studioGenerating) return;
+  if (!canSendFreeMsg()) {
+    const { limit } = getMsgUsage();
+    openUpgradeFlow('Usaste tus ' + limit + ' mensajes gratuitos de este mes. Actualiza para seguir creando parrillas.');
+    return;
+  }
+  if (typeof SYSTEM_SOCIAL === 'undefined') {
+    showToast('No se pudo cargar el asistente de contenido. Recarga la página e intenta de nuevo.', 'error');
+    return;
+  }
+
   window._studioGenerating = true;
-  // Limpiar preview anterior
-  const preview = document.getElementById('studio-stream-preview');
-  if (preview) preview.innerHTML = '';
-  // Mostrar overlay con preview
+  window._streamPostsCount = 0;
   const overlay = document.getElementById('studio-gen-loading');
+  const grid = document.getElementById('studio-stream-calendar');
+  const ctr = document.getElementById('studio-stream-counter');
+  if (grid) renderStreamCalendar([], grid);
+  if (ctr) ctr.textContent = 'Analizando tu negocio…';
   if (overlay) overlay.style.display = 'flex';
-  // Enviar al agente social sin cambiar de vista
-  setAgentContext('social');
-  setTimeout(() => {
-    document.getElementById('cin').value = prompt;
-    sendMsg();
-  }, 100);
+
+  const cerrar = () => {
+    window._studioGenerating = false;
+    if (overlay) overlay.style.display = 'none';
+  };
+
+  try {
+    const sysPrompt = SYSTEM_SOCIAL
+      .replace('{MEMORY}', memCtx()).replace('{STAGE}', clientStage).replace('{AGENT}', 'Social Media Manager');
+    incrementMsgUsage();
+    const res = await fetchAuth('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], system: sysPrompt })
+    });
+    if (!res.ok) {
+      let errMsg = 'Error ' + res.status;
+      try { const d = await res.json(); errMsg = d.error || errMsg; } catch(_) {}
+      throw new Error(errMsg);
+    }
+
+    // /api/chat responde en SSE: se arma el texto y, mientras llega la tabla,
+    // se pinta la vista previa del calendario.
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let sseBuffer = '', fullText = '';
+    const pintarPreview = () => {
+      if (!grid || fullText.includes('<PARRILLA_JSON>')) return;
+      const parsed = [];
+      for (const line of fullText.split('\n')) { const p = parseStreamTableRow(line); if (p) parsed.push(p); }
+      if (parsed.length === window._streamPostsCount) return;
+      window._streamPostsCount = parsed.length;
+      renderStreamCalendar(parsed, grid);
+      if (ctr) ctr.textContent = parsed.length ? parsed.length + ' posts detectados…' : 'Analizando tu negocio…';
+    };
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      sseBuffer += decoder.decode(value, { stream: true });
+      const lines = sseBuffer.split('\n');
+      sseBuffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        let evt;
+        try { evt = JSON.parse(line.slice(6).trim()); } catch(_) { continue; }
+        if (evt.error) throw new Error(evt.error);
+        if (evt.done && evt.full !== undefined) fullText = evt.full;
+        else if (evt.delta) { fullText += evt.delta; pintarPreview(); }
+      }
+    }
+
+    const m = fullText.match(/<PARRILLA_JSON>([\s\S]*?)<\/PARRILLA_JSON>/);
+    if (!m) {
+      console.warn('[studio] la respuesta no trajo <PARRILLA_JSON>:', fullText.slice(-600));
+      throw new Error(fullText.trim()
+        ? 'La IA respondió, pero sin los posts en el formato que el calendario puede importar.'
+        : 'La IA no devolvió ninguna respuesta.');
+    }
+    window._studioWizardName = wizardName || null;
+    const importados = parseParrillaJSON(m[1].trim());
+    if (!importados) throw new Error('La IA devolvió los posts, pero no se pudieron leer.');
+
+    lastParrillaText = fullText
+      .replace(/\[PARRILLA_LISTA\]/g, '').replace(/\[GENERAR_IMAGENES_PARRILLA\]/g, '')
+      .replace(/<PARRILLA_JSON>[\s\S]*?<\/PARRILLA_JSON>/g, '').replace(/\[SUGERENCIAS:[^\]]*\]/g, '').trim();
+    window._studioJustImported = importados;
+    cerrar();
+    openSocialStudio();
+  } catch (err) {
+    console.error('[studio] no se pudo crear la parrilla:', err);
+    window._studioWizardName = null;
+    cerrar();
+    // Un modal y no un toast: la espera es de uno o dos minutos y el aviso no
+    // puede desaparecer antes de que la persona vuelva a mirar.
+    const otraVez = await confirmarAguaP({
+      titulo: 'No se pudo crear la parrilla',
+      texto: (err.message || 'Error desconocido.') + '\n\nNo se guardó nada. Puedes intentarlo de nuevo con las mismas opciones.',
+      confirmar: 'Intentar de nuevo',
+    });
+    if (otraVez) studioGenerateParrilla(prompt, wizardName);
+  }
 }
 
 function renderCalendarView(posts) {
@@ -9079,8 +9169,8 @@ function renderListView(posts) {
     const netCfg = STUDIO_NETWORKS[post.network] || { label: post.network, color:'#666', bg:'#f5f5f5' };
     const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
     const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
-    const thumbHtml = post.imageBase64
-      ? '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" style="width:100%;height:100%;object-fit:cover">'
+    const thumbHtml = postTieneImagen(post)
+      ? '<img src="' + esc(postImagenSrc(post)) + '" alt="" style="width:100%;height:100%;object-fit:cover">'
       : post.videoUrl
         ? '<video src="' + post.videoUrl + '" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>'
         : '<span style="font-size:20px">' + fmt.icon + '</span>';
@@ -9219,14 +9309,15 @@ function openStudioWizard() {
 
       <!-- Imágenes -->
       <div style="margin-bottom:20px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Cuántas imágenes generar con IA?</div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Cuántos posts con imagen sugerida?</div>
+        <div style="font-size:11px;color:var(--muted2);margin:-4px 0 8px">La IA deja listo el prompt de cada imagen; la generas después desde el post, cuando quieras.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-imgs">
           ${[
-            {val:'0',label:'Sin imágenes'},
-            {val:'3',label:'3 imágenes'},
-            {val:'5',label:'5 imágenes'},
-            {val:'10',label:'10 imágenes'},
-            {val:'todas',label:'Todas las posibles'},
+            {val:'0',label:'Ninguno'},
+            {val:'3',label:'3 posts'},
+            {val:'5',label:'5 posts'},
+            {val:'10',label:'10 posts'},
+            {val:'todas',label:'Todos los que apliquen'},
           ].map((im,i)=>`<button onclick="wizSelect(this,'wiz-imgs')" data-val="${im.val}" class="wiz-chip ${i===2?'active':''}">${im.label}</button>`).join('')}
         </div>
       </div>
@@ -9282,11 +9373,13 @@ function submitStudioWizard() {
   const netLabels = { instagram:'Instagram', tiktok:'TikTok', facebook:'Facebook', linkedin:'LinkedIn', x:'X (Twitter)', youtube:'YouTube' };
   const fmtLabels = { reel:'Reels/Videos', feed:'Imágenes estáticas', carrusel:'Carruseles', story:'Stories', post:'Posts de texto' };
 
+  // Las imágenes no salen de esta llamada: se generan después, post por post,
+  // desde el modal. Aquí solo se decide qué posts llevan imagen y su prompt.
   const imgInstr = imgCount === '0'
-    ? 'No generes imágenes para esta parrilla.'
+    ? 'Ningún post lleva imagen: needsImage false e imagePrompt vacío en todos.'
     : imgCount === 'todas'
-    ? 'Al terminar la parrilla, genera imágenes para TODOS los posts que las necesiten (needsImage: true).'
-    : `Al terminar la parrilla, genera exactamente ${imgCount} imágenes para los posts más importantes (los que necesiten imagen).`;
+    ? 'Marca needsImage true con un imagePrompt detallado en TODOS los posts que lleven imagen.'
+    : `Marca needsImage true con un imagePrompt detallado en exactamente ${imgCount} posts (los más importantes que lleven imagen); en el resto, needsImage false.`;
 
   const netNames = nets.map(n => netLabels[n] || n).join(' + ');
   const dateStr = new Date().toLocaleDateString('es', { day: 'numeric', month: 'long' });
@@ -9303,7 +9396,9 @@ ${topics ? 'TEMAS A TRATAR: ' + topics : ''}
 ${hashtags ? 'HASHTAGS DE MARCA: ' + hashtags : ''}
 IMÁGENES: ${imgInstr}
 
-Crea la parrilla completa siguiendo el formato tabla markdown estándar, con contenido específico y relevante para el negocio (no genérico). Incluye captions completos listos para publicar para cada post.`;
+Crea la parrilla completa siguiendo el formato tabla markdown estándar, con contenido específico y relevante para el negocio (no genérico). Incluye captions completos listos para publicar para cada post.
+
+Esta parrilla se importa directo al calendario: es OBLIGATORIO terminar con el bloque <PARRILLA_JSON> con TODOS los posts, tal como indica tu Skill 6. Sin ese bloque no se guarda nada. No hagas preguntas: crea la parrilla con la información que tienes.`;
 
   document.getElementById('studio-wizard').remove();
   // Generate without leaving Studio
@@ -9332,7 +9427,7 @@ function openPostModal(postId) {
   let mediaHTML = '';
 
   const hasVideo = !!post.videoUrl;
-  const hasImage = !!post.imageBase64;
+  const hasImage = postTieneImagen(post);
 
   if (hasVideo) {
     // Video subido (object URL — sesión)
@@ -9369,10 +9464,10 @@ function openPostModal(postId) {
         '<button class="pm-btn pm-btn-ghost" style="justify-content:center;color:#e53e3e;border-color:#fed7d7!important" onclick="clearPostMedia(\'' + postId + '\')" title="Eliminar slides">🗑</button>' +
       '</div>';
   } else if (hasImage) {
-    // Imagen guardada en base64
+    // Imagen en base64 (recién generada) o en su URL (ya guardada)
     mediaHTML =
       '<div class="post-modal-media-preview">' +
-        '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" style="width:100%;height:100%;object-fit:cover">' +
+        '<img src="' + esc(postImagenSrc(post)) + '" alt="" style="width:100%;height:100%;object-fit:cover">' +
       '</div>' +
       '<div style="display:flex;gap:6px">' +
         '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadPostImage(\'' + postId + '\')">⬇ Descargar</button>' +
@@ -9444,7 +9539,7 @@ function openPostModal(postId) {
   }
 
   // ── Pie: botones de estado ────────────────────────────────────────────────
-  const hasMedia = !!(post.imageBase64 || post.videoUrl);
+  const hasMedia = !!(postTieneImagen(post) || post.videoUrl);
   const igConn   = getSocialAccount('instagram');
   const fbConn   = getSocialAccount('facebook');
   const hasAnyConn = !!(igConn || fbConn);
@@ -9543,6 +9638,7 @@ function uploadMediaForPost(postId, accept) {
         videoUrl,
         videoFileName: file.name,
         imageBase64: null,        // limpiar imagen previa
+        imageUrl: null,           // y su copia guardada, o volvería a aparecer
         imageMediaType: file.type
       });
       closePostModal();
@@ -9556,7 +9652,9 @@ function uploadMediaForPost(postId, accept) {
       const reader = new FileReader();
       reader.onload = (ev) => {
         const base64 = ev.target.result.split(',')[1];
-        updateStudioPost(postId, { imageBase64: base64, imageMediaType: file.type, videoUrl: null });
+        // imageUrl a null: si quedara la de la imagen anterior, el guardado no
+        // subiría la nueva (la da por subida) y se mostraría la vieja.
+        updateStudioPost(postId, { imageBase64: base64, imageMediaType: file.type, imageUrl: null, videoUrl: null });
         closePostModal();
         setTimeout(() => openPostModal(postId), 80);
       };
@@ -9919,23 +10017,60 @@ function inferVisualConcept(post) {
   return base + ', ' + net + ', Latin American setting, authentic people';
 }
 
-function downloadPostImage(postId) {
-  const post = loadStudioPosts().find(p => p.id === postId);
-  if (!post || !post.imageBase64) return;
-  downloadAdImage(post.imageBase64, post.imageMediaType, 'post_' + post.network + '_sem' + post.week + '.png');
+// Al guardar, la imagen se sube y la copia en base64 se borra (studioSubirImagenes):
+// desde ahí el post solo tiene imageUrl. Todo lo que muestra o descarga la imagen
+// tiene que mirar las dos, o el post «pierde» su imagen tras el primer guardado.
+function postTieneImagen(post) {
+  return !!(post && (post.imageBase64 || post.imageUrl));
+}
+function postImagenSrc(post) {
+  if (!post) return '';
+  if (post.imageBase64) return 'data:' + (post.imageMediaType || 'image/jpeg') + ';base64,' + post.imageBase64;
+  return post.imageUrl || '';
 }
 
-function downloadAllStudioImages() {
-  const posts = loadStudioPosts().filter(p => p.imageBase64);
+async function descargarImagenPost(post, filename) {
+  if (post.imageBase64) { downloadAdImage(post.imageBase64, post.imageMediaType, filename); return true; }
+  if (!post.imageUrl) return false;
+  try {
+    const r = await fetch(post.imageUrl);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const blobUrl = URL.createObjectURL(await r.blob());
+    const a = document.createElement('a');
+    a.href = blobUrl; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    return true;
+  } catch (e) {
+    // Sin descarga directa, al menos se abre la imagen para guardarla a mano.
+    console.warn('[studio] descarga por URL falló, se abre en pestaña:', e);
+    window.open(post.imageUrl, '_blank', 'noopener');
+    return false;
+  }
+}
+
+function downloadPostImage(postId) {
+  const post = loadStudioPosts().find(p => p.id === postId);
+  if (!postTieneImagen(post)) { showToast('Este post no tiene imagen para descargar.', 'error'); return; }
+  descargarImagenPost(post, 'post_' + post.network + '_sem' + post.week + '.png');
+}
+
+async function downloadAllStudioImages() {
+  const posts = loadStudioPosts().filter(postTieneImagen);
   if (!posts.length) { alert('No hay imágenes generadas todavía.'); return; }
-  posts.forEach(p => downloadAdImage(p.imageBase64, p.imageMediaType, 'post_' + p.network + '_sem' + p.week + '_' + (p.title||'post').slice(0,20).replace(/\s+/g,'_') + '.png'));
+  let fallidas = 0;
+  for (const p of posts) {
+    const ok = await descargarImagenPost(p, 'post_' + p.network + '_sem' + p.week + '_' + (p.title||'post').slice(0,20).replace(/\s+/g,'_') + '.png');
+    if (!ok) fallidas++;
+  }
+  if (fallidas) showToast(fallidas + ' imagen' + (fallidas === 1 ? '' : 'es') + ' no se pudo descargar directo; se abrió en otra pestaña para guardarla.', 'error');
 }
 
 // ── Borrar media de un post (vuelve al estado vacío) ─────────────────────────
 function clearPostMedia(postId) {
   if (!confirm('¿Eliminar la imagen/slides de este post?')) return;
   updateStudioPost(postId, {
-    imageBase64: null, imageMediaType: null,
+    imageBase64: null, imageMediaType: null, imageUrl: null,
     carouselImages: null, videoUrl: null, videoFileName: null
   });
   closePostModal();
@@ -10568,6 +10703,7 @@ function irA(destino) {
         case 'marketing':     navGo('marketing'); break;
         case 'plantillas':    navGo('marketing'); setTimeout(() => crmSetView('plantillas'), 150); break;
         case 'paginas':       navGo('marketing'); setTimeout(() => crmSetView('paginas'), 150); break;
+        case 'studio':        openSocialStudio(); break;
         case 'propuestas':    navGo('marketing'); setTimeout(() => crmSetView('proposals'), 150); break;
         case 'pauta':         navGo('marketing'); setTimeout(() => crmSetView('pauta'), 150); break;
         case 'pauta-ventas':  navGo('marketing'); setTimeout(() => { pautaVista = 'ventas'; crmSetView('pauta'); }, 150); break;
@@ -11025,8 +11161,8 @@ function academiaHTML() { // legacy — kept for reference, not used
       + card('SEO',SE,I.edit,'Optimización on-page con el agente SEO','Mejora títulos, meta-descriptions, headings y contenido de tus páginas.','7 min',''))
     // Contenido
     + section('contenido','#F5F3FF','#7c3aed','<path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>','Contenido para Redes Sociales','Studio de contenido, parrilla editorial y generación de imágenes con IA',
-        card('Contenido',CO,I.layout,'El Studio de Contenido — guía completa','Conoce todos los módulos: generador de copys, parrilla, publicación y análisis.','12 min','')
-      + card('Contenido',CO,I.cal,'Genera y publica tu parrilla mensual de contenido','Crea un mes de contenido en minutos: copys, imágenes y publicación directa.','8 min','')
+        card('Contenido',CO,I.layout,'El Studio de Contenido — guía completa','Conoce todos los módulos: generador de copys, parrilla, imágenes y descarga para publicar.','12 min','')
+      + card('Contenido',CO,I.cal,'Genera tu parrilla mensual de contenido','Crea un mes de contenido en minutos: copys e imágenes listos para descargar y publicar.','8 min','')
       + card('Contenido',CO,I.img,'Generación de imágenes con IA para redes sociales','Usa el generador de imágenes para crear visuales de marca listos para publicar.','6 min','')
       + card('Contenido',CO,I.video,'Guiones para Reels, TikToks y Stories con IA','Genera scripts virales con hooks probados y call-to-action optimizados.','7 min',''))
     // Agencia
@@ -11153,7 +11289,7 @@ function setAgentContext(ctx, showGuide=false){
     if(socialBar)socialBar.style.display=isEmpty?'block':'none';
     // Actualizar descripción del Studio banner con conteo de posts
     const descEl=document.getElementById('studio-bar-desc');
-    if(descEl){const posts=loadStudioPosts();descEl.textContent=posts.length>0?posts.length+' posts en tu calendario · haz clic para verlos':'Calendario visual · genera imágenes · gestiona tu parrilla';}
+    if(descEl){const posts=loadStudioPosts();descEl.textContent=posts.length>0?posts.length+' posts en tu calendario · haz clic para verlos':'Calendario visual · genera imágenes · descarga y publica';}
     if(qaBar)qaBar.style.display='none';
   } else {
     if(socialBar)socialBar.style.display='none';
@@ -21021,26 +21157,6 @@ async function closeConfirm() {
   }
 }
 
-// Muestra el cierre registrado dentro de la ficha del lead
-function crmRenderCloseInfo(lead) {
-  const host = document.getElementById('crm-d-stage')?.closest('.crm-detail-section');
-  if (!host) return;
-  document.getElementById('crm-d-close-info')?.remove();
-  if (!lead.close_reason && !lead.closed_at) return;
-  const won = crmIsWonStage(lead.stage);
-  const fecha = lead.closed_at ? new Date(lead.closed_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
-  const monto = (won && lead.value) ? (lead.close_currency || '') + ' ' + Number(lead.value).toLocaleString('es-CO') : '';
-  const box = document.createElement('div');
-  box.id = 'crm-d-close-info';
-  box.style.cssText = 'margin-top:10px;padding:10px 12px;border-radius:10px;font-size:12.5px;line-height:1.6;' +
-    'background:' + (won ? '#ECFDF5' : '#FEF2F2') + ';color:' + (won ? '#065F46' : '#991B1B');
-  box.innerHTML = '<b>' + (won ? '🎉 Ganada' : 'Perdida') + '</b>' +
-    (monto ? ' · ' + esc(monto) : '') +
-    (fecha ? ' · ' + esc(fecha) : '') +
-    (lead.close_reason ? '<br><span style="opacity:.85">Motivo: ' + esc(lead.close_reason) + '</span>' : '');
-  host.appendChild(box);
-}
-
 function crmSetupDrop(el, stageKey) {
   el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
   el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
@@ -22136,78 +22252,12 @@ async function motivoDelFallo(res, accion) {
 // Desde el 08-10-2026 el panel lateral NO se abre (decisión de Alejandro):
 // cualquier enlace a un lead —inbox, Pulso, tareas, voz, duplicados, informes,
 // campana— abre la ficha grande. crmOpenDetail se queda como nombre de entrada
-// para no tocar cada llamada; el panel viejo vive en crmPanelLateralViejo y no
-// lo llama nadie.
+// para no tocar cada llamada. El código del panel viejo se borró el 08-10-2026.
+// Su HTML (#crm-detail-panel) sigue en index.html, oculto: la ficha reutiliza
+// algunas piezas como fontanería (la sugerencia de la IA se escribe en
+// crm-d-suggest-result, el cambio de etapa lee crm-d-stage).
 function crmOpenDetail(leadId, leadSuelto) {
   return crmAbrirFicha(leadId, leadSuelto);
-}
-
-async function crmPanelLateralViejo(leadId, leadSuelto) {
-  const lead = crmLeads.find(l => l.id === leadId) || leadSuelto;
-  if (!lead) return;
-  crmDetailLead = lead;
-  crmDetalleAplicarPermiso(lead);
-  crmPintarProceso(lead);
-  document.getElementById('crm-d-name').textContent = lead.name;
-  // Avatar
-  const avatarPalette = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','var(--blue)','#14B8A6','#EF4444'];
-  const avatarBg = avatarPalette[(lead.name || 'A').charCodeAt(0) % avatarPalette.length];
-  const avatarInitials = (lead.name || '?').split(' ').filter(Boolean).slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
-  const avatarEl = document.getElementById('crm-d-avatar');
-  if (avatarEl) { avatarEl.textContent = avatarInitials; avatarEl.style.background = avatarBg; }
-  // Quick action buttons
-  const qaPhone = (lead.phone || '').replace(/\s/g,'');
-  const qaEl = document.getElementById('crm-d-quick-actions');
-  if (qaEl) {
-    qaEl.innerHTML =
-      (lead.phone ? '<a class="crm-qa-btn" href="tel:' + qaPhone + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg> Llamar</a>' : '') +
-      (lead.phone ? '<a class="crm-qa-btn wa" href="https://wa.me/' + qaPhone.replace(/\D/g,'') + '" target="_blank"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 0C5.373 0 0 5.373 0 12c0 2.124.557 4.122 1.532 5.862L0 24l6.272-1.516C7.993 23.46 9.966 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.933 0-3.74-.511-5.29-1.402l-.38-.225-3.725.9.934-3.613-.247-.394C2.504 15.63 2 13.865 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> WhatsApp</a>' : '') +
-      (lead.email ? '<a class="crm-qa-btn em" href="mailto:' + esc(lead.email) + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email</a>' : '') +
-      '<button class="crm-qa-btn" style="border-color:var(--blue-md);color:var(--blue);background:var(--blue-lt);cursor:pointer;font-family:var(--font)" onclick="crmSendLeadToConsultor()" title="El Consultor analiza el lead y prepara el seguimiento">✨ Enviar al Consultor</button>' +
-      '<button class="crm-qa-btn" style="cursor:pointer;font-family:var(--font)" onclick="agnScheduleForLead()" title="Crear tarea o reunión con este lead (sincroniza con Google Calendar)">📅 Agendar</button>' +
-      '<button class="crm-qa-btn" style="cursor:pointer;font-family:var(--font);border-color:#A7F3D0;background:#ECFDF5;color:#059669" onclick="prpOpenForLead()" title="Generar y enviar una propuesta comercial con link de pago">📄 Propuesta</button>' +
-      // Se pinta oculto y lo revela crmRevelarNotas() solo para el dueño y los
-      // administradores, igual que en la tarjeta del tablero.
-      '<button class="crm-qa-btn crm-nota-btn" style="display:none;cursor:pointer;font-family:var(--font);border-color:var(--blue-md);background:var(--blue-lt);color:var(--blue)"' +
-      ' onclick="crmNotaAbrir(\'' + esc(lead.id) + '\')"' +
-      ' title="Deja una instrucción a quien lleva este lead: le llega por correo y en la campana">' +
-      '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg> Nota al responsable</button>';
-    // El permiso llega por consulta: se revela cuando se sepa, sin frenar la ficha.
-    crmRevelarNotas();
-  }
-  document.getElementById('crm-d-email').textContent = lead.email || '—';
-  document.getElementById('crm-d-phone').textContent = lead.phone || '—';
-  document.getElementById('crm-d-company').textContent = lead.company || '—';
-  document.getElementById('crm-d-source').textContent = fuenteLabel(lead.source);
-  const valueRow = document.getElementById('crm-d-value-row');
-  if (valueRow) { valueRow.style.display = lead.value ? 'flex' : 'none'; const valEl = document.getElementById('crm-d-value'); if (valEl) valEl.textContent = lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : ''; }
-  crmPintarCierre(lead);
-  lfQuienRefrescar();
-  crmRenderDetailTags();
-  teamEnsureLoaded().then(() => teamPopulateAssign(lead));
-  const notesSection = document.getElementById('crm-d-notes-section');
-  if (lead.notes) {
-    notesSection.style.display = 'flex';
-    document.getElementById('crm-d-notes').textContent = lead.notes;
-  } else {
-    notesSection.style.display = 'none';
-  }
-  crmPopulateStageSelects();
-  // Desde «Todos los procesos» se abren leads de otros procesos: su ficha
-  // ofrece SUS etapas, no las del proceso abierto. Con las de otro, una etapa
-  // como «Envío de condiciones» no existía en la lista y el desplegable salía
-  // en blanco, invitando a moverlo a una etapa ajena.
-  const selEtapa = document.getElementById('crm-d-stage');
-  selEtapa.innerHTML = crmEtapasDelLead(lead).map(s => `<option value="${esc(s.key)}">${esc(s.label)}</option>`).join('');
-  selEtapa.value = lead.stage;
-  crmRenderCloseInfo(lead);
-  document.getElementById('crm-detail-overlay').classList.add('open');
-  document.getElementById('crm-detail-panel').classList.add('open');
-  document.getElementById('crm-activity-input').value = '';
-  // Reset suggest result
-  const suggestResult = document.getElementById('crm-d-suggest-result');
-  if (suggestResult) suggestResult.style.display = 'none';
-  await Promise.all([crmLoadActivities(leadId), crmLoadLinkedConversations(leadId), crmCargarTareasLead(leadId)]);
 }
 
 // Editor de etiquetas en el detalle: chips con ✕ + input con autocompletado
@@ -22284,37 +22334,6 @@ function crmCloseDetail() {
   // `crmDetailLead` en null y no hacía nada, sin decir una palabra. Con la
   // ficha cerrada (`lfLead` null) se comporta igual que siempre.
   crmDetailLead = (typeof lfLead !== 'undefined' && lfLead) ? lfLead : null;
-}
-
-async function crmLoadLinkedConversations(leadId) {
-  const section = document.getElementById('crm-d-convs-section');
-  const list = document.getElementById('crm-d-convs-list');
-  if (!section || !list) return;
-  try {
-    const res = await fetchAuth('/api/chat-conversations?lead_id=' + encodeURIComponent(leadId));
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    const convs = data.conversations || [];
-    if (convs.length === 0) { section.style.display = 'none'; return; }
-    const channelIcons = { whatsapp: '💬', messenger: '💙', instagram: '📸' };
-    const channelColors = { whatsapp: '#DCFCE7', messenger: '#DBEAFE', instagram: '#FCE7F3' };
-    list.innerHTML = convs.map(c => {
-      const icon = channelIcons[c.channel] || '💬';
-      const bg = channelColors[c.channel] || 'var(--bg-muted)';
-      const name = c.contact_name || c.contact_id || 'Contacto';
-      const preview = c.last_message ? c.last_message.slice(0, 60) + (c.last_message.length > 60 ? '…' : '') : 'Sin mensajes';
-      const time = c.last_message_at ? new Date(c.last_message_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
-      return '<div class="crm-linked-conv" onclick="crmOpenConvFromDetail(\'' + esc(c.id) + '\',\'' + esc(c.channel) + '\')">' +
-        '<div class="crm-linked-conv-icon" style="background:' + bg + '">' + icon + '</div>' +
-        '<div class="crm-linked-conv-info">' +
-        '<div class="crm-linked-conv-name">' + esc(name) + '</div>' +
-        '<div class="crm-linked-conv-preview">' + esc(preview) + '</div>' +
-        '</div>' +
-        '<div class="crm-linked-conv-time">' + esc(time) + '</div>' +
-        '</div>';
-    }).join('');
-    section.style.display = 'flex';
-  } catch(e) { section.style.display = 'none'; }
 }
 
 // Esperar a que la conversación esté en la lista cargada. Se reintenta un rato
@@ -22612,31 +22631,8 @@ async function crmSuggestNextAction() {
 
 // ── El proceso de venta del lead ────────────────────────────────────────────
 //
-// Cuál es se leía en ninguna parte: la ficha enseñaba la etapa, que solo
-// significa algo dentro de un proceso. Y moverlo de proceso no se podía.
-function crmPintarProceso(lead) {
-  const cont = document.getElementById('crm-d-proceso');
-  if (!cont) return;
-  const actual = (crmPipelines || []).find(p => p.id === lead.pipeline_id);
-  // Solo el dueño y un administrador mueven de proceso. Es la misma regla que
-  // aplica el servidor; esconder el botón no es el permiso, es la cortesía.
-  //
-  // `crmSoyMiembro` y NO `window._miPerfil`: ese solo se rellena cuando la
-  // persona es miembro del equipo de alguien. Al DUEÑO se le queda sin definir,
-  // así que preguntarle a él escondía el botón justo a quien más permisos
-  // tiene. Lo encontró Alejandro abriendo una ficha, no la prueba.
-  const puede = !crmSoyMiembro ||
-    !!(window._miPerfil && window._miPerfil.gestiona_equipo);
-  // Los de SU cliente, no los de todos: un proceso pertenece a un cliente y
-  // mover el lead a uno ajeno le cambiaría la cartera sin decirlo.
-  const candidatos = (crmPipelines || []).filter(p =>
-    p.id !== lead.pipeline_id && (p.client_id || null) === (lead.client_id || null));
-
-  cont.innerHTML =
-    '<span class="nom">' + esc(actual ? actual.name : 'Sin proceso asignado') + '</span>' +
-    (puede && candidatos.length ? '<button onclick="crmMoverProcesoAbrir()">Cambiar</button>' : '');
-}
-
+// Moverlo de proceso: lo abre la ficha (el panel lateral que pintaba el
+// proceso actual se borró el 08-10-2026).
 function crmMoverProcesoAbrir() {
   const lead = crmDetailLead;
   if (!lead) return;
@@ -33526,29 +33522,6 @@ async function teamConfirmarTraspaso(id) {
     btn.disabled = false; btn.textContent = 'Pasar y quitar';
     showToast(e.message, 'error');
   }
-}
-
-// Deja el detalle en solo lectura cuando el lead es de otra persona, y lo dice
-// en vez de limitarse a que los botones no hagan nada.
-function crmDetalleAplicarPermiso(lead) {
-  const puedo = puedoGestionar(lead);
-  const del = document.querySelector('.crm-detail-del-btn');
-  if (del) del.style.display = puedo ? '' : 'none';
-  const ID = 'crm-d-sin-permiso';
-  document.getElementById(ID)?.remove();
-  if (puedo) return;
-  const nombre = document.getElementById('crm-d-name');
-  const host = nombre && nombre.closest('.crm-detail-head') || nombre?.parentElement;
-  if (!host || !host.parentElement) return;
-  const el = document.createElement('div');
-  el.id = ID;
-  el.style.cssText = 'margin:0 20px 10px;padding:9px 12px;background:var(--sidebar);border:1px solid var(--border);' +
-    'border-radius:9px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px';
-  el.innerHTML =
-    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
-      'style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>' +
-    '<span>' + esc(motivoSinPermiso(lead)) + '</span>';
-  host.parentElement.insertBefore(el, host.nextSibling);
 }
 
 // ── Asignación de leads ───────────────────────────────────────────────────────
