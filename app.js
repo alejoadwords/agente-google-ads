@@ -32350,6 +32350,7 @@ async function srcRender() {
           '<code id="src-wh-url" style="flex:1;font-size:10.5px;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:9px 11px;overflow-x:auto;white-space:nowrap">Cargando…</code>' +
           '<button class="btn-sec sm" onclick="navigator.clipboard.writeText(document.getElementById(\'src-wh-url\').textContent).then(function(){showToast(\'Copiado ✓\',\'success\')})">Copiar</button>' +
         '</div>' +
+        '<div id="src-wh-destino" style="margin-bottom:10px"></div>' +
         '<details style="margin-bottom:6px"><summary style="font-size:12px;font-weight:700;cursor:pointer">🛒 Receta: conectar Hotmart</summary>' +
           '<ol style="font-size:12px;color:var(--muted);margin:8px 0 4px 18px;line-height:1.7">' +
             '<li>En Hotmart ve a <b>Herramientas → Webhook (API y notificaciones)</b></li>' +
@@ -32393,7 +32394,77 @@ async function srcLoadWebhook() {
     const d = await fetchAuth('/api/lead-webhook').then(r => r.json());
     if (d.url) el.textContent = d.url;
     else el.textContent = d.error || 'Error';
-  } catch { el.textContent = 'No se pudo cargar'; }
+    srcPintarDestinoWebhook(d);
+  } catch {
+    el.textContent = 'No se pudo cargar';
+    srcPintarDestinoWebhook({ destino_error: 'No se pudo leer a qué tablero llegan los leads.' });
+  }
+}
+
+// A qué tablero llegan los leads del webhook. Sin esto, una cuenta con
+// clientes y sin pro_main los recibía en el tablero del ámbito nulo, vacío, y
+// nadie se enteraba: el 08-10-2026 hubo que arreglarlo a mano en la base.
+let _srcWh = null;
+function srcPintarDestinoWebhook(d) {
+  const caja = document.getElementById('src-wh-destino');
+  if (!caja) return;
+  _srcWh = d || null;
+  if (!d || d.destino_error) {
+    caja.innerHTML = '<div style="font-size:12px;color:var(--danger)">' + esc((d && d.destino_error) || 'No se pudo leer a qué tablero llegan los leads.') + '</div>';
+    return;
+  }
+  const ambitos = d.ambitos || [];
+  // Las opciones son clientes de verdad: el ámbito nulo no se ofrece porque
+  // un client_id vacío en la conexión significa «el de la cuenta» (pro_main),
+  // no «General».
+  const opciones = ambitos.filter(a => a.client_id);
+  const elegir = d.puede_elegir && ambitos.length > 1 && opciones.length > 0;
+  const dest = d.destino;
+  const linea = dest
+    ? 'Los leads llegan a <b>' + esc(dest.cliente) + '</b> → tablero <b>' + esc(dest.tablero) + '</b>.'
+    : 'Todavía no hay ningún tablero que reciba estos leads.';
+  const aviso = d.vacio
+    ? '<div style="display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5;color:var(--text);background:var(--warning-bg);border:1px solid var(--warning);border-radius:10px;padding:9px 11px;margin-bottom:8px">' +
+        '<span style="color:var(--warning);font-weight:800">!</span>' +
+        '<div><b>Tus leads de webhook están cayendo en un tablero vacío.</b> ' +
+        (elegir ? 'Elige abajo a qué cliente deben llegar.' : 'Pide al dueño de la cuenta que elija a qué cliente deben llegar.') + '</div>' +
+      '</div>'
+    : '';
+  const actual = opciones.find(a => a.client_id === d.client_id);
+  caja.innerHTML = aviso +
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)">' +
+      (elegir
+        ? '<span>Cliente:</span>' +
+          '<button class="dd-btn" id="src-wh-cliente" style="max-width:260px" onclick="srcElegirClienteWebhook(this)">' +
+            '<span class="dd-btn-txt">' + esc(actual ? actual.nombre : 'Elegir cliente…') + '</span>' +
+            '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" style="flex-shrink:0;opacity:.5"><polyline points="6 9 12 15 18 9"/></svg>' +
+          '</button>'
+        : '') +
+      '<span>' + linea + '</span>' +
+    '</div>';
+}
+
+function srcElegirClienteWebhook(btn) {
+  const opciones = ((_srcWh && _srcWh.ambitos) || []).filter(a => a.client_id)
+    .map(a => ({ id: a.client_id, name: a.nombre + ' — ' + a.tablero }));
+  ddAbrir(btn, opciones, (_srcWh && _srcWh.client_id) || '', async (id) => {
+    if (!id || id === (_srcWh && _srcWh.client_id)) return;
+    btn.disabled = true;
+    try {
+      const r = await fetchAuth('/api/lead-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: id }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      srcPintarDestinoWebhook(d);
+      showToast('Los leads del webhook llegarán a ' + ((d.destino && d.destino.cliente) || 'ese cliente'), 'success');
+    } catch (e) {
+      btn.disabled = false;
+      showToast('No se pudo cambiar el cliente: ' + (e.message || 'error'), 'error');
+    }
+  });
 }
 
 const SRC_CHANNEL_META = {

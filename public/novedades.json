@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-08-webhook-elige-cliente",
+      "fecha": "2026-10-08",
+      "tipo": "mejora",
+      "titulo": "Webhook de entrada: eliges a qué cliente llegan los leads",
+      "texto": "En Fuentes de leads, junto a la URL de tu webhook de entrada (Hotmart, Zapier, Make…), ahora ves a qué cliente y a qué tablero llegan sus leads. Si tu cuenta trabaja con varios clientes, eliges el destino en un desplegable. Y si los leads están cayendo en un tablero vacío que nadie mira, te avisamos ahí mismo."
+    },
+    {
       "id": "2026-10-08-seo-cupo-del-mes",
       "fecha": "2026-10-08",
       "tipo": "mejora",
