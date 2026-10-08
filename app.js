@@ -10568,6 +10568,7 @@ function irA(destino) {
         case 'marketing':     navGo('marketing'); break;
         case 'plantillas':    navGo('marketing'); setTimeout(() => crmSetView('plantillas'), 150); break;
         case 'paginas':       navGo('marketing'); setTimeout(() => crmSetView('paginas'), 150); break;
+        case 'propuestas':    navGo('marketing'); setTimeout(() => crmSetView('proposals'), 150); break;
         case 'pauta':         navGo('marketing'); setTimeout(() => crmSetView('pauta'), 150); break;
         case 'pauta-ventas':  navGo('marketing'); setTimeout(() => { pautaVista = 'ventas'; crmSetView('pauta'); }, 150); break;
         case 'pauta-diagnostico': navGo('marketing'); setTimeout(() => { pautaVista = 'diagnostico'; crmSetView('pauta'); }, 150); break;

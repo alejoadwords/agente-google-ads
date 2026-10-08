@@ -6,7 +6,11 @@
       "fecha": "2026-10-08",
       "tipo": "arreglo",
       "titulo": "«Aceptar y pagar» ya deja la propuesta aceptada",
-      "texto": "Si tu propuesta tiene tu propio link de pago (Wompi, Stripe u otro), tu cliente ahora firma primero y luego pasa al pago. Antes podía pagar sin que la propuesta quedara como aceptada y no te llegaba el aviso por correo."
+      "texto": "Si tu propuesta tiene tu propio link de pago (Wompi, Stripe u otro), tu cliente ahora firma primero y luego pasa al pago. Antes podía pagar sin que la propuesta quedara como aceptada y no te llegaba el aviso por correo.",
+      "accion": {
+        "texto": "Ver Propuestas",
+        "ir": "propuestas"
+      }
     },
     {
       "id": "2026-10-07-ventas-de-hoy",
