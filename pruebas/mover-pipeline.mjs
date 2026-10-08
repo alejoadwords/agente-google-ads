@@ -176,8 +176,9 @@ console.log('\nEl botón lo ve quien puede usarlo\n');
   // Las demás propiedades del perfil (`solo_sus_leads`, `solo_lo_suyo`,
   // `modulos`) RESTRINGEN, así que «sin definir» es lo correcto para el dueño.
   // La peligrosa es la que CONCEDE, como `gestiona_equipo`.
+  // El botón lo pinta la FICHA desde que se borró el panel lateral (08-10-2026).
   chk('el permiso contempla al dueño, no solo a los miembros',
-      /!crmSoyMiembro \|\|[\s\S]{0,120}gestiona_equipo/.test(bloque));
+      /const puedeMover = !crmSoyMiembro \|\|[\s\S]{0,120}gestiona_equipo/.test(app));
   chk('y `_miPerfil` no decide solo', !/const puede = !!\(window\._miPerfil/.test(bloque));
 
   // Y que el que concede siga siendo el único de esa forma en toda la app.
@@ -194,7 +195,7 @@ console.log('\nEl botón lo ve quien puede usarlo\n');
       /\(p\.client_id \|\| null\) === \(lead\.client_id \|\| null\)/.test(bloque));
   chk('y nunca el proceso en el que ya está',
       /p\.id !== lead\.pipeline_id/.test(bloque));
-  chk('sin candidatos no se enseña el botón', /puede && candidatos\.length/.test(bloque));
+  chk('sin candidatos se dice, no se abre un modal vacío', /if \(!candidatos\.length\) \{ showToast\(/.test(bloque));
 }
 
 console.log('\nLo que el endpoint NO puede dejar pasar\n');

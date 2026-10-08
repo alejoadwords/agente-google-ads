@@ -71,7 +71,7 @@ console.log('\nUn clic en el lead abre la ficha\n');
   // lateral (decisión de Alejandro): crmOpenDetail solo reenvía.
   chk('todo enlace a un lead abre la ficha, nunca el panel',
       /function crmOpenDetail\(leadId, leadSuelto\) \{\s*return crmAbrirFicha\(leadId, leadSuelto\);/.test(js) &&
-      (js.match(/crmPanelLateralViejo\(/g) || []).length === 1);
+      !/crm-detail-panel'\)\.classList\.add\('open'\)/.test(js));
 }
 
 console.log('\nEl panel sigue siendo el sitio para mirar rápido\n');

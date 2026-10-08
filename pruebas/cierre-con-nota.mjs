@@ -30,7 +30,7 @@ const ok = (c, m, extra) => {
   if (!c) mal++;
 };
 
-const src = trozo('async function closeConfirm()', '\n// Muestra el cierre registrado');
+const src = trozo('async function closeConfirm()', '\nfunction crmSetupDrop(');
 
 // Monta closeConfirm con un DOM y una red de mentira. `fallan` dice qué
 // peticiones tienen que salir mal.

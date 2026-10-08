@@ -33,7 +33,7 @@ const clases = { remove() {}, add() {} };
 globalThis.document = { getElementById: () => ({ classList: clases, style: {}, innerHTML: '' }), querySelector: () => null };
 
 const codigo = [
-  trozo('function crmCloseDetail()', '\nasync function crmLoadLinkedConversations'),
+  trozo('function crmCloseDetail()', '\n// Esperar a que la conversación esté en la lista cargada'),
   trozo('function agnScheduleForLead()', '\n// ══ ROUTER'),
   'var crmDetailLead = null, lfLead = null;',
   'var abiertos = [];',

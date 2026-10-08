@@ -21157,26 +21157,6 @@ async function closeConfirm() {
   }
 }
 
-// Muestra el cierre registrado dentro de la ficha del lead
-function crmRenderCloseInfo(lead) {
-  const host = document.getElementById('crm-d-stage')?.closest('.crm-detail-section');
-  if (!host) return;
-  document.getElementById('crm-d-close-info')?.remove();
-  if (!lead.close_reason && !lead.closed_at) return;
-  const won = crmIsWonStage(lead.stage);
-  const fecha = lead.closed_at ? new Date(lead.closed_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
-  const monto = (won && lead.value) ? (lead.close_currency || '') + ' ' + Number(lead.value).toLocaleString('es-CO') : '';
-  const box = document.createElement('div');
-  box.id = 'crm-d-close-info';
-  box.style.cssText = 'margin-top:10px;padding:10px 12px;border-radius:10px;font-size:12.5px;line-height:1.6;' +
-    'background:' + (won ? '#ECFDF5' : '#FEF2F2') + ';color:' + (won ? '#065F46' : '#991B1B');
-  box.innerHTML = '<b>' + (won ? '🎉 Ganada' : 'Perdida') + '</b>' +
-    (monto ? ' · ' + esc(monto) : '') +
-    (fecha ? ' · ' + esc(fecha) : '') +
-    (lead.close_reason ? '<br><span style="opacity:.85">Motivo: ' + esc(lead.close_reason) + '</span>' : '');
-  host.appendChild(box);
-}
-
 function crmSetupDrop(el, stageKey) {
   el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
   el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
@@ -22272,78 +22252,12 @@ async function motivoDelFallo(res, accion) {
 // Desde el 08-10-2026 el panel lateral NO se abre (decisión de Alejandro):
 // cualquier enlace a un lead —inbox, Pulso, tareas, voz, duplicados, informes,
 // campana— abre la ficha grande. crmOpenDetail se queda como nombre de entrada
-// para no tocar cada llamada; el panel viejo vive en crmPanelLateralViejo y no
-// lo llama nadie.
+// para no tocar cada llamada. El código del panel viejo se borró el 08-10-2026.
+// Su HTML (#crm-detail-panel) sigue en index.html, oculto: la ficha reutiliza
+// algunas piezas como fontanería (la sugerencia de la IA se escribe en
+// crm-d-suggest-result, el cambio de etapa lee crm-d-stage).
 function crmOpenDetail(leadId, leadSuelto) {
   return crmAbrirFicha(leadId, leadSuelto);
-}
-
-async function crmPanelLateralViejo(leadId, leadSuelto) {
-  const lead = crmLeads.find(l => l.id === leadId) || leadSuelto;
-  if (!lead) return;
-  crmDetailLead = lead;
-  crmDetalleAplicarPermiso(lead);
-  crmPintarProceso(lead);
-  document.getElementById('crm-d-name').textContent = lead.name;
-  // Avatar
-  const avatarPalette = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','var(--blue)','#14B8A6','#EF4444'];
-  const avatarBg = avatarPalette[(lead.name || 'A').charCodeAt(0) % avatarPalette.length];
-  const avatarInitials = (lead.name || '?').split(' ').filter(Boolean).slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
-  const avatarEl = document.getElementById('crm-d-avatar');
-  if (avatarEl) { avatarEl.textContent = avatarInitials; avatarEl.style.background = avatarBg; }
-  // Quick action buttons
-  const qaPhone = (lead.phone || '').replace(/\s/g,'');
-  const qaEl = document.getElementById('crm-d-quick-actions');
-  if (qaEl) {
-    qaEl.innerHTML =
-      (lead.phone ? '<a class="crm-qa-btn" href="tel:' + qaPhone + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg> Llamar</a>' : '') +
-      (lead.phone ? '<a class="crm-qa-btn wa" href="https://wa.me/' + qaPhone.replace(/\D/g,'') + '" target="_blank"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 0C5.373 0 0 5.373 0 12c0 2.124.557 4.122 1.532 5.862L0 24l6.272-1.516C7.993 23.46 9.966 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.933 0-3.74-.511-5.29-1.402l-.38-.225-3.725.9.934-3.613-.247-.394C2.504 15.63 2 13.865 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> WhatsApp</a>' : '') +
-      (lead.email ? '<a class="crm-qa-btn em" href="mailto:' + esc(lead.email) + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email</a>' : '') +
-      '<button class="crm-qa-btn" style="border-color:var(--blue-md);color:var(--blue);background:var(--blue-lt);cursor:pointer;font-family:var(--font)" onclick="crmSendLeadToConsultor()" title="El Consultor analiza el lead y prepara el seguimiento">✨ Enviar al Consultor</button>' +
-      '<button class="crm-qa-btn" style="cursor:pointer;font-family:var(--font)" onclick="agnScheduleForLead()" title="Crear tarea o reunión con este lead (sincroniza con Google Calendar)">📅 Agendar</button>' +
-      '<button class="crm-qa-btn" style="cursor:pointer;font-family:var(--font);border-color:#A7F3D0;background:#ECFDF5;color:#059669" onclick="prpOpenForLead()" title="Generar y enviar una propuesta comercial con link de pago">📄 Propuesta</button>' +
-      // Se pinta oculto y lo revela crmRevelarNotas() solo para el dueño y los
-      // administradores, igual que en la tarjeta del tablero.
-      '<button class="crm-qa-btn crm-nota-btn" style="display:none;cursor:pointer;font-family:var(--font);border-color:var(--blue-md);background:var(--blue-lt);color:var(--blue)"' +
-      ' onclick="crmNotaAbrir(\'' + esc(lead.id) + '\')"' +
-      ' title="Deja una instrucción a quien lleva este lead: le llega por correo y en la campana">' +
-      '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg> Nota al responsable</button>';
-    // El permiso llega por consulta: se revela cuando se sepa, sin frenar la ficha.
-    crmRevelarNotas();
-  }
-  document.getElementById('crm-d-email').textContent = lead.email || '—';
-  document.getElementById('crm-d-phone').textContent = lead.phone || '—';
-  document.getElementById('crm-d-company').textContent = lead.company || '—';
-  document.getElementById('crm-d-source').textContent = fuenteLabel(lead.source);
-  const valueRow = document.getElementById('crm-d-value-row');
-  if (valueRow) { valueRow.style.display = lead.value ? 'flex' : 'none'; const valEl = document.getElementById('crm-d-value'); if (valEl) valEl.textContent = lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : ''; }
-  crmPintarCierre(lead);
-  lfQuienRefrescar();
-  crmRenderDetailTags();
-  teamEnsureLoaded().then(() => teamPopulateAssign(lead));
-  const notesSection = document.getElementById('crm-d-notes-section');
-  if (lead.notes) {
-    notesSection.style.display = 'flex';
-    document.getElementById('crm-d-notes').textContent = lead.notes;
-  } else {
-    notesSection.style.display = 'none';
-  }
-  crmPopulateStageSelects();
-  // Desde «Todos los procesos» se abren leads de otros procesos: su ficha
-  // ofrece SUS etapas, no las del proceso abierto. Con las de otro, una etapa
-  // como «Envío de condiciones» no existía en la lista y el desplegable salía
-  // en blanco, invitando a moverlo a una etapa ajena.
-  const selEtapa = document.getElementById('crm-d-stage');
-  selEtapa.innerHTML = crmEtapasDelLead(lead).map(s => `<option value="${esc(s.key)}">${esc(s.label)}</option>`).join('');
-  selEtapa.value = lead.stage;
-  crmRenderCloseInfo(lead);
-  document.getElementById('crm-detail-overlay').classList.add('open');
-  document.getElementById('crm-detail-panel').classList.add('open');
-  document.getElementById('crm-activity-input').value = '';
-  // Reset suggest result
-  const suggestResult = document.getElementById('crm-d-suggest-result');
-  if (suggestResult) suggestResult.style.display = 'none';
-  await Promise.all([crmLoadActivities(leadId), crmLoadLinkedConversations(leadId), crmCargarTareasLead(leadId)]);
 }
 
 // Editor de etiquetas en el detalle: chips con ✕ + input con autocompletado
@@ -22420,37 +22334,6 @@ function crmCloseDetail() {
   // `crmDetailLead` en null y no hacía nada, sin decir una palabra. Con la
   // ficha cerrada (`lfLead` null) se comporta igual que siempre.
   crmDetailLead = (typeof lfLead !== 'undefined' && lfLead) ? lfLead : null;
-}
-
-async function crmLoadLinkedConversations(leadId) {
-  const section = document.getElementById('crm-d-convs-section');
-  const list = document.getElementById('crm-d-convs-list');
-  if (!section || !list) return;
-  try {
-    const res = await fetchAuth('/api/chat-conversations?lead_id=' + encodeURIComponent(leadId));
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    const convs = data.conversations || [];
-    if (convs.length === 0) { section.style.display = 'none'; return; }
-    const channelIcons = { whatsapp: '💬', messenger: '💙', instagram: '📸' };
-    const channelColors = { whatsapp: '#DCFCE7', messenger: '#DBEAFE', instagram: '#FCE7F3' };
-    list.innerHTML = convs.map(c => {
-      const icon = channelIcons[c.channel] || '💬';
-      const bg = channelColors[c.channel] || 'var(--bg-muted)';
-      const name = c.contact_name || c.contact_id || 'Contacto';
-      const preview = c.last_message ? c.last_message.slice(0, 60) + (c.last_message.length > 60 ? '…' : '') : 'Sin mensajes';
-      const time = c.last_message_at ? new Date(c.last_message_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
-      return '<div class="crm-linked-conv" onclick="crmOpenConvFromDetail(\'' + esc(c.id) + '\',\'' + esc(c.channel) + '\')">' +
-        '<div class="crm-linked-conv-icon" style="background:' + bg + '">' + icon + '</div>' +
-        '<div class="crm-linked-conv-info">' +
-        '<div class="crm-linked-conv-name">' + esc(name) + '</div>' +
-        '<div class="crm-linked-conv-preview">' + esc(preview) + '</div>' +
-        '</div>' +
-        '<div class="crm-linked-conv-time">' + esc(time) + '</div>' +
-        '</div>';
-    }).join('');
-    section.style.display = 'flex';
-  } catch(e) { section.style.display = 'none'; }
 }
 
 // Esperar a que la conversación esté en la lista cargada. Se reintenta un rato
@@ -22748,31 +22631,8 @@ async function crmSuggestNextAction() {
 
 // ── El proceso de venta del lead ────────────────────────────────────────────
 //
-// Cuál es se leía en ninguna parte: la ficha enseñaba la etapa, que solo
-// significa algo dentro de un proceso. Y moverlo de proceso no se podía.
-function crmPintarProceso(lead) {
-  const cont = document.getElementById('crm-d-proceso');
-  if (!cont) return;
-  const actual = (crmPipelines || []).find(p => p.id === lead.pipeline_id);
-  // Solo el dueño y un administrador mueven de proceso. Es la misma regla que
-  // aplica el servidor; esconder el botón no es el permiso, es la cortesía.
-  //
-  // `crmSoyMiembro` y NO `window._miPerfil`: ese solo se rellena cuando la
-  // persona es miembro del equipo de alguien. Al DUEÑO se le queda sin definir,
-  // así que preguntarle a él escondía el botón justo a quien más permisos
-  // tiene. Lo encontró Alejandro abriendo una ficha, no la prueba.
-  const puede = !crmSoyMiembro ||
-    !!(window._miPerfil && window._miPerfil.gestiona_equipo);
-  // Los de SU cliente, no los de todos: un proceso pertenece a un cliente y
-  // mover el lead a uno ajeno le cambiaría la cartera sin decirlo.
-  const candidatos = (crmPipelines || []).filter(p =>
-    p.id !== lead.pipeline_id && (p.client_id || null) === (lead.client_id || null));
-
-  cont.innerHTML =
-    '<span class="nom">' + esc(actual ? actual.name : 'Sin proceso asignado') + '</span>' +
-    (puede && candidatos.length ? '<button onclick="crmMoverProcesoAbrir()">Cambiar</button>' : '');
-}
-
+// Moverlo de proceso: lo abre la ficha (el panel lateral que pintaba el
+// proceso actual se borró el 08-10-2026).
 function crmMoverProcesoAbrir() {
   const lead = crmDetailLead;
   if (!lead) return;
@@ -33577,29 +33437,6 @@ async function teamConfirmarTraspaso(id) {
     btn.disabled = false; btn.textContent = 'Pasar y quitar';
     showToast(e.message, 'error');
   }
-}
-
-// Deja el detalle en solo lectura cuando el lead es de otra persona, y lo dice
-// en vez de limitarse a que los botones no hagan nada.
-function crmDetalleAplicarPermiso(lead) {
-  const puedo = puedoGestionar(lead);
-  const del = document.querySelector('.crm-detail-del-btn');
-  if (del) del.style.display = puedo ? '' : 'none';
-  const ID = 'crm-d-sin-permiso';
-  document.getElementById(ID)?.remove();
-  if (puedo) return;
-  const nombre = document.getElementById('crm-d-name');
-  const host = nombre && nombre.closest('.crm-detail-head') || nombre?.parentElement;
-  if (!host || !host.parentElement) return;
-  const el = document.createElement('div');
-  el.id = ID;
-  el.style.cssText = 'margin:0 20px 10px;padding:9px 12px;background:var(--sidebar);border:1px solid var(--border);' +
-    'border-radius:9px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px';
-  el.innerHTML =
-    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
-      'style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>' +
-    '<span>' + esc(motivoSinPermiso(lead)) + '</span>';
-  host.parentElement.insertBefore(el, host.nextSibling);
 }
 
 // ── Asignación de leads ───────────────────────────────────────────────────────
