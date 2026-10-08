@@ -39,6 +39,31 @@ Es el motivo número uno de tickets, y casi nunca es el mismo que el anterior.
 - **Alcance por cliente**: sin `client_id`, `/api/leads` devuelve toda la
   cuenta. Todo contador debe usar el alcance de la vista a la que enlaza.
 
+## «Podía y de repente no me deja» / «el historial sale vacío» / «el responsable dice que ya no está en el equipo»
+
+HBSB, 08-10-2026. Casi siempre es **la sesión que se cerró con la pestaña
+abierta**: la pantalla sigue con lo que tenía cargado, pero cada petición sale
+sin credenciales. Los datos están intactos.
+
+- **La firma**: el **propio dueño** aparece como «(ya no está en el equipo)» en
+  el desplegable de responsable. Eso solo pasa cuando la app no sabe quién está
+  conectado. Si además el historial dice «Sin actividad registrada» y nada se
+  guarda, no hay que buscar más.
+- **Causa típica**: varias personas comparten el usuario del dueño y una cambia
+  la contraseña con «cerrar las demás sesiones» marcado, o cierra sesión en
+  todos los dispositivos. También caduca sola.
+- **Comprobar sin entrar**: que la cuenta tenga sus leads y su historial
+  (`soporte.mjs`, `count(*)` de `lead_activities`) y que no haya errores en
+  `error_log`. Una petición sin token no se anota allí: que esté limpio no
+  descarta nada.
+- **Respuesta**: recargar la página y, si sigue igual, cerrar sesión y volver a
+  entrar. Recomendar **un usuario por persona** (miembro del equipo) en vez de
+  compartir el del dueño.
+- Desde el 08-10-2026 (`a118e7a`) la app lo dice sola: barra fija «Tu sesión se
+  cerró» con **Volver a entrar**, y el historial dice «No se pudo cargar» en vez
+  de mostrarlo vacío. Quien todavía no recargó desde entonces tiene la versión
+  muda. Ver [[project_auth_fetch]].
+
 ## «El Pulso me avisa de leads sin actividad que sí tienen actividad»
 
 Todo lo de inactividad cuelga de **`leads.updated_at`**. Quien atienda un lead
