@@ -364,7 +364,25 @@ async function actionPedirResena(step, lead, auto) {
   const canal = step.canal === 'whatsapp' ? 'whatsapp' : 'email';
   let envio;
   if (canal === 'whatsapp') {
-    envio = await actionSendWhatsapp({ ...step, message: texto + '\n' + enlace }, lead);
+    // El texto va ya armado, no como `step.body`: antes se pasaba como
+    // `message`, actionSendWhatsapp leía `body` y salía un WhatsApp vacío,
+    // sin el enlace. Y renderizarlo dos veces no es gratis: un nombre que
+    // traiga «{{…}}» se volvería a interpretar.
+    envio = await actionSendWhatsapp(step, lead, texto + '\n' + enlace);
+    if (envio.result !== 'sent') {
+      // Por WhatsApp lo normal hoy es que NO salga (hace falta conversación
+      // previa en el Inbox y Meta todavía no aprueba la app). Quien armó el
+      // flujo tiene que verlo en rojo con el motivo, y el comercial en la
+      // ficha del lead, no enterarse porque las reseñas no llegan. La marca
+      // es `fallida`, no `pedida`: yaSePidio() no la cuenta y se puede volver
+      // a pedir cuando haya por dónde.
+      const motivo = 'No se pidió la reseña por WhatsApp: ' + envio.detail;
+      await sb('/lead_activities', 'POST', {
+        user_id: auto.user_id, lead_id: lead.id, type: 'nota', content: motivo + '.',
+        metadata: { resena: 'fallida', canal },
+      }, 'return=minimal').catch(() => {});
+      return { result: 'failed', detail: motivo };
+    }
   } else {
     if (!lead.email) return { result: 'skipped', detail: 'El lead no tiene email' };
     if (dadoDeBajaCorreo(lead)) return { result: 'skipped', detail: 'Se dio de baja del correo' };
@@ -412,7 +430,27 @@ export async function actionSendSms(step, lead, auto) {
   return { result: 'failed', detail: r.detalle || r.estado };
 }
 
-async function actionSendWhatsapp(step, lead) {
+// Los errores de Meta llegan en inglés y sin contexto. Los que de verdad
+// aparecen se traducen a algo que el cliente pueda resolver; el resto va tal
+// cual, para no esconder nada.
+function motivoMeta(error) {
+  const code = Number(error?.code);
+  const crudo = String(error?.message || 'error sin mensaje').slice(0, 150);
+  if (code === 131047 || /re-engagement|24 hours/i.test(crudo))
+    return 'pasaron más de 24 h desde el último mensaje del contacto y WhatsApp solo deja escribirle dentro de esa ventana (Meta: ' + crudo + ')';
+  if (code === 10 || code === 200 || /permission/i.test(crudo))
+    return 'Meta no da permiso para enviar desde esta conexión; la app de Acuarius aún está en revisión de Meta (Meta: ' + crudo + ')';
+  if (code === 190) return 'la conexión con Meta venció: hay que reconectar el canal (Meta: ' + crudo + ')';
+  return 'Meta: ' + crudo;
+}
+
+// `textoListo` es para quien ya armó el mensaje (la reseña, con su enlace);
+// el paso «Enviar WhatsApp» manda su `body` con las variables del lead.
+async function actionSendWhatsapp(step, lead, textoListo) {
+  const text = textoListo != null ? String(textoListo) : renderVars(step.body, lead);
+  // Un WhatsApp vacío no es un envío: que el historial lo diga en vez de
+  // marcarlo «sent». Así se habría visto el fallo de la reseña desde el día uno.
+  if (!text.trim()) return { result: 'failed', detail: 'El paso no tiene mensaje: no se envió nada' };
   if (!lead.phone) return { result: 'skipped', detail: 'El lead no tiene teléfono' };
   const digits = String(lead.phone).replace(/\D/g, '');
   if (digits.length < 7) return { result: 'skipped', detail: 'Teléfono inválido' };
@@ -429,7 +467,6 @@ async function actionSendWhatsapp(step, lead) {
   const conns = await sb(`/channel_connections?id=eq.${conv.connection_id}&select=*`);
   const conn = await abrirConexion(conns?.[0]);
   if (!conn) return { result: 'failed', detail: 'Conexión del canal no encontrada' };
-  const text = renderVars(step.body, lead);
   try {
     if (conv.channel === 'whatsapp') {
       const r = await fetch(`https://graph.facebook.com/v19.0/${conn.external_id}/messages`, {
@@ -438,7 +475,7 @@ async function actionSendWhatsapp(step, lead) {
         body: JSON.stringify({ messaging_product: 'whatsapp', to: conv.contact_id, type: 'text', text: { body: text } }),
       });
       const d = await r.json().catch(() => ({}));
-      if (d.error) return { result: 'failed', detail: 'Meta: ' + (d.error.message || '').slice(0, 150) };
+      if (d.error || !r.ok) return { result: 'failed', detail: motivoMeta(d.error || { message: 'HTTP ' + r.status }) };
     } else {
       const r = await fetch(`https://graph.facebook.com/v19.0/me/messages?access_token=${conn.access_token}`, {
         method: 'POST',
@@ -446,7 +483,7 @@ async function actionSendWhatsapp(step, lead) {
         body: JSON.stringify({ recipient: { id: conv.contact_id }, message: { text } }),
       });
       const d = await r.json().catch(() => ({}));
-      if (d.error) return { result: 'failed', detail: 'Meta: ' + (d.error.message || '').slice(0, 150) };
+      if (d.error || !r.ok) return { result: 'failed', detail: motivoMeta(d.error || { message: 'HTTP ' + r.status }) };
     }
     // Registrar el mensaje saliente en la conversación
     await sb('/chat_messages', 'POST', {

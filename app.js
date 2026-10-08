@@ -28579,7 +28579,11 @@ function autoStepFields(s, path) {
       (s.canal === 'whatsapp' ? '' :
         '<div class="auto-field"><label class="auto-label">Asunto</label><input class="auto-input" value="' + esc(s.asunto || '') + '" placeholder="¿Nos dejas una reseña?" oninput="' + U + '\'asunto\',this.value)"></div>') +
       '<div class="auto-field"><label class="auto-label">Mensaje</label><textarea class="auto-input" rows="3" placeholder="Hola {{nombre}}, gracias por confiar en nosotros. ¿Nos ayudas con una reseña?…" oninput="' + U + '\'mensaje\',this.value)">' + esc(s.mensaje || '') + '</textarea>' +
-      '<div class="auto-vars-hint">El cliente recibe un enlace <b>tuyo</b> que lo lleva a tu ficha de Google, así queda registrado en su historial quién fue de verdad a dejar la reseña. Se pide <b>una sola vez por lead</b>. Configura el enlace en <a href="#" onclick="resAbrirGestor();return false">CRM → Reseñas</a>.</div></div>';
+      '<div class="auto-vars-hint">El cliente recibe un enlace <b>tuyo</b> que lo lleva a tu ficha de Google, así queda registrado en su historial quién fue de verdad a dejar la reseña. Se pide <b>una sola vez por lead</b>. Configura el enlace en <a href="#" onclick="resAbrirGestor();return false">CRM → Reseñas</a>.' +
+      // Por WhatsApp casi nunca sale hoy: mejor saberlo al armar el flujo que
+      // descubrirlo porque las reseñas no llegan.
+      (s.canal === 'whatsapp' ? '<br><br>Por WhatsApp solo sale si el cliente <b>te escribió en las últimas 24 horas</b> y esa conversación está en tu Inbox. Si no se puede enviar, el historial y la ficha del lead dicen por qué, y se le puede volver a pedir más adelante.' : '') +
+      '</div></div>';
   }
   if (s.type === 'branch') {
     const fields = [['stage','Etapa'],['source','Fuente'],['value','Valor ($)'],['has_email','Tiene email'],['has_phone','Tiene teléfono'],['email_opened','Abrió el email'],['has_tag','Tiene la etiqueta']];
