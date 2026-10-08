@@ -8035,7 +8035,9 @@ function openSocialConnectionsModal() {
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:24px 28px 20px;border-bottom:1px solid var(--border)">' +
         '<div>' +
           '<div style="font-size:20px;font-weight:800;color:var(--text);letter-spacing:-.3px">Conectar redes sociales</div>' +
-          '<div style="font-size:14px;color:var(--muted);margin-top:4px">Publica directamente desde el Studio</div>' +
+          // Publicar desde aquí pide pages_manage_posts e instagram_content_publish, que
+          // Meta aún no aprueba (REVISION-META.md): no se promete lo que no funciona.
+          '<div style="font-size:14px;color:var(--muted);margin-top:4px">La publicación directa se habilita cuando Meta apruebe la app. Mientras tanto, descarga tus posts y publícalos.</div>' +
         '</div>' +
         '<button style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 6px;border-radius:8px" onclick="document.getElementById(\'social-conn-modal\')?.remove()">×</button>' +
       '</div>' +
@@ -8067,7 +8069,7 @@ function openPublishModal(postId) {
   const igAcct  = igAccts[0] || null;
   const fbAcct  = fbAccts[0] || null;
 
-  const hasMedia  = !!(post.imageBase64 || post.videoUrl);
+  const hasMedia  = !!(postTieneImagen(post) || post.videoUrl);
   const isCarousel = !!(post.format === 'carrusel' && post.carouselImages && post.carouselImages.length > 1);
 
   const igIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
@@ -8857,7 +8859,7 @@ function renderStudio() {
   const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
   setEl('stat-total', posts.length);
   setEl('stat-listos', posts.filter(p => p.status === 'listo').length);
-  setEl('stat-imagenes', posts.filter(p => p.imageBase64).length);
+  setEl('stat-imagenes', posts.filter(postTieneImagen).length);
   setEl('stat-publicados', posts.filter(p => p.status === 'publicado').length);
 
   if (studioCurrentView === 'calendar') {
@@ -8987,21 +8989,109 @@ function renderStreamCalendar(posts, grid) {
   grid.innerHTML = html;
 }
 
-function studioGenerateParrilla(prompt, wizardName) {
-  window._studioWizardName = wizardName || null;
+// El asistente llama a /api/chat por su cuenta. Antes pasaba por sendMsg(), que
+// corta si el chat de agentes no está activo (onDone): con AGENTES_ACTIVOS=false
+// no se llamaba a la IA y «Creando tu parrilla…» se quedaba girando para siempre.
+async function studioGenerateParrilla(prompt, wizardName) {
+  if (window._studioGenerating) return;
+  if (!canSendFreeMsg()) {
+    const { limit } = getMsgUsage();
+    openUpgradeFlow('Usaste tus ' + limit + ' mensajes gratuitos de este mes. Actualiza para seguir creando parrillas.');
+    return;
+  }
+  if (typeof SYSTEM_SOCIAL === 'undefined') {
+    showToast('No se pudo cargar el asistente de contenido. Recarga la página e intenta de nuevo.', 'error');
+    return;
+  }
+
   window._studioGenerating = true;
-  // Limpiar preview anterior
-  const preview = document.getElementById('studio-stream-preview');
-  if (preview) preview.innerHTML = '';
-  // Mostrar overlay con preview
+  window._streamPostsCount = 0;
   const overlay = document.getElementById('studio-gen-loading');
+  const grid = document.getElementById('studio-stream-calendar');
+  const ctr = document.getElementById('studio-stream-counter');
+  if (grid) renderStreamCalendar([], grid);
+  if (ctr) ctr.textContent = 'Analizando tu negocio…';
   if (overlay) overlay.style.display = 'flex';
-  // Enviar al agente social sin cambiar de vista
-  setAgentContext('social');
-  setTimeout(() => {
-    document.getElementById('cin').value = prompt;
-    sendMsg();
-  }, 100);
+
+  const cerrar = () => {
+    window._studioGenerating = false;
+    if (overlay) overlay.style.display = 'none';
+  };
+
+  try {
+    const sysPrompt = SYSTEM_SOCIAL
+      .replace('{MEMORY}', memCtx()).replace('{STAGE}', clientStage).replace('{AGENT}', 'Social Media Manager');
+    incrementMsgUsage();
+    const res = await fetchAuth('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], system: sysPrompt })
+    });
+    if (!res.ok) {
+      let errMsg = 'Error ' + res.status;
+      try { const d = await res.json(); errMsg = d.error || errMsg; } catch(_) {}
+      throw new Error(errMsg);
+    }
+
+    // /api/chat responde en SSE: se arma el texto y, mientras llega la tabla,
+    // se pinta la vista previa del calendario.
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let sseBuffer = '', fullText = '';
+    const pintarPreview = () => {
+      if (!grid || fullText.includes('<PARRILLA_JSON>')) return;
+      const parsed = [];
+      for (const line of fullText.split('\n')) { const p = parseStreamTableRow(line); if (p) parsed.push(p); }
+      if (parsed.length === window._streamPostsCount) return;
+      window._streamPostsCount = parsed.length;
+      renderStreamCalendar(parsed, grid);
+      if (ctr) ctr.textContent = parsed.length ? parsed.length + ' posts detectados…' : 'Analizando tu negocio…';
+    };
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      sseBuffer += decoder.decode(value, { stream: true });
+      const lines = sseBuffer.split('\n');
+      sseBuffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        let evt;
+        try { evt = JSON.parse(line.slice(6).trim()); } catch(_) { continue; }
+        if (evt.error) throw new Error(evt.error);
+        if (evt.done && evt.full !== undefined) fullText = evt.full;
+        else if (evt.delta) { fullText += evt.delta; pintarPreview(); }
+      }
+    }
+
+    const m = fullText.match(/<PARRILLA_JSON>([\s\S]*?)<\/PARRILLA_JSON>/);
+    if (!m) {
+      console.warn('[studio] la respuesta no trajo <PARRILLA_JSON>:', fullText.slice(-600));
+      throw new Error(fullText.trim()
+        ? 'La IA respondió, pero sin los posts en el formato que el calendario puede importar.'
+        : 'La IA no devolvió ninguna respuesta.');
+    }
+    window._studioWizardName = wizardName || null;
+    const importados = parseParrillaJSON(m[1].trim());
+    if (!importados) throw new Error('La IA devolvió los posts, pero no se pudieron leer.');
+
+    lastParrillaText = fullText
+      .replace(/\[PARRILLA_LISTA\]/g, '').replace(/\[GENERAR_IMAGENES_PARRILLA\]/g, '')
+      .replace(/<PARRILLA_JSON>[\s\S]*?<\/PARRILLA_JSON>/g, '').replace(/\[SUGERENCIAS:[^\]]*\]/g, '').trim();
+    window._studioJustImported = importados;
+    cerrar();
+    openSocialStudio();
+  } catch (err) {
+    console.error('[studio] no se pudo crear la parrilla:', err);
+    window._studioWizardName = null;
+    cerrar();
+    // Un modal y no un toast: la espera es de uno o dos minutos y el aviso no
+    // puede desaparecer antes de que la persona vuelva a mirar.
+    const otraVez = await confirmarAguaP({
+      titulo: 'No se pudo crear la parrilla',
+      texto: (err.message || 'Error desconocido.') + '\n\nNo se guardó nada. Puedes intentarlo de nuevo con las mismas opciones.',
+      confirmar: 'Intentar de nuevo',
+    });
+    if (otraVez) studioGenerateParrilla(prompt, wizardName);
+  }
 }
 
 function renderCalendarView(posts) {
@@ -9079,8 +9169,8 @@ function renderListView(posts) {
     const netCfg = STUDIO_NETWORKS[post.network] || { label: post.network, color:'#666', bg:'#f5f5f5' };
     const fmt = STUDIO_FORMATS[post.format] || STUDIO_FORMATS.feed;
     const sc = STATUS_CFG[post.status] || STATUS_CFG.borrador;
-    const thumbHtml = post.imageBase64
-      ? '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" style="width:100%;height:100%;object-fit:cover">'
+    const thumbHtml = postTieneImagen(post)
+      ? '<img src="' + esc(postImagenSrc(post)) + '" alt="" style="width:100%;height:100%;object-fit:cover">'
       : post.videoUrl
         ? '<video src="' + post.videoUrl + '" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>'
         : '<span style="font-size:20px">' + fmt.icon + '</span>';
@@ -9219,14 +9309,15 @@ function openStudioWizard() {
 
       <!-- Imágenes -->
       <div style="margin-bottom:20px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Cuántas imágenes generar con IA?</div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">¿Cuántos posts con imagen sugerida?</div>
+        <div style="font-size:11px;color:var(--muted2);margin:-4px 0 8px">La IA deja listo el prompt de cada imagen; la generas después desde el post, cuando quieras.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap" id="wiz-imgs">
           ${[
-            {val:'0',label:'Sin imágenes'},
-            {val:'3',label:'3 imágenes'},
-            {val:'5',label:'5 imágenes'},
-            {val:'10',label:'10 imágenes'},
-            {val:'todas',label:'Todas las posibles'},
+            {val:'0',label:'Ninguno'},
+            {val:'3',label:'3 posts'},
+            {val:'5',label:'5 posts'},
+            {val:'10',label:'10 posts'},
+            {val:'todas',label:'Todos los que apliquen'},
           ].map((im,i)=>`<button onclick="wizSelect(this,'wiz-imgs')" data-val="${im.val}" class="wiz-chip ${i===2?'active':''}">${im.label}</button>`).join('')}
         </div>
       </div>
@@ -9282,11 +9373,13 @@ function submitStudioWizard() {
   const netLabels = { instagram:'Instagram', tiktok:'TikTok', facebook:'Facebook', linkedin:'LinkedIn', x:'X (Twitter)', youtube:'YouTube' };
   const fmtLabels = { reel:'Reels/Videos', feed:'Imágenes estáticas', carrusel:'Carruseles', story:'Stories', post:'Posts de texto' };
 
+  // Las imágenes no salen de esta llamada: se generan después, post por post,
+  // desde el modal. Aquí solo se decide qué posts llevan imagen y su prompt.
   const imgInstr = imgCount === '0'
-    ? 'No generes imágenes para esta parrilla.'
+    ? 'Ningún post lleva imagen: needsImage false e imagePrompt vacío en todos.'
     : imgCount === 'todas'
-    ? 'Al terminar la parrilla, genera imágenes para TODOS los posts que las necesiten (needsImage: true).'
-    : `Al terminar la parrilla, genera exactamente ${imgCount} imágenes para los posts más importantes (los que necesiten imagen).`;
+    ? 'Marca needsImage true con un imagePrompt detallado en TODOS los posts que lleven imagen.'
+    : `Marca needsImage true con un imagePrompt detallado en exactamente ${imgCount} posts (los más importantes que lleven imagen); en el resto, needsImage false.`;
 
   const netNames = nets.map(n => netLabels[n] || n).join(' + ');
   const dateStr = new Date().toLocaleDateString('es', { day: 'numeric', month: 'long' });
@@ -9303,7 +9396,9 @@ ${topics ? 'TEMAS A TRATAR: ' + topics : ''}
 ${hashtags ? 'HASHTAGS DE MARCA: ' + hashtags : ''}
 IMÁGENES: ${imgInstr}
 
-Crea la parrilla completa siguiendo el formato tabla markdown estándar, con contenido específico y relevante para el negocio (no genérico). Incluye captions completos listos para publicar para cada post.`;
+Crea la parrilla completa siguiendo el formato tabla markdown estándar, con contenido específico y relevante para el negocio (no genérico). Incluye captions completos listos para publicar para cada post.
+
+Esta parrilla se importa directo al calendario: es OBLIGATORIO terminar con el bloque <PARRILLA_JSON> con TODOS los posts, tal como indica tu Skill 6. Sin ese bloque no se guarda nada. No hagas preguntas: crea la parrilla con la información que tienes.`;
 
   document.getElementById('studio-wizard').remove();
   // Generate without leaving Studio
@@ -9332,7 +9427,7 @@ function openPostModal(postId) {
   let mediaHTML = '';
 
   const hasVideo = !!post.videoUrl;
-  const hasImage = !!post.imageBase64;
+  const hasImage = postTieneImagen(post);
 
   if (hasVideo) {
     // Video subido (object URL — sesión)
@@ -9369,10 +9464,10 @@ function openPostModal(postId) {
         '<button class="pm-btn pm-btn-ghost" style="justify-content:center;color:#e53e3e;border-color:#fed7d7!important" onclick="clearPostMedia(\'' + postId + '\')" title="Eliminar slides">🗑</button>' +
       '</div>';
   } else if (hasImage) {
-    // Imagen guardada en base64
+    // Imagen en base64 (recién generada) o en su URL (ya guardada)
     mediaHTML =
       '<div class="post-modal-media-preview">' +
-        '<img src="data:' + post.imageMediaType + ';base64,' + post.imageBase64 + '" alt="" style="width:100%;height:100%;object-fit:cover">' +
+        '<img src="' + esc(postImagenSrc(post)) + '" alt="" style="width:100%;height:100%;object-fit:cover">' +
       '</div>' +
       '<div style="display:flex;gap:6px">' +
         '<button class="pm-btn pm-btn-ghost" style="flex:1;justify-content:center;font-size:11px" onclick="downloadPostImage(\'' + postId + '\')">⬇ Descargar</button>' +
@@ -9444,7 +9539,7 @@ function openPostModal(postId) {
   }
 
   // ── Pie: botones de estado ────────────────────────────────────────────────
-  const hasMedia = !!(post.imageBase64 || post.videoUrl);
+  const hasMedia = !!(postTieneImagen(post) || post.videoUrl);
   const igConn   = getSocialAccount('instagram');
   const fbConn   = getSocialAccount('facebook');
   const hasAnyConn = !!(igConn || fbConn);
@@ -9543,6 +9638,7 @@ function uploadMediaForPost(postId, accept) {
         videoUrl,
         videoFileName: file.name,
         imageBase64: null,        // limpiar imagen previa
+        imageUrl: null,           // y su copia guardada, o volvería a aparecer
         imageMediaType: file.type
       });
       closePostModal();
@@ -9556,7 +9652,9 @@ function uploadMediaForPost(postId, accept) {
       const reader = new FileReader();
       reader.onload = (ev) => {
         const base64 = ev.target.result.split(',')[1];
-        updateStudioPost(postId, { imageBase64: base64, imageMediaType: file.type, videoUrl: null });
+        // imageUrl a null: si quedara la de la imagen anterior, el guardado no
+        // subiría la nueva (la da por subida) y se mostraría la vieja.
+        updateStudioPost(postId, { imageBase64: base64, imageMediaType: file.type, imageUrl: null, videoUrl: null });
         closePostModal();
         setTimeout(() => openPostModal(postId), 80);
       };
@@ -9919,23 +10017,60 @@ function inferVisualConcept(post) {
   return base + ', ' + net + ', Latin American setting, authentic people';
 }
 
-function downloadPostImage(postId) {
-  const post = loadStudioPosts().find(p => p.id === postId);
-  if (!post || !post.imageBase64) return;
-  downloadAdImage(post.imageBase64, post.imageMediaType, 'post_' + post.network + '_sem' + post.week + '.png');
+// Al guardar, la imagen se sube y la copia en base64 se borra (studioSubirImagenes):
+// desde ahí el post solo tiene imageUrl. Todo lo que muestra o descarga la imagen
+// tiene que mirar las dos, o el post «pierde» su imagen tras el primer guardado.
+function postTieneImagen(post) {
+  return !!(post && (post.imageBase64 || post.imageUrl));
+}
+function postImagenSrc(post) {
+  if (!post) return '';
+  if (post.imageBase64) return 'data:' + (post.imageMediaType || 'image/jpeg') + ';base64,' + post.imageBase64;
+  return post.imageUrl || '';
 }
 
-function downloadAllStudioImages() {
-  const posts = loadStudioPosts().filter(p => p.imageBase64);
+async function descargarImagenPost(post, filename) {
+  if (post.imageBase64) { downloadAdImage(post.imageBase64, post.imageMediaType, filename); return true; }
+  if (!post.imageUrl) return false;
+  try {
+    const r = await fetch(post.imageUrl);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const blobUrl = URL.createObjectURL(await r.blob());
+    const a = document.createElement('a');
+    a.href = blobUrl; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    return true;
+  } catch (e) {
+    // Sin descarga directa, al menos se abre la imagen para guardarla a mano.
+    console.warn('[studio] descarga por URL falló, se abre en pestaña:', e);
+    window.open(post.imageUrl, '_blank', 'noopener');
+    return false;
+  }
+}
+
+function downloadPostImage(postId) {
+  const post = loadStudioPosts().find(p => p.id === postId);
+  if (!postTieneImagen(post)) { showToast('Este post no tiene imagen para descargar.', 'error'); return; }
+  descargarImagenPost(post, 'post_' + post.network + '_sem' + post.week + '.png');
+}
+
+async function downloadAllStudioImages() {
+  const posts = loadStudioPosts().filter(postTieneImagen);
   if (!posts.length) { alert('No hay imágenes generadas todavía.'); return; }
-  posts.forEach(p => downloadAdImage(p.imageBase64, p.imageMediaType, 'post_' + p.network + '_sem' + p.week + '_' + (p.title||'post').slice(0,20).replace(/\s+/g,'_') + '.png'));
+  let fallidas = 0;
+  for (const p of posts) {
+    const ok = await descargarImagenPost(p, 'post_' + p.network + '_sem' + p.week + '_' + (p.title||'post').slice(0,20).replace(/\s+/g,'_') + '.png');
+    if (!ok) fallidas++;
+  }
+  if (fallidas) showToast(fallidas + ' imagen' + (fallidas === 1 ? '' : 'es') + ' no se pudo descargar directo; se abrió en otra pestaña para guardarla.', 'error');
 }
 
 // ── Borrar media de un post (vuelve al estado vacío) ─────────────────────────
 function clearPostMedia(postId) {
   if (!confirm('¿Eliminar la imagen/slides de este post?')) return;
   updateStudioPost(postId, {
-    imageBase64: null, imageMediaType: null,
+    imageBase64: null, imageMediaType: null, imageUrl: null,
     carouselImages: null, videoUrl: null, videoFileName: null
   });
   closePostModal();
@@ -10568,6 +10703,7 @@ function irA(destino) {
         case 'marketing':     navGo('marketing'); break;
         case 'plantillas':    navGo('marketing'); setTimeout(() => crmSetView('plantillas'), 150); break;
         case 'paginas':       navGo('marketing'); setTimeout(() => crmSetView('paginas'), 150); break;
+        case 'studio':        openSocialStudio(); break;
         case 'propuestas':    navGo('marketing'); setTimeout(() => crmSetView('proposals'), 150); break;
         case 'pauta':         navGo('marketing'); setTimeout(() => crmSetView('pauta'), 150); break;
         case 'pauta-ventas':  navGo('marketing'); setTimeout(() => { pautaVista = 'ventas'; crmSetView('pauta'); }, 150); break;
@@ -11025,8 +11161,8 @@ function academiaHTML() { // legacy — kept for reference, not used
       + card('SEO',SE,I.edit,'Optimización on-page con el agente SEO','Mejora títulos, meta-descriptions, headings y contenido de tus páginas.','7 min',''))
     // Contenido
     + section('contenido','#F5F3FF','#7c3aed','<path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>','Contenido para Redes Sociales','Studio de contenido, parrilla editorial y generación de imágenes con IA',
-        card('Contenido',CO,I.layout,'El Studio de Contenido — guía completa','Conoce todos los módulos: generador de copys, parrilla, publicación y análisis.','12 min','')
-      + card('Contenido',CO,I.cal,'Genera y publica tu parrilla mensual de contenido','Crea un mes de contenido en minutos: copys, imágenes y publicación directa.','8 min','')
+        card('Contenido',CO,I.layout,'El Studio de Contenido — guía completa','Conoce todos los módulos: generador de copys, parrilla, imágenes y descarga para publicar.','12 min','')
+      + card('Contenido',CO,I.cal,'Genera tu parrilla mensual de contenido','Crea un mes de contenido en minutos: copys e imágenes listos para descargar y publicar.','8 min','')
       + card('Contenido',CO,I.img,'Generación de imágenes con IA para redes sociales','Usa el generador de imágenes para crear visuales de marca listos para publicar.','6 min','')
       + card('Contenido',CO,I.video,'Guiones para Reels, TikToks y Stories con IA','Genera scripts virales con hooks probados y call-to-action optimizados.','7 min',''))
     // Agencia
@@ -11153,7 +11289,7 @@ function setAgentContext(ctx, showGuide=false){
     if(socialBar)socialBar.style.display=isEmpty?'block':'none';
     // Actualizar descripción del Studio banner con conteo de posts
     const descEl=document.getElementById('studio-bar-desc');
-    if(descEl){const posts=loadStudioPosts();descEl.textContent=posts.length>0?posts.length+' posts en tu calendario · haz clic para verlos':'Calendario visual · genera imágenes · gestiona tu parrilla';}
+    if(descEl){const posts=loadStudioPosts();descEl.textContent=posts.length>0?posts.length+' posts en tu calendario · haz clic para verlos':'Calendario visual · genera imágenes · descarga y publica';}
     if(qaBar)qaBar.style.display='none';
   } else {
     if(socialBar)socialBar.style.display='none';

@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-08-studio-parrilla",
+      "fecha": "2026-10-08",
+      "tipo": "arreglo",
+      "titulo": "El Studio Social vuelve a crear tu parrilla",
+      "texto": "Al usar «Crear parrilla de contenido», la pantalla «Creando tu parrilla…» podía quedarse cargando sin terminar nunca. Ya está resuelto: la parrilla se crea y entra sola a tu calendario, y si algo falla te lo decimos en pantalla y puedes reintentar con las mismas opciones. También arreglamos que las imágenes de tus posts aparecieran como «Sin imagen» después de guardar: ahora se ven, se cuentan y se descargan siempre. Por ahora los posts se descargan para publicarlos tú; la publicación directa en Instagram y Facebook llegará cuando Meta apruebe la app.",
+      "accion": {
+        "texto": "Abrir el Studio",
+        "ir": "studio"
+      }
+    },
+    {
       "id": "2026-10-08-todo-abre-la-ficha",
       "fecha": "2026-10-08",
       "tipo": "mejora",
