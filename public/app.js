@@ -22929,7 +22929,14 @@ function crmEditCurrentLead() {
 
 async function crmDeleteCurrentLead() {
   if (!crmDetailLead) return;
-  if (!confirm(`¿Eliminar el lead "${crmDetailLead.name}"? Esta acción no se puede deshacer.`)) return;
+  // El borrado es lógico (deleted_at) y cron-retention lo purga a los 30 días.
+  // Decir «no se puede deshacer» asustaba sin motivo y escondía la Papelera.
+  if (!await confirmarAguaP({
+    titulo: 'Eliminar lead',
+    texto: '«' + (crmDetailLead.name || 'Sin nombre') + '» va a la papelera. Durante 30 días puedes restaurarlo desde Configuración › Plan y facturación › Papelera; después se borra para siempre.',
+    confirmar: 'Mover a la papelera',
+    peligro: true,
+  })) return;
   const leadId = crmDetailLead.id;
   crmCloseDetail();
   try {
@@ -33490,6 +33497,9 @@ let _impRows = [];       // filas crudas parseadas
 let _impHeaders = [];    // encabezados detectados
 let _impMap = {};        // índice de columna → campo
 let _impStep = 1;
+// Reparto de los importados: la regla de la cuenta, uno solo, varios en turnos
+// o nadie. _impAsg es lo que devuelve /api/assign-rules (equipo y reglas).
+let _impAsg = null, _impAsgModo = 'regla', _impAsgIds = [];
 
 const IMP_FIELDS = [
   { key: '', label: 'Ignorar esta columna' },
@@ -33681,6 +33691,7 @@ function impAutoMap(headers) {
 
 function impOpen() {
   _impRows = []; _impHeaders = []; _impMap = {}; _impStep = 1;
+  _impAsg = null; _impAsgModo = 'regla'; _impAsgIds = [];
   impRender();
 }
 
@@ -33694,7 +33705,7 @@ function impRender() {
 
   if (_impStep === 1) {
     body =
-      '<div style="border:2px dashed var(--border);border-radius:14px;padding:26px;text-align:center;margin-bottom:14px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--blue)\'" onmouseout="this.style.borderColor=\'var(--border)\'" onclick="document.getElementById(\'imp-file\').click()">' +
+      '<div id="imp-drop" style="border:2px dashed var(--border);border-radius:14px;padding:26px;text-align:center;margin-bottom:14px;cursor:pointer;transition:border-color .15s,background .15s" onmouseover="this.style.borderColor=\'var(--blue)\'" onmouseout="this.style.borderColor=\'var(--border)\'" onclick="document.getElementById(\'imp-file\').click()" ondragover="impArrastrando(event,true)" ondragleave="impArrastrando(event,false)" ondrop="impSoltar(event)">' +
         '<div style="font-size:26px;margin-bottom:6px">📄</div>' +
         '<div style="font-weight:700;font-size:var(--fs-md)">Sube tu archivo Excel o CSV</div>' +
         '<div style="font-size:var(--fs-sm);color:var(--muted)">Haz clic o arrastra aquí · .xlsx, .csv</div>' +
@@ -33733,6 +33744,8 @@ function impRender() {
         '<option value="skip">Omitirlo (no tocar el lead existente)</option>' +
         '<option value="update">Actualizarlo (completa datos y suma etiquetas)</option>' +
       '</select></div>' +
+      '<div class="auto-field"><label class="auto-label">Quién atiende a los contactos nuevos</label>' +
+        '<div id="imp-asg">' + impAsgHtml() + '</div></div>' +
       '<div style="font-size:11.5px;color:#B45309;background:#FEF3C7;border-radius:10px;padding:9px 12px;margin-top:6px">Las importaciones no disparan automatizaciones de "lead nuevo" (protección anti-envíos accidentales). Para contactarlos, crea una campaña dirigida a la etiqueta de importación.</div>';
   }
 
@@ -33760,7 +33773,107 @@ function impRender() {
           '<button class="btn-pri" id="imp-next-btn" ' + (canNext ? '' : 'disabled style="opacity:.5"') + ' onclick="impNext()">' + (_impStep === 3 ? 'Importar →' : 'Siguiente →') + '</button>' +
         '</div>' : '') +
     '</div>';
+  // Un archivo que se suelta fuera de la zona (pero dentro del asistente) no
+  // debe hacer que el navegador lo abra y se pierda todo lo configurado.
+  ov.addEventListener('dragover', e => e.preventDefault());
+  ov.addEventListener('drop', e => e.preventDefault());
   document.body.appendChild(ov);
+  if (_impStep === 3) { ddConvertirSelects(ov); impAsgCargar(); }
+}
+
+function impArrastrando(e, encima) {
+  e.preventDefault();
+  const z = document.getElementById('imp-drop');
+  if (!z) return;
+  z.style.borderColor = encima ? 'var(--blue)' : 'var(--border)';
+  z.style.background = encima ? 'var(--blue-lt)' : '';
+}
+
+function impSoltar(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  impArrastrando(e, false);
+  const archivos = e.dataTransfer && e.dataTransfer.files;
+  if (!archivos || !archivos.length) { showToast('Eso no era un archivo. Arrastra un .xlsx o .csv', 'error'); return; }
+  if (archivos.length > 1) showToast('Solo se importa un archivo a la vez: tomé el primero', 'info');
+  impArchivo(archivos[0]);
+}
+
+async function impAsgCargar() {
+  if (_impAsg || (window._miPerfil && window._miPerfil.solo_sus_leads)) return;
+  try {
+    const r = await fetchAuth('/api/assign-rules');
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Error');
+    _impAsg = d;
+  } catch (e) {
+    _impAsg = { error: true };
+  }
+  impAsgPintar();
+}
+
+function impAsgPintar() {
+  const box = document.getElementById('imp-asg');
+  if (!box) return;
+  box.innerHTML = impAsgHtml();
+  ddConvertirSelects(box);
+}
+
+// Lo que hace hoy la regla de «Importación» (o la general), dicho en corto.
+function impAsgReglaHoy() {
+  const reglas = (_impAsg && _impAsg.reglas) || {};
+  const r = reglas.importacion || reglas.default || { modo: 'off' };
+  if (r.modo === 'turnos') return 'en turnos entre todo el equipo';
+  if (r.modo === 'fijo') {
+    const m = (_impAsg.equipo || []).find(x => x.id === r.fijo);
+    return m ? 'todos a ' + m.nombre : 'a una persona que ya no está en el equipo';
+  }
+  return 'sin asignar';
+}
+
+function impAsgHtml() {
+  if (window._miPerfil && window._miPerfil.solo_sus_leads) {
+    return '<div style="font-size:12px;color:var(--muted)">Los contactos que importes quedan <b>a tu nombre</b>.</div>';
+  }
+  if (!_impAsg) return '<div style="font-size:12px;color:var(--muted2)">Cargando tu equipo…</div>';
+  if (_impAsg.error) {
+    // Sin equipo cargado no se puede elegir a nadie: se aplica la regla de la
+    // cuenta en el servidor, y se dice para que nadie crea que quedan sin dueño.
+    return '<div style="font-size:12px;color:var(--danger)">No pude cargar tu equipo. Se aplicará la regla de reparto de la cuenta. <a href="#" onclick="event.preventDefault();_impAsg=null;impAsgPintar();impAsgCargar()">Reintentar</a></div>';
+  }
+  const equipo = _impAsg.equipo || [];
+  if (!equipo.length) {
+    return '<div style="font-size:12px;color:var(--muted)">Trabajas solo en esta cuenta, así que los contactos nuevos quedan <b>a tu nombre</b>.</div>';
+  }
+  const modos = [
+    ['regla', 'Según la regla de reparto (hoy: ' + impAsgReglaHoy() + ')'],
+    ['turnos', 'Repartir en turnos entre varios asesores'],
+    ['fijo', 'Todos a un solo asesor'],
+    ['ninguno', 'Dejarlos sin asignar'],
+  ];
+  let extra = '';
+  if (_impAsgModo === 'fijo') {
+    const elegido = _impAsgIds[0] && equipo.some(m => m.id === _impAsgIds[0]) ? _impAsgIds[0] : equipo[0].id;
+    _impAsgIds = [elegido];
+    extra = '<select class="auto-input" id="imp-asg-fijo" style="width:100%;margin-top:8px" onchange="_impAsgIds=[this.value]">' +
+      equipo.map(m => '<option value="' + esc(m.id) + '"' + (m.id === elegido ? ' selected' : '') + '>' + esc(m.nombre) + '</option>').join('') +
+    '</select>';
+  } else if (_impAsgModo === 'turnos') {
+    if (!_impAsgIds.length) _impAsgIds = equipo.map(m => m.id);
+    extra = '<div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px">' +
+      equipo.map(m => '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">' +
+        '<input type="checkbox" value="' + esc(m.id) + '"' + (_impAsgIds.includes(m.id) ? ' checked' : '') + ' onchange="impAsgMarcar(this)">' +
+        esc(m.nombre) + '</label>').join('') +
+    '</div>';
+  }
+  return '<select class="auto-input" id="imp-asg-modo" style="width:100%" onchange="_impAsgModo=this.value;_impAsgIds=[];impAsgPintar()">' +
+      modos.map(([v, t]) => '<option value="' + v + '"' + (_impAsgModo === v ? ' selected' : '') + '>' + esc(t) + '</option>').join('') +
+    '</select>' + extra +
+    '<div style="font-size:11px;color:var(--muted2);margin-top:8px">Cada asesor recibe un solo correo al final con cuántos le tocaron. Los contactos que ya existían conservan su responsable.</div>';
+}
+
+function impAsgMarcar(chk) {
+  _impAsgIds = chk.checked ? [...new Set([..._impAsgIds, chk.value])] : _impAsgIds.filter(id => id !== chk.value);
 }
 
 function impLoadData(text) {
@@ -33782,6 +33895,16 @@ async function impFile(input) {
   const f = input.files && input.files[0];
   if (!f) return;
   input.value = '';
+  impArchivo(f);
+}
+
+// El mismo camino para el archivo elegido con clic y para el que se arrastra.
+async function impArchivo(f) {
+  // Arrastrando se puede soltar cualquier cosa; el accept del input no filtra aquí.
+  if (!/\.(csv|txt|xlsx?)$/i.test(f.name)) {
+    showToast('Ese archivo no es una hoja de cálculo. Usa .xlsx o .csv, o copia los datos y pégalos abajo', 'error');
+    return;
+  }
 
   // .xls es el binario viejo de Excel (anterior a 2007) y no es un ZIP: leerlo
   // exigiria una libreria entera. Para ese caso sigue estando el pegado.
@@ -33844,9 +33967,17 @@ async function impRun() {
   const stage = document.getElementById('imp-stage')?.value || 'nuevo';
   const dedupe = document.getElementById('imp-dedupe')?.value || 'skip';
   const leads = impBuildLeads();
+  let asignacion = { modo: 'regla' };
+  if (_impAsg && !_impAsg.error && (_impAsg.equipo || []).length) {
+    if ((_impAsgModo === 'turnos' || _impAsgModo === 'fijo') && !_impAsgIds.length) {
+      showToast('Elige al menos un asesor, o cambia cómo se reparten', 'error');
+      return;
+    }
+    asignacion = { modo: _impAsgModo, ids: _impAsgIds };
+  }
   _impStep = 4; impRender();
 
-  const totals = { created: 0, updated: 0, skipped: 0, invalid: 0, email_invalido: 0, limit_reached: false, tags_ignoradas: [] };
+  const totals = { created: 0, updated: 0, skipped: 0, invalid: 0, email_invalido: 0, limit_reached: false, tags_ignoradas: [], asignados: {}, asignacion_error: null };
   const BATCH = 250;
   const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
   const qs = '?action=import' + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
@@ -33854,7 +33985,7 @@ async function impRun() {
     try {
       const rLote = await fetchAuth('/api/leads' + qs, {
         method: 'POST',
-        body: JSON.stringify({ leads: leads.slice(i, i + BATCH), options: { tags, stage, dedupe } }),
+        body: JSON.stringify({ leads: leads.slice(i, i + BATCH), options: { tags, stage, dedupe, asignacion } }),
       });
       if (!rLote.ok) throw await motivoDelFallo(rLote, 'importar contactos');
       const d = await rLote.json();
@@ -33864,6 +33995,11 @@ async function impRun() {
         totals.email_invalido += (d.result.email_invalido || 0);
         if (d.result.limit_reached) totals.limit_reached = true;
         if (d.result.tags_ignoradas) totals.tags_ignoradas = [...new Set([...totals.tags_ignoradas, ...d.result.tags_ignoradas])];
+        if (d.result.asignacion_error) totals.asignacion_error = d.result.asignacion_error;
+        Object.entries(d.result.asignados || {}).forEach(([id, a]) => {
+          const t = totals.asignados[id] || (totals.asignados[id] = { nombre: a.nombre, n: 0 });
+          t.n += a.n;
+        });
       } else if (d.error) { showToast('⚠️ ' + d.error, 'error'); break; }
     } catch (e) { showToast('Error importando el lote ' + (Math.floor(i / BATCH) + 1), 'error'); break; }
     const pct = Math.min(100, Math.round(((i + BATCH) / leads.length) * 100));
@@ -33875,6 +34011,22 @@ async function impRun() {
   }
 
   track('leads_imported', { total: totals.created + totals.updated });
+
+  // El aviso a los asesores va una vez, al final: un correo por persona con su
+  // total, no uno por contacto ni uno por lote.
+  const repartidos = Object.entries(totals.asignados);
+  let avisoFallido = false;
+  if (repartidos.length && !(window._miPerfil && window._miPerfil.solo_sus_leads)) {
+    try {
+      const rAv = await fetchAuth('/api/leads?action=import_aviso', {
+        method: 'POST',
+        body: JSON.stringify({ conteos: Object.fromEntries(repartidos.map(([id, a]) => [id, a.n])), etiqueta: tags[0] || null }),
+      });
+      const dAv = await rAv.json().catch(() => ({}));
+      avisoFallido = !rAv.ok || (dAv.fallidos || 0) > 0;
+    } catch { avisoFallido = true; }
+  }
+  const sinDueno = totals.created - repartidos.reduce((s, [, a]) => s + a.n, 0);
   const wrap = document.getElementById('imp-progress-wrap');
   if (wrap) wrap.style.display = 'none';
   const resEl = document.getElementById('imp-result');
@@ -33892,6 +34044,11 @@ async function impRun() {
         (totals.email_invalido ? '<div style="font-size:12px;color:var(--muted);margin-top:10px">' + totals.email_invalido + ' contactos traían el correo mal escrito: se guardaron igual, sin correo.</div>' : '') +
         (totals.tags_ignoradas.length ? '<div style="font-size:12px;color:#B45309;margin-top:10px">No se pusieron estas etiquetas porque no están en el catálogo de la cuenta y solo un administrador puede crearlas: ' + esc(totals.tags_ignoradas.join(', ')) + '</div>' : '') +
         (totals.limit_reached ? '<div style="font-size:12px;color:#B45309;margin-top:12px">Alcanzaste el límite de leads de tu plan — los restantes no se importaron.</div>' : '') +
+        (repartidos.length ? '<div style="font-size:12px;color:var(--muted);margin-top:12px">Repartidos: ' +
+          repartidos.map(([, a]) => '<b>' + esc(a.nombre || 'Asesor') + '</b> ' + a.n).join(' · ') +
+          (sinDueno > 0 ? ' · <b>sin asignar</b> ' + sinDueno : '') + '</div>' : '') +
+        (totals.asignacion_error ? '<div style="font-size:12px;color:var(--warning);margin-top:10px">No se pudieron repartir: ' + esc(totals.asignacion_error) + ' Quedaron sin asignar; puedes repartirlos desde el tablero.</div>' : '') +
+        (avisoFallido ? '<div style="font-size:12px;color:var(--warning);margin-top:10px">Los contactos quedaron asignados, pero no pude mandar el correo de aviso a todos los asesores. Cuéntales tú.</div>' : '') +
         (tags.length && totals.created + totals.updated > 0 ? '<div style="font-size:12px;color:var(--muted);margin-top:12px">Todos quedaron con la etiqueta <b>' + esc(tags.join(', ')) + '</b> — ya puedes crear una campaña dirigida a ella.</div>' : '') +
         '<div style="margin-top:18px"><button class="btn-pri" onclick="document.getElementById(\'imp-overlay\').remove();crmLoadLeads().then(()=>{crmRender();crmLoadTags()})">Ver mis leads</button></div>' +
       '</div>';

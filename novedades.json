@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-08-importar-reparto",
+      "fecha": "2026-10-08",
+      "tipo": "mejora",
+      "titulo": "Al importar contactos eliges quién los atiende",
+      "texto": "En el paso de configuración del importador ahora decides a quién quedan los contactos nuevos: según tu regla de reparto, todos a un asesor, repartidos en turnos entre varios asesores, o sin asignar. Cada asesor recibe un solo correo al final con cuántos le tocaron. Además, ya puedes arrastrar el archivo .xlsx o .csv directamente al importador, y al eliminar un lead te recordamos que queda 30 días en la Papelera por si necesitas restaurarlo."
+    },
+    {
       "id": "2026-10-08-resena-whatsapp",
       "fecha": "2026-10-08",
       "tipo": "arreglo",

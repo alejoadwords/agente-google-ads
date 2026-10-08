@@ -524,6 +524,13 @@ export default async function handler(req) {
     const dedupe = opts.dedupe === 'update' ? 'update' : 'skip';
     const stage = String(opts.stage || 'nuevo').slice(0, 40);
     const importTags = Array.isArray(opts.tags) ? opts.tags : [];
+    // Quién atiende a los importados. Un asesor de perfil Ventas solo ve lo que
+    // tiene asignado: si importa sin dueño, los contactos desaparecen de su
+    // tablero en cuanto termina. Lo suyo queda a su nombre, y repartir es del
+    // administrador.
+    const asignacion = soloLosMios
+      ? { modo: 'fijo', ids: [actorId] }
+      : (opts.asignacion && typeof opts.asignacion === 'object' ? opts.asignacion : { modo: 'regla' });
 
     // Límite de plan (mismo cálculo que la creación individual)
     let userPlan = 'free', leadsExtra = 0;
@@ -645,14 +652,70 @@ export default async function handler(req) {
       });
     }
     if (toInsert.length) {
-      const insRes = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
-        method: 'POST', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+      // El dueño se decide antes de insertar, en bloque: ver repartirLote().
+      // Solo los nuevos; a un contacto que ya existía no se le cambia el dueño.
+      const { repartirLote } = await import('./_assign.js');
+      const reparto = await repartirLote(userId, toInsert.length, asignacion, 'importacion');
+      toInsert.forEach((l, i) => {
+        const com = reparto.coms[i];
+        // Todas las filas con las mismas claves: PostgREST lo exige en un insert múltiple.
+        l.assigned_to = com ? com.id : null;
+        l.assigned_name = com ? com.nombre : null;
+      });
+      if (reparto.error) result.asignacion_error = reparto.error;
+
+      const insRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?select=id,assigned_to,assigned_name`, {
+        method: 'POST', headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
         body: JSON.stringify(toInsert),
       });
       if (!insRes.ok) return jsonResp({ error: 'Error insertando: ' + (await insRes.text()).slice(0, 200) }, 500);
       result.created = toInsert.length;
+
+      const creados = (await insRes.json().catch(() => [])) || [];
+      const conDueno = creados.filter(l => l.assigned_to);
+      if (conDueno.length) {
+        // Cuántos le tocaron a cada uno, para el resumen y para el único correo
+        // que se manda al final (action=import_aviso).
+        result.asignados = {};
+        conDueno.forEach(l => {
+          const a = result.asignados[l.assigned_to] || (result.asignados[l.assigned_to] = { nombre: l.assigned_name, n: 0 });
+          a.n++;
+        });
+        // El historial de cada ficha cuenta de dónde salió su dueño. Un solo
+        // insert para todo el lote; si falla, los leads ya quedaron asignados.
+        await fetch(`${SUPABASE_URL}/rest/v1/lead_activities`, {
+          method: 'POST', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+          body: JSON.stringify(conDueno.map(l => ({
+            lead_id: l.id, user_id: userId, type: 'nota',
+            content: `Asignado a ${l.assigned_name} al importar`,
+            metadata: { sistema: true, asignacion: 'importacion' },
+          }))),
+        }).catch(() => {});
+      }
     }
     return jsonResp({ ok: true, result, plan_limit: planLimit, current: currentCount + result.created });
+  }
+
+  // POST ?action=import_aviso — el aviso de una importación, al final y una
+  // sola vez: un correo por comercial con su total, no uno por contacto.
+  // Body: { conteos: { <member_user_id>: n }, etiqueta }
+  if (req.method === 'POST' && url.searchParams.get('action') === 'import_aviso') {
+    if (soloLosMios) return jsonResp({ avisados: 0 });
+    let body;
+    try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    const conteos = body?.conteos && typeof body.conteos === 'object' ? body.conteos : {};
+    const etiqueta = String(body?.etiqueta || '').slice(0, 60) || null;
+    const { comercialesActivos, avisarImportacion } = await import('./_assign.js');
+    // Solo gente del equipo: los ids llegan del navegador y no se les cree.
+    // Quien importó no necesita que le avisen de lo que acaba de hacer.
+    const equipo = (await comercialesActivos(userId)).filter(m => m.id !== actorId);
+    let avisados = 0, fallidos = 0;
+    for (const com of equipo) {
+      const n = Math.min(parseInt(conteos[com.id]) || 0, 100000);
+      if (n <= 0) continue;
+      if (await avisarImportacion(com, n, etiqueta)) avisados++; else fallidos++;
+    }
+    return jsonResp({ avisados, fallidos });
   }
 
   // POST — create lead

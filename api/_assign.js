@@ -156,6 +156,89 @@ export async function siguienteComercial(userId, fuente, entre = null, forzarTur
 }
 
 
+// Reparto de un lote entero de una vez, para la importación. asignarLead() va
+// lead por lead: un PATCH, una nota, una tarea y un correo por cada uno, y con
+// un archivo de mil contactos eso son mil correos de «te asignaron un lead»
+// (Resend nos da 100 al día para toda la plataforma). Aquí se decide el dueño
+// de cada fila ANTES de insertarla y el turno se guarda una sola vez por lote;
+// el aviso va aparte, uno por comercial, con avisarImportacion().
+//
+// eleccion.modo:
+//   'regla'   → la regla de la fuente (o la general) de Configuración
+//   'ninguno' → sin responsable
+//   'fijo'    → todos a eleccion.ids[0]
+//   'turnos'  → en turnos entre eleccion.ids
+// Devuelve { coms: [com|null × n], error } — error dice por qué no se pudo
+// repartir lo pedido, para contarlo en pantalla en vez de importar mudo.
+export async function repartirLote(userId, n, eleccion, fuente = 'importacion') {
+  const modo = ['regla', 'ninguno', 'fijo', 'turnos'].includes(eleccion?.modo) ? eleccion.modo : 'regla';
+  const vacio = (error = null) => ({ coms: new Array(n).fill(null), error });
+  if (!n || modo === 'ninguno') return vacio();
+
+  const equipo = await comercialesActivos(userId);
+  const clave = String(fuente || 'default').toLowerCase().slice(0, 40);
+  const blob = await leerBlob(userId);
+  let candidatos;
+
+  if (modo === 'regla') {
+    // Mismo criterio que siguienteComercial(): sin equipo, el dueño es el comercial.
+    if (!equipo.length) {
+      const dueno = await duenoComoComercial(userId);
+      return { coms: new Array(n).fill(dueno), error: dueno ? null : 'No se encontró al dueño de la cuenta.' };
+    }
+    const reglas = blob.reglas || {};
+    const regla = normalizarRegla(reglas[clave] || reglas.default);
+    if (regla.modo === 'off') return vacio();
+    if (regla.modo === 'fijo') {
+      const uno = equipo.find(m => m.id === regla.fijo);
+      return uno ? { coms: new Array(n).fill(uno), error: null }
+                 : vacio('La persona de la regla de reparto ya no está en el equipo.');
+    }
+    candidatos = equipo;
+  } else {
+    const ids = Array.isArray(eleccion.ids) ? eleccion.ids.map(String) : [];
+    candidatos = equipo.filter(m => ids.includes(m.id));
+    if (!candidatos.length) return vacio('Los asesores elegidos ya no están activos en el equipo.');
+    if (modo === 'fijo') return { coms: new Array(n).fill(candidatos[0]), error: null };
+  }
+
+  // Turnos: sigue donde quedó el puntero de esta fuente, así que el lote
+  // siguiente (y la próxima importación) arranca con quien sigue.
+  const turnos = blob.turnos || {};
+  let idx = Number.isInteger(turnos[clave]) ? turnos[clave] : -1;
+  const coms = [];
+  for (let i = 0; i < n; i++) { idx = (idx + 1) % candidatos.length; coms.push(candidatos[idx]); }
+  await guardarBlob(userId, { ...blob, turnos: { ...turnos, [clave]: idx } });
+  return { coms, error: null };
+}
+
+// Un solo correo por comercial al terminar una importación, con el total.
+export async function avisarImportacion(com, cantidad, etiqueta) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key || !com?.email || !cantidad) return false;
+  const plural = cantidad === 1 ? 'contacto importado' : 'contactos importados';
+  const res = await enviarResend('_assign', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
+      to: com.email,
+      subject: `Te asignaron ${cantidad} ${plural}`,
+      html: emailHtml({
+        titulo: `Tienes ${cantidad} ${plural}`,
+        intro: `Se acaba de importar una base de contactos y <strong>${cantidad}</strong> quedaron a tu nombre.`,
+        preheader: `${cantidad} ${plural} a tu nombre`,
+        cuerpo: etiqueta
+          ? bloque(`<div style="color:#5B6072;font-size:13px">Los encuentras con la etiqueta <strong>${esc(etiqueta)}</strong>.</div>`)
+          : '',
+        cta: { texto: 'Abrir el CRM', url: 'https://app.acuarius.app/crm' },
+        pie: 'Una base importada no se está esperando tu llamada: conviene presentarse antes de vender.',
+      }),
+    }),
+  }).catch(() => null);
+  return !!res?.ok;
+}
+
 // Aviso al comercial. Si no hay Resend configurado simplemente no se manda:
 // el lead ya quedó asignado, que es lo importante.
 async function avisarComercial(com, lead, fuente) {
