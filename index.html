@@ -6089,6 +6089,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <script src="/prompts/social.js"></script>
 <script>
 window.AGENTES_ACTIVOS = false;
+// Publicar directo en Instagram y Facebook desde el Studio. Apagado hasta que
+// Meta apruebe pages_manage_posts e instagram_content_publish (REVISION-META.md):
+// sin eso solo puede conectar quien tenga rol en la app de Meta. El equipo de
+// Acuarius (isAdminUser) lo ve igual, para probarlo. Al aprobarse: true.
+window.PUBLICAR_DIRECTO = false;
 if (window.AGENTES_ACTIVOS) {
   // El <body> nace con `sin-agentes` para no pintar la barra de pestañas vacía.
   // Este es el mismo interruptor: si se reenciende, hay que devolverla.

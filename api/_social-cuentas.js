@@ -157,6 +157,52 @@ export async function tokenDeCuenta(userId, clientId, network, pageId) {
   };
 }
 
+// ── Graph API ────────────────────────────────────────────────────────────────
+// Una sola versión para conectar y publicar. Antes cada archivo traía la suya y
+// social-publish se quedó sin la constante (se borró en f7abeae): toda
+// publicación reventaba con «GRAPH is not defined» y nadie lo vio porque Meta
+// todavía no dejaba conectar a ningún cliente.
+export const GRAPH = 'https://graph.facebook.com/v23.0';
+
+// Los permisos que hacen falta para publicar. Si la persona desmarca alguno en
+// el diálogo de Facebook, la conexión se guarda igual pero se le dice cuál
+// falta: publicar después y recibir un «(#200)» no le explicaría nada.
+export const PERMISOS_PUBLICAR = [
+  'pages_show_list', 'pages_read_engagement', 'pages_manage_posts',
+  'instagram_basic', 'instagram_content_publish',
+];
+
+// El error de Graph, en algo que la persona pueda entender y resolver. Se
+// conserva el mensaje original al final: soporte lo necesita para buscarlo.
+export function errorDeMeta(e, contexto) {
+  const err = e?.error || e || {};
+  const code = Number(err.code), sub = Number(err.error_subcode);
+  const original = String(err.error_user_msg || err.message || '').slice(0, 220);
+  let texto, reconectar = false;
+  if (code === 190 || code === 102) {
+    texto = 'La conexión con Meta venció o se revocó. Vuelve a conectar la cuenta desde «Conectar redes».';
+    reconectar = true;
+  } else if (code === 10 || (code >= 200 && code <= 299)) {
+    texto = 'Meta no dio permiso para publicar en esta cuenta. Vuelve a conectarla y acepta todos los permisos que pide.';
+    reconectar = true;
+  } else if ([4, 17, 32, 613].includes(code)) {
+    texto = 'Meta frenó las publicaciones por demasiadas solicitudes seguidas. Espera unos minutos y reintenta.';
+  } else if (sub === 2207042 || code === 9) {
+    texto = 'Instagram llegó al límite de publicaciones por API de las últimas 24 horas. Reintenta mañana.';
+  } else if ([2207003, 2207020, 2207052].includes(sub)) {
+    texto = 'Instagram no pudo descargar el archivo. Reintenta; si sigue, vuelve a subir la imagen o el video.';
+  } else if ([2207004, 2207005, 2207009, 2207013].includes(sub)) {
+    texto = 'Instagram no acepta esta imagen: tiene que ser JPG, de hasta 8 MB y con proporción entre 4:5 y 1,91:1.';
+  } else if ([2207026, 2207023, 2207082].includes(sub)) {
+    texto = 'Instagram no acepta este video: tiene que ser MP4 o MOV, de 3 segundos a 15 minutos, idealmente vertical 9:16.';
+  } else if (sub === 2207050) {
+    texto = 'La cuenta de Instagram está restringida o inactiva. Entra a Instagram y revisa su estado.';
+  } else {
+    texto = 'Meta no aceptó la publicación' + (contexto ? ' (' + contexto + ')' : '') + '.';
+  }
+  return { error: texto + (original ? ' Detalle de Meta: ' + original : ''), reconectar, codigo: code || null, subcodigo: sub || null };
+}
+
 export async function borrarCuentas(userId, clientId, network) {
   const cli = String(clientId ?? '');
   const r = await fetch(

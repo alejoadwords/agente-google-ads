@@ -7931,6 +7931,16 @@ function getSocialAccount(network) {
   return list.length > 0 ? list[0] : null;
 }
 
+// Publicar directo en Instagram y Facebook necesita que Meta apruebe
+// pages_manage_posts e instagram_content_publish (REVISION-META.md). Mientras
+// no estén, solo puede conectar quien tenga rol en la app de Meta, así que la
+// función queda escondida para los clientes: se enciende con
+// window.PUBLICAR_DIRECTO en index.html. El equipo de Acuarius la ve siempre,
+// para poder probarla.
+function publicarDirectoDisponible() {
+  return window.PUBLICAR_DIRECTO === true || isAdminUser();
+}
+
 async function connectSocialNetwork(network) {
   // El ticket lo firma el servidor con nuestra sesión ya verificada. Antes se
   // mandaba el userId en la URL y cambiándolo se le podía colgar una cuenta de
@@ -7940,7 +7950,7 @@ async function connectSocialNetwork(network) {
       encodeURIComponent(crmAmbitoCliente() || ''), { noCache: true });
     const d = await r.json();
     if (!r.ok || !d.ticket) throw new Error(d.error || 'no se pudo preparar la conexión');
-    window.location.href = '/api/social-connect?network=' + encodeURIComponent(network) +
+    window.location.href = '/api/social-connect?network=' + encodeURIComponent(network || 'instagram') +
       '&t=' + encodeURIComponent(d.ticket);
   } catch (e) {
     showToast('No pudimos empezar la conexión: ' + (e.message || 'intenta de nuevo'), 'error');
@@ -7948,7 +7958,12 @@ async function connectSocialNetwork(network) {
 }
 
 async function disconnectSocialNetwork(network) {
-  if (!confirm('¿Desconectar la cuenta de ' + (network === 'instagram' ? 'Instagram' : 'Facebook') + '?')) return;
+  const ok = await confirmarAguaP({
+    titulo: 'Quitar ' + (network === 'instagram' ? 'Instagram' : 'Facebook'),
+    texto: 'Se dejará de poder publicar en ' + (network === 'instagram' ? 'las cuentas de Instagram' : 'las páginas de Facebook') + ' conectadas. Lo ya publicado no se toca.',
+    confirmar: 'Quitar', peligro: true,
+  });
+  if (!ok) return;
   try {
     const r = await fetchAuth('/api/social-connections?network=' + encodeURIComponent(network) +
       '&client_id=' + encodeURIComponent(crmAmbitoCliente() || ''), { method: 'DELETE' });
@@ -7959,22 +7974,22 @@ async function disconnectSocialNetwork(network) {
   }
   await socialSincronizar();
   updateStudioConnectBtn();
-  const modal = document.getElementById('social-conn-modal');
-  if (modal) { modal.remove(); openSocialConnectionsModal(); }
+  if (document.getElementById('social-conn-modal')) openSocialConnectionsModal();
 }
 
 function updateStudioConnectBtn() {
   const lbl  = document.getElementById('studio-connect-label');
   const btn  = document.getElementById('studio-connect-btn');
   if (!lbl || !btn) return;
+  btn.style.display = publicarDirectoDisponible() ? '' : 'none';
   const conns    = loadSocialConnections();
   const igCount  = (conns.instagram || []).length;
   const fbCount  = (conns.facebook  || []).length;
   const total    = igCount + fbCount;
   if (total > 0) {
-    lbl.textContent = total + (total === 1 ? ' red conectada' : ' redes conectadas');
-    btn.style.color = '#059669';
-    btn.style.borderColor = '#A7F3D0';
+    lbl.textContent = total + (total === 1 ? ' cuenta conectada' : ' cuentas conectadas');
+    btn.style.color = 'var(--success)';
+    btn.style.borderColor = 'var(--success)';
   } else {
     lbl.textContent = 'Conectar redes';
     btn.style.color = '';
@@ -7982,48 +7997,47 @@ function updateStudioConnectBtn() {
   }
 }
 
+const SOCIAL_ICN = {
+  instagram: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--marca-instagram)" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>',
+  facebook:  '<svg width="20" height="20" viewBox="0 0 24 24" fill="var(--marca-messenger)"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
+};
+const SOCIAL_RED = { instagram: 'Instagram', facebook: 'Facebook' };
+const socialNombreCuenta = (network, a) =>
+  (network === 'instagram' && a.igUsername) ? '@' + a.igUsername : (a.pageName || 'Cuenta sin nombre');
+
 // ── Modal de conexiones sociales ──────────────────────────────────────────────
+// Una sola conexión trae las dos redes: el Instagram que se publica por API
+// cuelga siempre de una página de Facebook.
 function openSocialConnectionsModal() {
   document.getElementById('social-conn-modal')?.remove();
+  if (!publicarDirectoDisponible()) {
+    showToast('La publicación directa se habilita cuando Meta apruebe la app. Mientras tanto, descarga tus posts y publícalos.', 'info');
+    return;
+  }
 
   const conns   = loadSocialConnections();
   const igAccts = conns.instagram || [];
   const fbAccts = conns.facebook  || [];
+  const hay = igAccts.length + fbAccts.length > 0;
 
-  const igSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
-  const fbSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
-
-  const netRow = (network, acct, icon, iconBg, label) => {
-    const connected = !!acct;
-    const sublabel  = connected
-      ? (network === 'instagram' && acct.igUsername ? '@' + acct.igUsername : acct.pageName || label)
-      : 'No conectado';
-
-    if (!connected) return (
-      '<div style="display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:14px;border:1.5px solid var(--border);background:var(--bg)">' +
-        '<div style="width:48px;height:48px;border-radius:14px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:15px;font-weight:700;color:var(--text)">' + label + '</div>' +
-          '<div style="font-size:13px;color:var(--muted);margin-top:2px">' + sublabel + '</div>' +
-        '</div>' +
-        '<button style="padding:10px 20px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap" onclick="connectSocialNetwork(\'' + network + '\')">Conectar</button>' +
-      '</div>'
-    );
-
-    return (
-      '<div style="display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:14px;border:1.5px solid #A7F3D0;background:#F0FDF4">' +
-        '<div style="width:48px;height:48px;border-radius:14px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="display:flex;align-items:center;gap:6px">' +
-            '<div style="font-size:15px;font-weight:700;color:#059669">' + label + '</div>' +
-            '<span style="font-size:12px;background:#DCFCE7;color:#059669;padding:2px 8px;border-radius:20px;font-weight:600">Conectado</span>' +
-          '</div>' +
-          '<div style="font-size:13px;color:#059669;margin-top:2px;opacity:.8">' + esc(sublabel) + '</div>' +
-        '</div>' +
-        '<button style="padding:8px 14px;background:none;color:#EF4444;border:1.5px solid #FCA5A5;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);white-space:nowrap" onclick="disconnectSocialNetwork(\'' + network + '\')">Quitar</button>' +
-      '</div>'
-    );
-  };
+  const bloque = (network, accts) =>
+    '<div style="border:1.5px solid ' + (accts.length ? 'var(--success)' : 'var(--border)') + ';border-radius:var(--rlg);padding:14px 16px">' +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+        SOCIAL_ICN[network] +
+        '<div style="flex:1;font-size:var(--fs-md);font-weight:700;color:var(--text)">' + SOCIAL_RED[network] + '</div>' +
+        (accts.length
+          ? '<button class="btn-ghost" style="font-size:var(--fs-sm);color:var(--danger)" onclick="disconnectSocialNetwork(\'' + network + '\')">Quitar</button>'
+          : '<span style="font-size:var(--fs-sm);color:var(--muted)">Sin conectar</span>') +
+      '</div>' +
+      (accts.length
+        ? '<div style="display:flex;flex-direction:column;gap:4px;margin:10px 0 0 30px">' +
+            accts.map(a => '<div style="font-size:var(--fs-base);color:var(--text-2)">' + icn('check', 12) + ' ' + esc(socialNombreCuenta(network, a)) +
+              (network === 'instagram' && a.pageName ? ' <span style="color:var(--muted2)">· página ' + esc(a.pageName) + '</span>' : '') + '</div>').join('') +
+          '</div>'
+        : (network === 'instagram'
+            ? '<div style="font-size:var(--fs-sm);color:var(--muted);margin:8px 0 0 30px;line-height:1.5">Tiene que ser una cuenta profesional (empresa o creador) vinculada a una página de Facebook que administres.</div>'
+            : '')) +
+    '</div>';
 
   const overlay = document.createElement('div');
   overlay.className = 'social-conn-overlay';
@@ -8031,386 +8045,325 @@ function openSocialConnectionsModal() {
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
   overlay.innerHTML =
     '<div class="social-conn-box" style="max-width:500px">' +
-      // Header
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:24px 28px 20px;border-bottom:1px solid var(--border)">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:24px 28px 18px;border-bottom:1px solid var(--border)">' +
         '<div>' +
-          '<div style="font-size:20px;font-weight:800;color:var(--text);letter-spacing:-.3px">Conectar redes sociales</div>' +
-          // Publicar desde aquí pide pages_manage_posts e instagram_content_publish, que
-          // Meta aún no aprueba (REVISION-META.md): no se promete lo que no funciona.
-          '<div style="font-size:14px;color:var(--muted);margin-top:4px">La publicación directa se habilita cuando Meta apruebe la app. Mientras tanto, descarga tus posts y publícalos.</div>' +
+          '<div style="font-size:var(--fs-lg);font-weight:800;color:var(--text)">Redes para publicar</div>' +
+          '<div style="font-size:var(--fs-base);color:var(--muted);margin-top:4px">Publica tus posts del Studio en Instagram y Facebook sin salir de Acuarius.</div>' +
         '</div>' +
-        '<button style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 6px;border-radius:8px" onclick="document.getElementById(\'social-conn-modal\')?.remove()">×</button>' +
+        '<button class="btn-ghost" style="font-size:20px;line-height:1;padding:2px 8px" onclick="document.getElementById(\'social-conn-modal\')?.remove()">×</button>' +
       '</div>' +
-      // Body
-      '<div style="padding:24px 28px;display:flex;flex-direction:column;gap:12px">' +
-        netRow('instagram', igAccts[0] || null, igSvg, '#FEF0F5', 'Instagram') +
-        netRow('facebook',  fbAccts[0] || null, fbSvg, '#EBF3FF', 'Facebook Page') +
-        // Nota informativa
-        '<div style="font-size:12px;color:var(--muted);padding:12px 16px;background:var(--bg-muted);border-radius:10px;line-height:1.6;margin-top:4px">' +
-          '💡 Conectar Instagram y Facebook simultáneamente permite publicar en ambas plataformas con un solo clic desde cada post.' +
-        '</div>' +
+      '<div style="padding:20px 28px 24px;display:flex;flex-direction:column;gap:12px">' +
+        bloque('instagram', igAccts) +
+        bloque('facebook', fbAccts) +
+        '<button class="btn-pri" style="width:100%;justify-content:center;margin-top:4px" onclick="connectSocialNetwork(\'instagram\')">' +
+          SOCIAL_ICN.facebook.replace('fill="var(--marca-messenger)"', 'fill="currentColor"') + ' ' + (hay ? 'Conectar otra vez o agregar páginas' : 'Conectar con Facebook') +
+        '</button>' +
+        '<div style="font-size:var(--fs-sm);color:var(--muted);line-height:1.6">Te llevamos a Facebook para elegir las páginas y aceptar los permisos. Con una sola conexión quedan las páginas y sus cuentas de Instagram. ' +
+          'Si no ves tu Instagram, revisa en Instagram que sea cuenta profesional y que esté vinculada a la página.</div>' +
       '</div>' +
     '</div>';
-
   document.body.appendChild(overlay);
+}
+
+// ── Archivos para publicar ────────────────────────────────────────────────────
+// Instagram descarga la imagen o el video desde una URL pública al crear la
+// publicación. Todo pasa antes por nuestro bucket `social-media`: las URLs de
+// los proveedores caducan y un video subido a mano solo existía en el navegador.
+
+const esUrlSocial = (u) => typeof u === 'string' && u.includes('/storage/v1/object/public/social-media/');
+
+async function subirArchivoSocial(blob, type) {
+  const r = await fetchAuth('/api/social-media-subida', { method: 'POST', body: JSON.stringify({ type, size: blob.size }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.subida) throw new Error(d.error || 'no se pudo preparar la subida (HTTP ' + r.status + ')');
+  const up = await fetch(d.subida, { method: 'PUT', headers: { 'Content-Type': type, 'x-upsert': 'false' }, body: blob });
+  if (!up.ok) throw new Error('no se pudo subir el archivo (HTTP ' + up.status + ')');
+  return d.url;
+}
+
+async function copiarArchivoSocial(url) {
+  const r = await fetchAuth('/api/social-media-subida', { method: 'POST', body: JSON.stringify({ copiarDe: url }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.url) throw new Error(d.error || 'no se pudo copiar el archivo (HTTP ' + r.status + ')');
+  return d.url;
+}
+
+// Imagen → JPEG dentro de la proporción que acepta Instagram (4:5 a 1,91:1) y
+// de hasta 1440 px. Instagram rechaza PNG y proporciones fuera de rango.
+function imagenAJpeg(src, recortar) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      let sx = 0, sy = 0, sw = img.width, sh = img.height;
+      if (recortar) {
+        const ratio = sw / sh;
+        if (ratio < 0.8) { const h = Math.round(sw / 0.8); sy = Math.round((sh - h) / 2); sh = h; }
+        else if (ratio > 1.91) { const w = Math.round(sh * 1.91); sx = Math.round((sw - w) / 2); sw = w; }
+      }
+      let w = sw, h = sh;
+      if (w > 1440) { h = Math.round(h * 1440 / w); w = 1440; }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+      c.toBlob(b => b ? resolve(b) : reject(new Error('no se pudo convertir la imagen')), 'image/jpeg', 0.88);
+    };
+    img.onerror = () => reject(new Error('no se pudo leer la imagen'));
+    img.src = src;
+  });
+}
+
+async function imagenPublicable(src, recortar) {
+  if (!src) throw new Error('falta la imagen');
+  try {
+    return await subirArchivoSocial(await imagenAJpeg(src, recortar), 'image/jpeg');
+  } catch (e) {
+    // Si el navegador no puede leer la imagen (CORS), que la copie el servidor
+    // tal cual. Facebook la acepta; Instagram puede pedir JPEG y lo dirá.
+    if (/^https:/.test(src)) return await copiarArchivoSocial(src);
+    throw e;
+  }
+}
+
+async function videoPublicable(url) {
+  if (!url) return null;
+  if (esUrlSocial(url)) return url;
+  if (url.startsWith('blob:')) {
+    // Video de una sesión anterior al arreglo: solo sirve si sigue vivo aquí.
+    let blob;
+    try { blob = await (await fetch(url)).blob(); }
+    catch { throw new Error('el video ya no está en este navegador. Vuelve a subirlo desde el post.'); }
+    return await subirArchivoSocial(blob, blob.type || 'video/mp4');
+  }
+  return await copiarArchivoSocial(url);
+}
+
+// Qué se publica de este post y cómo lo entiende cada red.
+function formatoDePublicacion(post) {
+  const slides = (post.carouselImages || []).length;
+  if (post.videoUrl) return post.format === 'story' ? 'historia' : 'reel';
+  if (post.format === 'carrusel' && slides > 1) return 'carrusel';
+  if (postTieneImagen(post)) return post.format === 'story' ? 'historia' : 'imagen';
+  return 'texto';
+}
+
+function captionDePublicacion(post) {
+  const cap = (post.caption || '').trim();
+  const faltan = (post.hashtags || []).filter(h => h && !cap.toLowerCase().includes(String(h).toLowerCase()));
+  return faltan.length ? cap + '\n\n' + faltan.join(' ') : cap;
+}
+
+// Lo que impide publicar en una red, o '' si se puede. Se muestra en el modal
+// ANTES de pulsar: mejor que un error de Meta después.
+function bloqueoDeRed(network, post) {
+  const formato = formatoDePublicacion(post);
+  if (network === 'instagram') {
+    if (formato === 'texto') return 'Instagram necesita una imagen o un video.';
+    const cap = captionDePublicacion(post);
+    if (cap.length > 2200) return 'El texto tiene ' + cap.length + ' caracteres; Instagram acepta hasta 2.200.';
+    const tags = (cap.match(/#[\p{L}\p{N}_]+/gu) || []).length;
+    if (tags > 30) return 'El texto lleva ' + tags + ' hashtags; Instagram acepta hasta 30.';
+  }
+  if (network === 'facebook' && formato === 'texto' && !(post.caption || '').trim()) return 'El post no tiene texto ni imagen.';
+  return '';
 }
 
 // ── Modal de publicación ──────────────────────────────────────────────────────
 function openPublishModal(postId) {
   document.getElementById('pub-modal')?.remove();
+  if (!publicarDirectoDisponible()) { openSocialConnectionsModal(); return; }
 
-  const posts = loadStudioPosts();
-  const post  = posts.find(p => p.id === postId);
+  const post = loadStudioPosts().find(p => p.id === postId);
   if (!post) return;
+  const conns = loadSocialConnections();
+  const hechas = post.publicaciones || {};
+  const formato = formatoDePublicacion(post);
+  const notaFormato = {
+    reel: 'Se publica como reel en Instagram y como video en Facebook.',
+    historia: 'En Instagram va como historia (24 h); en Facebook, como post normal.',
+    carrusel: 'Carrusel de ' + Math.min((post.carouselImages || []).length, 10) + ' imágenes.',
+    imagen: 'Imagen con su texto. En Instagram se ajusta a la proporción que acepta (4:5 a 1,91:1).',
+    texto: 'Solo texto: Facebook lo publica; Instagram necesita imagen o video.',
+  }[formato];
 
-  const conns   = loadSocialConnections();
-  const igAccts = conns.instagram || [];
-  const fbAccts = conns.facebook  || [];
-  const igAcct  = igAccts[0] || null;
-  const fbAcct  = fbAccts[0] || null;
-
-  const hasMedia  = !!(postTieneImagen(post) || post.videoUrl);
-  const isCarousel = !!(post.format === 'carrusel' && post.carouselImages && post.carouselImages.length > 1);
-
-  const igIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
-  const fbIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
-
-  // Construir fila de red con: checkbox pre-marcado + selector de cuenta si hay múltiples
-  const netRow = (network, accts, icon, iconBg) => {
-    const label     = network === 'instagram' ? 'Instagram' : 'Facebook Page';
-    const connected = accts.length > 0;
-
-    if (!connected) return (
-      '<div style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg-subtle);opacity:.6">' +
-        '<div style="width:42px;height:42px;border-radius:12px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
-        '<div style="flex:1">' +
-          '<div style="font-size:14px;font-weight:700;color:var(--muted)">' + label + '</div>' +
-          '<button style="font-size:12px;color:var(--blue);background:none;border:none;padding:0;cursor:pointer;font-family:var(--font);margin-top:2px" onclick="document.getElementById(\'pub-modal\')?.remove();openSocialConnectionsModal()">Conectar cuenta →</button>' +
-        '</div>' +
-      '</div>'
-    );
-
-    // Construir opciones del selector de cuenta
-    const acctOptions = accts.map((a, i) => {
-      const name = (network === 'instagram' && a.igUsername) ? '@' + a.igUsername : a.pageName || 'Cuenta ' + (i + 1);
-      return '<option value="' + i + '">' + esc(name) + '</option>';
-    }).join('');
-
-    const hasMultiple = accts.length > 1;
-    const firstLabel  = (network === 'instagram' && accts[0].igUsername) ? '@' + accts[0].igUsername : accts[0].pageName || label;
-
+  const fila = (network) => {
+    const accts = conns[network] || [];
+    const ya = hechas[network];
+    if (!accts.length) return (
+      '<div style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:var(--r);border:1.5px dashed var(--border)">' +
+        SOCIAL_ICN[network] +
+        '<div style="flex:1;font-size:var(--fs-base);color:var(--muted)">' + SOCIAL_RED[network] + ' sin conectar</div>' +
+        '<button class="btn-ghost" style="font-size:var(--fs-sm)" onclick="document.getElementById(\'pub-modal\')?.remove();openSocialConnectionsModal()">Conectar</button>' +
+      '</div>');
+    const bloqueo = bloqueoDeRed(network, post);
+    const marcada = !bloqueo && !ya;
     return (
-      '<label style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:2px solid var(--blue);background:var(--blue-lt);cursor:pointer;transition:all .15s" ' +
-             'onclick="this.querySelector(\'input[type=checkbox]\').click()">' +
-        '<input type="checkbox" name="pub-net" value="' + network + '" checked ' +
-               'style="width:18px;height:18px;accent-color:var(--blue);flex-shrink:0;cursor:pointer" ' +
-               'onclick="event.stopPropagation();var r=this.closest(\'label\');r.style.borderColor=this.checked?\'var(--blue)\':\' var(--border)\';r.style.background=this.checked?\'var(--blue-lt)\':\' var(--bg)\'">' +
-        '<div style="width:42px;height:42px;border-radius:12px;background:' + iconBg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
-        '<div style="flex:1;min-width:0" onclick="event.stopPropagation()">' +
-          '<div style="font-size:14px;font-weight:700;color:var(--text)">' + label + '</div>' +
-          // Si hay múltiples cuentas, mostrar selector; si solo hay una, mostrar el nombre
-          (hasMultiple
-            ? '<select id="pub-acct-' + network + '" style="margin-top:4px;font-size:13px;color:var(--blue);background:transparent;border:none;font-family:var(--font);font-weight:600;cursor:pointer;width:100%;padding:0">' + acctOptions + '</select>'
-            : '<div style="font-size:13px;color:var(--blue);margin-top:2px;font-weight:600">' + esc(firstLabel) + '</div>'
-          ) +
+      '<div class="pub-fila" data-net="' + network + '" data-acct="0" style="padding:14px;border-radius:var(--r);border:1.5px solid ' + (marcada ? 'var(--blue)' : 'var(--border)') + ';background:' + (marcada ? 'var(--blue-lt)' : 'var(--bg)') + '">' +
+        '<div style="display:flex;align-items:center;gap:12px">' +
+          '<input type="checkbox" name="pub-net" value="' + network + '"' + (marcada ? ' checked' : '') + (bloqueo ? ' disabled' : '') +
+            ' style="width:17px;height:17px;accent-color:var(--blue)" onchange="pubPintarFila(this)">' +
+          SOCIAL_ICN[network] +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:var(--fs-base);font-weight:700;color:var(--text)">' + SOCIAL_RED[network] + '</div>' +
+            (accts.length > 1
+              ? '<button type="button" class="dd-btn" style="margin-top:4px;max-width:100%" onclick="pubElegirCuenta(this,\'' + network + '\')"><span class="dd-btn-txt">' + esc(socialNombreCuenta(network, accts[0])) + '</span>' + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' + '</button>'
+              : '<div style="font-size:var(--fs-sm);color:var(--text-2)">' + esc(socialNombreCuenta(network, accts[0])) + '</div>') +
+          '</div>' +
         '</div>' +
-        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>' +
-      '</label>'
-    );
+        (ya ? '<div style="font-size:var(--fs-sm);color:var(--success);margin:8px 0 0 29px">' + icn('check', 12) + ' Ya publicado' +
+              (ya.permalink ? ' · <a href="' + esc(ya.permalink) + '" target="_blank" rel="noopener" style="color:var(--blue)">ver</a>' : '') +
+              '. Márcalo solo si quieres publicarlo otra vez.</div>' : '') +
+        (bloqueo ? '<div style="font-size:var(--fs-sm);color:var(--danger);margin:8px 0 0 29px">' + esc(bloqueo) + '</div>' : '') +
+      '</div>');
   };
 
-  const hasAnyConn2 = igAccts.length > 0 || fbAccts.length > 0;
-
+  const cap = captionDePublicacion(post);
   const overlay = document.createElement('div');
   overlay.className = 'pub-overlay';
   overlay.id = 'pub-modal';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-
-  const captionPreview = (post.caption || '').slice(0, 140) + (post.caption && post.caption.length > 140 ? '…' : '');
-
+  overlay.onclick = (e) => { if (e.target === overlay && !overlay.dataset.ocupado) overlay.remove(); };
   overlay.innerHTML =
-    '<div class="pub-box" style="max-width:460px">' +
-      // Header
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:22px 24px 18px;border-bottom:1px solid var(--border)">' +
-        '<div>' +
-          '<div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.3px">Publicar post</div>' +
-          '<div style="font-size:13px;color:var(--muted);margin-top:3px">' + esc(post.title || 'Sin título') + '</div>' +
+    '<div class="pub-box" style="max-width:480px">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:22px 24px 16px;border-bottom:1px solid var(--border)">' +
+        '<div style="min-width:0">' +
+          '<div style="font-size:var(--fs-lg);font-weight:800;color:var(--text)">Publicar post</div>' +
+          '<div style="font-size:var(--fs-base);color:var(--muted);margin-top:3px">' + esc(post.title || 'Sin título') + '</div>' +
         '</div>' +
-        '<button style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 6px;border-radius:8px" onclick="document.getElementById(\'pub-modal\')?.remove()">×</button>' +
+        '<button class="btn-ghost" id="pub-cerrar" style="font-size:20px;line-height:1;padding:2px 8px" onclick="document.getElementById(\'pub-modal\')?.remove()">×</button>' +
       '</div>' +
-      // Body
-      '<div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">' +
-        // Caption preview
-        (captionPreview
-          ? '<div style="background:var(--bg-muted);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--text-2);line-height:1.6;border-left:3px solid var(--border2)">' + esc(captionPreview) + '</div>'
-          : '') +
-        // Network rows
-        '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:4px">Publicar en:</div>' +
-        netRow('instagram', igAccts, igIcon, '#FEF0F5') +
-        netRow('facebook',  fbAccts, fbIcon, '#EBF3FF') +
-        // No connections warning
-        (!hasAnyConn2
-          ? '<div style="text-align:center;padding:12px;font-size:13px;color:var(--muted)">Conecta al menos una red para publicar. <button style="background:none;border:none;color:var(--blue);cursor:pointer;font-family:var(--font);font-size:13px;text-decoration:underline" onclick="document.getElementById(\'pub-modal\')?.remove();openSocialConnectionsModal()">Conectar →</button></div>'
-          : '') +
-        // Publish button
-        '<button id="pub-confirm-btn" style="width:100%;padding:14px;background:' + (hasAnyConn2 ? 'var(--blue)' : 'var(--bg-muted)') + ';color:' + (hasAnyConn2 ? '#fff' : 'var(--muted)') + ';border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:' + (hasAnyConn2 ? 'pointer' : 'not-allowed') + ';font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px"' +
-          (hasAnyConn2 ? ' onclick="publishPostNow(\'' + postId + '\')"' : ' disabled') + '>' +
-          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
-          'Publicar ahora' +
+      '<div style="padding:18px 24px 22px;display:flex;flex-direction:column;gap:10px">' +
+        (cap ? '<div style="background:var(--bg-muted);border-radius:var(--r);padding:10px 12px;font-size:var(--fs-sm);color:var(--text-2);line-height:1.55;max-height:110px;overflow:auto;white-space:pre-wrap">' + esc(cap) + '</div>' : '') +
+        '<div style="font-size:var(--fs-sm);color:var(--muted)">' + esc(notaFormato) + '</div>' +
+        fila('instagram') + fila('facebook') +
+        '<button id="pub-confirm-btn" class="btn-pri" style="width:100%;justify-content:center;margin-top:6px" onclick="publishPostNow(\'' + postId + '\')">' +
+          icn('send', 14) + ' Publicar ahora' +
         '</button>' +
-        '<div id="pub-status" style="font-size:13px;color:var(--muted);text-align:center;min-height:20px"></div>' +
+        '<div id="pub-status" role="status" style="font-size:var(--fs-base);color:var(--muted);text-align:center;min-height:20px;line-height:1.5"></div>' +
       '</div>' +
     '</div>';
-
   document.body.appendChild(overlay);
+}
+
+function pubPintarFila(chk) {
+  const f = chk.closest('.pub-fila');
+  f.style.borderColor = chk.checked ? 'var(--blue)' : 'var(--border)';
+  f.style.background  = chk.checked ? 'var(--blue-lt)' : 'var(--bg)';
+}
+
+function pubElegirCuenta(btn, network) {
+  const fila = btn.closest('.pub-fila');
+  const accts = loadSocialConnections()[network] || [];
+  ddAbrir(btn, accts.map((a, i) => ({ id: i, name: socialNombreCuenta(network, a) })), fila.dataset.acct, v => {
+    fila.dataset.acct = v;
+    btn.querySelector('.dd-btn-txt').textContent = socialNombreCuenta(network, accts[Number(v)] || accts[0]);
+  });
 }
 
 // ── Publicar post en las redes seleccionadas ──────────────────────────────────
 async function publishPostNow(postId) {
-  const posts = loadStudioPosts();
-  const post  = posts.find(p => p.id === postId);
+  const post = loadStudioPosts().find(p => p.id === postId);
   if (!post) return;
+  const filas = [...document.querySelectorAll('#pub-modal .pub-fila')]
+    .filter(f => f.querySelector('input[name="pub-net"]')?.checked);
+  if (!filas.length) { showToast('Marca al menos una red para publicar.', 'error'); return; }
 
-  // Leer redes seleccionadas
-  const checkboxes  = document.querySelectorAll('input[name="pub-net"]:checked');
-  const selectedNets = Array.from(checkboxes).map(c => c.value);
-  if (!selectedNets.length) {
-    alert('Selecciona al menos una red para publicar.');
-    return;
-  }
-
-  const btn    = document.getElementById('pub-confirm-btn');
-  const status = document.getElementById('pub-status');
+  const overlay = document.getElementById('pub-modal');
+  const btn     = document.getElementById('pub-confirm-btn');
+  const status  = document.getElementById('pub-status');
+  const decir = (t, error) => { if (status) { status.textContent = t; status.style.color = error ? 'var(--danger)' : 'var(--muted)'; } };
+  // Mientras publica no se cierra el modal sin querer: si se cerrara a mitad,
+  // no se sabría qué salió y qué no.
+  if (overlay) overlay.dataset.ocupado = '1';
   if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Publicando…'; }
-  if (status) status.textContent = 'Preparando media…';
 
-  const conns    = loadSocialConnections();
-  const caption  = post.caption || '';
-  const isCarousel = !!(post.format === 'carrusel' && post.carouselImages && post.carouselImages.length > 1);
-
-  // ── Helper: obtener URL pública de una imagen ──────────────────────────────
-  // Estrategia:
-  // 1. Si ya hay una URL (Ideogram, fal.ai, cualquier CDN) → usarla directamente.
-  //    Meta la fetchea al crear el media container. Si expiró, Meta devuelve un
-  //    error claro que el usuario puede ver.
-  // 2. Si no hay URL pero sí base64 → comprimir a JPEG (reduce PNG 3-5 MB → 200-400 KB)
-  //    y subir al CDN de fal.ai con timeout de 55s.
-  async function getPublicUrl(base64, mediaType, existingUrl, forceRatio) {
-    if (existingUrl && existingUrl.startsWith('https://') && !forceRatio) return existingUrl;
-
-    // Comprimir la imagen en cliente antes de subir (PNG/WebP → JPEG 85%)
-    // Si forceRatio=true, ajustar también el aspect ratio para Instagram (4:5 a 1.91:1)
-    if (status) status.textContent = 'Preparando imagen…';
-    let uploadBase64 = base64 || (existingUrl && !existingUrl.startsWith('https://') ? existingUrl : null);
-    let uploadType   = mediaType || 'image/jpeg';
-
-    // Si sólo tenemos una URL existente (HTTPS) con forceRatio, cargar desde URL
-    const srcData = uploadBase64
-      ? 'data:' + uploadType + ';base64,' + uploadBase64
-      : existingUrl;
-
-    try {
-      const compressed = await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          let w = img.width;
-          let h = img.height;
-          let sx = 0, sy = 0, sw = w, sh = h;
-
-          // Ajustar aspect ratio a rango Instagram (4:5 = 0.8 a 1.91:1)
-          if (forceRatio) {
-            const MIN_RATIO = 0.8;   // 4:5  portrait
-            const MAX_RATIO = 1.91;  // 1.91:1 landscape
-            const ratio = w / h;
-            if (ratio < MIN_RATIO) {
-              // Muy alto/retrato → recortar height
-              sh = Math.round(w / MIN_RATIO);
-              sy = Math.round((h - sh) / 2);
-            } else if (ratio > MAX_RATIO) {
-              // Muy ancho/paisaje → recortar width
-              sw = Math.round(h * MAX_RATIO);
-              sx = Math.round((w - sw) / 2);
-            }
-            w = sw; h = sh;
-          }
-
-          // Escalar a max 1440px de ancho (Instagram max)
-          const MAX_W = 1440;
-          if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
-
-          const canvas = document.createElement('canvas');
-          canvas.width  = w;
-          canvas.height = h;
-          canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          resolve(dataUrl.split(',')[1]);
-        };
-        img.onerror = reject;
-        img.src = srcData;
-      });
-      uploadBase64 = compressed;
-      uploadType   = 'image/jpeg';
-    } catch {}
-
-    if (status) status.textContent = 'Subiendo imagen al servidor…';
-    const controller = new AbortController();
-    const timeoutId  = setTimeout(() => controller.abort(), 55000);
-    let upRes;
-    try {
-      upRes = await fetchAuth('/api/upload-media', {
-        method: 'POST', signal: controller.signal,
-        body: JSON.stringify({ base64: uploadBase64, mediaType: uploadType }),
-      });
-    } catch (fetchErr) {
-      clearTimeout(timeoutId);
-      if (fetchErr.name === 'AbortError') throw new Error('La subida de imagen tardó demasiado. Verifica tu conexión e intenta de nuevo.');
-      throw new Error('Error de red: ' + fetchErr.message);
-    }
-    clearTimeout(timeoutId);
-    let upData;
-    try { upData = await upRes.json(); } catch { upData = {}; }
-    if (!upRes.ok || !upData.url) throw new Error(upData.error || 'Error subiendo imagen (HTTP ' + upRes.status + ')');
-    return upData.url;
-  }
-
+  const conns   = loadSocialConnections();
+  const formato = formatoDePublicacion(post);
+  const caption = captionDePublicacion(post);
+  const clientId = crmAmbitoCliente() || '';
   const results = [];
 
   try {
-    // ── Estrategia de media según redes seleccionadas ──────────────────────────
-    // • Instagram requiere URL pública → CDN upload obligatorio
-    // • Facebook acepta upload binario directo → NO necesita CDN
-    // • Si IG + FB: subir al CDN una vez y reusar URL en ambas redes
-    const needsIg  = selectedNets.includes('instagram');
-    const needsFbOnly = selectedNets.length === 1 && selectedNets[0] === 'facebook';
-
-    let sharedImageUrl     = null;
-    let sharedVideoUrl     = post.videoUrl || null;
-    let sharedCarouselUrls = [];
-
-    // ── Video: resolver URL pública si es blob: (upload manual, no accesible externamente) ──
-    if (sharedVideoUrl && sharedVideoUrl.startsWith('blob:')) {
-      if (status) status.textContent = 'Subiendo video al servidor…';
-      try {
-        const blobResp  = await fetch(sharedVideoUrl);
-        const blobData  = await blobResp.blob();
-        const arrBuf    = await blobData.arrayBuffer();
-        const bytes     = new Uint8Array(arrBuf);
-        // Límite ~6MB para evitar superar Vercel body limit (el video se sube comprimido igual)
-        if (bytes.byteLength > 6 * 1024 * 1024) {
-          throw new Error('El video es demasiado grande para subir directamente (>6 MB). Usa un video generado con IA o súbelo desde una URL pública.');
-        }
-        let binary = '';
-        bytes.forEach(b => { binary += String.fromCharCode(b); });
-        const videoBase64 = btoa(binary);
-        const mimeType    = blobData.type || 'video/mp4';
-        const controller  = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 55000);
-        const upRes  = await fetchAuth('/api/upload-media', {
-          method: 'POST', signal: controller.signal,
-          body: JSON.stringify({ base64: videoBase64, mediaType: mimeType, fileName: 'video.mp4' }),
-        });
-        clearTimeout(tid);
-        const upData = await upRes.json();
-        if (upRes.ok && upData.url) {
-          sharedVideoUrl = upData.url;
-          updateStudioPost(postId, { videoUrl: upData.url }); // guardar URL permanente
-        }
-      } catch (blobErr) {
-        if (blobErr.name === 'AbortError') throw new Error('Subida de video tardó demasiado. Intenta de nuevo.');
-        throw blobErr;
-      }
-    }
-
-    if (isCarousel && needsIg) {
-      // Carousel: siempre necesita URLs (solo aplica a IG)
-      for (const slide of post.carouselImages.slice(0, 10)) {
-        const url = await getPublicUrl(slide.base64, slide.mediaType, slide.url, true);
-        sharedCarouselUrls.push(url);
-      }
-    } else if (!needsFbOnly && !sharedVideoUrl && (post.imageBase64 || post.imageUrl)) {
-      // IG presente (solo o mixto), post de imagen: subir al CDN una vez
-      // forceRatio=true garantiza que la imagen cumpla el rango de aspecto de Instagram (4:5 a 1.91:1)
-      sharedImageUrl = await getPublicUrl(post.imageBase64, post.imageMediaType, post.imageUrl, true);
-      // Guardar CDN URL en el post para evitar re-uploads futuros
-      if (sharedImageUrl && sharedImageUrl !== post.imageUrl) {
-        updateStudioPost(postId, { imageUrl: sharedImageUrl });
-      }
-    }
-    // needsFbOnly sin video → no CDN: pasamos imageBase64 directo a social-publish
-
-    // ── Publicar en cada red seleccionada ─────────────────────────────────────
-    for (const network of selectedNets) {
-      const acctList = conns[network] || [];
-      const acctIdx  = parseInt(document.getElementById('pub-acct-' + network)?.value || '0');
-      const acct     = acctList[acctIdx] || acctList[0];
-      if (!acct) { results.push({ network, success: false, error: 'No hay cuenta conectada' }); continue; }
-
-      if (status) status.textContent = 'Publicando en ' + (network === 'instagram' ? 'Instagram' : 'Facebook') + '…';
-
-      // Facebook directo: enviar base64 para imágenes sin pasar por CDN (más rápido)
-      const useDirect = network === 'facebook' && needsFbOnly && !sharedImageUrl && !sharedVideoUrl && post.imageBase64;
-
-      const body = {
-        network,
-        // Va el id de la página, no el token: el servidor busca el suyo.
-        pageId:            acct.pageId,
-        clientId:          crmAmbitoCliente() || '',
-        imageUrl:          sharedImageUrl,
-        imageBase64:       useDirect ? post.imageBase64              : null,
-        imageMediaType:    useDirect ? (post.imageMediaType || 'image/jpeg') : null,
-        videoUrl:          sharedVideoUrl,
-        caption,
-        isCarousel:        isCarousel && network === 'instagram',
-        carouselImageUrls: sharedCarouselUrls,
-      };
-
-      const pubRes  = await fetchAuth('/api/social-publish', { method: 'POST', body: JSON.stringify(body) });
-      const pubData = await pubRes.json();
-
-      if (!pubRes.ok || !pubData.success) {
-        results.push({ network, success: false, error: pubData.error || 'Error publicando' });
-      } else {
-        results.push({ network, success: true, postId: pubData.postId });
-      }
-    }
-
-    // ── Evaluar resultados ────────────────────────────────────────────────────
-    const allOk = results.every(r => r.success);
-    const anyOk = results.some(r => r.success);
-
-    if (anyOk) {
-      updateStudioPost(postId, { status: 'publicado' });
-    }
-
-    if (allOk) {
-      if (status) status.textContent = '✅ ¡Publicado exitosamente!';
-      setTimeout(() => {
-        document.getElementById('pub-modal')?.remove();
-        closePostModal();
-        renderStudio();
-        showPublishSuccessModal(results, post);
-      }, 600);
+    // 1. Archivos en nuestro almacenamiento. Se guardan en el post para no
+    // volver a subirlos si hay que reintentar.
+    decir('Preparando archivos…');
+    const media = { imageUrls: [], videoUrl: null };
+    const origen = formato === 'carrusel'
+      ? (post.carouselImages || []).slice(0, 10).map(s => s.url || ('data:' + (s.mediaType || 'image/jpeg') + ';base64,' + s.base64))
+      : (formato === 'imagen' || (formato === 'historia' && !post.videoUrl)) ? [postImagenSrc(post)] : [];
+    const clave = JSON.stringify([formato, post.videoUrl || '', origen.map(s => s.slice(0, 80) + s.length)]);
+    if (post.publicable && post.publicable.clave === clave) {
+      Object.assign(media, post.publicable.media);
     } else {
-      const failedNets = results.filter(r => !r.success);
-      const errText    = failedNets.map(r => r.network + ': ' + r.error).join(' · ');
-      if (status) { status.textContent = '❌ ' + errText; status.style.color = '#EF4444'; }
-      if (btn)    { btn.disabled = false; btn.innerHTML = 'Reintentar'; }
-      // Si al menos una red publicó, igual mostramos el modal parcial
-      if (anyOk) {
-        setTimeout(() => {
-          document.getElementById('pub-modal')?.remove();
-          closePostModal();
-          renderStudio();
-          showPublishSuccessModal(results, post);
-        }, 600);
+      if (post.videoUrl) {
+        decir('Subiendo el video…');
+        media.videoUrl = await videoPublicable(post.videoUrl);
       }
+      for (let i = 0; i < origen.length; i++) {
+        decir(origen.length > 1 ? 'Preparando imagen ' + (i + 1) + ' de ' + origen.length + '…' : 'Preparando la imagen…');
+        media.imageUrls.push(await imagenPublicable(origen[i], formato !== 'historia'));
+      }
+      updateStudioPost(postId, { publicable: { clave, media } });
     }
 
+    // 2. Cada red por su cuenta: si una falla, la otra sigue.
+    for (const fila of filas) {
+      const network = fila.dataset.net;
+      const acct = (conns[network] || [])[Number(fila.dataset.acct) || 0];
+      const red = SOCIAL_RED[network];
+      if (!acct) { results.push({ network, success: false, error: 'No hay cuenta conectada.' }); continue; }
+      try {
+        const base = { network, pageId: acct.pageId, clientId };
+        const pedir = async (extra) => {
+          const r = await fetchAuth('/api/social-publish', { method: 'POST', body: JSON.stringify({ ...base, ...extra }) });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) { const e = new Error(d.error || 'HTTP ' + r.status); e.reconectar = d.reconectar; throw e; }
+          return d;
+        };
+        decir('Publicando en ' + red + '…');
+        let d = await pedir({ paso: 'preparar', formato, caption, ...media });
+        if (!d.publicado) {
+          // Instagram procesa el archivo antes de publicar. Una imagen tarda
+          // segundos; un reel, hasta unos minutos.
+          const desde = Date.now();
+          for (;;) {
+            const e = await pedir({ paso: 'estado', creationId: d.creationId });
+            if (e.estado === 'FINISHED') break;
+            if (e.estado === 'ERROR' || e.estado === 'EXPIRED') throw new Error('Instagram no pudo procesar el archivo' + (e.detalle ? ': ' + e.detalle : '.'));
+            if (Date.now() - desde > 6 * 60 * 1000) throw new Error('Instagram lleva más de 6 minutos procesando el archivo. Revisa en un rato si salió antes de reintentar.');
+            const seg = Math.round((Date.now() - desde) / 1000);
+            decir(formato === 'reel' ? 'Instagram está procesando el video (' + seg + ' s)…' : 'Instagram está procesando la publicación…');
+            await new Promise(r => setTimeout(r, formato === 'reel' ? 5000 : 2000));
+          }
+          d = await pedir({ paso: 'confirmar', creationId: d.creationId });
+        }
+        results.push({ network, success: true, postId: d.postId, permalink: d.permalink, cuenta: socialNombreCuenta(network, acct) });
+        // Se anota en cuanto sale: si la otra red falla y se reintenta, esta no
+        // se vuelve a publicar.
+        const p = loadStudioPosts().find(x => x.id === postId) || post;
+        updateStudioPost(postId, { publicaciones: { ...(p.publicaciones || {}), [network]: { postId: d.postId, permalink: d.permalink || null, cuenta: socialNombreCuenta(network, acct), at: Date.now() } } });
+      } catch (e) {
+        results.push({ network, success: false, error: e.message || 'Error publicando', reconectar: !!e.reconectar });
+      }
+    }
   } catch (err) {
-    console.error('publishPostNow error:', err);
-    if (status) { status.textContent = '❌ ' + err.message; status.style.color = '#EF4444'; }
-    if (btn)    { btn.disabled = false; btn.innerHTML = 'Reintentar'; }
+    console.error('[publicar] preparando archivos:', err);
+    filas.forEach(f => results.push({ network: f.dataset.net, success: false, error: 'No se pudo preparar el archivo: ' + (err.message || 'error desconocido') }));
+  }
+
+  if (overlay) delete overlay.dataset.ocupado;
+  const anyOk = results.some(r => r.success);
+  if (anyOk) updateStudioPost(postId, { status: 'publicado' });
+  if (anyOk) {
+    document.getElementById('pub-modal')?.remove();
+    closePostModal();
+    renderStudio();
+    showPublishSuccessModal(results, post);
+  } else {
+    decir(results.map(r => SOCIAL_RED[r.network] + ': ' + r.error).join(' · '), true);
+    if (btn) { btn.disabled = false; btn.innerHTML = icn('send', 14) + ' Reintentar'; }
+    if (results.some(r => r.reconectar) && status) {
+      status.insertAdjacentHTML('beforeend', '<div style="margin-top:8px"><button class="btn-ghost" style="font-size:var(--fs-sm)" onclick="document.getElementById(\'pub-modal\')?.remove();openSocialConnectionsModal()">Volver a conectar</button></div>');
+    }
   }
 }
 
@@ -8430,8 +8383,11 @@ function showPublishSuccessModal(results, post) {
 
   const okRows  = ok.map(r =>
     '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#F0FDF4;border-radius:8px;margin-bottom:6px">' +
-    netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:var(--text)">' + netLabel[r.network] + '</span>' +
-    '<span style="margin-left:auto;font-size:12px;color:#059669;font-weight:700">✓ Publicado</span></div>'
+    netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:var(--text)">' + netLabel[r.network] +
+      (r.cuenta ? ' <span style="font-weight:400;color:var(--muted)">· ' + esc(r.cuenta) + '</span>' : '') + '</span>' +
+    (r.permalink
+      ? '<a href="' + esc(r.permalink) + '" target="_blank" rel="noopener" style="margin-left:auto;font-size:12px;color:var(--blue);font-weight:700">Ver publicación ↗</a>'
+      : '<span style="margin-left:auto;font-size:12px;color:var(--success);font-weight:700">✓ Publicado</span>') + '</div>'
   ).join('');
 
   const failRows = fail.map(r =>
@@ -8440,7 +8396,7 @@ function showPublishSuccessModal(results, post) {
         netIcon[r.network] + '<span style="font-size:13px;font-weight:600;color:var(--text)">' + netLabel[r.network] + '</span>' +
         '<span style="margin-left:auto;font-size:12px;color:#DC2626;font-weight:600">✗ Error</span>' +
       '</div>' +
-      (r.error ? '<p style="margin:5px 0 0 28px;font-size:11px;color:#B91C1C;line-height:1.4;word-break:break-word">' + r.error.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</p>' : '') +
+      (r.error ? '<p style="margin:5px 0 0 28px;font-size:11px;color:#B91C1C;line-height:1.4;word-break:break-word">' + esc(r.error) + '</p>' : '') +
     '</div>'
   ).join('');
 
@@ -8448,7 +8404,7 @@ function showPublishSuccessModal(results, post) {
   const title    = allOk ? '¡Post publicado!' : 'Publicado parcialmente';
   const subtitle = allOk
     ? 'Tu contenido ya está en vivo'
-    : 'Publicado en ' + ok.length + ' de ' + results.length + ' redes';
+    : 'Publicado en ' + ok.length + ' de ' + results.length + ' redes. Abre el post y pulsa «Publicar» para reintentar la que falló: la que salió no se repite.';
 
   const overlay = document.createElement('div');
   overlay.id = 'pub-success-modal';
@@ -9549,12 +9505,21 @@ function openPostModal(postId) {
   const fbConn   = getSocialAccount('facebook');
   const hasAnyConn = !!(igConn || fbConn);
 
-  // Botón principal de publicar (solo si hay media o caption)
-  const publishBtn = (hasMedia || post.caption)
-    ? '<button class="pm-btn" style="background:#1E2BCC;color:#fff;font-weight:700;gap:5px" onclick="openPublishModal(\'' + postId + '\')">' +
+  // Botón principal de publicar (solo si hay media o caption, y solo mientras
+  // la publicación directa esté encendida: ver publicarDirectoDisponible()).
+  const yaPublicado = Object.entries(post.publicaciones || {});
+  const publishBtn = (publicarDirectoDisponible() && (hasMedia || post.caption))
+    ? '<button class="pm-btn" style="background:var(--blue);color:#fff;font-weight:700;gap:5px" onclick="openPublishModal(\'' + postId + '\')">' +
         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
-        'Publicar' +
+        (!yaPublicado.length ? 'Publicar' : yaPublicado.length >= 2 ? 'Publicar de nuevo' : 'Publicar en otra red') +
       '</button>'
+    : '';
+  const enlacesPublicado = yaPublicado.length
+    ? '<div style="order:10;flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:var(--fs-sm);color:var(--success)">' + icn('check', 12) + ' Publicado en ' +
+        yaPublicado.map(([red, x]) => x.permalink
+          ? '<a href="' + esc(x.permalink) + '" target="_blank" rel="noopener" style="color:var(--blue);font-weight:600">' + (red === 'instagram' ? 'Instagram' : 'Facebook') + ' ↗</a>'
+          : '<span>' + (red === 'instagram' ? 'Instagram' : 'Facebook') + '</span>').join(' · ') +
+      '</div>'
     : '';
 
   const footerBtns =
@@ -9562,6 +9527,7 @@ function openPostModal(postId) {
       ? '<button class="pm-btn pm-btn-success" onclick="setPostStatus(\'' + postId + '\',\'listo\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Marcar como listo</button>'
       : '<button class="pm-btn pm-btn-ghost" style="cursor:default;opacity:.5">✓ Listo</button>') +
     publishBtn +
+    enlacesPublicado +
     '<div style="flex:1"></div>' +
     '<button class="pm-btn pm-btn-danger" onclick="if(confirm(\'Eliminar este post?\'))deleteStudioPost(\'' + postId + '\')">Eliminar</button>';
 
@@ -9637,17 +9603,28 @@ function uploadMediaForPost(postId, accept) {
     if (!file) return;
 
     if (file.type.startsWith('video/')) {
-      // Videos: usar object URL (sesión) — no caben en localStorage
-      const videoUrl = URL.createObjectURL(file);
-      updateStudioPost(postId, {
-        videoUrl,
-        videoFileName: file.name,
-        imageBase64: null,        // limpiar imagen previa
-        imageUrl: null,           // y su copia guardada, o volvería a aparecer
-        imageMediaType: file.type
+      // El video se sube al almacenamiento en cuanto se elige. Antes quedaba
+      // como `blob:` del navegador: desaparecía al recargar, el equipo no lo
+      // veía y publicarlo fallaba con cualquier video de más de 4,5 MB.
+      const tipo = file.type === 'video/quicktime' ? 'video/quicktime' : (file.type === 'video/mp4' ? 'video/mp4' : '');
+      if (!tipo) { alert('Ese formato de video no se puede publicar. Usa MP4 o MOV.'); return; }
+      if (file.size > 50 * 1024 * 1024) { alert('El video pesa ' + Math.round(file.size / 1048576) + ' MB. El máximo es 50 MB.'); return; }
+      showToast('Subiendo el video… no cierres esta pestaña.', 'info');
+      subirArchivoSocial(file, tipo).then(videoUrl => {
+        updateStudioPost(postId, {
+          videoUrl,
+          videoFileName: file.name,
+          imageBase64: null,        // limpiar imagen previa
+          imageUrl: null,           // y su copia guardada, o volvería a aparecer
+          imageMediaType: tipo,
+          publicable: null,
+        });
+        showToast('Video subido.');
+        if (activePostId === postId) { closePostModal(); setTimeout(() => openPostModal(postId), 80); }
+      }).catch(e => {
+        console.error('[studio] subida de video:', e);
+        alert('No se pudo subir el video: ' + (e.message || 'error desconocido') + '. Intenta de nuevo.');
       });
-      closePostModal();
-      setTimeout(() => openPostModal(postId), 80);
     } else {
       // Imágenes: convertir a base64 (límite 5 MB)
       if (file.size > 5 * 1024 * 1024) {
@@ -10319,7 +10296,7 @@ function showConnectionModal(platform, accountName) {
 }
 
 // SOCIAL CONNECTION SUCCESS MODAL
-function showSocialConnectionModal(igAccts, fbAccts) {
+function showSocialConnectionModal(igAccts, fbAccts, faltan) {
   const existing = document.getElementById('social-conn-success-modal');
   if (existing) existing.remove();
 
@@ -10330,7 +10307,7 @@ function showSocialConnectionModal(igAccts, fbAccts) {
   const igLines = hasIG ? igAccts.map(a =>
     '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#FFF0F7;border-radius:8px;margin-bottom:6px">' +
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>' +
-    '<span style="font-size:13px;color:#333;font-weight:500">' + (a.igUsername ? '@' + a.igUsername : a.pageName) + '</span>' +
+    '<span style="font-size:13px;color:var(--text);font-weight:500">' + esc(a.igUsername ? '@' + a.igUsername : (a.pageName || '')) + '</span>' +
     '<span style="margin-left:auto;font-size:11px;color:#059669;font-weight:600">✓ IG</span>' +
     '</div>'
   ).join('') : '';
@@ -10338,11 +10315,20 @@ function showSocialConnectionModal(igAccts, fbAccts) {
   const fbLines = hasFB ? fbAccts.map(a =>
     '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#EFF6FF;border-radius:8px;margin-bottom:6px">' +
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>' +
-    '<span style="font-size:13px;color:#333;font-weight:500">' + a.pageName + '</span>' +
+    '<span style="font-size:13px;color:var(--text);font-weight:500">' + esc(a.pageName || '') + '</span>' +
     '<span style="margin-left:auto;font-size:11px;color:#059669;font-weight:600">✓ FB</span>' +
     '</div>'
   ).join('') : '';
 
+  // Lo que quedó a medias se dice aquí, al volver de Facebook, y no al primer
+  // intento de publicar: entonces ya nadie recordaría qué desmarcó.
+  const PERM_TXT = { pages_manage_posts: 'publicar en tus páginas', instagram_content_publish: 'publicar en Instagram',
+    pages_show_list: 'ver tus páginas', pages_read_engagement: 'leer tus páginas', instagram_basic: 'ver tu Instagram' };
+  const aviso = t => '<div style="text-align:left;font-size:12px;line-height:1.5;color:var(--warning);background:var(--warning-bg);border-radius:8px;padding:9px 12px;margin-bottom:8px">' + t + '</div>';
+  const avisos =
+    ((faltan || []).length ? aviso('No aceptaste el permiso para ' + faltan.map(p => PERM_TXT[p] || p).join(', ') + '. Sin él no se puede publicar: vuelve a conectar y déjalo marcado.') : '') +
+    (hasFB && !hasIG ? aviso('Ninguna de tus páginas tiene un Instagram profesional vinculado, así que solo se conectó Facebook. Vincúlalo en Instagram (Configuración › Cuenta › Compartir en otras apps) y vuelve a conectar.') : '') +
+    '';
   const titleParts = [hasIG ? 'Instagram' : null, hasFB ? 'Facebook' : null].filter(Boolean);
   const title = titleParts.join(' y ') + (titleParts.length === 1 ? ' conectado' : ' conectados');
 
@@ -10359,7 +10345,8 @@ function showSocialConnectionModal(igAccts, fbAccts) {
       '<h2 style="font-size:21px;font-weight:700;color:var(--text);margin:0 0 6px;font-family:var(--font)">¡' + title + '!</h2>' +
       '<p style="font-size:14px;color:#666;margin:0 0 22px;font-family:var(--font)">Tus cuentas ya están listas para publicar desde el Studio</p>' +
       // Lista de cuentas
-      '<div style="text-align:left;margin-bottom:24px">' + igLines + fbLines + '</div>' +
+      '<div style="text-align:left;margin-bottom:' + (avisos ? '12' : '24') + 'px">' + igLines + fbLines + '</div>' +
+      avisos +
       // Botones
       '<button id="scm-studio-btn" style="width:100%;padding:13px;background:var(--accent,var(--blue));color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);margin-bottom:8px;transition:opacity .2s">Ir al Social Studio</button>' +
       '<button id="scm-close-btn" style="width:100%;padding:11px;background:transparent;color:var(--muted2);border:1px solid var(--border);border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font)">Cerrar</button>' +
@@ -11166,8 +11153,8 @@ function academiaHTML() { // legacy — kept for reference, not used
       + card('SEO',SE,I.edit,'Optimización on-page con el agente SEO','Mejora títulos, meta-descriptions, headings y contenido de tus páginas.','7 min',''))
     // Contenido
     + section('contenido','#F5F3FF','#7c3aed','<path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>','Contenido para Redes Sociales','Studio de contenido, parrilla editorial y generación de imágenes con IA',
-        card('Contenido',CO,I.layout,'El Studio de Contenido — guía completa','Conoce todos los módulos: generador de copys, parrilla, imágenes y descarga para publicar.','12 min','')
-      + card('Contenido',CO,I.cal,'Genera tu parrilla mensual de contenido','Crea un mes de contenido en minutos: copys e imágenes listos para descargar y publicar.','8 min','')
+        card('Contenido',CO,I.layout,'El Studio de Contenido — guía completa',(window.PUBLICAR_DIRECTO ? 'Conoce todos los módulos: generador de copys, parrilla, imágenes y publicación directa.' : 'Conoce todos los módulos: generador de copys, parrilla, imágenes y descarga para publicar.'),'12 min','')
+      + card('Contenido',CO,I.cal,'Genera tu parrilla mensual de contenido',(window.PUBLICAR_DIRECTO ? 'Crea un mes de contenido en minutos: copys, imágenes y publicación directa en Instagram y Facebook.' : 'Crea un mes de contenido en minutos: copys e imágenes listos para descargar y publicar.'),'8 min','')
       + card('Contenido',CO,I.img,'Generación de imágenes con IA para redes sociales','Usa el generador de imágenes para crear visuales de marca listos para publicar.','6 min','')
       + card('Contenido',CO,I.video,'Guiones para Reels, TikToks y Stories con IA','Genera scripts virales con hooks probados y call-to-action optimizados.','7 min',''))
     // Agencia
@@ -11294,7 +11281,7 @@ function setAgentContext(ctx, showGuide=false){
     if(socialBar)socialBar.style.display=isEmpty?'block':'none';
     // Actualizar descripción del Studio banner con conteo de posts
     const descEl=document.getElementById('studio-bar-desc');
-    if(descEl){const posts=loadStudioPosts();descEl.textContent=posts.length>0?posts.length+' posts en tu calendario · haz clic para verlos':'Calendario visual · genera imágenes · descarga y publica';}
+    if(descEl){const posts=loadStudioPosts();descEl.textContent=posts.length>0?posts.length+' posts en tu calendario · haz clic para verlos':(window.PUBLICAR_DIRECTO ? 'Calendario visual · genera imágenes · publica directo' : 'Calendario visual · genera imágenes · descarga y publica');}
     if(qaBar)qaBar.style.display='none';
   } else {
     if(socialBar)socialBar.style.display='none';
@@ -14815,8 +14802,8 @@ function generateBasicImage() {
   if (params.get('social_connected') === 'true') {
     window.history.replaceState({}, '', window.location.pathname);
 
-    const network  = params.get('social_network') || 'instagram';
     const clientId = params.get('social_client')  || '';
+    const faltan   = (params.get('faltan') || '').split(',').filter(Boolean);
 
     // Ya no vuelve ningún token: el servidor guardó la conexión cifrada y aquí
     // solo se relee. Antes llegaban por sessionStorage y se quedaban en el
@@ -14825,11 +14812,11 @@ function generateBasicImage() {
       const hay = await socialSincronizar();
       updateStudioConnectBtn();
       if (!hay) {
-        showToast('Conexión completada pero no encontramos páginas de Facebook ni cuentas de Instagram vinculadas. Revisa que tu cuenta tenga una página de Facebook con Instagram Business asociado.', 'warning');
+        showToast('La conexión terminó, pero no pudimos leer tus cuentas desde aquí. Abre «Conectar redes» en el Studio para revisarlas.', 'error');
         return;
       }
       const conns = loadSocialConnections();
-      showSocialConnectionModal(conns.instagram || [], conns.facebook || []);
+      showSocialConnectionModal(conns.instagram || [], conns.facebook || [], faltan);
     };
 
     // Hay que esperar a Clerk: sin sesión la lectura sale 401 y parecería que
@@ -14858,8 +14845,27 @@ function generateBasicImage() {
   if (params.get('social_error')) {
     window.history.replaceState({}, '', window.location.pathname);
     const msg = params.get('social_error');
+    // Cada motivo en palabras: «token_failed» no le dice nada a nadie.
+    const MOTIVOS = {
+      sesion: 'El enlace de conexión venció (dura 15 minutos). Vuelve a pulsar «Conectar con Facebook».',
+      sin_paginas: 'Tu cuenta de Facebook no administra ninguna página en la que puedas publicar. Para publicar hace falta una página de Facebook (y, para Instagram, una cuenta profesional vinculada a ella).',
+      paginas: 'Facebook no nos dejó leer tus páginas. Vuelve a conectar y elige al menos una página.',
+      token_failed: 'Facebook no completó la conexión. Vuelve a intentarlo.',
+      sin_codigo: 'Facebook no completó la conexión. Vuelve a intentarlo.',
+      config: 'La conexión con Facebook no está configurada en Acuarius. Escríbenos a soporte.',
+      server_error: 'Algo falló guardando la conexión. Vuelve a intentarlo; si sigue, escríbenos a soporte.',
+    };
     if (msg !== 'access_denied') {
-      showToast('Error conectando red social: ' + (msg || 'error desconocido'), 'error');
+      // Un modal y no un toast: la persona acaba de volver de Facebook y el
+      // motivo suele pedir que haga algo allí antes de reintentar.
+      setTimeout(async () => {
+        const otraVez = await confirmarAguaP({
+          titulo: 'No se pudo conectar tu red social',
+          texto: MOTIVOS[msg] || ('No se pudo conectar la red social (' + (msg || 'error desconocido') + ').'),
+          confirmar: 'Intentar de nuevo',
+        });
+        if (otraVez) { openSocialStudio(); setTimeout(openSocialConnectionsModal, 600); }
+      }, 1200);
     }
   }
 })();

@@ -434,3 +434,74 @@ Texto para pegar (en inglés):
 Certain Pezzano puede arrancar hoy con Google Ads, el CRM, los formularios web, las
 campañas de email, las automatizaciones y las propuestas. Lo que queda en pausa hasta que
 Meta apruebe es Meta Ads, Messenger, Instagram y WhatsApp.
+
+## 7. Segunda solicitud: publicar desde el Studio (preparada el 08-10-2026)
+
+**Qué es.** Publicar los posts del Studio Social en Instagram y en páginas de Facebook.
+El código está terminado y probado (`api/social-connect.js`, `social-callback.js`,
+`social-publish.js`, `social-media-subida.js`; en `app.js`, `openPublishModal` y
+`publishPostNow`), pero **apagado para los clientes**: `window.PUBLICAR_DIRECTO = false`
+en `public/index.html`. El equipo de Acuarius (`isAdminUser`) lo ve igual, para probarlo.
+
+Necesita dos permisos que la solicitud del 06-10 **no** pidió: `pages_manage_posts` e
+`instagram_content_publish`. Los otros que usa (`pages_show_list`,
+`pages_read_engagement`, `instagram_basic`, `business_management`) ya van en la primera.
+
+### Lo que hace Johana en el panel (antes de grabar)
+
+1. **Casos de uso → Personalizar → Permisos**: añadir `pages_manage_posts` e
+   `instagram_content_publish` (en acceso estándar funcionan para quien tenga rol).
+2. **Inicio de sesión con Facebook para empresas → Configuraciones → Crear**: una
+   configuración NUEVA, aparte de la de Meta Ads (`1570497151241728`), llamada
+   «Acuarius — publicar». Tipo de token: **usuario**. Activos: **Páginas** e
+   **Instagram**. Permisos: `pages_show_list`, `pages_read_engagement`,
+   `pages_manage_posts`, `instagram_basic`, `instagram_content_publish`,
+   `business_management`. Copiar el id que da.
+3. Ese id va en Vercel como **`META_SOCIAL_CONFIG_ID`** (lo pongo yo por API). Sin él,
+   `social-connect` pide los permisos por `scope`, que solo funciona para quien tiene rol.
+4. La URI de redirección `https://app.acuarius.app/api/social-callback` tiene que estar en
+   **Inicio de sesión con Facebook → Configuración → URI de redireccionamiento de OAuth
+   válidos** (la de Meta Ads es otra: `/api/meta-callback`).
+
+### Textos para el formulario (en inglés)
+
+#### pages_manage_posts
+
+> We use `pages_manage_posts` to publish the posts the user prepares in Acuarius' content
+> calendar (Marketing → Studio Social) to the Facebook Page they connected. The user writes
+> or generates the copy and image of each post, opens it, presses "Publish", chooses the
+> Page and confirms. We publish a photo, several photos, a video or a text post, exactly as
+> the user prepared it, and show the link to the published post. We never publish
+> without that explicit action by the user, and we do not edit or delete existing posts.
+> Shown in the video: connecting the Page, then publishing one post from the calendar and
+> opening the published post on Facebook.
+
+#### instagram_content_publish
+
+> We use `instagram_content_publish` to publish the posts the user prepares in Acuarius'
+> content calendar to the Instagram professional account linked to their Facebook Page:
+> single images, carousels (2 to 10 images), reels and stories. The user opens the post,
+> presses "Publish", picks the Instagram account and confirms; we create the media
+> container, wait until Instagram finishes processing it and publish it, then show the
+> link to the post. Nothing is published without that explicit action. Shown in the
+> video: publishing one image post and opening it on Instagram.
+
+### Guion del video (2-3 minutos, cuenta sin rol en la app)
+
+1. Entrar a app.acuarius.app → Marketing → Studio Social. Se ve el calendario con posts.
+2. «Conectar redes» → «Conectar con Facebook» → diálogo de Meta: elegir UNA página y su
+   Instagram, dejar todos los permisos marcados → volver: modal «Instagram y Facebook
+   conectados» con la página y la cuenta de Instagram.
+3. Abrir un post con imagen → «Publicar» → se ven marcadas Instagram y Facebook con su
+   cuenta → «Publicar ahora» → «Instagram está procesando la publicación…» →
+   «¡Post publicado!» con «Ver publicación» en cada red.
+4. Pulsar «Ver publicación» de Instagram y de Facebook: el post en vivo, con el mismo texto
+   e imagen.
+5. Volver al post: «Publicado en Instagram ↗ · Facebook ↗».
+
+### Al aprobarse
+
+1. `window.PUBLICAR_DIRECTO = true` en `public/index.html` (y la copia de la raíz).
+2. Entrada en `public/novedades.json` anunciando la publicación directa.
+3. Repasar los textos que hoy dicen «descarga y publica»: están condicionados a la misma
+   bandera (barra del Studio y Academia), así que cambian solos.

@@ -10,9 +10,6 @@
     "api/upload-media.js": {
       "maxDuration": 60
     },
-    "api/social-publish.js": {
-      "maxDuration": 60
-    },
     "api/cron-campaigns.js": {
       "maxDuration": 120
     },

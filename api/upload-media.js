@@ -12,8 +12,14 @@ export const config = {
   },
 };
 
+// Sin sesión cualquiera podía subir archivos a nuestro almacenamiento de fal.ai,
+// con nuestra clave y a nuestra cuenta.
+import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const sesion = await verificarSesion(req);
+  if (!sesion.id) return res.status(401).json(await cuerpoSinSesion(sesion, 'upload-media'));
 
   const { base64, mediaType = 'image/jpeg', fileName } = req.body;
   if (!base64) return res.status(400).json({ error: 'base64 requerido' });
