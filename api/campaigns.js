@@ -199,6 +199,10 @@ async function correosQuemados() {
   } catch { return new Set(); }
 }
 
+// Una exclusión que no se pudo aplicar. Se distingue de un fallo cualquiera
+// porque su mensaje sí se le enseña a la persona: dice qué arreglar.
+class ExclusionFallida extends Error {}
+
 // Los ids que hay que sacar: los de las listas de exclusión y los de las
 // etiquetas excluidas. Una lista dinámica se resuelve a sus leads en el momento,
 // para que excluir «clientes actuales» siga funcionando cuando entren nuevos.
@@ -209,33 +213,48 @@ async function idsExcluidos(userId, clientId, audience) {
   if (!listas.length && !etiquetas.length) return new Set();
   const fuera = new Set();
 
+  // Una exclusión cortada o vacía por un fallo es peor que ninguna: se le
+  // escribe a quien pidió que no le escribieran y nadie se entera hasta que se
+  // queja. Por eso aquí todo fallo LANZA, y quien llama decide qué enseñar; antes
+  // un error de red devolvía [] y el envío salía sin excluir a nadie.
+  const todas = async (q) => {
+    const r = await traerTodo(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id`, sbHeaders(), { techo: 100000 });
+    if (r.truncado) throw new ExclusionFallida('Una de tus exclusiones tiene más de 100.000 contactos y no se pudo aplicar completa.');
+    return r.filas || [];
+  };
+
   for (const lid of listas) {
-    const sub = await normalizeAudience(userId, { list_id: lid });
+    // La lista se lee aquí y no con normalizeAudience: esa convierte una lista
+    // borrada (o un fallo de red) en «nadie», que para incluir es lo prudente
+    // pero para excluir significa no quitar a nadie.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lead_lists?id=eq.${encodeURIComponent(lid)}&user_id=eq.${encodeURIComponent(userId)}&select=name,kind,lead_ids,filters`, { headers: sbHeaders() });
+    if (!res.ok) throw new ExclusionFallida('No se pudo leer una de tus listas de exclusión. Reintenta en unos segundos.');
+    const l = ((await res.json()) || [])[0];
+    if (!l) throw new ExclusionFallida('Una de las listas de «No enviar a» ya no existe. Quítala de la campaña o elige otra.');
     let filas = [];
-    if (Array.isArray(sub.lead_ids) && sub.lead_ids.length) {
-      filas = await leadsByIds(userId, clientId, sub.lead_ids, null, 'id');
-    } else if (Object.keys(sub).length) {
-      // Una exclusión cortada es peor que ninguna: se le escribe a quien pidió
-      // que no le escribieran y nadie se entera hasta que se queja.
-      filas = await traerTodo(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, sub, null)}&select=id`,
-        sbHeaders(), { techo: 100000 }).then(r => r.filas).catch(() => []);
+    if (l.kind === 'static') {
+      if ((l.lead_ids || []).length) filas = await leadsByIds(userId, clientId, l.lead_ids, null, 'id');
+    } else if (l.filters && Object.keys(l.filters).length) {
+      filas = await todas(audienceQuery(userId, clientId, l.filters, null));
+    } else {
+      // Una lista dinámica sin filtros es «todos»: excluirla dejaría la campaña
+      // vacía, y eso lo dice el contador, no hace falta inventarse otra cosa.
+      filas = await todas(audienceQuery(userId, clientId, {}, null));
     }
-    (filas || []).forEach(l => fuera.add(l.id));
+    filas.forEach(f => fuera.add(f.id));
   }
 
   if (etiquetas.length) {
-    const q = audienceQuery(userId, clientId, { tags: etiquetas }, null);
-    const filas = await traerTodo(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id`,
-      sbHeaders(), { techo: 100000 }).then(r => r.filas).catch(() => []);
-    (filas || []).forEach(l => fuera.add(l.id));
+    (await todas(audienceQuery(userId, clientId, { tags: etiquetas }, null))).forEach(f => fuera.add(f.id));
   }
   return fuera;
 }
 
+
 // Devuelve { leads, truncado }. `truncado` no es decorativo: si viene true la
 // audiencia está incompleta y NO se puede encolar la campaña, porque enviarla
 // dejaría fuera a gente sin que nadie lo sepa.
-async function resolveAudience(userId, clientId, audience, channel) {
+export async function resolveAudience(userId, clientId, audience, channel) {
   const a = await normalizeAudience(userId, audience);
   let base, truncado = false;
   if (Array.isArray(a.lead_ids) && a.lead_ids.length) {
@@ -258,6 +277,47 @@ async function resolveAudience(userId, clientId, audience, channel) {
     && !(channel === 'email' && quemados.has(String(l.email || '').toLowerCase()))
     && !(channel === 'sms' && !normalizarTelefono(l.phone)));
   return { leads, truncado };
+}
+
+/**
+ * Lo que enseña el contador del asistente: cuántos, unos nombres de ejemplo y
+ * por qué quedan fuera los demás. El número sale de resolveAudience() —la MISMA
+ * función con la que se encola— y con la audiencia tal cual se guarda, para que
+ * lo que ve la persona sea exactamente lo que sale.
+ *
+ * Exportada para pruebas/campanas-exclusiones.mjs.
+ */
+export async function contarAudiencia(userId, clientId, audience, channel) {
+  // `a` solo sirve para el desglose. Lo que se cuenta va con la audiencia
+  // ORIGINAL: con la normalizada, una lista guardada perdía sus exclusiones.
+  const a = await normalizeAudience(userId, audience);
+  const hasIds = Array.isArray(a.lead_ids) && a.lead_ids.length;
+  const [resuelta, all, fuera] = await Promise.all([
+    resolveAudience(userId, clientId, audience, channel),
+    hasIds
+      ? leadsByIds(userId, clientId, a.lead_ids, null, 'id,email,phone,tags')
+      : traerTodo(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, a, null)}&select=id,email,phone,tags`,
+          sbHeaders(), { techo: TECHO_AUDIENCIA }).then(r => r.filas || []),
+    idsExcluidos(userId, clientId, audience),
+  ]);
+  const leads = resuelta.leads;
+  const breakdown = { matched: all.length, unsubscribed: 0, missing: 0, excluidos: 0, rebotados: 0 };
+  const quemados = channel === 'email' ? await correosQuemados() : new Set();
+  for (const l of all) {
+    if (fuera.has(l.id)) { breakdown.excluidos++; continue; }
+    if (channel === 'email') {
+      if ((l.tags || []).includes('no-email')) breakdown.unsubscribed++;
+      else if (!l.email) breakdown.missing++;
+      else if (quemados.has(String(l.email).toLowerCase())) breakdown.rebotados++;
+    } else if (channel === 'sms') {
+      if ((l.tags || []).includes(BAJA_SMS)) breakdown.unsubscribed++;
+      else if (!normalizarTelefono(l.phone)) breakdown.missing++;
+    } else if (!l.phone) breakdown.missing++;
+  }
+  // `truncado` viaja hasta la pantalla: el wizard tiene que poder avisar
+  // ANTES de enviar, no después. Ver el aviso en public/app.js.
+  return { count: leads.length, sample: leads.slice(0, 5).map(l => l.name), breakdown,
+           truncado: resuelta.truncado, techo: TECHO_AUDIENCIA };
 }
 
 /**
@@ -525,34 +585,11 @@ export default async function handler(req) {
     let audience = {};
     try { audience = JSON.parse(url.searchParams.get('audience') || '{}'); } catch {}
     const channel = canalDe(url.searchParams.get('channel'));
-    const a = await normalizeAudience(userId, audience);
-    const hasIds = Array.isArray(a.lead_ids) && a.lead_ids.length;
-    const [resuelta, all] = await Promise.all([
-      resolveAudience(userId, clientId, a, channel),
-      hasIds
-        ? leadsByIds(userId, clientId, a.lead_ids, null, 'id,email,phone,tags')
-        : traerTodo(`${SUPABASE_URL}/rest/v1/leads?${audienceQuery(userId, clientId, a, null)}&select=id,email,phone,tags`,
-            sbHeaders(), { techo: TECHO_AUDIENCIA }).then(r => r.filas || []),
-    ]);
-    const leads = resuelta.leads;
-    const breakdown = { matched: all.length, unsubscribed: 0, missing: 0, excluidos: 0, rebotados: 0 };
-    const fuera = await idsExcluidos(userId, clientId, audience);
-    const quemados = channel === 'email' ? await correosQuemados() : new Set();
-    for (const l of all) {
-      if (fuera.has(l.id)) { breakdown.excluidos++; continue; }
-      if (channel === 'email') {
-        if ((l.tags || []).includes('no-email')) breakdown.unsubscribed++;
-        else if (!l.email) breakdown.missing++;
-        else if (quemados.has(String(l.email).toLowerCase())) breakdown.rebotados++;
-      } else if (channel === 'sms') {
-        if ((l.tags || []).includes(BAJA_SMS)) breakdown.unsubscribed++;
-        else if (!normalizarTelefono(l.phone)) breakdown.missing++;
-      } else if (!l.phone) breakdown.missing++;
+    try {
+      return jsonResp(await contarAudiencia(userId, clientId, audience, channel));
+    } catch (e) {
+      return jsonResp({ error: e instanceof ExclusionFallida ? e.message : 'No se pudo calcular la audiencia. Reintenta en unos segundos.' }, e instanceof ExclusionFallida ? 400 : 503);
     }
-    // `truncado` viaja hasta la pantalla: el wizard tiene que poder avisar
-    // ANTES de enviar, no después. Ver el aviso en public/app.js.
-    return jsonResp({ count: leads.length, sample: leads.slice(0, 5).map(l => l.name), breakdown,
-                      truncado: resuelta.truncado, techo: TECHO_AUDIENCIA });
   }
 
   // GET ?stats=1&id= — aperturas de una campaña (join sent → opened por resend_id)
@@ -661,7 +698,9 @@ export default async function handler(req) {
       toEmail = u?.email_addresses?.[0]?.email_address;
     }
     if (!toEmail) return jsonResp({ error: 'No se pudo obtener tu email' }, 500);
-    const sampleRows = (await resolveAudience(userId, clientId, c.audience, 'email')).leads;
+    // La prueba solo necesita un lead de ejemplo: si una exclusión falla, se
+    // prueba con datos de ejemplo en vez de no dejar probar.
+    const sampleRows = await resolveAudience(userId, clientId, c.audience, 'email').then(r => r.leads).catch(() => []);
     // La audiencia se trae con cuatro columnas —encolar no necesita más, y son
     // hasta cien mil filas—, así que en el correo de prueba {{empresa}},
     // {{etapa}}, {{fuente}} y {{valor}} salían en blanco y parecía que las
@@ -749,7 +788,14 @@ export default async function handler(req) {
       }
     }
 
-    const { leads, truncado } = await resolveAudience(userId, clientId, c.audience, c.channel);
+    let leads, truncado;
+    try {
+      ({ leads, truncado } = await resolveAudience(userId, clientId, c.audience, c.channel));
+    } catch (e) {
+      // Si no se pudo saber a quién NO escribirle, no se encola: mejor una
+      // campaña que no sale que una que le llega a quien se excluyó.
+      return jsonResp({ error: e instanceof ExclusionFallida ? e.message : 'No se pudo preparar la audiencia. Reintenta en unos segundos.' }, e instanceof ExclusionFallida ? 400 : 503);
+    }
     if (!leads.length) return jsonResp({ error: 'La audiencia quedó vacía con esos filtros' }, 400);
     // Antes que enviar media campaña en silencio, no enviarla y decir por qué.
     // Una campaña incompleta no se puede "completar" después: los que sí la

@@ -9,6 +9,13 @@
       "texto": "En Análisis → Marketing, la tasa de apertura de las campañas salía en 0 %. Ahora cuenta las aperturas y los clics reales de cada campaña, igual que «ver aperturas» en Campañas."
     },
     {
+      "id": "2026-10-09-campanas-no-enviar-a",
+      "fecha": "2026-10-09",
+      "tipo": "arreglo",
+      "titulo": "«No enviar a» se respeta en el envío de tus campañas",
+      "texto": "Las listas y etiquetas que eliges en «No enviar a», dentro del paso «¿A quién le llega?», ahora se guardan con la campaña y se aplican al enviarla, no solo en el contador. El número de destinatarios que ves es exactamente a quienes les llega, también cuando eliges una lista guardada. Si editas un borrador, tus exclusiones siguen ahí, y la revisión final te las muestra. Si una lista de exclusión ya no existe, te lo decimos antes de enviar en lugar de mandarle a todos."
+    },
+    {
       "id": "2026-10-09-analisis-por-proceso-y-fechas",
       "fecha": "2026-10-09",
       "tipo": "mejora",
