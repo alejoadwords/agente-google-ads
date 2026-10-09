@@ -2030,7 +2030,13 @@ async function abrirAvisos(){
   if (typeof crmAvisosCargar === 'function') {
     try { await crmAvisosCargar(); } catch (e) { console.warn('[movil] avisos', e); }
   }
-  var caja = $('#avisos-lista'); if (!caja || !h.parentNode) return;
+  pintarAvisos();
+}
+
+// La lista de la hoja, aparte: responder un aviso la vuelve a pintar sin
+// recargar la hoja entera.
+function pintarAvisos(){
+  var caja = $('#avisos-lista'); if (!caja) return;
   var av = avisosDeLaWeb();
   if (av === null) {
     // Sin sesión no es que fallara: es que no hay de dónde traerlos. Decir «no
@@ -2048,15 +2054,53 @@ async function abrirAvisos(){
     + av.map(function(a){
       var t = String(a.texto || '');
       var cuando = a.created_at && typeof crmHace === 'function' ? crmHace(a.created_at) : '';
-      return '<button class="aviso-fila" style="display:block;width:100%;text-align:left;font:inherit;cursor:pointer" '
-        + 'onclick="M.abrirAviso(\''+esc(a.id)+'\',\''+esc(a.lead_id)+'\')">'
+      // Un div y no un <button>: dentro va el botón «Responder», y un botón
+      // dentro de otro no es HTML válido (el toque caería en los dos).
+      return '<div class="aviso-fila">'
+        + '<div role="button" style="cursor:pointer" onclick="M.abrirAviso(\''+esc(a.id)+'\',\''+esc(a.lead_id)+'\')">'
         + '<div class="at">'+esc(a.autor || 'Alguien')+(a.lead ? ' · '+esc(a.lead) : '')+'</div>'
+        + (a.en_respuesta_a !== null && a.en_respuesta_a !== undefined
+            ? '<div class="ac" style="margin:2px 0 4px">Respondiendo a tu nota: «'+esc(String(a.en_respuesta_a).slice(0, 100))+'»</div>' : '')
         + '<div class="ab">'+esc(t)+'</div>'
         + (cuando ? '<div class="ac">'+esc(cuando)+'</div>' : '')
-        + '</button>';
+        + '</div>'
+        + '<button class="bbtn" style="margin-top:8px" onclick="M.responderAviso(\''+esc(a.id)+'\')">Responder</button>'
+        + '</div>';
     }).join(''))
     : '<div class="vacio">No tienes avisos sin leer.</div>';
   pintarPunto();
+}
+
+// Responder un aviso: el mismo camino que la campana de la web
+// (notaResponder en app.js). La respuesta le llega a quien escribió la nota.
+function responderAviso(id){
+  toque();
+  abrirSheet('<textarea id="sh-resp" maxlength="1000" placeholder="Escribe tu respuesta…"></textarea>'
+    + '<button class="bbtn" id="sh-resp-btn" onclick="M.enviarRespuesta(\''+esc(id)+'\')">Enviar respuesta</button>');
+  setTimeout(function(){ var t = $('#sh-resp'); if (t) t.focus(); }, 60);
+}
+async function enviarRespuesta(id){
+  var ta = $('#sh-resp'), btn = $('#sh-resp-btn');
+  var texto = ta ? ta.value.trim() : '';
+  if (!texto) { chicharra('Escribe la respuesta antes de enviar.', 'mal'); return; }
+  if (typeof notaResponder !== 'function') { chicharra('No se pudo enviar la respuesta.', 'mal'); return; }
+  var av = avisosDeLaWeb() || [];
+  var a = null;
+  for (var i = 0; i < av.length; i++) if (String(av[i].id) === String(id)) a = av[i];
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    var d = await notaResponder(id, texto, a && a.lead_id);
+    cerrarSheet();
+    // Nunca «enviada» a secas si el aviso no salió: la respuesta queda
+    // guardada, pero quien la espera no se enteró.
+    var fallo = d && d.aviso && d.aviso.enviado === false;
+    chicharra(typeof notaRespondidaTexto === 'function' ? notaRespondidaTexto(d) : 'Respuesta enviada', fallo ? 'mal' : undefined);
+    if (typeof crmAvisosCargar === 'function') { try { await crmAvisosCargar(); } catch (e) {} }
+    pintarAvisos();
+  } catch (e) {
+    chicharra('No se pudo enviar la respuesta: ' + (e.message || 'error'), 'mal');
+    if (btn) { btn.disabled = false; btn.textContent = 'Enviar respuesta'; }
+  }
 }
 
 // Abrir un aviso = abrir su lead y, solo si se abrió, marcarlo leído. Es el
@@ -3537,7 +3581,7 @@ function movilMontar(opciones){
     editarCampo: editarCampo,
     enviarMsg: enviarMsg,
     filtrar: filtrar,
-    abrirAviso: abrirAviso,
+    abrirAviso: abrirAviso, responderAviso: responderAviso, enviarRespuesta: enviarRespuesta,
     marcar: marcar,
     meter: meter,
     nuevoLead: nuevoLead,

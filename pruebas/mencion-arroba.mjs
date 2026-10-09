@@ -26,13 +26,15 @@ let mal = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) mal++; };
 
 // ── El servidor manda ──────────────────────────────────────────────────
-ok(/const \{ lead_id, type, content, metadata, avisar, mencion \} = body;/.test(api),
+ok(/const \{ type, content, metadata, avisar, mencion, responde_a \} = body;/.test(api),
    'el endpoint recibe a quién se menciona');
 ok(/await esDelEquipo\(userId, mencion\)/.test(api),
    'y lo valida contra el equipo ANTES de avisar');
 ok(/Esa persona no está en tu equipo\.' \}, 403\)/.test(api),
    'si no es del equipo responde 403 y no manda nada');
-ok(/const para = mencionado\s*\n\s*\|\|/.test(api),
+// Desde el 09-10-2026 delante va la respuesta a una nota; la mención sigue
+// mandando sobre el responsable del lead.
+ok(/\|\| mencionado\s*\n\s*\|\| \(\(avisar && lead\.assigned_to/.test(api),
    'la mención manda sobre el responsable del lead');
 ok(/if \(mencion && mencion !== actorId\)/.test(api),
    'y uno no se menciona a sí mismo');
@@ -186,9 +188,9 @@ console.log('\nEl equipo se carga también para un miembro\n');
 // nunca.
 console.log('\nMencionar avisa por correo y teléfono, no solo en la campana\n');
 {
-  ok(/if \(avisar \|\| mencionado\) \{/.test(api),
+  ok(/if \(avisar \|\| mencionado \|\| respuesta\) \{/.test(api),
      'el aviso se dispara también con una mención, no solo con `avisar`');
-  const bloqueAviso = api.slice(api.indexOf('if (avisar || mencionado)'), api.indexOf('return jsonResp({ activity: rows[0]'));
+  const bloqueAviso = api.slice(api.indexOf('if (avisar || mencionado || respuesta)'), api.indexOf('return jsonResp({ activity: rows[0]'));
   ok(/avisarNotaLead\(/.test(bloqueAviso), 'manda el correo');
   ok(/enviarPushA\(para/.test(bloqueAviso), 'y el aviso al teléfono');
   ok(/mencion: !!mencionado/.test(bloqueAviso),
@@ -201,7 +203,7 @@ console.log('\nMencionar avisa por correo y teléfono, no solo en la campana\n')
 }
 {
   const correo = readFileSync(join(RAIZ, 'api/_aviso-lead-nota.js'), 'utf8');
-  ok(/avisarNotaLead\(\{ ownerId, autorNombre, lead, texto, paraId, mencion \}\)/.test(correo),
+  ok(/avisarNotaLead\(\{ ownerId, autorNombre, lead, texto, paraId, mencion, respuesta = null \}\)/.test(correo),
      'el correo recibe si es una mención');
   ok(/mencion \? `\$\{esc\(quien\)\} te mencionó/.test(correo), 'y lo dice en el título');
   // La frase falsa: a quien te mencionan puede no llevar ese lead.

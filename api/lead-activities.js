@@ -95,6 +95,9 @@ export default async function handler(req) {
         empresa: nombres[a.lead_id]?.company || null,
         texto: a.content,
         autor: a.metadata?.actor || null,
+        // Si es la respuesta a una nota tuya, qué decía la tuya: sin eso, un
+        // «sí, mañana lo llamo» suelto en la campana no se entiende.
+        en_respuesta_a: a.metadata?.responde_a ? (a.metadata.en_respuesta_a || '') : null,
         created_at: a.created_at,
       })),
     });
@@ -172,7 +175,36 @@ export default async function handler(req) {
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
-    const { lead_id, type, content, metadata, avisar, mencion } = body;
+    const { type, content, metadata, avisar, mencion, responde_a } = body;
+    let { lead_id } = body;
+
+    // ── Responder una nota dirigida ─────────────────────────────────────────
+    // Las notas al responsable y las menciones eran de ida: el asesor las
+    // leía y no tenía por dónde contestar (09-10-2026). Ahora quien participa
+    // en una nota —quien la escribió o a quien iba— puede responderla, y la
+    // respuesta va al OTRO, con el mismo aviso: campana, correo y teléfono.
+    // No hace falta ser de dirección para responder: sí para empezar.
+    //
+    // El autor sale de `actor_id`; si no está, la escribió el dueño (sus notas
+    // no lo guardaban: 69 de 94 el 09-10-2026).
+    let respuesta = null;
+    if (responde_a) {
+      if (!/^[0-9a-f-]{36}$/i.test(String(responde_a))) return jsonResp({ error: 'Nota no válida' }, 400);
+      const orig = (await fetch(
+        `${SUPABASE_URL}/rest/v1/lead_activities?id=eq.${responde_a}&user_id=eq.${encodeURIComponent(userId)}&type=eq.nota&select=id,lead_id,content,metadata&limit=1`,
+        { headers: sbHeaders() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []))?.[0];
+      const m = orig?.metadata || {};
+      if (!orig || !m.para) return jsonResp({ error: 'Esa nota no existe o no iba dirigida a nadie.' }, 404);
+      const autor = m.actor_id || userId;
+      if (actorId !== m.para && actorId !== autor) {
+        return jsonResp({ error: 'Solo puede responder quien escribió la nota o a quien iba.' }, 403);
+      }
+      if (!String(content || '').trim()) return jsonResp({ error: 'Escribe la respuesta.' }, 400);
+      respuesta = { orig, para: actorId === m.para ? autor : m.para };
+      lead_id = orig.lead_id;   // la respuesta vive en la ficha de la nota, diga lo que diga el navegador
+    }
+
     if (!lead_id || !type) return jsonResp({ error: 'Faltan campos requeridos' }, 400);
 
     // 'visita' es la nota que el asesor escribe al cerrar una cita: cómo le
@@ -188,9 +220,11 @@ export default async function handler(req) {
       return jsonResp({ error: 'Solo el dueño de la cuenta y los administradores pueden avisar al responsable' }, 403);
     }
 
-    // Verify the lead belongs to this user
+    // Verify the lead belongs to this user. Para responder basta con participar
+    // en la nota: si el lead cambió de dueño desde entonces, la conversación
+    // sobre él no se corta a mitad.
     const checkRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${userId}${filtroMios}&select=id,name,company,assigned_to,client_id`,
+      `${SUPABASE_URL}/rest/v1/leads?id=eq.${lead_id}&user_id=eq.${userId}${respuesta ? '' : filtroMios}&select=id,name,company,assigned_to,client_id`,
       { headers: sbHeaders() }
     );
     const check = await checkRes.json();
@@ -216,8 +250,17 @@ export default async function handler(req) {
       if (!mencionado) return jsonResp({ error: 'Esa persona no está en tu equipo.' }, 403);
     }
 
-    const para = mencionado
+    const para = (respuesta && respuesta.para !== actorId ? respuesta.para : null)
+      || mencionado
       || ((avisar && lead.assigned_to && lead.assigned_to !== actorId) ? lead.assigned_to : null);
+
+    // El dueño no tiene fila en team_members, así que sus notas se guardaban
+    // sin nombre. En una respuesta hace falta: es lo que lee el otro.
+    let firma = actorNombre;
+    if (respuesta && !firma) {
+      firma = (await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${encodeURIComponent(actorId)}&select=name&limit=1`, { headers: sbHeaders() })
+        .then(r => (r.ok ? r.json() : [])).catch(() => []))?.[0]?.name || null;
+    }
 
     const payload = {
       lead_id,
@@ -228,9 +271,17 @@ export default async function handler(req) {
       metadata: {
         ...(metadata || {}),
         ...(actorNombre ? { actor: actorNombre, actor_id: actorId } : {}),
+        // En una respuesta el autor va siempre, también el dueño: sin él, la
+        // contestación a esta respuesta no sabría a quién volver.
+        ...(respuesta ? {
+          actor_id: actorId, ...(firma ? { actor: firma } : {}),
+          responde_a: respuesta.orig.id,
+          en_respuesta_a: String(respuesta.orig.content || '').slice(0, 160),
+        } : {}),
         ...(para ? { para, avisado_at: new Date().toISOString() } : {}),
       },
     };
+    if (respuesta && type !== 'nota') return jsonResp({ error: 'Una respuesta es una nota' }, 400);
     const res = await fetch(`${SUPABASE_URL}/rest/v1/lead_activities`, {
       method: 'POST',
       headers: sbHeaders(),
@@ -341,8 +392,18 @@ export default async function handler(req) {
     // Reunión o una Tarea, ese cron ni la mira (`type=eq.nota`) y no salía
     // nunca. Etiquetar a alguien y que no se entere es peor que no poder
     // etiquetarlo.
-    if (avisar || mencionado) {
-      if (!para) {
+    // Responder es leer: la nota contestada sale de la campana de quien responde.
+    if (respuesta && respuesta.orig.metadata.para === actorId && !respuesta.orig.metadata.leida_at) {
+      await fetch(`${SUPABASE_URL}/rest/v1/lead_activities?id=eq.${respuesta.orig.id}`, {
+        method: 'PATCH', headers: sbHeaders(),
+        body: JSON.stringify({ metadata: { ...respuesta.orig.metadata, leida_at: new Date().toISOString() } }),
+      }).catch(() => {});
+    }
+
+    if (avisar || mencionado || respuesta) {
+      if (!para && respuesta) {
+        aviso = { enviado: false, motivo: 'te respondiste a ti mismo, no hay a quién avisar' };
+      } else if (!para) {
         aviso = !lead.assigned_to
           ? { enviado: false, motivo: 'este lead no tiene responsable asignado' }
           : { enviado: false, motivo: 'el lead es tuyo, no hay a quién avisar' };
@@ -351,7 +412,7 @@ export default async function handler(req) {
           const { avisarNotaLead } = await import('./_aviso-lead-nota.js');
           aviso = await avisarNotaLead({
             ownerId: userId,
-            autorNombre: actorNombre,
+            autorNombre: firma,
             lead: { id: lead.id, name: lead.name, company: lead.company },
             texto: content || '',
             paraId: para,
@@ -359,6 +420,7 @@ export default async function handler(req) {
             // responsable del lead, y a quien mencionas puede no ser suyo.
             // Decirle «un lead que tienes asignado» sería mentira.
             mencion: !!mencionado,
+            respuesta: respuesta ? String(respuesta.orig.content || '') : null,
           });
         } catch (e) {
           aviso = { enviado: false, motivo: 'no se pudo enviar el correo' };
@@ -384,7 +446,7 @@ export default async function handler(req) {
         try {
           const { enviarPushA } = await import('./_push.js');
           await enviarPushA(para, {
-            titulo: 'Nota sobre ' + (lead.name || 'un lead'),
+            titulo: (respuesta ? (firma || 'Alguien') + ' respondió sobre ' : 'Nota sobre ') + (lead.name || 'un lead'),
             texto: (content || '').slice(0, 120),
             url: '/crm?lead=' + lead.id,
             etiqueta: 'nota-' + lead.id,

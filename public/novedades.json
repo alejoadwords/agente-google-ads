@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-09-responder-notas",
+      "fecha": "2026-10-09",
+      "tipo": "nuevo",
+      "titulo": "Ahora puedes responder las notas que te dejan",
+      "texto": "Cuando alguien de tu equipo te deja una nota o te menciona con @, puedes contestarle desde la campana, desde la ficha del lead o desde el celular, con el botón «Responder». Tu respuesta le llega por la campana, por correo y al teléfono, y queda en el historial del lead junto a la nota original."
+    },
+    {
       "id": "2026-10-09-informes-pdf-y-enlace",
       "fecha": "2026-10-09",
       "tipo": "nuevo",

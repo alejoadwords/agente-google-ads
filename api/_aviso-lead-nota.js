@@ -59,7 +59,7 @@ export function conEnlaces(txt) {
   return out;
 }
 
-export async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId, mencion }) {
+export async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId, mencion, respuesta = null }) {
   try {
     if (!paraId) return { enviado: false, motivo: 'el lead no tiene responsable' };
 
@@ -79,13 +79,17 @@ export async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId
       body: JSON.stringify({
         from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
         to: destino.email,
-        subject: mencion ? `${quien} te mencionó en ${nombreLead}` : `Nota sobre ${nombreLead}`,
+        subject: respuesta !== null ? `${quien} respondió tu nota sobre ${nombreLead}`
+          : mencion ? `${quien} te mencionó en ${nombreLead}` : `Nota sobre ${nombreLead}`,
         html: emailHtml({
-          titulo: mencion ? `${esc(quien)} te mencionó en una nota` : `${esc(quien)} te dejó una nota`,
+          titulo: respuesta !== null ? `${esc(quien)} respondió tu nota`
+            : mencion ? `${esc(quien)} te mencionó en una nota` : `${esc(quien)} te dejó una nota`,
           // A quien te mencionan NO tiene por qué llevar ese lead: decirle «un
           // lead que tienes asignado» sería falso la mayoría de las veces, y
           // basta una frase falsa para que el correo deje de creerse.
-          intro: mencion
+          intro: respuesta !== null
+            ? `Sobre <strong>${esc(deQuien)}</strong>. Tu nota decía: <em>«${esc(String(respuesta).slice(0, 160))}»</em>`
+            : mencion
             ? `Sobre <strong>${esc(deQuien)}</strong>.`
             : `Sobre <strong>${esc(deQuien)}</strong>, un lead que tienes asignado.`,
           preheader: String(texto).slice(0, 90),
@@ -96,7 +100,9 @@ export async function avisarNotaLead({ ownerId, autorNombre, lead, texto, paraId
             texto: 'Abrir la ficha del lead',
             url: `https://app.acuarius.app/crm?lead=${encodeURIComponent(lead?.id || '')}`,
           },
-          pie: 'La nota queda en el historial de la ficha, junto a las llamadas y los correos.',
+          pie: respuesta !== null
+            ? 'Puedes contestarle desde la campana o desde la ficha del lead.'
+            : 'La nota queda en el historial de la ficha, junto a las llamadas y los correos. Puedes responderla desde la campana.',
         }),
       }),
     }).catch(() => null);

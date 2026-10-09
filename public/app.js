@@ -20813,16 +20813,79 @@ function crmAvisosPanel() {
           '<span style="font-size:12.5px;font-weight:700;color:var(--text)">' + esc(a.lead || 'Lead') + '</span>' +
           (a.empresa ? '<span style="font-size:11px;color:var(--muted2)">' + esc(a.empresa) + '</span>' : '') +
         '</div>' +
+        (a.en_respuesta_a !== null && a.en_respuesta_a !== undefined
+          ? '<div style="font-size:11.5px;color:var(--muted);border-left:2px solid var(--border);padding-left:8px;margin-bottom:6px">Respondiendo a tu nota: «' + esc(String(a.en_respuesta_a).slice(0, 120)) + '»</div>' : '') +
         '<div style="font-size:12.5px;color:var(--text);line-height:1.5;white-space:pre-wrap">' + esc(a.texto || '') + '</div>' +
-        '<div style="font-size:10.5px;color:var(--muted2);margin-top:7px">' +
-          (a.autor ? esc(a.autor) + ' · ' : '') + crmHace(a.created_at) +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:7px">' +
+          '<div style="flex:1;font-size:10.5px;color:var(--muted2)">' + (a.autor ? esc(a.autor) + ' · ' : '') + crmHace(a.created_at) + '</div>' +
+          '<button class="btn-ghost sm" onclick="event.stopPropagation();crmAvisoResponderAbrir(\'' + esc(a.id) + '\')">Responder</button>' +
         '</div>' +
+        '<div id="aviso-resp-' + esc(a.id) + '" onclick="event.stopPropagation()" style="cursor:default"></div>' +
       '</div>'
     ).join('');
 
   // Abrir la campana NO las marca. Antes sí, y una nota que se vio de pasada
   // —o que ni se alcanzó a leer— desaparecía para siempre. Cada nota se queda
   // hasta que la persona le da clic y abre su lead (crmAvisoAbrir).
+}
+
+// ── Responder una nota ──────────────────────────────────────────────────────
+// Las notas dirigidas eran de ida: el asesor las leía y no tenía por dónde
+// contestar (09-10-2026). Quien participa en una nota —quien la escribió o a
+// quien iba— la responde, y la respuesta le llega al otro con el mismo aviso.
+// El servidor decide a quién va (api/lead-activities.js, `responde_a`): aquí
+// solo se manda el texto. Lo usan la campana, la ficha y el móvil.
+async function notaResponder(notaId, texto, leadId) {
+  const r = await fetchAuth('/api/lead-activities', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'nota', content: texto, responde_a: notaId, lead_id: leadId || null }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+  return d;   // { activity, aviso: { enviado, motivo } }
+}
+
+// Qué decir después de responder: nunca «avisado» si el aviso no salió.
+function notaRespondidaTexto(d) {
+  const a = d && d.aviso;
+  if (a && a.enviado === false) return 'Respuesta guardada, pero el aviso no salió: ' + (a.motivo || 'motivo desconocido');
+  return 'Respuesta enviada';
+}
+
+function crmAvisoResponderAbrir(id) {
+  const caja = document.getElementById('aviso-resp-' + id);
+  if (!caja) return;
+  if (caja.innerHTML) { caja.innerHTML = ''; return; }
+  caja.innerHTML = '<div style="margin-top:9px">' +
+    '<textarea id="aviso-resp-txt-' + esc(id) + '" class="auto-input" rows="2" maxlength="1000" placeholder="Escribe tu respuesta…" style="width:100%;resize:vertical;font-size:12.5px"></textarea>' +
+    '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:6px">' +
+      '<button class="btn-ghost sm" onclick="document.getElementById(\'aviso-resp-' + esc(id) + '\').innerHTML=\'\'">Cancelar</button>' +
+      '<button class="btn-pri sm" id="aviso-resp-btn-' + esc(id) + '" onclick="crmAvisoResponder(\'' + esc(id) + '\')">Enviar</button>' +
+    '</div></div>';
+  setTimeout(() => document.getElementById('aviso-resp-txt-' + id)?.focus(), 30);
+}
+
+async function crmAvisoResponder(id) {
+  const txt = (document.getElementById('aviso-resp-txt-' + id)?.value || '').trim();
+  const btn = document.getElementById('aviso-resp-btn-' + id);
+  if (!txt) { showToast('Escribe la respuesta', 'error'); return; }
+  const aviso = crmAvisos.find(a => String(a.id) === String(id));
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    const d = await notaResponder(id, txt, aviso && aviso.lead_id);
+    // Responder es leerla: el servidor ya la marcó, aquí sale de la lista.
+    crmAvisos = crmAvisos.filter(a => String(a.id) !== String(id));
+    crmAvisosPorLead = {};
+    crmAvisos.forEach(a => { crmAvisosPorLead[a.lead_id] = (crmAvisosPorLead[a.lead_id] || 0) + 1; });
+    _avisosVistos = crmAvisos.length;
+    if (typeof refrescarCampana === 'function') refrescarCampana();
+    crmAvisosPanel();
+    showToast(notaRespondidaTexto(d), d.aviso && d.aviso.enviado === false ? 'info' : 'success');
+    if (aviso) lfRefrescarHistorial(aviso.lead_id);
+  } catch (e) {
+    showToast('No se pudo enviar la respuesta: ' + (e.message || 'error'), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; }
+  }
 }
 
 // Una nota sale de la campana solo cuando su lead se abre de verdad: si es de
@@ -45212,17 +45275,71 @@ function lfHistorial() {
     // Una nota dirigida se ve distinta de una nota suelta: si no, dos meses
     // después nadie sabe cuál llevó aviso. Misma regla que en el panel.
     const dirigida = a.type === 'nota' && a.metadata && a.metadata.para;
+    const esRespuesta = dirigida && a.metadata.responde_a;
     return cabecera +
-      '<div class="lf-ev"><div class="ico">' + icn(meta[1], 14) + '</div><div class="cuerpo">' +
+      '<div class="lf-ev"><div class="ico">' + icn(esRespuesta ? 'chat' : meta[1], 14) + '</div><div class="cuerpo">' +
         '<div class="cab"><span class="qui">' +
-          (dirigida ? 'Nota al responsable' : esc(meta[0])) +
+          (esRespuesta ? 'Respuesta' : dirigida ? 'Nota al responsable' : esc(meta[0])) +
           (a.metadata && a.metadata.actor ? ' · ' + esc(a.metadata.actor) : '') +
         '</span><span class="cuando">' +
           cuando.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) +
         '</span></div>' +
+        (esRespuesta && a.metadata.en_respuesta_a
+          ? '<div style="font-size:11.5px;color:var(--muted);border-left:2px solid var(--border);padding-left:8px;margin:2px 0 4px">«' + esc(String(a.metadata.en_respuesta_a).slice(0, 120)) + '»</div>' : '') +
         '<div class="txt">' + actTexto(a.content || '') + '</div>' +
+        (dirigida && lfPuedoResponder(a)
+          ? '<div style="margin-top:4px"><button class="btn-ghost sm" onclick="lfResponderAbrir(\'' + esc(a.id) + '\')">Responder</button></div>' +
+            '<div id="lf-resp-' + esc(a.id) + '"></div>'
+          : '') +
       '</div></div>';
   }).join('');
+}
+
+// Si la ficha de ese lead está abierta, su historial muestra la respuesta.
+async function lfRefrescarHistorial(leadId) {
+  if (typeof lfLead === 'undefined' || !lfLead || lfLead.id !== leadId) return;
+  try { await crmTraerActividades(leadId); lfPintar(); } catch {}
+}
+
+// ¿Participo en esta nota? Quien la escribió o a quien iba. Las del dueño no
+// guardaban autor: sin `actor_id`, es suya. El servidor lo vuelve a comprobar;
+// esto solo decide si se ve el botón.
+function lfPuedoResponder(a) {
+  const yo = (typeof clerkInstance !== 'undefined' && clerkInstance?.user?.id) || null;
+  if (!yo || !a.metadata) return false;
+  if (a.metadata.para === yo || a.metadata.actor_id === yo) return true;
+  return !a.metadata.actor_id && typeof crmSoyMiembro !== 'undefined' && !crmSoyMiembro;
+}
+
+function lfResponderAbrir(id) {
+  const caja = document.getElementById('lf-resp-' + id);
+  if (!caja) return;
+  if (caja.innerHTML) { caja.innerHTML = ''; return; }
+  caja.innerHTML = '<div style="margin-top:6px">' +
+    '<textarea id="lf-resp-txt-' + esc(id) + '" class="auto-input" rows="2" maxlength="1000" placeholder="Escribe tu respuesta…" style="width:100%;resize:vertical;font-size:12.5px"></textarea>' +
+    '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:6px">' +
+      '<button class="btn-ghost sm" onclick="document.getElementById(\'lf-resp-' + esc(id) + '\').innerHTML=\'\'">Cancelar</button>' +
+      '<button class="btn-pri sm" id="lf-resp-btn-' + esc(id) + '" onclick="lfResponder(\'' + esc(id) + '\')">Enviar</button>' +
+    '</div></div>';
+  setTimeout(() => document.getElementById('lf-resp-txt-' + id)?.focus(), 30);
+}
+
+async function lfResponder(id) {
+  const txt = (document.getElementById('lf-resp-txt-' + id)?.value || '').trim();
+  const btn = document.getElementById('lf-resp-btn-' + id);
+  if (!txt) { showToast('Escribe la respuesta', 'error'); return; }
+  const leadId = (typeof lfLead !== 'undefined' && lfLead && lfLead.id) || (crmDetailLead && crmDetailLead.id);
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    const d = await notaResponder(id, txt, leadId);
+    showToast(notaRespondidaTexto(d), d.aviso && d.aviso.enviado === false ? 'info' : 'success');
+    // Si la nota estaba en mi campana, responderla la sacó de ahí.
+    if (crmAvisos.some(a => String(a.id) === String(id))) crmAvisosCargar();
+    if (leadId) lfRefrescarHistorial(leadId);
+  } catch (e) {
+    showToast('No se pudo enviar la respuesta: ' + (e.message || 'error'), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; }
+  }
 }
 
 /** «Hoy», «Ayer» o la fecha. Un montón de fechas iguales no agrupa nada. */
