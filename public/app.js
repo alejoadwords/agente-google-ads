@@ -5134,6 +5134,9 @@ window.onload = async () => {
   // Recién terminada el alta: la bienvenida del equipo, en el chat de soporte.
   if (window._bienvenidaAhora) {
     history.replaceState({}, '', location.pathname);
+    // Su primer paso es esta bienvenida y el importador, no conectar Google Ads:
+    // la invitación a conectar no se le muestra ni hoy ni en la próxima visita.
+    try { localStorage.setItem('acuarius_welcome_connect_shown', '1'); } catch {}
     if (!enSoporte()) setTimeout(() => { sopAbrirBienvenida(); }, 1200);
   }
 
@@ -10262,6 +10265,11 @@ function showConnectionModal(platform, accountName) {
   };
   const icon  = icons[platform]  || '✅';
   const label = labels[platform] || platform;
+  // Con el chat de agentes en pausa, la auditoría por chat terminaba en un aviso
+  // de «en pausa». El siguiente paso real es el Diagnóstico de la pauta.
+  const auditaChat  = AGENTES_ACTIVOS && !!AUDIT_AGENT_KEY[platform];
+  const auditaPauta = !AGENTES_ACTIVOS && (platform === 'google_ads' || platform === 'meta_ads');
+  const conPaso = auditaChat || auditaPauta;
 
   const overlay = document.createElement('div');
   overlay.id = 'acuarius-conn-modal';
@@ -10276,8 +10284,9 @@ function showConnectionModal(platform, accountName) {
       <h2 style="font-size:22px;font-weight:700;color:var(--text);margin:0 0 8px;font-family:var(--font)">¡${label} conectado!</h2>
       <p style="font-size:15px;color:var(--text-2);margin:0 0 6px;font-family:var(--font)">Cuenta vinculada correctamente</p>
       <p style="font-size:13px;color:var(--muted2);margin:0 0 32px;font-family:var(--font);font-weight:500">${accountName}</p>
-      ${AUDIT_AGENT_KEY[platform] ? `<button id="conn-modal-audit-btn" class="btn-pri lg" style="margin-bottom:10px">✨ Auditar mi cuenta con IA ahora</button>` : ''}
-      <button id="conn-modal-settings-btn" class="${AUDIT_AGENT_KEY[platform] ? 'btn-sec lg' : 'btn-pri lg'}" style="margin-bottom:10px">Ver configuración</button>
+      ${auditaChat ? `<button id="conn-modal-audit-btn" class="btn-pri lg" style="margin-bottom:10px">✨ Auditar mi cuenta con IA ahora</button>` : ''}
+      ${auditaPauta ? `<button id="conn-modal-diag-btn" class="btn-pri lg" style="margin-bottom:10px">Ver el diagnóstico de mi cuenta</button>` : ''}
+      <button id="conn-modal-settings-btn" class="${conPaso ? 'btn-sec lg' : 'btn-pri lg'}" style="margin-bottom:10px">Ver configuración</button>
       <button id="conn-modal-close-btn" class="btn-ghost lg">Cerrar</button>
     </div>
   `;
@@ -10310,6 +10319,11 @@ function showConnectionModal(platform, accountName) {
   if (auditBtn) auditBtn.addEventListener('click', () => {
     close();
     setTimeout(() => launchInitialAudit(platform), 280);
+  });
+  const diagBtn = document.getElementById('conn-modal-diag-btn');
+  if (diagBtn) diagBtn.addEventListener('click', () => {
+    close();
+    setTimeout(() => irA('pauta-diagnostico'), 280);
   });
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 }
@@ -26626,10 +26640,20 @@ window.addEventListener('keydown', e => {
 // reales antes de que el usuario escriba un solo mensaje.
 // (AUDIT_PROMPTS y AUDIT_AGENT_KEY declarados antes de showConnectionModal)
 
-// ── BIENVENIDA "PRIMER WOW EN 3 MINUTOS" ──────────────────────────────────────
-// Invita al usuario nuevo a conectar su cuenta de ads para recibir una
-// auditoría automática. Se muestra una sola vez: al terminar el tour, o al
-// entrar si ya hizo el tour pero nunca conectó una plataforma.
+// ── BIENVENIDA: CONECTAR GOOGLE ADS ──────────────────────────────────────────
+// Invita al usuario nuevo a conectar su cuenta de Google Ads. Se muestra una
+// sola vez: al terminar el tour, o al entrar si ya hizo el tour pero nunca
+// conectó una plataforma.
+//
+// Antes prometía «tu primera auditoría con IA» por el chat del agente, que hoy
+// está en pausa (AGENTES_ACTIVOS): quien conectaba llegaba a un aviso de
+// «en pausa». Ahora promete solo lo que de verdad pasa al conectar, que vive en
+// Plataformas de pauta (Campañas, Diagnóstico y Analista IA). Meta no se ofrece
+// como botón: sin App Review nadie puede conectarla, y un botón que lleva a un
+// error parece culpa del cliente.
+//
+// Quien entra por el alta guiada (/registro, ?bienvenida=1) no lo ve: su primer
+// paso es la bienvenida del soporte y, si lo pidió, el importador.
 function welcomeConnectShouldShow() {
   if (enSoporte() || window._bienvenidaAhora) return false;
   try {
@@ -26644,27 +26668,40 @@ function welcomeConnectShouldShow() {
   } catch { return false; }
 }
 
+function cerrarWelcomeConnect() {
+  document.getElementById('welcome-connect-modal')?.remove();
+}
+
 function showWelcomeConnect() {
   if (!welcomeConnectShouldShow()) return;
   try { localStorage.setItem('acuarius_welcome_connect_shown', '1'); } catch {}
 
+  const punto = t =>
+    '<li style="display:flex;gap:10px;align-items:flex-start;margin-bottom:9px">' +
+      '<span style="color:var(--blue);flex-shrink:0;margin-top:2px">' + icn('check', 14) + '</span>' +
+      '<span>' + t + '</span>' +
+    '</li>';
+
   const overlay = document.createElement('div');
   overlay.id = 'welcome-connect-modal';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:99990;display:flex;align-items:center;justify-content:center;background:rgba(10,12,40,.45);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);animation:fadeInOverlay .3s ease;padding:20px';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99990;display:flex;align-items:center;justify-content:center;background:rgba(10,12,40,.45);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);animation:fadeInOverlay .3s ease;padding:16px';
   overlay.innerHTML =
-    '<div style="background:var(--bg,#fff);border-radius:20px;padding:36px 34px 30px;max-width:460px;width:100%;box-shadow:0 32px 90px rgba(10,12,40,.4);animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">' +
-      '<div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1E2BCC,#00B8CE);display:flex;align-items:center;justify-content:center;margin-bottom:18px">' +
-        '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
+    '<div role="dialog" aria-modal="true" aria-labelledby="wc-titulo" style="background:var(--bg);border-radius:20px;padding:32px 30px 24px;max-width:460px;width:100%;max-height:calc(100vh - 32px);overflow-y:auto;box-shadow:var(--shadow-lg);animation:scaleInCard .35s cubic-bezier(.34,1.56,.64,1)">' +
+      '<div style="width:48px;height:48px;border-radius:14px;background:var(--blue-lt);color:var(--blue);display:flex;align-items:center;justify-content:center;margin-bottom:16px">' + icn('trend', 24) + '</div>' +
+      '<h2 id="wc-titulo" style="font-size:var(--fs-lg);font-weight:800;color:var(--text);margin:0 0 8px;font-family:var(--font);letter-spacing:-.3px">Mira qué hace tu pauta con tus leads</h2>' +
+      '<p style="font-size:var(--fs-base);color:var(--text-2);margin:0 0 14px;font-family:var(--font);line-height:1.6">Conecta tu cuenta de Google Ads —en solo lectura: Acuarius no pausa ni cambia nada— y en <b>Plataformas de pauta</b> verás:</p>' +
+      '<ul style="list-style:none;padding:0;margin:0 0 20px;font-size:var(--fs-base);color:var(--text);font-family:var(--font);line-height:1.5">' +
+        punto('Lo que gastó cada campaña y qué pasó con esos leads dentro de tu CRM.') +
+        punto('Un diagnóstico con los errores que te están costando plata, cada uno con el número que lo sostiene.') +
+        punto('El Analista IA: una revisión de la cuenta entera con propuestas que tú apruebas o descartas.') +
+      '</ul>' +
+      '<button class="btn-pri lg" style="margin-bottom:10px" onclick="cerrarWelcomeConnect();connectGoogleAds()">Conectar Google Ads</button>' +
+      '<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border:1px dashed var(--border);border-radius:11px;margin-bottom:6px;font-family:var(--font)">' +
+        '<span style="flex:1;font-size:var(--fs-base);font-weight:600;color:var(--muted2)">Meta Ads</span>' +
+        '<span class="pauta-pill pauta-pill-ojo">Pronto</span>' +
       '</div>' +
-      '<h2 style="font-size:21px;font-weight:800;color:var(--text,#111);margin:0 0 8px;font-family:var(--font);letter-spacing:-.3px">Tu primera auditoría con IA, en 3 minutos</h2>' +
-      '<p style="font-size:13.5px;color:var(--text-2,#555);margin:0 0 22px;font-family:var(--font);line-height:1.6">Conecta tu cuenta de anuncios y el agente la revisará al instante: campañas, presupuesto, gasto desperdiciado y los 3 hallazgos más importantes con acciones concretas. Sin costo, incluido en tu plan Free.</p>' +
-      '<button onclick="document.getElementById(\'welcome-connect-modal\').remove();connectGoogleAds()" style="width:100%;display:flex;align-items:center;gap:12px;padding:13px 16px;background:transparent;border:1.5px solid var(--border,var(--border));border-radius:12px;font-size:14px;font-weight:600;color:var(--text,#111);cursor:pointer;font-family:var(--font);margin-bottom:10px;transition:all .15s;text-align:left" onmouseover="this.style.borderColor=\'#1E2BCC\';this.style.background=\'var(--blue-lt,#EEF0FD)\'" onmouseout="this.style.borderColor=\'var(--border,var(--border))\';this.style.background=\'transparent\'">' +
-        '<span style="font-size:18px">🎯</span><span style="flex:1">Conectar Google Ads</span><span style="color:var(--muted2,#999);font-size:12px">→</span>' +
-      '</button>' +
-      '<button onclick="document.getElementById(\'welcome-connect-modal\').remove();connectMetaAds()" style="width:100%;display:flex;align-items:center;gap:12px;padding:13px 16px;background:transparent;border:1.5px solid var(--border,var(--border));border-radius:12px;font-size:14px;font-weight:600;color:var(--text,#111);cursor:pointer;font-family:var(--font);margin-bottom:16px;transition:all .15s;text-align:left" onmouseover="this.style.borderColor=\'#1E2BCC\';this.style.background=\'var(--blue-lt,#EEF0FD)\'" onmouseout="this.style.borderColor=\'var(--border,var(--border))\';this.style.background=\'transparent\'">' +
-        '<span style="font-size:18px">📘</span><span style="flex:1">Conectar Meta Ads</span><span style="color:var(--muted2,#999);font-size:12px">→</span>' +
-      '</button>' +
-      '<button class="btn-ghost lg" onclick="document.getElementById(\'welcome-connect-modal\').remove()">Explorar la plataforma primero</button>' +
+      '<p style="font-size:var(--fs-xs);color:var(--muted);margin:0 0 16px;font-family:var(--font);line-height:1.5">Meta está revisando nuestra aplicación; te avisamos el día que puedas conectarla. Mientras tanto, los leads de tus formularios de Meta sí entran al CRM.</p>' +
+      '<button class="btn-ghost" style="width:100%" onclick="cerrarWelcomeConnect()">Explorar la plataforma primero</button>' +
     '</div>';
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
@@ -27188,7 +27225,7 @@ async function renderPulso(force) {
       cards = [{
         tone: 'info',
         title: 'Activa tu Pulso diario',
-        body: 'Conecta Google Ads o Meta para vigilar tus campañas y ver aquí lo importante cada día.',
+        body: 'Conecta Google Ads para vigilar tus campañas y ver aquí lo importante cada día.',
         actLabel: 'Conectar ahora →',
         act: () => { try { localStorage.removeItem('acuarius_welcome_connect_shown'); } catch {} showWelcomeConnect(); },
       }];
