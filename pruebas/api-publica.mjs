@@ -20,12 +20,15 @@ process.env.RESEND_API_KEY ||= 're_simulado';
 const T = Date.now();
 const DUENO = 'user_prueba_api_' + T, GRATIS = 'user_prueba_api_free_' + T, OTRA = 'user_prueba_api_otra_' + T;
 const MIEMBRO = 'user_prueba_api_miembro_' + T;
+const ADMIN = 'user_prueba_api_admin_' + T;
 const SB = process.env.SUPABASE_URL, KEY = process.env.SUPABASE_SERVICE_KEY;
 const sbH = { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' };
 
 // ── Clerk, Resend y el receptor de avisos, simulados ────────────────────────
 const usuarios = {
-  [DUENO]:  { id: DUENO, public_metadata: { plan: 'pro' }, email_addresses: [{ email_address: `dueno${T}@prueba.test` }] },
+  [DUENO]:  { id: DUENO, public_metadata: { plan: 'pro' }, two_factor_enabled: true, primary_email_address_id: 'e1', email_addresses: [{ id: 'e1', email_address: `dueno${T}@prueba.test` }] },
+  [ADMIN]:  { id: ADMIN, public_metadata: { plan: 'trial' }, two_factor_enabled: true, email_addresses: [{ email_address: `admin${T}@prueba.test` }] },
+  [MIEMBRO]: { id: MIEMBRO, public_metadata: { plan: 'trial' }, two_factor_enabled: false, email_addresses: [{ email_address: `miembro${T}@prueba.test` }] },
   [GRATIS]: { id: GRATIS, public_metadata: { plan: 'free' }, email_addresses: [{ email_address: `gratis${T}@prueba.test` }] },
   [OTRA]:   { id: OTRA, public_metadata: { plan: 'pro' }, email_addresses: [{ email_address: `otra${T}@prueba.test` }] },
 };
@@ -99,6 +102,7 @@ await sbPost('close_reasons', [
   { user_id: DUENO, kind: 'lost', label: 'Sin presupuesto', position: 1 },
 ]);
 await sbPost('team_members', { owner_user_id: DUENO, member_user_id: MIEMBRO, member_email: `miembro${T}@prueba.test`, member_name: 'Asesora Prueba', role: 'vendedor', status: 'active', invite_token: 'tok' + T });
+await sbPost('team_members', { owner_user_id: DUENO, member_user_id: ADMIN, member_email: `admin${T}@prueba.test`, member_name: 'Admin Prueba', role: 'admin', status: 'active', invite_token: 'tka' + T });
 [auto] = await sbPost('automations', { user_id: DUENO, client_id: null, name: 'Prueba API', active: true, trigger: { type: 'stage_changed', stage: 'calificado' }, steps: [] });
 [ajeno] = await sbPost('leads', { user_id: OTRA, name: 'Lead ajeno', stage: 'nuevo', stage_position: 0, source: 'manual' });
 
@@ -119,6 +123,17 @@ await sbPost('team_members', { owner_user_id: DUENO, member_user_id: MIEMBRO, me
   ok(p.s === 200 && p.d.llaves.some(l => l.id === filaLlave.id) && !('hash' in p.d.llaves[0]), 'la lista la muestra sin el hash');
   p = await panel(MIEMBRO);
   ok(p.s === 403, 'una asesora (perfil Ventas) no gestiona la API');
+  ok(correos.some(c => c.to === `dueno${T}@prueba.test` && /Se creó una llave/.test(c.subject) && /Agente de prueba/.test(c.html)), 'al dueño le llega el aviso de la llave nueva');
+
+  console.log('Verificación en dos pasos');
+  usuarios[DUENO].two_factor_enabled = false;
+  p = await panel(DUENO);
+  ok(p.s === 200 && p.d.dos_pasos === false, 'la pantalla sabe que no la tiene');
+  p = await panel(DUENO, 'POST', { accion: 'crear_llave', nombre: 'Sin dos pasos', permisos: ['leads:leer'] });
+  ok(p.s === 403 && p.d.requiere_2fa === true, 'sin verificación en dos pasos no se crea una llave');
+  p = await panel(DUENO, 'POST', { accion: 'crear_webhook', url: `https://receptor-${T}.prueba.test/x`, eventos: ['lead.creado'] });
+  ok(p.s === 403 && p.d.requiere_2fa === true, 'ni un webhook');
+  usuarios[DUENO].two_factor_enabled = true;
 
   console.log('Puerta');
   let r = await api(null, 'GET', '');
@@ -258,14 +273,57 @@ await sbPost('team_members', { owner_user_id: DUENO, member_user_id: MIEMBRO, me
   r = await api(LLAVE2, 'GET', '');
   ok(r.s === 429 && r.d.codigo === 'limite_minuto' && r.h.get('retry-after'), 'pasado el límite por minuto: 429 con Retry-After');
 
+  console.log('Límite de cambios');
+  p = await panel(DUENO, 'POST', { accion: 'crear_llave', nombre: 'Agente apurado', permisos: ['leads:leer', 'leads:escribir'] });
+  const LLAVE3 = p.d.llave;
+  await sbPatch(`api_llaves?id=eq.${p.d.fila.id}`, { limite_escrituras_minuto: 1 });
+  r = await api(LLAVE3, 'POST', `leads/${LEAD}/notas`, { texto: 'primera' });
+  ok(r.s === 201, 'el primer cambio pasa');
+  r = await api(LLAVE3, 'POST', `leads/${LEAD}/notas`, { texto: 'segunda' });
+  ok(r.s === 429 && r.d.codigo === 'limite_escrituras', 'el segundo choca con el límite de cambios');
+  r = await api(LLAVE3, 'GET', `leads/${LEAD}`);
+  ok(r.s === 200, 'pero las consultas siguen pasando');
+
+  console.log('Tope de la cuenta');
+  process.env.API_LIMITE_CUENTA_MINUTO = '1';
+  r = await api(LLAVE3, 'GET', '');
+  ok(r.s === 429 && r.d.codigo === 'limite_cuenta', 'entre todas sus llaves, la cuenta tiene tope por minuto');
+  delete process.env.API_LIMITE_CUENTA_MINUTO;
+
+  console.log('Quien creó la llave se va del equipo');
+  p = await panel(ADMIN, 'POST', { accion: 'crear_llave', nombre: 'Llave del admin', permisos: ['leads:leer'] });
+  ok(p.s === 201, 'un administrador del equipo crea una llave');
+  const LLAVE_ADMIN = p.d.llave, ID_LLAVE_ADMIN = p.d.fila.id;
+  ok(correos.some(c => /Se creó una llave/.test(c.subject) && /Admin Prueba/.test(c.html)), 'y el dueño se entera de quién la creó');
+  p = await panel(ADMIN, 'POST', { accion: 'crear_webhook', url: `https://receptor-${T}.prueba.test/admin`, eventos: ['lead.creado'] });
+  ok(p.s === 201, 'y un webhook');
+  const WH_ADMIN = p.d.fila.id;
+  await sbPatch(`team_members?owner_user_id=eq.${DUENO}&member_user_id=eq.${ADMIN}`, { role: 'vendedor' });
+  r = await api(LLAVE_ADMIN, 'GET', '');
+  ok(r.s === 401 && r.d.codigo === 'llave_revocada', 'le bajan el perfil: su llave deja de entrar');
+  const revocada = (await sbGet(`api_llaves?id=eq.${ID_LLAVE_ADMIN}&select=revocada_at,revocada_por`))[0];
+  ok(revocada.revocada_at && revocada.revocada_por === 'sistema', 'y queda revocada en la base, no solo rechazada');
+  ok(correos.some(c => /revocó una llave/.test(c.subject) && /ya no es administrador/.test(c.html)), 'el dueño recibe el porqué');
+  const [otroLead] = await sbPost('leads', { user_id: DUENO, name: 'Dispara el webhook del admin', stage: 'nuevo', stage_position: 0, source: 'manual', pipeline_id: proceso.id });
+  await cron(new Request('https://app.acuarius.app/api/cron-webhooks', { headers: { authorization: 'Bearer ' + process.env.CRON_SECRET } }));
+  const whAdmin = (await sbGet(`api_webhooks?id=eq.${WH_ADMIN}&select=activo,desactivado_motivo`))[0];
+  ok(whAdmin.activo === false && /ya no es administrador/.test(whAdmin.desactivado_motivo), 'su webhook se desactiva solo antes de mandar nada');
+  ok(!avisos.some(a => a.url.endsWith('/admin')), 'y no le llegó ningún dato');
+  ok(correos.some(c => /desactivó un webhook/.test(c.subject)), 'y el dueño se entera');
+  await sbDel(`api_webhooks?id=eq.${WH_ADMIN}`);
+  await sbDel(`leads?id=eq.${otroLead.id}`);
+
   console.log('Plan y revocación');
   const { generarLlave } = await import('../api/_api-llaves.js');
   const g = await generarLlave();
   await sbPost('api_llaves', { user_id: GRATIS, nombre: 'Llave vieja', prefijo: g.prefijo, hash: g.hash, permisos: ['leads:leer'], creada_por: GRATIS });
   r = await api(g.llave, 'GET', 'leads');
   ok(r.s === 403 && r.d.codigo === 'plan_sin_api', 'una cuenta que bajó a gratis: su llave deja de servir (403)');
+  usuarios[DUENO].two_factor_enabled = false;
   p = await panel(DUENO, 'POST', { accion: 'revocar_llave', id: filaLlave.id });
-  ok(p.s === 200, 'revoca desde Configuración');
+  ok(p.s === 200, 'revoca desde Configuración (revocar no pide verificación en dos pasos)');
+  ok(correos.some(c => /Se revocó una llave/.test(c.subject)), 'y el dueño recibe el aviso');
+  usuarios[DUENO].two_factor_enabled = true;
   r = await api(LLAVE, 'GET', '');
   ok(r.s === 401 && r.d.codigo === 'llave_revocada', 'la llave revocada ya no entra');
 
@@ -341,6 +399,7 @@ await sbPost('team_members', { owner_user_id: DUENO, member_user_id: MIEMBRO, me
   await sbDel(`close_reasons?user_id=eq.${DUENO}`);
   await sbDel(`lead_tags?user_id=eq.${DUENO}`);
   await sbDel(`team_members?owner_user_id=eq.${DUENO}`);
+  await sbDel(`api_uso_cuenta?user_id=in.${cuentas}`);
   await sbDel(`api_webhooks?user_id=in.${cuentas}`);
   if (llaves) {
     await sbDel(`api_uso?llave_id=in.(${llaves})`);

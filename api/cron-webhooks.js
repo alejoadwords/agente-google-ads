@@ -12,7 +12,7 @@
 export const config = { runtime: 'edge' };
 
 import { latir } from './_latido.js';
-import { entregarAviso, sbHeaders } from './_api-llaves.js';
+import { entregarAviso, sbHeaders, creadorVigente, avisarDueno, fechaAviso } from './_api-llaves.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const ESPERAS_MIN = [1, 5, 15, 60, 240, 720];
@@ -70,6 +70,35 @@ async function procesar(e, webhook) {
   return { ok: false, webhook: webhook.id, error: r.error };
 }
 
+// Un webhook que creó un administrador que ya no lo es (lo sacaron del equipo
+// o le bajaron el perfil) se apaga antes de mandar nada: quien se va no puede
+// seguir recibiendo los datos de la cuenta en su servidor. Igual que las llaves
+// en api/v1.js. Si no se puede comprobar, ese webhook no se toca en esta vuelta.
+async function apagarHuerfanos(webhooks) {
+  for (const w of webhooks.values()) {
+    if (!w.activo || !w.creado_por || w.creado_por === w.user_id) continue;
+    let c;
+    // Sin poder comprobarlo no se entrega ni se descarta: sus entregas ya
+    // quedaron reservadas cinco minutos y salen en una vuelta siguiente.
+    try { c = await creadorVigente(w.user_id, w.creado_por); } catch { w._esperar = true; continue; }
+    if (c.vigente) continue;
+    const motivo = `Se desactivó solo el ${new Date().toISOString().slice(0, 10)} porque ${c.motivo}.`;
+    const filas = await sb(`/api_webhooks?id=eq.${w.id}&activo=is.true`, {
+      method: 'PATCH', prefer: 'return=representation', body: { activo: false, desactivado_motivo: motivo },
+    });
+    w.activo = false;
+    if (filas?.length) {
+      await avisarDueno(w.user_id, {
+        asunto: 'Acuarius desactivó un webhook de tu cuenta',
+        titulo: 'Desactivamos un webhook',
+        intro: `Dejamos de enviar avisos a esta dirección porque ${c.motivo}. Quien sale del equipo no se lleva los datos de tu cuenta.`,
+        filas: [['Dirección', w.url], ['Cuándo', fechaAviso()]],
+        pie: 'Si esa dirección debe seguir recibiendo avisos, actívala de nuevo desde Configuración → API y agentes.',
+      });
+    }
+  }
+}
+
 // Una sola escritura por webhook y ejecución, no una por entrega.
 async function anotarWebhooks(resultados, webhooks) {
   const porWebhook = new Map();
@@ -107,6 +136,8 @@ async function limpiar() {
   const ayer = new Date(Date.now() - 86400000).toISOString();
   // Las ventanas son 'm:AAAA-MM-DDTHH:MM' y 'd:AAAA-MM-DD': se comparan como texto.
   await sb(`/api_uso?ventana=lt.${encodeURIComponent('m:' + ayer.slice(0, 16))}&ventana=like.m:*`, { method: 'DELETE', prefer: 'return=minimal' });
+  await sb(`/api_uso?ventana=lt.${encodeURIComponent('w:' + ayer.slice(0, 16))}&ventana=like.w:*`, { method: 'DELETE', prefer: 'return=minimal' });
+  await sb(`/api_uso_cuenta?ventana=lt.${encodeURIComponent('m:' + ayer.slice(0, 16))}`, { method: 'DELETE', prefer: 'return=minimal' });
   await sb(`/api_uso?ventana=lt.${encodeURIComponent('d:' + new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10))}&ventana=like.d:*`, { method: 'DELETE', prefer: 'return=minimal' });
 }
 
@@ -123,10 +154,12 @@ export default async function handler(req) {
       if (!lote.length) break;
       const ids = [...new Set(lote.map(e => e.webhook_id))];
       const webhooks = new Map((await sb(`/api_webhooks?id=in.(${ids.join(',')})&select=*`) || []).map(w => [w.id, w]));
+      await apagarHuerfanos(webhooks);
       const resultados = [];
       for (let i = 0; i < lote.length; i += PARALELO) {
-        resultados.push(...await Promise.all(lote.slice(i, i + PARALELO).map(e =>
-          procesar(e, webhooks.get(e.webhook_id)).catch(err => ({ ok: false, error: err.message })))));
+        resultados.push(...await Promise.all(lote.slice(i, i + PARALELO)
+          .filter(e => !webhooks.get(e.webhook_id)?._esperar)
+          .map(e => procesar(e, webhooks.get(e.webhook_id)).catch(err => ({ ok: false, error: err.message })))));
       }
       await anotarWebhooks(resultados, webhooks);
       for (const r of resultados) { if (r.ok) total.enviadas++; else total.fallidas++; }

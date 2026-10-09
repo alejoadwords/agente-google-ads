@@ -99,10 +99,11 @@ td{border-bottom:1px solid var(--border);padding:7px 10px;vertical-align:top;col
 <p><strong>Todo queda firmado.</strong> Cada cambio aparece en el historial del prospecto con el nombre de la llave, igual que si lo hubiera hecho alguien del equipo.</p>
 <p><strong>Nunca borra.</strong> No existe ninguna ruta para borrar prospectos, tareas ni notas.</p>
 <p><strong>No toca Marketing.</strong> La API no envía campañas ni mensajes, y no crea ni cambia automatizaciones, páginas de aterrizaje, formularios, plantillas ni listas. Eso lo maneja tu equipo desde Acuarius. Si mover un prospecto de etapa cumple la condición de una automatización que tu equipo creó, esa automatización corre igual que si lo hubiera movido una persona.</p>
+<p><strong>Seguridad de las llaves.</strong> Para crear una llave o un webhook hay que tener activa la verificación en dos pasos. Al dueño de la cuenta le llega un correo cada vez que alguien crea o revoca una llave, o añade, cambia o elimina un webhook. Si quien creó una llave o un webhook era un administrador del equipo y deja de serlo (lo sacan o le cambian el perfil), su llave se revoca y su webhook se desactiva solos.</p>
 <p><strong>Plan.</strong> La API está en los planes Pro y Agency (y durante la prueba de 14 días). Si la cuenta pasa a gratis, sus llaves dejan de funcionar.</p>
 
 <h2 id="limites">Límites</h2>
-<p>Cada llave tiene <strong>120 llamadas por minuto</strong> y <strong>20.000 por día</strong> (el día se reinicia a medianoche UTC). Cada respuesta trae cuánto llevas: <code>X-Uso-Minuto</code>, <code>X-Limite-Minuto</code>, <code>X-Uso-Dia</code> y <code>X-Limite-Dia</code>. Al pasarte recibes <code>429</code> con <code>Retry-After</code> en segundos. Las listas devuelven como mucho 100 elementos por página. Si tu caso necesita más, escríbenos.</p>
+<p>Cada llave tiene <strong>120 llamadas por minuto</strong>, de las cuales como mucho <strong>30 pueden ser cambios</strong> (<code>POST</code> o <code>PATCH</code>), y <strong>20.000 llamadas por día</strong> (el día se reinicia a medianoche UTC). Además, entre todas las llaves de una cuenta caben <strong>300 llamadas por minuto</strong>. Cada respuesta trae cuánto llevas: <code>X-Uso-Minuto</code>, <code>X-Limite-Minuto</code>, <code>X-Uso-Dia</code> y <code>X-Limite-Dia</code>; <code>GET /</code> muestra todos los límites. Al pasarte recibes <code>429</code> con <code>Retry-After</code> en segundos. Las listas devuelven como mucho 100 elementos por página. Si tu caso necesita más, escríbenos.</p>
 
 <h2 id="errores">Errores</h2>
 <p>Todo error trae un mensaje en español y un código estable para que tu sistema decida sin leer el texto:</p>
@@ -116,7 +117,7 @@ td{border-bottom:1px solid var(--border);padding:7px 10px;vertical-align:top;col
   <tr><td>404</td><td><code>no_encontrado</code> <code>ruta_desconocida</code></td><td>Ese id no existe en esta cuenta.</td></tr>
   <tr><td>409</td><td><code>duplicado</code> <code>idempotencia_en_curso</code> <code>anulada</code></td><td>Mira el detalle de la respuesta.</td></tr>
   <tr><td>422</td><td><code>falta_campo</code> <code>campo_invalido</code> <code>fecha_invalida</code> <code>etapa_desconocida</code> <code>falta_motivo</code> <code>motivo_desconocido</code> <code>etapa_pide_cita</code> <code>etapa_de_cierre</code> <code>usa_otra_ruta</code></td><td>Corrige lo que pide el mensaje. Muchas respuestas traen las opciones válidas.</td></tr>
-  <tr><td>429</td><td><code>limite_minuto</code> <code>limite_dia</code></td><td>Espera lo que dice <code>Retry-After</code>.</td></tr>
+  <tr><td>429</td><td><code>limite_minuto</code> <code>limite_escrituras</code> <code>limite_cuenta</code> <code>limite_dia</code></td><td>Espera lo que dice <code>Retry-After</code>.</td></tr>
   <tr><td>5xx</td><td><code>error_interno</code> <code>plan_no_disponible</code> <code>limite_no_disponible</code></td><td>Reintenta con espera creciente.</td></tr>
 </table>
 

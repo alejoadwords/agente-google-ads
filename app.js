@@ -33377,7 +33377,22 @@ function cfgApiPintar() {
     '<label class="api-opcion"><input type="checkbox" name="cfg-api-evento" value="' + esc(e.clave) + '">' +
     '<span>' + esc(e.nombre) + '<small>' + esc(e.clave) + '</small></span></label>').join('');
 
+  // Crear o redirigir exige la verificación en dos pasos de quien mira (el
+  // servidor lo vuelve a comprobar). Revocar y apagar, nunca.
+  const sin2fa = d.dos_pasos !== true;
+  const bloqueo = sin2fa ? ' disabled title="Activa la verificación en dos pasos para crear"' : '';
   caja.innerHTML =
+    (sin2fa
+      ? '<div style="border:1.5px solid var(--warning);background:var(--warning-bg);border-radius:11px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;line-height:1.55">' +
+          '<strong>Activa la verificación en dos pasos para crear llaves y webhooks.</strong> ' +
+          (d.dos_pasos === null
+            ? 'No pudimos comprobar si la tienes activa; vuelve a intentarlo en un momento.'
+            : 'Una llave abre tu cuenta a otro sistema: pedimos que quien la crea confirme que es de verdad quien dice ser. Revocar y desactivar siguen disponibles.') +
+          '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
+            '<button class="btn-pri sm" onclick="clerkInstance?.openUserProfile?.()">Activar ahora</button>' +
+            '<button class="btn-ghost sm" onclick="cfgApiCargar()">Ya la activé</button>' +
+          '</div></div>'
+      : '') +
     '<div class="api-bloque-titulo">Llaves</div>' +
     '<div class="api-bloque-sub">Cada sistema que se conecte lleva su propia llave, con solo los permisos que necesita. Si una llave se filtra o deja de usarse, revócala: deja de funcionar al instante.</div>' +
     cfgApiListaLlaves(d, nombreCliente) +
@@ -33386,7 +33401,7 @@ function cfgApiPintar() {
       '<input class="auto-input" id="cfg-api-nombre" maxlength="60" placeholder="Nombre que firmará en el historial, p. ej. «Agente de seguimiento»" style="width:100%;box-sizing:border-box">' +
       '<div style="font-size:11.5px;color:var(--muted);margin:10px 0 2px">Qué puede hacer</div>' + permisos +
       cfgApiSelectorCliente('cfg-api-cliente') +
-      '<button class="btn-pri sm" id="cfg-api-crear" style="margin-top:12px" onclick="cfgApiCrearLlave()">Crear llave</button>' +
+      '<button class="btn-pri sm" id="cfg-api-crear" style="margin-top:12px" onclick="cfgApiCrearLlave()"' + bloqueo + '>Crear llave</button>' +
     '</div>' +
 
     '<div class="api-bloque">' +
@@ -33398,7 +33413,7 @@ function cfgApiPintar() {
         '<input class="auto-input" id="cfg-api-url" maxlength="500" placeholder="https://tu-servidor.com/acuarius" style="width:100%;box-sizing:border-box">' +
         '<div style="font-size:11.5px;color:var(--muted);margin:10px 0 2px">Avisar cuando</div>' + eventos +
         cfgApiSelectorCliente('cfg-api-wh-cliente') +
-        '<button class="btn-pri sm" id="cfg-api-wh-crear" style="margin-top:12px" onclick="cfgApiCrearWebhook()">Añadir webhook</button>' +
+        '<button class="btn-pri sm" id="cfg-api-wh-crear" style="margin-top:12px" onclick="cfgApiCrearWebhook()"' + bloqueo + '>Añadir webhook</button>' +
       '</div>' +
     '</div>' +
 
@@ -33462,6 +33477,11 @@ async function cfgApiPost(cuerpo) {
   const r = await fetchAuth('/api/llaves-api', { method: 'POST', body: JSON.stringify(cuerpo) });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+  // Cada cambio le manda un aviso de seguridad al dueño. Si no salió, se dice:
+  // el dueño cree que se entera de todo.
+  if (d.aviso && d.aviso.enviado === false) {
+    showToast('Hecho, pero no se pudo enviar el aviso por correo al dueño de la cuenta.', 'info');
+  }
   return d;
 }
 

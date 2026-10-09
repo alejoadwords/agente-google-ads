@@ -15,6 +15,7 @@ import { quienPregunta } from './_perfiles.js';
 import {
   sbHeaders, PERMISOS, CLAVES_PERMISOS, EVENTOS, CLAVES_EVENTOS, MAX_LLAVES, MAX_WEBHOOKS,
   generarLlave, generarSecretoWebhook, validarUrlWebhook, cuentaConApi, entregarAviso,
+  tieneDosPasos, avisarDueno, fechaAviso,
 } from './_api-llaves.js';
 import { cifrar } from './_cifrado.js';
 
@@ -84,8 +85,13 @@ export default async function handler(req) {
         sb(`/api_llaves?user_id=eq.${encodeURIComponent(cuenta)}&select=${COLS_LLAVE}&order=created_at.desc`),
         sb(`/api_webhooks?user_id=eq.${encodeURIComponent(cuenta)}&select=${COLS_WEBHOOK}&order=created_at.asc`),
       ]);
+      // Si quien mira puede crear o no: la pantalla lo dice antes de que lo
+      // intente. Si Clerk no responde se pinta como «no», y crear lo vuelve
+      // a comprobar de todos modos.
+      const dosPasos = await tieneDosPasos(quien.actorId).catch(() => null);
       return jsonResp({
         plan_permite: plan.permitido,
+        dos_pasos: dosPasos,
         permisos: PERMISOS, eventos: EVENTOS,
         llaves: llaves || [], webhooks: webhooks || [],
         cliente_fijo: quien.cliente || null,
@@ -103,6 +109,24 @@ export default async function handler(req) {
     if (crea && !plan.permitido) {
       return jsonResp({ error: 'La API está en los planes Pro y Agency. Mejora tu plan para conectar sistemas externos.', plan_sin_api: true }, 403);
     }
+    // Abrir o redirigir una puerta a la cuenta exige la verificación en dos
+    // pasos de QUIEN lo hace (no del dueño): una contraseña robada no basta
+    // para crear una llave que luego sobrevive al cambio de contraseña.
+    // Revocar, desactivar y eliminar nunca la piden: cerrar tiene que ser fácil.
+    const abre = ['crear_llave', 'crear_webhook', 'rotar_secreto'].includes(accion) ||
+      (accion === 'editar_webhook' && b.url !== undefined);
+    if (abre) {
+      let ok;
+      try { ok = await tieneDosPasos(quien.actorId); }
+      catch { return jsonResp({ error: 'No se pudo comprobar tu verificación en dos pasos. Reintenta en unos segundos.' }, 503); }
+      if (!ok) {
+        return jsonResp({
+          error: 'Para esto necesitas activar la verificación en dos pasos en tu usuario: Configuración → Seguridad → Configurar 2FA.',
+          requiere_2fa: true,
+        }, 403);
+      }
+    }
+    const quienLoHizo = quien.esDueno ? 'El dueño de la cuenta' : (quien.nombre || 'Un administrador del equipo');
     // Un administrador atado a un cliente solo crea llaves de ese cliente.
     const cliente = quien.cliente || (typeof b.client_id === 'string' && b.client_id.trim() ? b.client_id.trim().slice(0, 80) : null);
 
@@ -122,7 +146,17 @@ export default async function handler(req) {
         },
       });
       const f = filas?.[0];
-      return jsonResp({ llave, fila: Object.fromEntries(COLS_LLAVE.split(',').map(k => [k, f?.[k] ?? null])) }, 201);
+      const aviso = await avisarDueno(cuenta, {
+        asunto: 'Se creó una llave de la API en tu cuenta de Acuarius',
+        titulo: 'Se creó una llave de la API',
+        intro: 'Con esta llave un sistema externo puede entrar a tu cuenta con los permisos de abajo.',
+        filas: [
+          ['Llave', `${nombre} (${prefijo}…)`], ['Creada por', quienLoHizo], ['Cuándo', fechaAviso()],
+          ['Permisos', permisos.map(p => (PERMISOS.find(x => x.clave === p) || {}).nombre || p).join(', ')],
+          ['Alcance', cliente ? 'Un cliente' : 'Toda la cuenta'],
+        ],
+      });
+      return jsonResp({ llave, aviso, fila: Object.fromEntries(COLS_LLAVE.split(',').map(k => [k, f?.[k] ?? null])) }, 201);
     }
 
     if (accion === 'revocar_llave') {
@@ -132,7 +166,14 @@ export default async function handler(req) {
         body: { revocada_at: new Date().toISOString(), revocada_por: quien.actorId },
       });
       if (!filas?.length) return jsonResp({ error: 'Esa llave no existe o ya estaba revocada.' }, 404);
-      return jsonResp({ ok: true });
+      const aviso = await avisarDueno(cuenta, {
+        asunto: 'Se revocó una llave de la API de tu cuenta de Acuarius',
+        titulo: 'Se revocó una llave de la API',
+        intro: 'Esta llave ya no puede entrar a tu cuenta.',
+        filas: [['Llave', `${filas[0].nombre} (${filas[0].prefijo}…)`], ['Revocada por', quienLoHizo], ['Cuándo', fechaAviso()]],
+        pie: 'Si no reconoces este cambio, escríbenos a soporte@acuarius.app.',
+      });
+      return jsonResp({ ok: true, aviso });
     }
 
     if (accion === 'crear_webhook') {
@@ -148,7 +189,16 @@ export default async function handler(req) {
         body: { user_id: cuenta, client_id: cliente, url: v.url, eventos, secreto: await cifrar(secreto), creado_por: quien.actorId },
       });
       const f = filas?.[0];
-      return jsonResp({ secreto, fila: Object.fromEntries(COLS_WEBHOOK.split(',').map(k => [k, f?.[k] ?? null])) }, 201);
+      const aviso = await avisarDueno(cuenta, {
+        asunto: 'Se añadió un webhook a tu cuenta de Acuarius',
+        titulo: 'Se añadió un webhook',
+        intro: 'Acuarius va a enviar a esta dirección los datos de los eventos de abajo.',
+        filas: [
+          ['Dirección', v.url], ['Añadido por', quienLoHizo], ['Cuándo', fechaAviso()],
+          ['Avisa cuando', eventos.map(e => (EVENTOS.find(x => x.clave === e) || {}).nombre || e).join(', ')],
+        ],
+      });
+      return jsonResp({ secreto, aviso, fila: Object.fromEntries(COLS_WEBHOOK.split(',').map(k => [k, f?.[k] ?? null])) }, 201);
     }
 
     // Lo que sigue opera sobre un webhook existente de esta cuenta.
@@ -177,13 +227,37 @@ export default async function handler(req) {
       if (!Object.keys(cambio).length) return jsonResp({ error: 'No llegó nada para cambiar.' }, 400);
       const filas = await sb(`/api_webhooks?id=eq.${webhook.id}`, { method: 'PATCH', prefer: 'return=representation', body: cambio });
       const f = filas?.[0];
-      return jsonResp({ fila: Object.fromEntries(COLS_WEBHOOK.split(',').map(k => [k, f?.[k] ?? null])) });
+      // Cambiar la dirección es mandar los datos a otro sitio: se avisa siempre.
+      // Encender o apagar, también: un webhook que se enciende solo es raro.
+      let aviso = null;
+      if (cambio.url && cambio.url !== webhook.url) {
+        aviso = await avisarDueno(cuenta, {
+          asunto: 'Cambió la dirección de un webhook de tu cuenta de Acuarius',
+          titulo: 'Cambió la dirección de un webhook',
+          intro: 'Desde ahora los avisos de este webhook van a la dirección nueva.',
+          filas: [['Antes', webhook.url], ['Ahora', cambio.url], ['Cambiado por', quienLoHizo], ['Cuándo', fechaAviso()]],
+        });
+      } else if (cambio.activo !== undefined && cambio.activo !== webhook.activo) {
+        aviso = await avisarDueno(cuenta, {
+          asunto: `Se ${cambio.activo ? 'activó' : 'desactivó'} un webhook de tu cuenta de Acuarius`,
+          titulo: `Se ${cambio.activo ? 'activó' : 'desactivó'} un webhook`,
+          intro: cambio.activo ? 'Acuarius vuelve a enviar avisos a esta dirección.' : 'Acuarius deja de enviar avisos a esta dirección.',
+          filas: [['Dirección', webhook.url], ['Por', quienLoHizo], ['Cuándo', fechaAviso()]],
+        });
+      }
+      return jsonResp({ aviso, fila: Object.fromEntries(COLS_WEBHOOK.split(',').map(k => [k, f?.[k] ?? null])) });
     }
 
     if (accion === 'rotar_secreto') {
       const secreto = generarSecretoWebhook();
       await sb(`/api_webhooks?id=eq.${webhook.id}`, { method: 'PATCH', prefer: 'return=minimal', body: { secreto: await cifrar(secreto) } });
-      return jsonResp({ secreto });
+      const aviso = await avisarDueno(cuenta, {
+        asunto: 'Se cambió el secreto de un webhook de tu cuenta de Acuarius',
+        titulo: 'Se cambió el secreto de un webhook',
+        intro: 'Los avisos a esta dirección se firman desde ahora con un secreto nuevo.',
+        filas: [['Dirección', webhook.url], ['Cambiado por', quienLoHizo], ['Cuándo', fechaAviso()]],
+      });
+      return jsonResp({ secreto, aviso });
     }
 
     if (accion === 'probar_webhook') {
@@ -200,7 +274,14 @@ export default async function handler(req) {
       // Borra la suscripción (configuración), no datos del CRM. Sus entregas
       // pendientes se van con ella (on delete cascade).
       await sb(`/api_webhooks?id=eq.${webhook.id}`, { method: 'DELETE', prefer: 'return=minimal' });
-      return jsonResp({ ok: true });
+      const aviso = await avisarDueno(cuenta, {
+        asunto: 'Se eliminó un webhook de tu cuenta de Acuarius',
+        titulo: 'Se eliminó un webhook',
+        intro: 'Acuarius dejó de enviar avisos a esta dirección.',
+        filas: [['Dirección', webhook.url], ['Eliminado por', quienLoHizo], ['Cuándo', fechaAviso()]],
+        pie: 'Si no reconoces este cambio, escríbenos a soporte@acuarius.app.',
+      });
+      return jsonResp({ ok: true, aviso });
     }
 
     return jsonResp({ error: 'Acción desconocida' }, 400);

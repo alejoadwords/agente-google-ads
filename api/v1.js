@@ -27,6 +27,7 @@ export const config = { runtime: 'edge' };
 
 import {
   sbHeaders, pareceLlave, sha256Hex, cuentaConApi, CLAVES_PERMISOS, PERMISOS, EVENTOS,
+  limiteCuentaMinuto, creadorVigente, avisarDueno, fechaAviso,
 } from './_api-llaves.js';
 import { estaSuspendido, esDelEquipo } from './_perfiles.js';
 import { intakeLead, ambitoDeTrabajo, enqueueAutomations, ensureCatalog, normTag } from './_lead-intake.js';
@@ -270,7 +271,11 @@ async function indice(ctx) {
     api: 'Acuarius', version: 'v1', documentacion: DOCS,
     llave: {
       nombre: ctx.llave.nombre, prefijo: ctx.llave.prefijo, permisos: ctx.llave.permisos,
-      cliente: ctx.cliente, limites: { por_minuto: ctx.llave.limite_minuto, por_dia: ctx.llave.limite_dia },
+      cliente: ctx.cliente,
+      limites: {
+        por_minuto: ctx.llave.limite_minuto, cambios_por_minuto: ctx.llave.limite_escrituras_minuto,
+        por_dia: ctx.llave.limite_dia, cuenta_por_minuto: limiteCuentaMinuto(),
+      },
     },
     uso: ctx.uso,
     permisos_disponibles: PERMISOS.map(p => ({ clave: p.clave, nombre: p.nombre })),
@@ -961,21 +966,61 @@ async function autenticar(req) {
   if (!plan.ok) return json({ error: 'No se pudo comprobar el plan de la cuenta. Reintenta en unos segundos.', codigo: 'plan_no_disponible' }, 503, { 'Retry-After': '10' });
   if (!plan.permitido) return json({ error: 'El plan de esta cuenta no incluye la API. Está en Pro y Agency.', codigo: 'plan_sin_api' }, 403);
 
-  // El límite se cuenta en la base, atómico. Si no se puede contar, NO se deja
-  // pasar: un agente desbocado sin freno es justo lo que el límite existe para
-  // parar, y no hay forma de saber que no lo es.
+  // Quien creó la llave tiene que seguir pudiendo crearla. Si era un
+  // administrador del equipo y lo sacaron (o le bajaron el perfil), la llave
+  // se revoca aquí mismo y el dueño se entera. Si no se puede comprobar, no
+  // se deja pasar.
+  let creador;
+  try { creador = await creadorVigente(fila.user_id, fila.creada_por); }
+  catch {
+    return json({ error: 'No se pudo comprobar la llave. Reintenta en unos segundos.', codigo: 'llave_no_disponible' }, 503, { 'Retry-After': '10' });
+  }
+  if (!creador.vigente) {
+    const revocada = await sb(`/api_llaves?id=eq.${fila.id}&revocada_at=is.null`, {
+      method: 'PATCH', prefer: 'return=representation',
+      body: { revocada_at: new Date().toISOString(), revocada_por: 'sistema' },
+    }).catch(() => null);
+    // Solo avisa la petición que la revocó: si llegan diez a la vez, un correo.
+    if (revocada?.length) {
+      await avisarDueno(fila.user_id, {
+        asunto: 'Acuarius revocó una llave de la API de tu cuenta',
+        titulo: 'Revocamos una llave de la API',
+        intro: `La llave «${fila.nombre}» dejó de funcionar porque ${creador.motivo}. Quien sale del equipo no se lleva acceso a tu cuenta.`,
+        filas: [['Llave', `${fila.nombre} (${fila.prefijo}…)`], ['Cuándo', fechaAviso()]],
+        pie: 'Si esa llave la usaba un sistema que debe seguir funcionando, crea una nueva desde Configuración → API y agentes.',
+      });
+    }
+    return json({ error: `Esta llave fue revocada porque ${creador.motivo}. Pide una nueva al dueño de la cuenta.`, codigo: 'llave_revocada' }, 401);
+  }
+
+  // Los límites se cuentan en la base, atómicos. Si no se puede contar, NO se
+  // deja pasar: un agente desbocado sin freno es justo lo que el límite existe
+  // para parar, y no hay forma de saber que no lo es.
+  //   · llamadas de la llave por minuto y por día
+  //   · CAMBIOS de la llave por minuto, más bajo: leer mucho no hace daño
+  //   · llamadas de toda la cuenta por minuto, sumando sus llaves
   const ahora = new Date();
   const minuto = 'm:' + ahora.toISOString().slice(0, 16);
   const dia = 'd:' + ahora.toISOString().slice(0, 10);
+  const escritura = req.method === 'POST' || req.method === 'PATCH';
   let uso;
   try {
-    uso = (await sb('/rpc/api_contar', { method: 'POST', body: { p_llave: fila.id, p_minuto: minuto, p_dia: dia } }))?.[0];
+    uso = (await sb('/rpc/api_contar_v2', { method: 'POST', body: {
+      p_llave: fila.id, p_cuenta: fila.user_id, p_minuto: minuto, p_dia: dia, p_escritura: escritura,
+    } }))?.[0];
   } catch {
     return json({ error: 'No se pudo comprobar el límite de uso. Reintenta en unos segundos.', codigo: 'limite_no_disponible' }, 503, { 'Retry-After': '10' });
   }
+  const resto = String(60 - ahora.getUTCSeconds());
   if (uso.minuto > fila.limite_minuto) {
-    return json({ error: `Pasaste el límite de ${fila.limite_minuto} llamadas por minuto.`, codigo: 'limite_minuto' }, 429,
-      { 'Retry-After': String(60 - ahora.getUTCSeconds()) });
+    return json({ error: `Pasaste el límite de ${fila.limite_minuto} llamadas por minuto.`, codigo: 'limite_minuto' }, 429, { 'Retry-After': resto });
+  }
+  if (escritura && uso.escrituras_minuto > fila.limite_escrituras_minuto) {
+    return json({ error: `Pasaste el límite de ${fila.limite_escrituras_minuto} cambios por minuto. Las consultas siguen disponibles.`, codigo: 'limite_escrituras' }, 429, { 'Retry-After': resto });
+  }
+  const topeCuenta = limiteCuentaMinuto();
+  if (uso.cuenta_minuto > topeCuenta) {
+    return json({ error: `La cuenta pasó el límite de ${topeCuenta} llamadas por minuto entre todas sus llaves.`, codigo: 'limite_cuenta' }, 429, { 'Retry-After': resto });
   }
   if (uso.dia > fila.limite_dia) {
     return json({ error: `Pasaste el límite de ${fila.limite_dia} llamadas por día (se reinicia a medianoche UTC).`, codigo: 'limite_dia' }, 429);

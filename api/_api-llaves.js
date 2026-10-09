@@ -42,6 +42,13 @@ export const CLAVES_EVENTOS = EVENTOS.map(e => e.clave);
 export const MAX_LLAVES = 20;
 export const MAX_WEBHOOKS = 10;
 
+// Tope de llamadas por minuto de TODA la cuenta, sumando sus llaves. Se lee en
+// cada petición (no en una constante del módulo) para poder ajustarlo desde
+// Vercel sin desplegar.
+export function limiteCuentaMinuto() {
+  return Number(process.env.API_LIMITE_CUENTA_MINUTO) || 300;
+}
+
 // Planes que pueden usar la API. La prueba de 14 días cuenta como Pro: es
 // cuando se decide comprar, y probar una integración es parte de decidir.
 export const PLANES_CON_API = ['pro', 'individual', 'agency', 'agencia', 'trial'];
@@ -109,8 +116,10 @@ export async function cuentaConApi(cuenta) {
     const correos = (u.email_addresses || []).map(e => String(e.email_address || '').toLowerCase());
     const admins = String(process.env.ADMIN_EMAILS || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
     const esAdmin = correos.some(c => admins.includes(c));
+    const principal = (u.email_addresses || []).find(e => e.id === u.primary_email_address_id) || (u.email_addresses || [])[0];
     const valor = {
       ok: true, plan, esAdmin,
+      correo: principal?.email_address || null,
       permitido: esAdmin || PLANES_CON_API.includes(plan),
       leadsExtra: parseInt(u.public_metadata?.leads_extra || 0) || 0,
     };
@@ -205,4 +214,91 @@ export async function entregarAviso(webhook, { evento, evento_id, created_at, da
   } finally {
     clearTimeout(reloj);
   }
+}
+
+
+// ── ¿Quien creó esto sigue pudiendo crearlo? ────────────────────────────────
+// Una llave o un webhook es de la CUENTA, pero lo creó una persona. Si esa
+// persona era un administrador del equipo y ya no lo es (la sacaron, o le
+// bajaron el perfil), lo que creó deja de valer: si no, quien se va de la
+// empresa se lleva una puerta abierta a la cuenta.
+//
+// Devuelve { vigente: true } o { vigente: false, motivo }. Si la consulta
+// falla LANZA: quien llama no puede tomar «no lo sé» por «sí».
+const _creadores = new Map();   // `${cuenta}|${creador}` -> { vigente, exp }
+export async function creadorVigente(cuenta, creador) {
+  if (!creador || creador === cuenta) return { vigente: true };
+  const clave = cuenta + '|' + creador;
+  const hit = _creadores.get(clave);
+  if (hit && hit.exp > Date.now()) return hit.valor;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/team_members?owner_user_id=eq.${encodeURIComponent(cuenta)}` +
+    `&member_user_id=eq.${encodeURIComponent(creador)}&status=eq.active&select=role,member_name,member_email&limit=1`,
+    { headers: sbHeaders() });
+  if (!r.ok) throw new Error('team_members respondió ' + r.status);
+  const fila = (await r.json())?.[0];
+  const { normalizarPerfil } = await import('./_perfiles.js');
+  const valor = !fila
+    ? { vigente: false, motivo: 'quien la creó ya no está en el equipo' }
+    : normalizarPerfil(fila.role) !== 'admin'
+      ? { vigente: false, motivo: `quien la creó (${fila.member_name || fila.member_email}) ya no es administrador` }
+      : { vigente: true };
+  // Un minuto: lo justo para no consultar en cada llamada de un agente, y poco
+  // para que quitar a alguien surta efecto casi en el acto.
+  _creadores.set(clave, { valor, exp: Date.now() + 60000 });
+  return valor;
+}
+
+// ── ¿Tiene la verificación en dos pasos? ───────────────────────────────────
+// Para crear una llave o un webhook se exige: quien abre una puerta a la
+// cuenta entera tiene que ser de verdad quien dice ser. Se pregunta a Clerk en
+// el momento, sin caché: es una acción rara y no puede valer un dato viejo.
+export async function tieneDosPasos(userId) {
+  const r = await fetch('https://api.clerk.com/v1/users/' + encodeURIComponent(userId), {
+    headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
+  });
+  if (!r.ok) throw new Error('Clerk respondió ' + r.status);
+  const u = await r.json();
+  return u.two_factor_enabled === true;
+}
+
+// ── Aviso de seguridad al dueño ─────────────────────────────────────────────
+// Cada vez que se abre, se cambia o se cierra una puerta a la cuenta, el dueño
+// se entera por correo, lo haya hecho él o no. Es la defensa contra lo que no
+// se ve: un administrador que crea una llave un viernes y se va el lunes.
+// Nunca tumba la acción: si el correo no sale, queda en error_log y se devuelve
+// { enviado: false } para que la pantalla pueda decirlo.
+export async function avisarDueno(cuenta, { asunto, titulo, intro, filas, pie }) {
+  try {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) return { enviado: false, motivo: 'correo no configurado' };
+    const datos = await cuentaConApi(cuenta);
+    if (!datos.ok || !datos.correo) return { enviado: false, motivo: 'no se encontró el correo del dueño' };
+    const { emailHtml, bloque, esc, RESPONDER_A } = await import('./_email-layout.js');
+    const { enviarResend } = await import('./_correo.js');
+    const tabla = (filas || []).filter(f => f && f[1]).map(([k, v]) =>
+      `<div style="margin:2px 0"><span style="color:#5B6072">${esc(k)}:</span> <strong>${esc(v)}</strong></div>`).join('');
+    const r = await enviarResend('api-seguridad', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
+        to: datos.correo, subject: asunto,
+        html: emailHtml({
+          titulo: esc(titulo), intro: esc(intro), preheader: esc(intro),
+          cuerpo: tabla ? bloque(tabla) : '',
+          cta: { texto: 'Revisar en API y agentes', url: 'https://app.acuarius.app/?ir=ajustes-api' },
+          pie: esc(pie || 'Si no reconoces este cambio, revoca la llave o elimina el webhook desde Configuración → API y agentes, y escríbenos a soporte@acuarius.app.') +
+            '<br><br>Equipo de Soporte — Acuarius',
+        }),
+      }),
+    }, cuenta);
+    return { enviado: !!r?.ok, ...(r?.ok ? {} : { motivo: 'Resend respondió ' + r?.status }) };
+  } catch (e) {
+    return { enviado: false, motivo: e?.message || String(e) };
+  }
+}
+
+// Fecha legible para los avisos, en hora de Colombia.
+export function fechaAviso(d = new Date()) {
+  return new Date(d).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'long', timeStyle: 'short' });
 }
