@@ -26291,7 +26291,7 @@ function resumenSetRange(d) { _resumenRange = d; crmRenderAnalytics(); crmRender
 // dibujan en un módulo aparte, el MISMO que usan el enlace compartido (/i/…) y
 // el PDF: así los tres no pueden decir cifras distintas. Aquí solo se juntan
 // los datos de la pantalla y se pinta lo que devuelve.
-let _informesMod = null, _informesCargando = null;
+let _informesMod = null, _informesCargando = null, _informeEtapasPedidas = false;
 function informesListo(repintar) {
   if (_informesMod) return _informesMod;
   if (!_informesCargando) {
@@ -26326,13 +26326,22 @@ function infRangoDe(id) {
   return ({ analytics: _resumenRange, sales: _salesRange, prod: _prodRange, equipo: _eqRange, mk: _mkRange })[id];
 }
 
+let _infNegocioCuenta = '';   // el del alta guiada, lo trae la lista de enlaces
 function infNombreNegocio() {
   const c = (typeof agencyClients !== 'undefined' ? agencyClients : []).find(x => x.id === agencyActiveClientId);
-  return (c && (c.business_name || c.name || c.nombre)) || '';
+  return (c && (c.business_name || c.name || c.nombre)) || _infNegocioCuenta || '';
+}
+async function infTraerNegocio() {
+  if (_infNegocioCuenta) return;
+  try {
+    const r = await fetchAuth('/api/informes-compartidos' + infQsCliente());
+    if (r.ok) _infNegocioCuenta = (await r.json()).negocio || '';
+  } catch {}
 }
 function infNombreProceso() {
   if (informeTodos()) return 'Todos los procesos';
-  const p = (crmPipelines || []).find(x => x.id === informePipelineId());
+  const id = informePipelineId() || crmPipelineId || ((crmPipelines || []).find(p => p.is_default) || {}).id;
+  const p = (crmPipelines || []).find(x => x.id === id);
   return p ? p.name : '';
 }
 
@@ -26405,6 +26414,7 @@ async function infDescargar() {
       ids.includes('equipo') && !_eqData ? eqLoad() : null,
       ids.includes('mk') && !_mkData ? mkLoad() : null,
       infCargarCss(),
+      infTraerNegocio(),
     ]);
     const conProceso = !!informePipelineId();
     const secciones = M.INFORMES.filter(i => ids.includes(i.id)).map(i => {
@@ -26468,6 +26478,9 @@ async function infListarEnlaces() {
     const r = await fetchAuth('/api/informes-compartidos' + infQsCliente());
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    if (d.negocio && !_infNegocioCuenta) _infNegocioCuenta = d.negocio;
+    const campo = document.getElementById('inf-c-negocio');
+    if (campo && !campo.value) campo.value = infNombreNegocio();
     const titulos = Object.fromEntries((_informesMod?.INFORMES || []).map(i => [i.id, i.titulo]));
     const procesos = Object.fromEntries((crmPipelines || []).map(p => [p.id, p.name]));
     box.innerHTML = (d.enlaces || []).length ? d.enlaces.map(e =>
@@ -26505,7 +26518,9 @@ async function infCrearEnlace() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         client_id: agencyActiveClientId || null,
-        pipeline_id: informePipelineId(),
+        // El proceso aunque sea el único: con null el enlace se lee como «todos
+        // los procesos» y el Resumen perdía las etapas.
+        pipeline_id: informeTodos() ? null : (crmPipelineId || (crmPipelines.find(p => p.is_default) || crmPipelines[0] || {}).id || null),
         informes: ids,
         negocio: (document.getElementById('inf-c-negocio')?.value || '').trim(),
         moneda,
@@ -26543,6 +26558,12 @@ async function infDesactivar(id) {
 
 // Lo común a todos los informes de la app.
 function informeCtx(repintar) {
+  // Entrando directo a Análisis, las etapas pueden no haber llegado: el embudo
+  // del Resumen salía vacío y nadie lo volvía a pintar (VIVA, 09-10-2026).
+  if (!crmStagesLoaded && repintar && !_informeEtapasPedidas) {
+    _informeEtapasPedidas = true;
+    crmLoadStages().then(ok => { _informeEtapasPedidas = false; if (ok) repintar(); }).catch(() => { _informeEtapasPedidas = false; });
+  }
   let moneda = '';
   try { moneda = localStorage.getItem('crm_last_currency') || ''; } catch {}
   return {

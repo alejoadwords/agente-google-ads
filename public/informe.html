@@ -15,6 +15,9 @@
 <link rel="stylesheet" href="/informes.css">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
+  /* Los botones tienen display propio y le ganaban a `hidden`: con un enlace
+     desactivado se veían «Actualizar» y «Descargar PDF» sin nada que hacer. */
+  [hidden]{display:none !important}
   body{background:#F4F5FB;-webkit-font-smoothing:antialiased}
   .wrap{max-width:1040px;margin:0 auto;padding:24px 16px 56px}
   .barra{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}

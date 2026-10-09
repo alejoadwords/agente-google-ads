@@ -60,6 +60,10 @@
 .inf-seccion > div{display:flex;flex-direction:column;gap:14px}
 .inf-pie{margin-top:18px;font-size:11px;color:var(--muted2);text-align:center}
 
+/* En el ancho de una hoja, los paneles de dos columnas dejaban las barras en
+   un par de píxeles: en el documento van uno debajo del otro. */
+#inf-imprimir div[style*="minmax(330px"]{grid-template-columns:1fr !important}
+
 /* En la app, el documento impreso no se ve en pantalla */
 @media screen{ #inf-imprimir{display:none} }
 

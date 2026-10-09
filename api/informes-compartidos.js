@@ -195,8 +195,10 @@ export default async function handler(req) {
       if (!e) return jsonResp({ error: 'Este enlace no existe.' }, 404);
       if (e.revocado_at) return jsonResp({ error: 'Este enlace fue desactivado por quien lo compartió.', revocado: true }, 410);
       const datos = await datosDelEnlace(e, { desde: url.searchParams.get('desde') });
-      // La visita se cuenta sin esperar: que falle no puede dejar sin informe.
-      fetch(`${SUPABASE_URL}/rest/v1/informes_compartidos?id=eq.${e.id}`, {
+      // La visita se cuenta ESPERANDO: una función edge corta lo que quede en
+      // vuelo al responder, y lanzada «sin esperar» no se contaba nunca. Que
+      // falle sí se traga: no puede dejar a nadie sin su informe.
+      await fetch(`${SUPABASE_URL}/rest/v1/informes_compartidos?id=eq.${e.id}`, {
         method: 'PATCH', headers: sbHeaders(),
         body: JSON.stringify({ vistas: (e.vistas || 0) + 1, ultima_vista: new Date().toISOString() }),
       }).catch(() => {});
@@ -229,8 +231,13 @@ export default async function handler(req) {
     const cliente = alcanceDeCliente(quien, url.searchParams.get('client_id'));
     const filtro = url.searchParams.has('client_id') || quien.cliente
       ? (cliente ? `&client_id=eq.${enc(cliente)}` : '&client_id=is.null') : '';
-    const enlaces = await sb(`informes_compartidos?user_id=eq.${U}${filtro}&revocado_at=is.null&select=id,token,client_id,pipeline_id,informes,titulo,negocio,creado_por_nombre,created_at,vistas,ultima_vista&order=created_at.desc`);
-    return jsonResp({ enlaces: enlaces || [] });
+    const [enlaces, alta] = await Promise.all([
+      sb(`informes_compartidos?user_id=eq.${U}${filtro}&revocado_at=is.null&select=id,token,client_id,pipeline_id,informes,titulo,negocio,creado_por_nombre,created_at,vistas,ultima_vista&order=created_at.desc`),
+      // El nombre del negocio, para proponerlo en el enlace y en la portada del
+      // PDF cuando la cuenta no tiene perfil de cliente. Es el del DUEÑO.
+      sb(`onboarding_cuenta?user_id=eq.${U}&select=empresa&limit=1`).catch(() => null),
+    ]);
+    return jsonResp({ enlaces: enlaces || [], negocio: (alta?.[0]?.empresa?.nombre || '').slice(0, 120) });
   }
 
   if (req.method === 'POST') {
