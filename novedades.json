@@ -2,12 +2,26 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-08-academia-tour-prueba",
+      "fecha": "2026-10-08",
+      "tipo": "mejora",
+      "titulo": "Academia: el tour y la prueba Pro, renovados",
+      "texto": "Grabamos de nuevo los dos primeros videos de la Academia con la plataforma de hoy: el tour completo (dónde está cada cosa y para qué sirve) y la prueba Pro de 14 días (qué incluye, sus cupos y un orden para aprovecharla semana a semana). Los dos tienen subtítulos. El de la prueba es también el que ven las cuentas nuevas en su mensaje de bienvenida.",
+      "accion": {
+        "texto": "Ver la Academia",
+        "ir": "academia"
+      }
+    },
+    {
       "id": "2026-10-08-api-publica",
       "fecha": "2026-10-08",
       "tipo": "nuevo",
       "titulo": "API para conectar tus sistemas y agentes de IA",
       "texto": "Ahora el agente de IA de tu empresa, tu app o tu ERP pueden gestionar el CRM como una persona del equipo: leer prospectos, moverlos de etapa, cerrarlos, asignarlos, dejar notas y agendar citas. Pasan por las mismas reglas que tu equipo y todo queda firmado en el historial. Además, Acuarius le avisa a tu sistema cuando entra un prospecto, cambia de etapa o llega un mensaje. Crea tus llaves en Configuración → API y agentes.",
-      "accion": { "texto": "Abrir API y agentes", "ir": "ajustes-api" }
+      "accion": {
+        "texto": "Abrir API y agentes",
+        "ir": "ajustes-api"
+      }
     },
     {
       "id": "2026-10-08-sesion-cerrada-avisa",

@@ -31,9 +31,10 @@ const CLERK = 'https://api.clerk.com/v1';
 // mandarlas de golpe a un asistente de bienvenida sería un estorbo, no un regalo.
 const DESDE = Date.parse('2026-09-30T00:00:00Z');
 
-// «Tu prueba Pro de 14 días — qué incluye y cómo aprovecharla», de la Academia.
+// «Tu prueba Pro de 14 días — qué incluye y cómo aprovecharla», de la Academia
+// (versión de octubre de 2026, con la navegación y los cupos de hoy).
 // Es el video que responde lo que se pregunta quien acaba de entrar.
-const VIDEO_POR_DEFECTO = 'https://www.youtube.com/watch?v=Qx7Rr1J6hgg';
+const VIDEO_POR_DEFECTO = 'https://www.youtube.com/watch?v=j05ZT7bsFZk';
 
 const FIRMA = 'Equipo de Soporte — Acuarius';
 
