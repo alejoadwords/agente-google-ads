@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-09-agentes-en-clientes",
+      "fecha": "2026-10-09",
+      "tipo": "mejora",
+      "titulo": "Agentes IA te dice en qué cliente están tus agentes",
+      "texto": "En las cuentas de agencia, cada agente pertenece a un cliente. Si estás en «Mi cuenta» y no ves tu agente, ahora la pantalla te dice en qué cliente está y te lleva a verlo con un clic, para que no crees uno repetido.",
+      "accion": {
+        "texto": "Ver Conversaciones",
+        "ir": "conversaciones"
+      }
+    },
+    {
       "id": "2026-10-09-terminos-api",
       "fecha": "2026-10-09",
       "tipo": "mejora",

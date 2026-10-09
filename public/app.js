@@ -23199,6 +23199,7 @@ function crmRenderAgents() {
   if (!list) return;
   if (crmAgents.length === 0) {
     list.innerHTML = '';
+    agAvisarAgentesEnClientes(list);
     return;
   }
   const channelIcons = { messenger: '💬', instagram: '📷', whatsapp: '📱', tiktok: '🎵' };
@@ -23219,6 +23220,48 @@ function crmRenderAgents() {
         onclick="event.stopPropagation();agBorrar('${esc(ag.id)}',${escJsAttr(ag.name)},${activeConns.length})">${ICONO_PAPELERA}</button>
     </div>`;
   }).join('');
+}
+
+// «Mi cuenta» sin agentes, en una agencia, casi nunca es que no haya: es que
+// viven dentro de un cliente. La lista vacía con solo «Crear nuevo agente»
+// hizo creer a Certain que su agente había desaparecido, y el siguiente paso
+// natural era crear otro. Aquí se dice dónde están y se lleva a verlos.
+async function agAvisarAgentesEnClientes(list) {
+  const clienteActivo = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
+  if (clienteActivo || typeof esCuentaAgencia !== 'function' || !esCuentaAgencia()) return;
+  let porCliente = {};
+  try {
+    const r = await fetchAuth('/api/chat-agents?resumen=clientes');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    porCliente = (await r.json()).porCliente || {};
+  } catch (e) {
+    console.warn('agAvisarAgentesEnClientes', e);
+    return;   // sin el resumen queda la pantalla de siempre; no se inventa nada
+  }
+  // Si mientras tanto se eligió un cliente o ya llegaron agentes, no aplica.
+  if ((typeof agencyActiveClientId !== 'undefined' && agencyActiveClientId) || crmAgents.length) return;
+  const nombre = id => {
+    const c = (agencyClients || []).find(x => String(x.id) === String(id));
+    return c ? (c.client_name || c.name || 'Cliente') : 'otro cliente';
+  };
+  const filas = Object.entries(porCliente).filter(([, n]) => n > 0);
+  if (!filas.length) return;
+  const total = filas.reduce((s, [, n]) => s + n, 0);
+  list.innerHTML = '<div class="ag-en-clientes">' +
+    '<div class="ag-en-clientes-tit">' + icn('bot', 15) +
+      (total === 1 ? 'Tienes 1 agente dentro de un cliente' : 'Tienes ' + total + ' agentes dentro de tus clientes') + '</div>' +
+    '<div class="ag-en-clientes-sub">En «Mi cuenta» solo salen los agentes que no son de ningún cliente. Elige el cliente para verlos y editarlos.</div>' +
+    filas.map(([id, n]) =>
+      '<div class="ag-en-clientes-fila"><span><b>' + esc(nombre(id)) + '</b> · ' + n + (n === 1 ? ' agente' : ' agentes') + '</span>' +
+      '<button class="btn-pri sm" onclick="agVerEnCliente(' + escJsAttr(id) + ')">Ver</button></div>').join('') +
+  '</div>';
+}
+
+function agVerEnCliente(id) {
+  if (typeof hdrClientPick === 'function') hdrClientPick(id);
+  // Elegir cliente lleva a Inicio; se vuelve a Agentes IA, que recarga con el
+  // nuevo cliente al cambiar el ámbito (crmEnsureLoaded).
+  setTimeout(() => { navGo('conversaciones'); crmSetView('agents'); }, 120);
 }
 
 // ── Modal Agente ──────────────────────────────────────────────────────────────

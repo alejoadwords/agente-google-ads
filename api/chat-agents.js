@@ -42,6 +42,22 @@ export default async function handler(req) {
   const clientId = clienteDelMiembro || url.searchParams.get('client_id') || null;
   const scopeFilter = clientId ? `user_id=eq.${userId}&client_id=eq.${clientId}` : `user_id=eq.${userId}&client_id=is.null`;
 
+  // GET ?resumen=clientes — cuántos agentes tiene cada cliente de la cuenta.
+  // Lo pide la pantalla de Agentes cuando «Mi cuenta» sale vacía: en una
+  // agencia los agentes viven dentro de cada cliente, y una lista vacía sin
+  // explicación hizo creer a Certain que su agente había desaparecido. Un
+  // miembro acotado solo ve el suyo.
+  if (req.method === 'GET' && url.searchParams.get('resumen') === 'clientes') {
+    const filtro = clienteDelMiembro
+      ? `user_id=eq.${userId}&client_id=eq.${encodeURIComponent(clienteDelMiembro)}`
+      : `user_id=eq.${userId}&client_id=not.is.null`;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/chat_agents?${filtro}&select=client_id`, { headers: sbHeaders() });
+    if (!res.ok) return jsonResp({ error: 'No se pudo leer los agentes' }, 502);
+    const porCliente = {};
+    for (const r of (await res.json()) || []) porCliente[r.client_id] = (porCliente[r.client_id] || 0) + 1;
+    return jsonResp({ porCliente });
+  }
+
   // GET — list agents with their channel_connections
   if (req.method === 'GET' && !url.searchParams.get('id')) {
     const res = await fetch(
