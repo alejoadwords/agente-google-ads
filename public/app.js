@@ -26304,6 +26304,243 @@ function informesListo(repintar) {
 }
 const INFORME_CARGANDO = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando informe…</div>';
 
+// ── Descargar en PDF y compartir por enlace ─────────────────────────────────
+// Los dos botones viven en la barra de Análisis y solo se ven en los informes
+// que el módulo sabe dibujar fuera de la app.
+function infPintarAcciones() {
+  const box = document.getElementById('inf-acciones');
+  if (!box) return;
+  const ver = enInforme();
+  box.style.display = ver ? 'flex' : 'none';
+  if (!ver || box.dataset.listo) return;
+  box.dataset.listo = '1';
+  // Un perfil que solo ve su gestión no comparte los números de la cuenta.
+  const puedeCompartir = !(window._miPerfil && window._miPerfil.solo_lo_suyo);
+  box.innerHTML =
+    '<button class="btn-sec sm" onclick="infAbrirDescarga()" title="Descargar los informes en PDF">' + icn('file', 13) + ' Descargar PDF</button>' +
+    (puedeCompartir ? '<button class="btn-sec sm" onclick="infAbrirCompartir()" title="Compartir los informes con un enlace">' + icn('link', 13) + ' Compartir</button>' : '');
+}
+
+// El periodo que tiene elegido cada informe en la app.
+function infRangoDe(id) {
+  return ({ analytics: _resumenRange, sales: _salesRange, prod: _prodRange, equipo: _eqRange, mk: _mkRange })[id];
+}
+
+function infNombreNegocio() {
+  const c = (typeof agencyClients !== 'undefined' ? agencyClients : []).find(x => x.id === agencyActiveClientId);
+  return (c && (c.business_name || c.name || c.nombre)) || '';
+}
+function infNombreProceso() {
+  if (informeTodos()) return 'Todos los procesos';
+  const p = (crmPipelines || []).find(x => x.id === informePipelineId());
+  return p ? p.name : '';
+}
+
+function infModal(id, titulo, cuerpo, pie) {
+  document.getElementById(id)?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.id = id;
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:520px">' +
+    '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">' + titulo + '</div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button></div>' +
+    '<div class="auto-modal-body">' + cuerpo + '</div>' +
+    (pie ? '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' + pie + '</div>' : '') +
+  '</div>';
+  document.body.appendChild(ov);
+  return ov;
+}
+
+function infCasillas(prefijo, marcados) {
+  const M = _informesMod;
+  return (M ? M.INFORMES : []).map(i =>
+    '<label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px">' +
+      '<input type="checkbox" class="' + prefijo + '-casilla" value="' + i.id + '"' + (marcados.includes(i.id) ? ' checked' : '') + '>' +
+      '<span style="flex:1;font-weight:600">' + esc(i.titulo) + '</span>' +
+      '<span style="font-size:11.5px;color:var(--muted)">' + esc(M.rangoTexto(infRangoDe(i.id))) + '</span>' +
+    '</label>').join('');
+}
+function infMarcados(prefijo) {
+  return [...document.querySelectorAll('.' + prefijo + '-casilla:checked')].map(x => x.value);
+}
+
+// ── PDF ─────────────────────────────────────────────────────────────────────
+function infAbrirDescarga() {
+  if (!informesListo(infAbrirDescarga)) return;
+  infModal('inf-descarga', 'Descargar en PDF',
+    '<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Cada informe sale en su página, con el periodo que tiene elegido en pantalla' +
+      (infNombreProceso() ? ' y del proceso <b>' + esc(infNombreProceso()) + '</b>' : '') + '.</div>' +
+    infCasillas('inf-d', [crmView]) +
+    '<div style="display:flex;gap:14px;margin-top:10px;font-size:12px">' +
+      '<a href="#" onclick="document.querySelectorAll(\'.inf-d-casilla\').forEach(c=>c.checked=true);return false">Marcar todos</a>' +
+      '<a href="#" onclick="document.querySelectorAll(\'.inf-d-casilla\').forEach(c=>c.checked=false);return false">Ninguno</a></div>' +
+    '<div id="inf-d-msg" style="font-size:12px;color:var(--danger);margin-top:10px"></div>',
+    '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+    '<button class="btn-pri sm" id="inf-d-btn" onclick="infDescargar()">' + icn('file', 13) + ' Descargar</button>');
+}
+
+async function infCargarCss() {
+  if (document.getElementById('inf-css')) return;
+  await new Promise(res => {
+    const l = document.createElement('link');
+    l.id = 'inf-css'; l.rel = 'stylesheet'; l.href = '/informes.css';
+    l.onload = res; l.onerror = res;
+    document.head.appendChild(l);
+  });
+}
+
+async function infDescargar() {
+  const ids = infMarcados('inf-d');
+  const msg = document.getElementById('inf-d-msg');
+  const btn = document.getElementById('inf-d-btn');
+  if (!ids.length) { if (msg) msg.textContent = 'Elige al menos un informe.'; return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparando…'; }
+  try {
+    const M = _informesMod;
+    await crmCargarLeadsAmbito();
+    // Lo que cada informe necesita, si todavía no se había abierto.
+    await Promise.all([
+      ids.includes('prod') && !_prodData ? prodLoad() : null,
+      ids.includes('equipo') && !_eqData ? eqLoad() : null,
+      ids.includes('mk') && !_mkData ? mkLoad() : null,
+      infCargarCss(),
+    ]);
+    const conProceso = !!informePipelineId();
+    const secciones = M.INFORMES.filter(i => ids.includes(i.id)).map(i => {
+      const ctx = Object.assign(informeCtx(), { interactivo: false, rango: infRangoDe(i.id), botones: '' });
+      if (i.id === 'prod') {
+        ctx.acts = M.actsDelInforme(actsDeMisLeads(_prodData.acts, ctx.leads), ctx.leads, conProceso);
+        ctx.inter = M.actsDelInforme(actsDeMisLeads(_prodData.inter, ctx.leads), ctx.leads, conProceso);
+        ctx.falla = !!_prodData.falla;
+      }
+      if (i.id === 'equipo') { ctx.inter = M.actsDelInforme(_eqData.inter, ctx.leads, true); ctx.equipo = _eqData.equipo; ctx.falla = !!_eqData.falla; }
+      if (i.id === 'mk') Object.assign(ctx, _mkData);
+      return { titulo: i.titulo, periodo: M.rangoTexto(infRangoDe(i.id)), html: i.html(ctx) };
+    });
+    document.getElementById('inf-imprimir')?.remove();
+    const doc = document.createElement('div');
+    doc.id = 'inf-imprimir';
+    doc.className = 'inf-doc';
+    doc.innerHTML = M.htmlDocumento({ negocio: infNombreNegocio(), proceso: infNombreProceso(), generado: new Date(), secciones });
+    document.body.appendChild(doc);
+    document.getElementById('inf-descarga')?.remove();
+    document.body.classList.add('inf-imprimiendo');
+    const fin = () => { document.body.classList.remove('inf-imprimiendo'); doc.remove(); window.removeEventListener('afterprint', fin); };
+    window.addEventListener('afterprint', fin);
+    // El diálogo del navegador es el que guarda el PDF: se le dice a la gente
+    // qué elegir, porque «imprimir» no suena a «descargar».
+    showToast('Elige «Guardar como PDF» en el destino de la impresión', 'info');
+    setTimeout(() => window.print(), 150);
+  } catch (e) {
+    console.error('infDescargar', e);
+    if (msg) msg.textContent = 'No se pudo preparar el PDF: ' + (e.message || 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = icn('file', 13) + ' Descargar'; }
+  }
+}
+
+// ── Compartir ───────────────────────────────────────────────────────────────
+async function infAbrirCompartir() {
+  if (!informesListo(infAbrirCompartir)) return;
+  infModal('inf-compartir', 'Compartir los informes',
+    '<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.5">Quien abra el enlace ve los informes <b>en vivo</b>, sin entrar a Acuarius y sin poder cambiar nada. ' +
+      'No verá nombres, teléfonos ni correos de tus leads: solo las cifras y los nombres del equipo.</div>' +
+    '<div class="auto-field"><label class="auto-label">Nombre que verá quien lo abra</label>' +
+      '<input class="auto-input" id="inf-c-negocio" maxlength="120" value="' + esc(infNombreNegocio()) + '" placeholder="Ej.: VIVA 1A IPS"></div>' +
+    '<div style="font-size:12px;color:var(--muted);margin:-4px 0 8px">Proceso: <b>' + esc(infNombreProceso() || 'el principal') + '</b> · cámbialo arriba antes de crear el enlace</div>' +
+    infCasillas('inf-c', _informesMod.INFORMES.map(i => i.id)) +
+    '<div id="inf-c-msg" style="font-size:12px;margin-top:10px"></div>' +
+    '<div style="margin-top:18px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted2)">Enlaces activos</div>' +
+    '<div id="inf-c-lista" style="font-size:12.5px;color:var(--muted);padding:8px 0">Cargando…</div>',
+    '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cerrar</button>' +
+    '<button class="btn-pri sm" id="inf-c-btn" onclick="infCrearEnlace()">' + icn('link', 13) + ' Crear enlace</button>');
+  infListarEnlaces();
+}
+
+function infQsCliente() {
+  return '?client_id=' + encodeURIComponent(agencyActiveClientId || '');
+}
+
+async function infListarEnlaces() {
+  const box = document.getElementById('inf-c-lista');
+  if (!box) return;
+  try {
+    const r = await fetchAuth('/api/informes-compartidos' + infQsCliente());
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    const titulos = Object.fromEntries((_informesMod?.INFORMES || []).map(i => [i.id, i.titulo]));
+    const procesos = Object.fromEntries((crmPipelines || []).map(p => [p.id, p.name]));
+    box.innerHTML = (d.enlaces || []).length ? d.enlaces.map(e =>
+      '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.negocio || 'Informes') + ' · ' + esc(e.pipeline_id ? (procesos[e.pipeline_id] || 'proceso') : 'todos los procesos') + '</div>' +
+          '<div style="font-size:11.5px;color:var(--muted2)">' + esc((e.informes || []).map(i => titulos[i] || i).join(', ')) +
+            ' · ' + (e.vistas || 0) + (e.vistas === 1 ? ' visita' : ' visitas') + '</div>' +
+        '</div>' +
+        '<button class="btn-sec sm" onclick="infCopiar(\'' + esc(e.token) + '\')" title="Copiar el enlace">' + icn('copy', 12) + '</button>' +
+        '<button class="btn-ghost sm" onclick="infDesactivar(\'' + esc(e.id) + '\')">Desactivar</button>' +
+      '</div>').join('')
+      : 'Todavía no has compartido ningún enlace.';
+  } catch (e) {
+    box.innerHTML = '<span style="color:var(--danger)">No se pudieron traer tus enlaces: ' + esc(e.message || 'error') + '</span>';
+  }
+}
+
+async function infCopiar(token) {
+  const url = location.origin + '/i/' + token;
+  try { await navigator.clipboard.writeText(url); showToast('Enlace copiado'); }
+  catch { showToast(url, 'info'); }
+}
+
+async function infCrearEnlace() {
+  const ids = infMarcados('inf-c');
+  const msg = document.getElementById('inf-c-msg');
+  const btn = document.getElementById('inf-c-btn');
+  if (!ids.length) { msg.style.color = 'var(--danger)'; msg.textContent = 'Elige al menos un informe.'; return; }
+  btn.disabled = true; btn.textContent = 'Creando…';
+  try {
+    let moneda = '';
+    try { moneda = localStorage.getItem('crm_last_currency') || ''; } catch {}
+    const r = await fetchAuth('/api/informes-compartidos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: agencyActiveClientId || null,
+        pipeline_id: informePipelineId(),
+        informes: ids,
+        negocio: (document.getElementById('inf-c-negocio')?.value || '').trim(),
+        moneda,
+      }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    await infCopiar(d.enlace.token);
+    msg.style.color = 'var(--success)';
+    msg.innerHTML = 'Enlace creado y copiado: <a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + esc(d.url) + '</a>';
+    infListarEnlaces();
+  } catch (e) {
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'No se pudo crear el enlace: ' + (e.message || 'error');
+  } finally {
+    btn.disabled = false; btn.innerHTML = icn('link', 13) + ' Crear enlace';
+  }
+}
+
+async function infDesactivar(id) {
+  const ok = await confirmarAguaP({
+    titulo: '¿Desactivar este enlace?',
+    texto: 'Quien lo tenga ya no podrá abrir los informes. Si lo necesitas otra vez, creas uno nuevo.',
+    confirmar: 'Desactivar', peligro: true,
+  });
+  if (!ok) return;
+  try {
+    const r = await fetchAuth('/api/informes-compartidos?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    showToast('Enlace desactivado');
+    infListarEnlaces();
+  } catch (e) { showToast('No se pudo desactivar: ' + (e.message || 'error'), 'error'); }
+}
+
 // Lo común a todos los informes de la app.
 function informeCtx(repintar) {
   let moneda = '';
@@ -26545,6 +26782,7 @@ function crmSetView(v) {
   // el total del pipeline pertenece al tablero: no debe colarse en Marketing ni Análisis
   const pipeTotal = document.getElementById('crm-pipeline-total');
   if (pipeTotal) pipeTotal.style.display = (v === 'kanban' || v === 'list') ? '' : 'none';
+  infPintarAcciones();
   if (v === 'kanban' || v === 'list') crmRender();
   if (v === 'agents') crmRenderAgents();
   if (v === 'inbox') crmLoadInbox();

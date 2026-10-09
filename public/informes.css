@@ -1,0 +1,77 @@
+/* public/informes.css — cómo se ven los informes fuera de la app.
+ *
+ * La usan la página del enlace compartido (/i/<código>) y el PDF que se
+ * descarga desde Análisis. Todo va dentro de .inf-doc: así la app puede
+ * cargarla para imprimir sin que sus colores ni su modo oscuro cambien.
+ * Las reglas de los informes (.crm-analytics-*…) son copia de index.html.
+ */
+.inf-doc{
+  --blue:#1E2BCC;--blue-h:#1520B0;--blue-mid:#3D52E5;
+  --text:#0D0F1C;--text-2:#5A607A;--muted:#5A607A;--muted2:#9DA3BE;
+  --border:#E4E6F0;--border2:#F0F1F8;--border-h:#C5CAF8;
+  --bg:#FFFFFF;--bg-subtle:#F7F8FC;--bg-muted:#F0F1F8;--sidebar:#F7F8FC;
+  --success:#059669;--warning:#D97706;--danger:#DC2626;
+  --fs-xs:11px;--fs-sm:12px;--fs-base:13px;--fs-md:15px;--fs-lg:18px;
+  --font:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  font-family:var(--font);color:var(--text);background:var(--bg);
+  -webkit-print-color-adjust:exact;print-color-adjust:exact;
+}
+.inf-doc *{box-sizing:border-box}
+
+/* Las piezas de los informes (copia de index.html) */
+.inf-doc .crm-analytics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.inf-doc .crm-analytics-card{background:var(--sidebar);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.inf-doc .crm-analytics-card-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted2);margin-bottom:8px}
+.inf-doc .crm-analytics-stat{font-size:26px;font-weight:800;letter-spacing:-.5px;color:var(--text);line-height:1}
+.inf-doc .crm-analytics-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.inf-doc .crm-analytics-section{background:var(--sidebar);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.inf-doc .crm-analytics-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-bottom:10px}
+.inf-doc .crm-analytics-stage-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
+.inf-doc .crm-analytics-stage-row:last-child{border-bottom:none}
+.inf-doc .crm-analytics-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.inf-doc .crm-analytics-stage-name{flex:1;color:var(--text)}
+.inf-doc .crm-analytics-stage-count{font-weight:700;color:var(--text);width:28px;text-align:right}
+.inf-doc .crm-analytics-bar-wrap{width:80px;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.inf-doc .crm-analytics-bar{height:100%;border-radius:3px}
+.inf-doc .crm-analytics-stage-val{font-size:10px;color:var(--muted);width:70px;text-align:right}
+.inf-doc .crm-attention-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text)}
+.inf-doc .crm-attention-item:last-child{border-bottom:none}
+.inf-doc .crm-attention-days{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:#FEF3C7;color:#D97706;flex-shrink:0}
+.inf-doc .crm-attention-stage{font-size:10px;padding:2px 6px;border-radius:4px;flex-shrink:0}
+.inf-doc .crm-source-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px}
+.inf-doc .crm-source-label{width:90px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inf-doc .crm-source-bar-wrap{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.inf-doc .crm-source-bar{height:100%;border-radius:3px;background:var(--blue)}
+.inf-doc .crm-source-count{font-weight:700;color:var(--text);width:24px;text-align:right;font-size:11px}
+.inf-doc .tag-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;line-height:1.5;white-space:nowrap}
+.inf-doc .btn-pri,.inf-doc .btn-sec{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:var(--font);font-size:var(--fs-xs);font-weight:700;border-radius:7px;padding:6px 11px;cursor:pointer;border:1px solid transparent;line-height:1.2;white-space:nowrap}
+.inf-doc .btn-pri{background:var(--blue);color:#fff}
+.inf-doc .btn-sec{background:var(--bg);color:var(--text);border-color:var(--border)}
+.inf-doc .btn-sec:hover{background:var(--bg-subtle);border-color:var(--border-h)}
+
+/* El documento: portada y una sección por informe */
+.inf-portada{padding:8px 0 22px;border-bottom:3px solid var(--blue);margin-bottom:22px}
+.inf-portada .inf-marca{font-size:12px;font-weight:800;color:var(--blue);letter-spacing:.04em;text-transform:uppercase}
+.inf-portada h1{font-size:28px;line-height:1.15;letter-spacing:-.01em;margin:8px 0 6px}
+.inf-portada .inf-meta{font-size:13px;color:var(--muted);line-height:1.6}
+.inf-seccion{padding:4px 0 26px}
+.inf-seccion + .inf-seccion{border-top:1px solid var(--border);padding-top:22px}
+.inf-seccion .inf-periodo{font-size:11px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.inf-seccion > div{display:flex;flex-direction:column;gap:14px}
+.inf-pie{margin-top:18px;font-size:11px;color:var(--muted2);text-align:center}
+
+/* En la app, el documento impreso no se ve en pantalla */
+@media screen{ #inf-imprimir{display:none} }
+
+@media print{
+  @page{size:A4;margin:14mm 12mm}
+  body.inf-imprimiendo{height:auto !important;overflow:visible !important;display:block !important;background:#fff !important}
+  body.inf-imprimiendo > *:not(#inf-imprimir){display:none !important}
+  #inf-imprimir{display:block !important}
+  .inf-doc .inf-seccion{break-before:page;border-top:none !important;padding-top:0 !important}
+  .inf-doc .inf-seccion:first-of-type{break-before:auto}
+  .inf-doc .crm-analytics-section,.inf-doc .crm-analytics-card,
+  .inf-doc .inf-seccion div[style*="border-radius:14px"]{break-inside:avoid}
+  .inf-doc .inf-no-imprimir{display:none !important}
+  .inf-doc table{min-width:0 !important}
+}

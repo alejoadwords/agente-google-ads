@@ -90,6 +90,10 @@
       "destination": "/reporte.html"
     },
     {
+      "source": "/i/:token",
+      "destination": "/informe.html"
+    },
+    {
       "source": "/agente/inmobiliarias",
       "destination": "/agente/inmobiliarias.html"
     },

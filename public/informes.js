@@ -901,3 +901,26 @@ export const INFORMES = [
   { id: 'analytics', titulo: 'Resumen',        html: htmlResumen,       rango: 0,  necesita: [] },
 ];
 export function informe(id) { return INFORMES.find(i => i.id === id) || null; }
+
+// ── El documento: portada + secciones ───────────────────────────────────────
+// Lo arma igual la página del enlace y el PDF de la app. `secciones` es una
+// lista de { titulo, periodo, html } y cada una va en su página al imprimir.
+export function htmlDocumento({ negocio, proceso, generado, secciones, nota }) {
+  const fecha = (generado ? new Date(generado) : new Date())
+    .toLocaleString('es-CO', { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return '<div class="inf-portada">' +
+      '<div class="inf-marca">Informe comercial</div>' +
+      '<h1>' + esc(negocio || 'Informes de Análisis') + '</h1>' +
+      '<div class="inf-meta">' +
+        (proceso ? 'Proceso: <b>' + esc(proceso) + '</b><br>' : '') +
+        'Datos al ' + esc(fecha) +
+        (nota ? '<br>' + esc(nota) : '') +
+      '</div>' +
+    '</div>' +
+    (secciones || []).map(s =>
+      '<section class="inf-seccion">' +
+        (s.periodo ? '<div class="inf-periodo">' + esc(s.titulo) + ' · ' + esc(s.periodo) + '</div>' : '') +
+        '<div>' + s.html + '</div>' +
+      '</section>').join('') +
+    '<div class="inf-pie">Hecho con Acuarius · acuarius.app</div>';
+}

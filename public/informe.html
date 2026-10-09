@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light">
+<title>Informes</title>
+<!-- Informes de Análisis compartidos por un enlace vivo (/i/<código>).
+     Los datos se leen al abrir —api/informes-compartidos.js— y se dibujan con
+     public/informes.js, el MISMO módulo de la app: el enlace y la pantalla no
+     pueden decir cifras distintas. Sin nombres ni contactos de los leads. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/informes.css">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#F4F5FB;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1040px;margin:0 auto;padding:24px 16px 56px}
+  .barra{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .barra .quien{font-size:12px;color:#5A607A}
+  .barra .quien b{color:#0D0F1C}
+  .acciones{display:flex;gap:8px;flex-wrap:wrap}
+  .doc{background:#fff;border-radius:18px;box-shadow:0 10px 40px rgba(20,22,31,.06);padding:28px 30px;position:relative;overflow:hidden}
+  .doc::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:#1E2BCC}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 20px}
+  .tab{font:inherit;font-size:13px;font-weight:700;border:1px solid #E4E6F0;background:#fff;color:#5A607A;border-radius:9px;padding:8px 14px;cursor:pointer}
+  .tab.on{background:#1E2BCC;border-color:#1E2BCC;color:#fff}
+  #vista{display:flex;flex-direction:column;gap:14px}
+  .estado{text-align:center;padding:80px 16px;color:#5A607A;font-size:14px;line-height:1.6}
+  .estado b{display:block;font-size:18px;color:#0D0F1C;margin-bottom:6px}
+  .aviso{font-size:12px;color:#7A4A08;background:#FFF4E5;border-radius:10px;padding:10px 14px;margin-bottom:14px}
+  @media (max-width:640px){ .doc{padding:22px 14px} }
+</style>
+</head>
+<body>
+<div class="wrap inf-doc">
+  <div class="barra">
+    <div class="quien" id="quien">Cargando informes…</div>
+    <div class="acciones">
+      <button class="btn-sec" id="b-actualizar" onclick="INF.actualizar()" hidden>Actualizar</button>
+      <button class="btn-pri" id="b-pdf" onclick="INF.pdf()" hidden>Descargar PDF</button>
+    </div>
+  </div>
+  <div class="doc">
+    <div class="tabs" id="tabs"></div>
+    <div id="aviso"></div>
+    <div id="vista"><div class="estado">Trayendo los datos…</div></div>
+  </div>
+</div>
+<div id="inf-imprimir" class="inf-doc"></div>
+<script type="module">
+import * as M from '/informes.js';
+
+const token = (location.pathname.match(/^\/i\/([a-f0-9]{32})$/) || [])[1]
+  || new URLSearchParams(location.search).get('t');
+const $ = (id) => document.getElementById(id);
+const esc = M.esc;
+
+let datos = null;        // lo último que mandó el servidor
+let desdeCargado = null; // desde qué fecha vienen las actividades
+let actual = null;       // informe en pantalla
+const rangos = {};       // periodo elegido de cada informe
+
+function estado(titulo, texto) {
+  $('vista').innerHTML = '<div class="estado"><b>' + esc(titulo) + '</b>' + esc(texto || '') + '</div>';
+  $('tabs').innerHTML = '';
+}
+
+// Desde cuándo hacen falta actividades para que todos los periodos elegidos
+// salgan completos (Productividad y Por comercial cuentan lo registrado).
+function desdeNecesario() {
+  const ids = (datos ? datos.enlace.informes : []).filter(i => i === 'prod' || i === 'equipo');
+  if (!ids.length) return null;
+  return Math.min(...ids.map(i => M.rangoIni(rangos[i], i === 'prod' ? 365 : 3650)));
+}
+
+async function cargar(desde) {
+  const q = '/api/informes-compartidos?t=' + token + (desde ? '&desde=' + Math.floor(desde) : '');
+  const r = await fetch(q, { cache: 'no-store' });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const e = new Error(d.error || 'No se pudo abrir el informe.');
+    e.status = r.status;
+    throw e;
+  }
+  datos = d;
+  desdeCargado = desde || (Date.now() - 365 * 86400000);
+}
+
+function ctxDe(id) {
+  const e = datos.enlace;
+  const leads = M.leadsDelProceso(datos.leads, e.pipeline_id, datos.pipelines);
+  const tareasPorLead = {};
+  (datos.tareas || []).forEach(t => {
+    const dia = M.crmFechaLocal(new Date(t.due_at));
+    if (!tareasPorLead[t.lead_id] || dia < tareasPorLead[t.lead_id]) tareasPorLead[t.lead_id] = dia;
+  });
+  const conProceso = !!e.pipeline_id;
+  return {
+    leads, etapas: datos.etapas || [], todos: !!e.todos,
+    etiquetas: datos.etiquetas || [], fuentes: datos.fuentes || [], tareasPorLead,
+    moneda: e.moneda || '', interactivo: false, privado: true,
+    acts: M.actsDelInforme(datos.acts || [], leads, conProceso),
+    inter: M.actsDelInforme(datos.inter || [], leads, id === 'equipo' ? true : conProceso),
+    falla: !!datos.falla, equipo: datos.equipo || [],
+    camps: datos.camps || [], autos: datos.autos || [], logs: datos.logs || [],
+    rango: rangos[id],
+  };
+}
+
+function botones(id) {
+  const r = rangos[id];
+  return '<div class="inf-no-imprimir" style="display:flex;gap:5px;flex-wrap:wrap">' +
+    M.RANGOS.map(([d, t]) =>
+      '<button class="btn-' + (r === d ? 'pri' : 'sec') + '" onclick="INF.rango(\'' + id + '\',' + d + ')">' + t + '</button>').join('') +
+  '</div>';
+}
+
+function pintar() {
+  const e = datos.enlace;
+  const lista = M.INFORMES.filter(i => e.informes.includes(i.id));
+  if (!lista.some(i => i.id === actual)) actual = lista[0] && lista[0].id;
+  $('tabs').innerHTML = lista.length > 1 ? lista.map(i =>
+    '<button class="tab' + (i.id === actual ? ' on' : '') + '" onclick="INF.ver(\'' + i.id + '\')">' + esc(i.titulo) + '</button>').join('') : '';
+  const inf = M.informe(actual);
+  $('vista').innerHTML = inf ? inf.html(Object.assign(ctxDe(actual), { botones: botones(actual) })) : '';
+  $('aviso').innerHTML = datos.truncado
+    ? '<div class="aviso">La cuenta tiene más leads de los que este enlace puede leer de una vez: las cifras están incompletas.</div>' : '';
+}
+
+function cabecera() {
+  const e = datos.enlace;
+  const proceso = e.todos ? 'Todos los procesos' : ((datos.pipelines || []).find(p => p.id === e.pipeline_id) || {}).name || '';
+  const hora = new Date(datos.generado).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
+  document.title = (e.negocio ? e.negocio + ' · ' : '') + 'Informes';
+  $('quien').innerHTML = '<b>' + esc(e.negocio || 'Informes') + '</b>' + (proceso ? ' · ' + esc(proceso) : '') +
+    ' · datos en vivo, actualizados a las ' + esc(hora);
+  $('b-actualizar').hidden = false;
+  $('b-pdf').hidden = false;
+}
+
+window.INF = {
+  ver(id) { actual = id; pintar(); },
+  async rango(id, d) {
+    rangos[id] = d;
+    const falta = desdeNecesario();
+    if (falta !== null && falta < desdeCargado - 3600000) {
+      $('vista').innerHTML = '<div class="estado">Trayendo el periodo…</div>';
+      try { await cargar(falta); cabecera(); } catch (e) { estado('No se pudo traer ese periodo', e.message); return; }
+    }
+    pintar();
+  },
+  async actualizar() {
+    $('b-actualizar').disabled = true;
+    try { await cargar(desdeNecesario()); cabecera(); pintar(); }
+    catch (e) { estado('No se pudo actualizar', e.message); }
+    finally { $('b-actualizar').disabled = false; }
+  },
+  pdf() {
+    const e = datos.enlace;
+    const proceso = e.todos ? 'Todos los procesos' : ((datos.pipelines || []).find(p => p.id === e.pipeline_id) || {}).name || '';
+    const secciones = M.INFORMES.filter(i => e.informes.includes(i.id)).map(i => ({
+      titulo: i.titulo, periodo: M.rangoTexto(rangos[i.id]),
+      html: i.html(Object.assign(ctxDe(i.id), { botones: '' })),
+    }));
+    $('inf-imprimir').innerHTML = M.htmlDocumento({ negocio: e.negocio || e.titulo, proceso, generado: datos.generado, secciones });
+    document.body.classList.add('inf-imprimiendo');
+    const fin = () => { document.body.classList.remove('inf-imprimiendo'); $('inf-imprimir').innerHTML = ''; window.removeEventListener('afterprint', fin); };
+    window.addEventListener('afterprint', fin);
+    window.print();
+  },
+};
+
+(async () => {
+  if (!token) { estado('Enlace no válido', 'Revisa que lo hayas copiado completo.'); return; }
+  M.INFORMES.forEach(i => { rangos[i.id] = i.rango; });
+  try {
+    await cargar(null);
+  } catch (e) {
+    if (e.status === 410) estado('Este enlace ya no está activo', 'Quien lo compartió lo desactivó. Pídele uno nuevo.');
+    else if (e.status === 404) estado('Este enlace no existe', 'Revisa que lo hayas copiado completo.');
+    else estado('No se pudo abrir el informe', e.message);
+    $('quien').textContent = '';
+    return;
+  }
+  cabecera();
+  pintar();
+})();
+</script>
+</body>
+</html>
