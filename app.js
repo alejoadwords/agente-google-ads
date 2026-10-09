@@ -26286,71 +26286,47 @@ function inboxSetFilter(status, btn) {
 let _resumenRange = 0;
 function resumenSetRange(d) { _resumenRange = d; crmRenderAnalytics(); crmRenderNps(); }
 
+// ── Los informes viven en /informes.js ──────────────────────────────────────
+// Resumen, Ventas, Productividad, Marketing y Por comercial se calculan y se
+// dibujan en un módulo aparte, el MISMO que usan el enlace compartido (/i/…) y
+// el PDF: así los tres no pueden decir cifras distintas. Aquí solo se juntan
+// los datos de la pantalla y se pinta lo que devuelve.
+let _informesMod = null, _informesCargando = null;
+function informesListo(repintar) {
+  if (_informesMod) return _informesMod;
+  if (!_informesCargando) {
+    _informesCargando = import('/informes.js')
+      .then(m => { _informesMod = m; })
+      .catch(e => { console.error('informes.js', e); _informesCargando = null; crmFallo('informes'); });
+  }
+  _informesCargando.then(() => { try { if (_informesMod && repintar) repintar(); } catch (e) { console.warn(e); } });
+  return null;
+}
+const INFORME_CARGANDO = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando informe…</div>';
+
+// Lo común a todos los informes de la app.
+function informeCtx(repintar) {
+  let moneda = '';
+  try { moneda = localStorage.getItem('crm_last_currency') || ''; } catch {}
+  return {
+    leads: leadsInforme(repintar),
+    etapas: typeof crmStages !== 'undefined' ? crmStages : [],
+    todos: informeTodos(),
+    etiquetas: typeof crmTags !== 'undefined' ? crmTags : [],
+    fuentes: typeof crmSources !== 'undefined' ? crmSources : [],
+    tareasPorLead: typeof crmTareasPorLead !== 'undefined' ? crmTareasPorLead : {},
+    moneda, interactivo: true, privado: false,
+  };
+}
+
 function crmRenderAnalytics() {
   const container = document.getElementById('crm-analytics-view');
   if (!container) return;
-  const now = Date.now();
-  const delAmbito = leadsInforme(crmRenderAnalytics);
-  const desdeR = rangoIni(_resumenRange), hastaR = rangoFin(_resumenRange);
-  const leads = _resumenRange
-    ? delAmbito.filter(l => { const t = new Date(l.created_at || 0).getTime(); return t >= desdeR && t <= hastaR; })
-    : delAmbito;
-  const active = leads.filter(l => l.stage !== 'ganado' && l.stage !== 'perdido');
-  const won = leads.filter(l => l.stage === 'ganado');
-  const total = leads.length;
-  const pipelineValue = active.reduce((s, l) => s + (Number(l.value) || 0), 0);
-  const wonValue = won.reduce((s, l) => s + (Number(l.value) || 0), 0);
-  const avgValue = total > 0 ? Math.round(pipelineValue / Math.max(active.length, 1)) : 0;
-  const convRate = total > 0 ? Math.round((won.length / total) * 100) : 0;
-  // Con «Todos los procesos» cada uno trae sus etapas y no hay un embudo común:
-  // se resume en abiertos, ganados y perdidos en vez de mezclar etapas ajenas.
-  const etapasEmbudo = informeTodos()
-    ? [{ key: '__abiertos', label: 'Abiertos', color: 'var(--blue)' },
-       { key: 'ganado', label: 'Ganados', color: 'var(--success)' },
-       { key: 'perdido', label: 'Perdidos', color: 'var(--muted2)' }]
-    : crmStages;
-  const enEtapa = (l, k) => k === '__abiertos' ? !leadCerrado(l) : l.stage === k;
-  const maxCount = Math.max(...etapasEmbudo.map(s => leads.filter(l => enEtapa(l, s.key)).length), 1);
-  const stageFunnel = etapasEmbudo.map(s => {
-    const cnt = leads.filter(l => enEtapa(l, s.key)).length;
-    const val = leads.filter(l => enEtapa(l, s.key)).reduce((sum, l) => sum + (Number(l.value) || 0), 0);
-    return { label: s.label, color: s.color, key: s.key, count: cnt, value: val, pct: Math.round((cnt / maxCount) * 100) };
-  });
-  const sourceCounts = {};
-  leads.forEach(l => { const s = l.source || 'manual'; sourceCounts[s] = (sourceCounts[s] || 0) + 1; });
-  const maxSrc = Math.max(...Object.values(sourceCounts), 1);
-  const needsAttention = leads.filter(l => {
-    if (leadCerrado(l) || tieneSeguimientoProgramado(l)) return false;
-    const lastActive = l.updated_at ? new Date(l.updated_at).getTime() : new Date(l.created_at || 0).getTime();
-    return Math.floor((now - lastActive) / 86400000) >= 7;
-  }).sort((a, b) => new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at)).slice(0, 8);
-  // Distribución por etiqueta: conteo + valor de pipeline por tag (top 12)
-  const tagStats = {};
-  leads.forEach(l => (l.tags || []).forEach(t => {
-    if (!tagStats[t]) tagStats[t] = { count: 0, value: 0 };
-    tagStats[t].count++;
-    tagStats[t].value += Number(l.value) || 0;
+  const M = informesListo(() => { crmRenderAnalytics(); crmRenderNps(); });
+  if (!M) { container.innerHTML = INFORME_CARGANDO; return; }
+  container.innerHTML = M.htmlResumen(Object.assign(informeCtx(crmRenderAnalytics), {
+    rango: _resumenRange, botones: rangoBotones(_resumenRange, 'resumenSetRange'),
   }));
-  const tagRows = Object.entries(tagStats).sort((a, b) => b[1].count - a[1].count).slice(0, 12);
-  const maxTag = Math.max(...tagRows.map(([, s]) => s.count), 1);
-  const tagSection = tagRows.length
-    ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Leads por etiqueta</div>' +
-      tagRows.map(([name, s]) => {
-        const c = tagColor(name);
-        return '<div class="crm-source-row" style="cursor:pointer" title="Ver estos leads en el pipeline" onclick="crmFilterTags=[' + escJsAttr(name) + '];crmRenderTagFilter();crmSetView(\'kanban\')">' +
-          '<div class="crm-source-label"><span class="tag-chip" style="background:' + c + '1A;color:' + c + '">' + (tagIsAuto(name) ? '⚡' : '') + esc(name) + '</span></div>' +
-          '<div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((s.count / maxTag) * 100) + '%;background:' + c + '"></div></div>' +
-          '<div class="crm-source-count">' + s.count + '</div>' +
-          '<div class="crm-analytics-stage-val">' + (s.value > 0 ? '$' + s.value.toLocaleString('es-CO') : '') + '</div>' +
-        '</div>';
-      }).join('') + '</div>'
-    : '';
-  const cabResumen = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">' +
-    '<div><div style="font-size:var(--fs-lg);font-weight:800">Resumen</div>' +
-    '<div style="font-size:12px;color:var(--muted)">' + (_resumenRange ? 'Los leads que entraron en el periodo y dónde están hoy' : 'Todos los leads, desde el primero') +
-      (informeTodos() ? ' · todos los procesos' : '') + '</div></div>' +
-    rangoBotones(_resumenRange, 'resumenSetRange') + '</div>';
-  container.innerHTML = cabResumen + '<div class="crm-analytics-grid"><div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Pipeline activo</div><div class="crm-analytics-stat" style="font-size:20px">$' + pipelineValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Valor en proceso</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Deals ganados</div><div class="crm-analytics-stat" style="font-size:20px">$' + wonValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">' + convRate + '% tasa de cierre</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Valor promedio</div><div class="crm-analytics-stat" style="font-size:20px">$' + avgValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Por deal activo</div></div></div><div id="crm-nps-section"></div><div class="crm-analytics-section"><div class="crm-analytics-section-title">Embudo del pipeline</div>' + stageFunnel.map(s => '<div class="crm-analytics-stage-row"><div class="crm-analytics-dot" style="background:' + s.color + '"></div><div class="crm-analytics-stage-name">' + esc(s.label) + '</div><div class="crm-analytics-bar-wrap"><div class="crm-analytics-bar" style="width:' + s.pct + '%;background:' + s.color + '"></div></div><div class="crm-analytics-stage-count">' + s.count + '</div><div class="crm-analytics-stage-val">' + (s.value > 0 ? '$' + s.value.toLocaleString('es-CO') : '') + '</div></div>').join('') + '</div>' + (Object.keys(sourceCounts).length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Fuentes de leads</div>' + Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, cnt]) => '<div class="crm-source-row"><div class="crm-source-label">' + esc(fuenteLabel(src)) + '</div><div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((cnt / maxSrc) * 100) + '%"></div></div><div class="crm-source-count">' + cnt + '</div></div>').join('') + '</div>' : '') + tagSection + (needsAttention.length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title" style="color:#D97706">Requieren atencion (' + needsAttention.length + ')</div>' + needsAttention.map(l => { const days = Math.floor((now - new Date(l.updated_at || l.created_at).getTime()) / 86400000); const st = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' }; return '<div class="crm-attention-item" onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><div class="crm-attention-days">' + days + 'd</div><div style="flex:1">' + esc(l.name) + (l.company ? '<span style="color:var(--muted);margin-left:4px">- ' + esc(l.company) + '</span>' : '') + '</div><div class="crm-attention-stage" style="background:' + st.color + '20;color:' + st.color + '">' + esc(st.label) + '</div></div>'; }).join('') + '</div>' : '');
 }
 
 // ── Widget NPS en Análisis (async — se pinta al llegar los datos) ───────────
@@ -35292,8 +35268,26 @@ async function mkLoad() {
     fetchAuth('/api/automations' + qs).then(r => r.ok ? r.json() : { automations: [] }).catch(() => ({ automations: [] })),
     fetchAuth('/api/automations?logs=1').then(r => r.ok ? r.json() : { logs: [] }).catch(() => ({ logs: [] })),
   ]);
-  _mkData = { camps: camps.campaigns || [], autos: autos.automations || [], logs: logs.logs || [] };
+  const lista = camps.campaigns || [];
+  await mkAperturasReales(lista);
+  _mkData = { camps: lista, autos: autos.automations || [], logs: logs.logs || [] };
   return _mkData;
+}
+
+// Las aperturas NO están en `stats`: el motor de campañas guarda enviados y
+// fallidos, nunca aperturas, y el informe decía «Tasa de apertura 0 %» en
+// todas las cuentas. Se cuentan como «ver aperturas», desde los eventos de
+// correo. La que no se pudo contar se queda sin el dato, nunca con un cero.
+async function mkAperturasReales(lista) {
+  const contables = lista.filter(c => c.channel === 'email' && ['sent', 'sending'].includes(c.status) && (c.stats || {}).sent > 0).slice(0, 30);
+  await Promise.all(contables.map(async c => {
+    try {
+      const r = await fetchAuth('/api/campaigns?stats=1&id=' + encodeURIComponent(c.id));
+      if (!r.ok) return;
+      const d = await r.json();
+      if (Number.isFinite(d.opened)) c.stats = Object.assign({}, c.stats, { opened: d.opened });
+    } catch {}
+  }));
 }
 
 async function mkRender() {
@@ -35303,107 +35297,12 @@ async function mkRender() {
     box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando marketing…</div>';
     await mkLoad();
   }
-  const { camps, autos, logs } = _mkData;
   await crmCargarLeadsAmbito();
-  const leads = leadsInforme();
-  const now = Date.now();
-  const from = rangoIni(_mkRange);
-  const hasta = rangoFin(_mkRange);
-  // Con el rango a mano importa también el extremo superior: sin él, «hasta»
-  // no se aplicaría y el informe seguiría llegando hasta hoy.
-  const inR = d => { if (!d) return false; const t = new Date(d).getTime(); return t >= from && t <= hasta; };
-
-  const enviadas = camps.filter(c => c.channel === 'email' && ['sent', 'sending'].includes(c.status) && inR(c.sent_at || c.created_at));
-  const totalSent = enviadas.reduce((s, c) => s + ((c.stats || {}).sent || 0), 0);
-  const totalDeliv = enviadas.reduce((s, c) => s + ((c.stats || {}).delivered || (c.stats || {}).sent || 0), 0);
-  const totalOpen = enviadas.reduce((s, c) => s + ((c.stats || {}).opened || 0), 0);
-  const openRate = totalDeliv ? Math.round(totalOpen / totalDeliv * 100) : 0;
-
-  const logsR = logs.filter(l => inR(l.created_at));
-  const impactados = new Set(logsR.map(l => l.lead_id).filter(Boolean)).size;
-  const activas = autos.filter(a => a.active).length;
-
-  const nuevos = leads.filter(l => inR(l.created_at));
-
-  const ranges = [[30, '30 días'], [90, '90 días'], [365, '12 meses'], [0, 'Todo']];
-  let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
-    '<div><div style="font-size:var(--fs-lg);font-weight:800">Marketing</div>' +
-    '<div style="font-size:12px;color:var(--muted)">Campañas, automatizaciones y captación de leads</div></div>' +
-    rangoBotones(_mkRange, 'mkSetRange') + '</div>';
-
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
-    salesCard('Campañas enviadas', enviadas.length, 'en el periodo') +
-    salesCard('Correos entregados', totalDeliv.toLocaleString('es-CO'), totalSent ? 'de ' + totalSent.toLocaleString('es-CO') + ' enviados' : '') +
-    salesCard('Tasa de apertura', openRate + '%', totalOpen.toLocaleString('es-CO') + ' aperturas') +
-    salesCard('Automatizaciones activas', activas, autos.length + ' creadas') +
-    salesCard('Contactos impactados', impactados, 'por automatizaciones') +
-  '</div>';
-
-  // Rendimiento por campaña
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Rendimiento por campaña</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Las aperturas llegan por el webhook de Resend</div>' +
-    (enviadas.length
-      ? '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
-        '<thead><tr style="text-align:left;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em">' +
-        '<th style="padding:6px 8px">Campaña</th><th style="padding:6px 8px">Envío</th>' +
-        '<th style="padding:6px 8px;text-align:right">Enviados</th><th style="padding:6px 8px;text-align:right">Aperturas</th>' +
-        '<th style="padding:6px 8px;text-align:right">Tasa</th></tr></thead><tbody>' +
-        enviadas.slice().sort((a, b) => new Date(b.sent_at || b.created_at) - new Date(a.sent_at || a.created_at)).map(c => {
-          const st = c.stats || {};
-          const d = st.delivered || st.sent || 0;
-          const rate = d ? Math.round((st.opened || 0) / d * 100) : 0;
-          return '<tr style="border-top:1px solid var(--border)">' +
-            '<td style="padding:8px"><b>' + esc(c.name || '') + '</b>' + (c.subject ? '<div style="font-size:11px;color:var(--muted2)">' + esc(c.subject) + '</div>' : '') + '</td>' +
-            '<td style="padding:8px;color:var(--muted)">' + (c.sent_at ? new Date(c.sent_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '—') + '</td>' +
-            '<td style="padding:8px;text-align:right">' + (st.sent || 0) + '</td>' +
-            '<td style="padding:8px;text-align:right">' + (st.opened || 0) + '</td>' +
-            '<td style="padding:8px;text-align:right;font-weight:700;color:' + (rate >= 20 ? '#059669' : rate > 0 ? '#B45309' : 'var(--muted2)') + '">' + rate + '%</td>' +
-          '</tr>';
-        }).join('') + '</tbody></table></div>'
-      : '<div style="font-size:12px;color:var(--muted2)">Aún no has enviado campañas. Créalas en <b>Marketing → Campañas</b>.</div>') +
-  '</div>';
-
-  // Automatizaciones + captación
-  const porAuto = {};
-  logsR.forEach(l => {
-    porAuto[l.automation_id] = porAuto[l.automation_id] || { n: 0, leads: new Set(), err: 0 };
-    porAuto[l.automation_id].n++;
-    if (l.lead_id) porAuto[l.automation_id].leads.add(l.lead_id);
-    if (l.result && /error|fail/i.test(l.result)) porAuto[l.automation_id].err++;
-  });
-  const autoRows = autos.map(a => ({ a, d: porAuto[a.id] || { n: 0, leads: new Set(), err: 0 } }))
-    .sort((x, y) => y.d.n - x.d.n);
-  const maxA = Math.max(1, ...autoRows.map(r => r.d.n));
-
-  const porFuente = {};
-  nuevos.forEach(l => { const k = l.source || 'manual'; porFuente[k] = (porFuente[k] || 0) + 1; });
-  const fuentes = Object.entries(porFuente).sort((a, b) => b[1] - a[1]);
-  const maxFu = Math.max(1, ...fuentes.map(e => e[1]));
-
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px">';
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Automatizaciones</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Acciones ejecutadas y contactos únicos alcanzados</div>' +
-    (autoRows.length ? autoRows.map(({ a, d }) =>
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
-        '<span style="width:7px;height:7px;border-radius:50%;background:' + (a.active ? '#10B981' : 'var(--muted2)') + ';flex-shrink:0"></span>' +
-        '<div style="width:150px;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(a.name || '') + '">' + esc(a.name || '') + '</div>' +
-        '<div style="flex:1;height:9px;background:var(--bg-muted);border-radius:5px;overflow:hidden">' +
-          '<div style="height:100%;width:' + Math.round(d.n / maxA * 100) + '%;background:#F59E0B;border-radius:5px"></div></div>' +
-        '<div style="width:40px;text-align:right;font-size:12.5px;font-weight:700">' + d.n + '</div>' +
-        '<div style="width:82px;text-align:right;font-size:11.5px;color:var(--muted)">' + d.leads.size + ' contactos</div>' +
-      '</div>').join('')
-      : '<div style="font-size:12px;color:var(--muted2)">Sin automatizaciones creadas todavía</div>') +
-  '</div>';
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Captación de leads</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">' + nuevos.length + ' leads nuevos en el periodo, por fuente</div>' +
-    (fuentes.length ? fuentes.map(([k, v]) => salesBar(k, v, maxFu, '#8B5CF6', Math.round(v / nuevos.length * 100) + '%')).join('')
-                    : '<div style="font-size:12px;color:var(--muted2)">Sin leads nuevos en el periodo</div>') +
-  '</div></div>';
-
-  box.innerHTML = html;
+  const M = informesListo(mkRender);
+  if (!M) { box.innerHTML = INFORME_CARGANDO; return; }
+  box.innerHTML = M.htmlMarketing(Object.assign(informeCtx(), _mkData, {
+    rango: _mkRange, botones: rangoBotones(_mkRange, 'mkSetRange'),
+  }));
 }
 
 // ── INFORME DE PRODUCTIVIDAD ──────────────────────────────────────────────────
@@ -35439,136 +35338,21 @@ async function prodRender() {
     box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando actividad…</div>';
     await prodLoad();
   }
-  const { acts: actsTodas, inter: interTodas } = _prodData;
   await crmCargarLeadsAmbito();
-  const leads = leadsInforme();
+  const M = informesListo(prodRender);
+  if (!M) { box.innerHTML = INFORME_CARGANDO; return; }
+  const ctx = informeCtx();
   // Productividad cuenta tareas y actividades, no solo leads. `leads` ya viene
   // recortado a la gestión propia si el perfil lo pide, así que las tareas se
   // recortan a esos mismos leads: si no, un comercial vería su propio nombre
-  // con los números de todo el equipo, que es peor que no recortar nada.
-  const acts = actsDelProceso(actsDeMisLeads(actsTodas, leads), leads);
-  const inter = actsDelProceso(actsDeMisLeads(interTodas, leads), leads);
-  const now = Date.now();
-  const from = rangoIni(_prodRange, 3650);
-  const hastaP = rangoFin(_prodRange);
-
-  const inRange = a => { const t = new Date(a.due_at || a.created_at).getTime(); return t >= from && t <= hastaP; };
-  const periodo = acts.filter(inRange);
-  const vencidas = acts.filter(a => !a.done && a.due_at && new Date(a.due_at).getTime() < now);
-  const debidas = periodo.filter(a => a.due_at && new Date(a.due_at).getTime() <= now);
-  const hechas = debidas.filter(a => a.done);
-  const compl = debidas.length ? Math.round(hechas.length / debidas.length * 100) : 0;
-  const proximas = acts.filter(a => !a.done && a.due_at &&
-    new Date(a.due_at).getTime() > now && new Date(a.due_at).getTime() <= now + 7 * 86400000);
-
-  // Interacciones reales (se excluye lo que genera el sistema)
-  const SYS = ['creacion', 'stage_change'];
-  const interReal = (inter || []).filter(a => !SYS.includes(a.type));
-
-  // Cobertura: leads abiertos con próxima actividad agendada
-  const abiertos = leads.filter(l => !['ganado', 'perdido'].includes(l.stage));
-  const conProxima = new Set(acts.filter(a => !a.done && a.due_at && new Date(a.due_at).getTime() > now).map(a => a.lead_id).filter(Boolean));
-  const cubiertos = abiertos.filter(l => conProxima.has(l.id));
-  const cobertura = abiertos.length ? Math.round(cubiertos.length / abiertos.length * 100) : 0;
-  const huerfanos = abiertos.filter(l => !conProxima.has(l.id));
-
-  let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
-    '<div><div style="font-size:var(--fs-lg);font-weight:800">Productividad comercial</div>' +
-    '<div style="font-size:12px;color:var(--muted)">Qué se agenda, qué se cumple y qué leads se están enfriando</div></div>' +
-    rangoBotones(_prodRange, 'prodSetRange') + '</div>';
-  // Si la actividad no se pudo leer, los contadores de abajo salen en cero:
-  // se avisa para que nadie lo lea como «el equipo no hizo nada».
-  if (_prodData.falla) html += '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">No se pudo leer la actividad del equipo: las cifras de llamadas y contactos están incompletas. <button class="btn-ghost sm" onclick="_prodData = null; prodRender()">Reintentar</button></div>';
-
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
-    salesCard('Actividades', periodo.length, 'agendadas en el periodo') +
-    salesCard('Tasa de cumplimiento', compl + '%', hechas.length + ' de ' + debidas.length + ' vencidas') +
-    salesCard('Vencidas sin hacer', vencidas.length, vencidas.length ? 'requieren acción' : 'todo al día') +
-    salesCard('Próximos 7 días', proximas.length, 'ya agendadas') +
-    salesCard('Cobertura de seguimiento', cobertura + '%', cubiertos.length + ' de ' + abiertos.length + ' leads abiertos') +
-  '</div>';
-
-  // Pulso diario
-  const dias = Math.min(rangoDias(_prodRange, 30), 30) || 30;
-  const dayKey = t => new Date(t).toISOString().slice(0, 10);
-  const creadas = {}, completadas = {};
-  acts.forEach(a => {
-    if (a.created_at && new Date(a.created_at).getTime() >= now - dias * 86400000) creadas[dayKey(a.created_at)] = (creadas[dayKey(a.created_at)] || 0) + 1;
-    if (a.done && a.updated_at && new Date(a.updated_at).getTime() >= now - dias * 86400000) completadas[dayKey(a.updated_at)] = (completadas[dayKey(a.updated_at)] || 0) + 1;
-  });
-  const serie = [];
-  for (let i = dias - 1; i >= 0; i--) {
-    const k = dayKey(now - i * 86400000);
-    serie.push([k, creadas[k] || 0, completadas[k] || 0]);
-  }
-  const maxD = Math.max(1, ...serie.map(s => Math.max(s[1], s[2])));
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px">' +
-    '<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">' +
-      '<div style="font-size:13.5px;font-weight:800">Pulso diario</div>' +
-      '<div style="display:flex;gap:12px;font-size:11px;color:var(--muted)">' +
-        '<span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#3D52E5;margin-right:4px"></span>creadas</span>' +
-        '<span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#10B981;margin-right:4px"></span>completadas</span>' +
-      '</div></div>' +
-    '<div style="display:flex;align-items:flex-end;gap:3px;height:90px">' + serie.map(([k, c, d]) =>
-      '<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:1px" title="' + k + ' · ' + c + ' creadas, ' + d + ' completadas">' +
-        '<div style="height:' + Math.round(c / maxD * 45) + 'px;background:#3D52E5;border-radius:3px 3px 0 0;min-height:' + (c ? 3 : 0) + 'px"></div>' +
-        '<div style="height:' + Math.round(d / maxD * 45) + 'px;background:#10B981;border-radius:0 0 3px 3px;min-height:' + (d ? 3 : 0) + 'px"></div>' +
-      '</div>').join('') + '</div>' +
-  '</div>';
-
-  // Mix por tipo + interacciones registradas
-  const tipoLbl = { task: 'Tareas', meeting: 'Reuniones', nota: 'Notas', llamada: 'Llamadas', email: 'Emails', reunion: 'Reuniones', tarea: 'Tareas' };
-  const mix = {};
-  periodo.forEach(a => { const k = tipoLbl[a.type] || a.type; mix[k] = (mix[k] || 0) + 1; });
-  const mixArr = Object.entries(mix).sort((a, b) => b[1] - a[1]);
-  const maxMix = Math.max(1, ...mixArr.map(e => e[1]));
-  const iMix = {};
-  interReal.forEach(a => { const k = tipoLbl[a.type] || a.type; iMix[k] = (iMix[k] || 0) + 1; });
-  const iArr = Object.entries(iMix).sort((a, b) => b[1] - a[1]);
-  const maxI = Math.max(1, ...iArr.map(e => e[1]));
-
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px;margin-bottom:20px">';
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Agenda por tipo</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Lo que programaste en el periodo</div>' +
-    (mixArr.length ? mixArr.map(([k, v]) => salesBar(k, v, maxMix, '#1E2BCC', '')).join('')
-                   : '<div style="font-size:12px;color:var(--muted2)">Nada agendado en el periodo</div>') +
-  '</div>';
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Interacciones registradas</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Notas, llamadas y correos anotados en las fichas</div>' +
-    (iArr.length ? iArr.map(([k, v]) => salesBar(k, v, maxI, '#0891B2', '')).join('')
-                 : '<div style="font-size:12px;color:var(--muted2)">Sin interacciones registradas — anótalas desde la ficha del lead</div>') +
-  '</div></div>';
-
-  // Alertas accionables
-  const venc = vencidas.slice().sort((a, b) => new Date(a.due_at) - new Date(b.due_at)).slice(0, 8);
-  const leadName = id => (leads.find(l => l.id === id) || {}).name || '';
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px">';
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Actividades vencidas</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">' + vencidas.length + ' sin completar</div>' +
-    (venc.length ? venc.map(a =>
-      '<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--border)">' +
-        '<div style="flex:1;font-size:12.5px"><b>' + esc(a.title || '(sin título)') + '</b>' +
-          (leadName(a.lead_id) ? '<div style="font-size:11px;color:var(--muted2)">' + esc(leadName(a.lead_id)) + '</div>' : '') + '</div>' +
-        '<div style="font-size:11.5px;color:#DC2626;font-weight:700">' + Math.round((now - new Date(a.due_at).getTime()) / 86400000) + ' d</div>' +
-      '</div>').join('')
-      : '<div style="font-size:12px;color:var(--muted2)">Ninguna actividad vencida 👏</div>') +
-  '</div>';
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Leads sin próxima actividad</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">' + huerfanos.length + ' oportunidades abiertas sin seguimiento agendado</div>' +
-    (huerfanos.length ? huerfanos.slice(0, 8).map(l =>
-      '<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--border)">' +
-        '<div style="flex:1;font-size:12.5px"><b>' + esc(l.name || '') + '</b>' +
-          (l.company ? '<div style="font-size:11px;color:var(--muted2)">' + esc(l.company) + '</div>' : '') + '</div>' +
-        '<button class="btn-sec sm" onclick="crmOpenDetail(\'' + l.id + '\')">Abrir</button>' +
-      '</div>').join('')
-      : '<div style="font-size:12px;color:var(--muted2)">Todos los leads abiertos tienen seguimiento 👏</div>') +
-  '</div></div>';
-
-  box.innerHTML = html;
+  // con los números de todo el equipo, que es peor que no recortar nada. Y
+  // también al cliente y al proceso: el registro de actividad es de la cuenta.
+  const conProceso = !!informePipelineId();
+  ctx.acts = M.actsDelInforme(actsDeMisLeads(_prodData.acts, ctx.leads), ctx.leads, conProceso);
+  ctx.inter = M.actsDelInforme(actsDeMisLeads(_prodData.inter, ctx.leads), ctx.leads, conProceso);
+  box.innerHTML = M.htmlProductividad(Object.assign(ctx, {
+    falla: !!_prodData.falla, rango: _prodRange, botones: rangoBotones(_prodRange, 'prodSetRange'),
+  }));
 }
 
 // ── INFORME DE VENTAS ─────────────────────────────────────────────────────────
@@ -35627,198 +35411,13 @@ function salesExportCsv() {
 function salesRender() {
   const box = document.getElementById('crm-sales-view');
   if (!box) return;
-  const leads = leadsInforme(salesRender);
-  const now = Date.now();
-  const from = rangoIni(_salesRange);
-  const hastaV = rangoFin(_salesRange);
-  const inRange = d => { if (!d) return false; const t = new Date(d).getTime(); return t >= from && t <= hastaV; };
-
-  // NUNCA `updated_at` para fechar un cierre: se mueve cada vez que alguien
-  // toca el lead, así que un negocio cerrado en agosto se iba al reporte de
-  // septiembre en cuanto alguien le editaba algo. Le pasó a Certain.
-  //
-  // `created_at` como respaldo es estable y nunca es posterior al cierre:
-  // solo hace falta para los leads de antes de que el servidor sellara la
-  // fecha, que ya no se crean.
-  const won  = leads.filter(l => l.stage === 'ganado'  && inRange(fechaDeCierre(l)));
-  const lost = leads.filter(l => l.stage === 'perdido' && inRange(fechaDeCierre(l)));
-  const open = leads.filter(l => !['ganado', 'perdido'].includes(l.stage));
-  const revenue = won.reduce((s, l) => s + (Number(l.value) || 0), 0);
-  const pipeline = open.reduce((s, l) => s + (Number(l.value) || 0), 0);
-  const ticket = won.length ? revenue / won.length : 0;
-  const closeRate = (won.length + lost.length) ? Math.round(won.length / (won.length + lost.length) * 100) : 0;
-  const cycles = won.filter(l => l.closed_at && l.created_at)
-    .map(l => (new Date(l.closed_at) - new Date(l.created_at)) / 86400000).filter(d => d >= 0);
-  const cycle = cycles.length ? Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length) : 0;
-  const cur = won.find(l => l.close_currency)?.close_currency || '';
-
-  window._salesWon = won;
-  // Periodo anterior de la misma longitud, para la comparativa
-  let dRev = null, dCount = null;
-  if (_salesRange) {
-    // El periodo anterior mide lo mismo que el elegido, sea de 90 días o de
-    // los que abarque un rango a mano.
-    const largo = hastaV - from;
-    const prevFrom = from - largo;
-    const prevWon = leads.filter(l => {
-      if (l.stage !== 'ganado') return false;
-      const t = new Date(fechaDeCierre(l) || 0).getTime();
-      return t >= prevFrom && t < from;
-    });
-    const prevRev = prevWon.reduce((s2, l) => s2 + (Number(l.value) || 0), 0);
-    if (prevRev > 0) dRev = ((revenue - prevRev) / prevRev) * 100;
-    if (prevWon.length > 0) dCount = ((won.length - prevWon.length) / prevWon.length) * 100;
-  }
-
-  const ranges = [[30, '30 días'], [90, '90 días'], [365, '12 meses'], [0, 'Todo']];
-  let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
-    '<div><div style="font-size:var(--fs-lg);font-weight:800">Rendimiento de ventas</div>' +
-    '<div style="font-size:12px;color:var(--muted)">Cómo cerró tu pipeline en el periodo</div></div>' +
-    rangoBotones(_salesRange, 'salesSetRange') + '</div>';
-
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
-    salesCard('Importe ganado', salesFmtMoney(revenue, cur), won.length + (won.length === 1 ? ' venta' : ' ventas') + (dRev !== null ? ' · vs periodo anterior' : ''), dRev) +
-    salesCard('Ticket medio', salesFmtMoney(ticket, cur), 'por venta cerrada', dCount) +
-    salesCard('Tasa de cierre', closeRate + '%', won.length + ' ganadas · ' + lost.length + ' perdidas') +
-    salesCard('Ciclo de venta', cycle + ' d', 'del alta al cierre') +
-    salesCard('Pipeline abierto', salesFmtMoney(pipeline, cur), open.length + ' oportunidades') +
-  '</div>';
-
-  // Motivos de pérdida y de ganada
-  const group = (arr) => {
-    const m = {};
-    arr.forEach(l => { const k = l.close_reason || 'Sin motivo registrado'; m[k] = m[k] || { n: 0, v: 0 }; m[k].n++; m[k].v += Number(l.value) || 0; });
-    return Object.entries(m).sort((a, b) => b[1].n - a[1].n);
-  };
-  const lostG = group(lost), wonG = group(won);
-  const maxL = Math.max(1, ...lostG.map(e => e[1].n)), maxW = Math.max(1, ...wonG.map(e => e[1].n));
-
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px;margin-bottom:20px">';
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Motivos de pérdida</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Por qué se cayeron ' + lost.length + ' oportunidades</div>' +
-    (lostG.length ? lostG.map(([k, d]) => salesBar(k, d.n, maxL, '#EF4444', Math.round(d.n / lost.length * 100) + '%')).join('')
-                  : '<div style="font-size:12px;color:var(--muted2)">Sin pérdidas registradas en el periodo</div>') +
-  '</div>';
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Motivos de ganada</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Qué hace que te compren</div>' +
-    (wonG.length ? wonG.map(([k, d]) => salesBar(k, d.n, maxW, '#10B981', salesFmtMoney(d.v, cur))).join('')
-                 : '<div style="font-size:12px;color:var(--muted2)">Sin ventas registradas en el periodo</div>') +
-  '</div></div>';
-
-  // Embudo del pipeline con conversión entre etapas + forecast ponderado
-  const stages = (typeof crmStages !== 'undefined' ? crmStages : []);
-  const openStages = stages.filter(st => !['ganado', 'perdido'].includes(st.key));
-  const cnt = k => leads.filter(l => l.stage === k).length;
-  const val = k => leads.filter(l => l.stage === k).reduce((a, l) => a + (Number(l.value) || 0), 0);
-  const maxF = Math.max(1, ...openStages.map(st => cnt(st.key)), won.length);
-
-  const forecast = openStages.reduce((sum, st, i) => {
-    const prob = pipeProbFor(st, i, stages.length) / 100;
-    return sum + val(st.key) * prob;
-  }, 0);
-
-  const funnelRows = openStages.concat(stages.filter(st => st.key === 'ganado')).map((st, i, arr) => {
-    const n = cnt(st.key), v = val(st.key);
-    const prev = i > 0 ? cnt(arr[i - 1].key) : null;
-    const conv = (prev && prev > 0) ? Math.round(n / prev * 100) : null;
-    const prob = pipeProbFor(st, i, stages.length);
-    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
-      '<div style="width:130px;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(st.label) + '</div>' +
-      '<div style="flex:1;height:26px;background:var(--bg-muted);border-radius:7px;overflow:hidden;position:relative">' +
-        '<div style="height:100%;width:' + Math.max(2, Math.round(n / maxF * 100)) + '%;background:' + (st.color || '#1E2BCC') + ';border-radius:7px;opacity:.85"></div>' +
-        '<div style="position:absolute;inset:0;display:flex;align-items:center;padding-left:9px;font-size:12px;font-weight:700;color:var(--text)">' + n + '</div>' +
-      '</div>' +
-      '<div style="width:92px;text-align:right;font-size:11.5px;color:var(--muted)">' + salesFmtMoney(v, cur) + '</div>' +
-      '<div style="width:52px;text-align:right;font-size:11.5px;color:var(--muted2)">' + (st.key === 'ganado' ? '' : prob + '%') + '</div>' +
-      '<div style="width:62px;text-align:right;font-size:11.5px;font-weight:700;color:' + (conv === null ? 'var(--muted2)' : conv >= 50 ? '#059669' : '#B45309') + '">' +
-        (conv === null ? '—' : '↓ ' + conv + '%') + '</div>' +
-    '</div>';
-  }).join('');
-
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px">' +
-    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">' +
-      '<div><div style="font-size:13.5px;font-weight:800">Embudo del pipeline</div>' +
-      '<div style="font-size:11.5px;color:var(--muted)">Cuántas oportunidades hay en cada etapa y qué porcentaje pasa a la siguiente</div></div>' +
-      '<div style="text-align:right"><div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Forecast ponderado</div>' +
-      '<div style="font-size:19px;font-weight:800;color:var(--blue)">' + salesFmtMoney(forecast, cur) + '</div>' +
-      '<div style="font-size:10.5px;color:var(--muted2)">importe × probabilidad de cada etapa</div></div>' +
-    '</div>' +
-    '<div style="display:flex;gap:10px;margin-bottom:6px;font-size:10.5px;color:var(--muted2);font-weight:700;text-transform:uppercase;letter-spacing:.04em">' +
-      '<div style="width:130px">Etapa</div><div style="flex:1">Oportunidades</div>' +
-      '<div style="width:92px;text-align:right">Valor</div><div style="width:52px;text-align:right">Prob.</div><div style="width:62px;text-align:right">Conv.</div>' +
-    '</div>' + funnelRows +
-  '</div>';
-
-  // Evolución de ingresos por mes
-  const byMonth = {};
-  won.forEach(l => {
-    const d = new Date(fechaDeCierre(l));
-    const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-    byMonth[k] = (byMonth[k] || 0) + (Number(l.value) || 0);
+  const M = informesListo(salesRender);
+  if (!M) { box.innerHTML = INFORME_CARGANDO; return; }
+  const ctx = Object.assign(informeCtx(salesRender), {
+    rango: _salesRange, botones: rangoBotones(_salesRange, 'salesSetRange'),
   });
-  const months = Object.entries(byMonth).sort();
-  const maxM = Math.max(1, ...months.map(e => e[1]));
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:12px">Evolución de ingresos</div>' +
-    (months.length
-      ? '<div style="display:flex;align-items:flex-end;gap:8px;height:130px">' + months.map(([k, v]) =>
-          '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px" title="' + salesFmtMoney(v, cur) + '">' +
-            '<div style="font-size:10.5px;color:var(--muted);white-space:nowrap">' + (v >= 1000 ? Math.round(v / 1000) + 'k' : Math.round(v)) + '</div>' +
-            '<div style="width:100%;max-width:54px;height:' + Math.max(4, Math.round(v / maxM * 95)) + 'px;background:linear-gradient(180deg,#3D52E5,#1520B0);border-radius:6px 6px 0 0"></div>' +
-            '<div style="font-size:10.5px;color:var(--muted2)">' + k.slice(2) + '</div>' +
-          '</div>').join('') + '</div>'
-      : '<div style="font-size:12px;color:var(--muted2)">Aún no hay ventas cerradas en el periodo</div>') +
-  '</div>';
-
-  // Por vendedor y por origen
-  const byField = (arr, field, fallback) => {
-    const m = {};
-    arr.forEach(l => { const k = l[field] || fallback; m[k] = m[k] || { n: 0, v: 0 }; m[k].n++; m[k].v += Number(l.value) || 0; });
-    return Object.entries(m).sort((a, b) => b[1].v - a[1].v);
-  };
-  const sellers = byField(won, 'assigned_name', 'Sin asignar');
-  const sources = byField(won.concat(lost).concat(open), 'source', 'manual');
-  const maxS = Math.max(1, ...sellers.map(e => e[1].v)), maxO = Math.max(1, ...sources.map(e => e[1].n));
-
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px">';
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:12px">Ventas por responsable</div>' +
-    (sellers.length ? sellers.map(([k, d]) => salesBar(k, d.n, Math.max(1, ...sellers.map(e => e[1].n)), '#1E2BCC', salesFmtMoney(d.v, cur))).join('')
-                    : '<div style="font-size:12px;color:var(--muted2)">Sin ventas en el periodo</div>') +
-  '</div>';
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Oportunidades por origen</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">De dónde vienen tus leads</div>' +
-    (sources.length ? sources.map(([k, d]) => salesBar(k, d.n, maxO, '#8B5CF6', salesFmtMoney(d.v, cur))).join('')
-                    : '<div style="font-size:12px;color:var(--muted2)">Sin datos</div>') +
-  '</div></div>';
-
-  // Listado de oportunidades ganadas + descarga
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-top:14px">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">' +
-      '<div><div style="font-size:13.5px;font-weight:800">Oportunidades ganadas</div>' +
-      '<div style="font-size:11.5px;color:var(--muted)">' + won.length + ' en el periodo</div></div>' +
-      (won.length ? '<button class="btn-sec sm" onclick="salesExportCsv()">Descargar CSV</button>' : '') +
-    '</div>' +
-    (won.length
-      ? '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
-        '<thead><tr style="text-align:left;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em">' +
-        '<th style="padding:6px 8px">Cliente</th><th style="padding:6px 8px">Motivo</th>' +
-        '<th style="padding:6px 8px">Cierre</th><th style="padding:6px 8px;text-align:right">Importe</th></tr></thead><tbody>' +
-        won.slice().sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0)).map(l =>
-          '<tr style="border-top:1px solid var(--border)">' +
-          '<td style="padding:8px"><b>' + esc(l.name || '') + '</b>' + (l.company ? '<div style="font-size:11px;color:var(--muted2)">' + esc(l.company) + '</div>' : '') + '</td>' +
-          '<td style="padding:8px;color:var(--muted)">' + esc(l.close_reason || '—') + '</td>' +
-          '<td style="padding:8px;color:var(--muted)">' + ((l.closed_at || '').slice(0, 10) || '—') + '</td>' +
-          '<td style="padding:8px;text-align:right;font-weight:700">' + salesFmtMoney(Number(l.value) || 0, l.close_currency || cur) + '</td>' +
-          '</tr>').join('') +
-        '</tbody></table></div>'
-      : '<div style="font-size:12px;color:var(--muted2)">Sin ventas cerradas en el periodo</div>') +
-  '</div>';
-
-  box.innerHTML = html;
+  window._salesWon = M.datosVentas(ctx).won;
+  box.innerHTML = M.htmlVentas(ctx);
 }
 
 async function crmRenderCampStats() {
@@ -37181,31 +36780,7 @@ async function eqLoad() {
   return _eqData;
 }
 
-// Qué cuenta como "contactado": una interacción registrada por una PERSONA.
-// Ni la creación, ni el cambio de etapa, ni las notas que escribe la propia
-// plataforma (reparto, veredicto de calificación) cuentan: si contaran, el
-// informe diría que el equipo contactó a todo el mundo en un minuto sin que
-// nadie hubiera levantado el teléfono.
-const EQ_SISTEMA = ['creacion', 'stage_change'];
-function eqEsDelSistema(a) {
-  return EQ_SISTEMA.includes(a.type) || !!(a.metadata && a.metadata.sistema);
-}
-
-function eqFmtDur(ms) {
-  if (ms === null || !isFinite(ms)) return '—';
-  const h = ms / 3600000;
-  if (h < 1) return Math.max(1, Math.round(ms / 60000)) + ' min';
-  if (h < 48) return (h < 10 ? h.toFixed(1) : Math.round(h)) + ' h';
-  return Math.round(h / 24) + ' días';
-}
-
-function eqMediana(xs) {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
-
+// El cálculo (qué cuenta como «contactado», medianas…) está en /informes.js.
 async function eqRender() {
   const box = document.getElementById('crm-equipo-view');
   if (!box) return;
@@ -37213,144 +36788,15 @@ async function eqRender() {
     box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando actividad…</div>';
     await eqLoad();
   }
-  const { inter, equipo } = _eqData;
   await crmCargarLeadsAmbito();
-  const leads = leadsInforme();
-  const desde = rangoIni(_eqRange, 3650);
-  const hastaEq = rangoFin(_eqRange);
-
-  let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">' +
-    '<div><div style="font-size:var(--fs-lg);font-weight:800">Por comercial</div>' +
-    '<div style="font-size:12px;color:var(--muted)">Qué recibe cada uno, qué tan rápido responde y qué cierra</div></div>' +
-    rangoBotones(_eqRange, 'eqSetRange') + '</div>';
-  // Si la actividad no se pudo leer, los contadores de abajo salen en cero:
-  // se avisa para que nadie lo lea como «el equipo no hizo nada».
-  if (_eqData.falla) html += '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">No se pudo leer la actividad del equipo: las cifras de llamadas y contactos están incompletas. <button class="btn-ghost sm" onclick="_eqData = null; eqRender()">Reintentar</button></div>';
-
-  // Primera interacción humana de cada lead
-  const primera = {};
-  (inter || []).forEach(a => {
-    if (eqEsDelSistema(a) || !a.lead_id) return;
-    const t = new Date(a.created_at).getTime();
-    if (!primera[a.lead_id] || t < primera[a.lead_id]) primera[a.lead_id] = t;
-  });
-
-  const delPeriodo = leads.filter(l => new Date(l.created_at).getTime() >= desde);
-
-  // Una fila por persona. Los que no tienen dueño van juntos: son justo los
-  // que se le escapan a todo el mundo, y esconderlos sería el peor favor.
-  const filas = {};
-  const fila = (id, nombre) => (filas[id] = filas[id] || {
-    id, nombre, recibidos: 0, contactados: 0, tiempos: [], ganados: 0, perdidos: 0, importe: 0,
-  });
-  (equipo || []).forEach(m => fila(m.id, m.nombre));
-
-  delPeriodo.forEach(l => {
-    const f = fila(l.assigned_to || '_sin', l.assigned_name || (l.assigned_to ? 'Comercial' : 'Sin asignar'));
-    f.recibidos++;
-    const p = primera[l.id];
-    if (p) {
-      f.contactados++;
-      f.tiempos.push(p - new Date(l.created_at).getTime());
-    }
-    if (l.stage === 'ganado') { f.ganados++; f.importe += Number(l.value || 0); }
-    if (l.stage === 'perdido') f.perdidos++;
-  });
-
-  const rows = Object.values(filas)
-    .filter(f => f.recibidos > 0 || f.id !== '_sin')
-    .sort((a, b) => b.recibidos - a.recibidos);
-
-  if (!rows.length) {
-    box.innerHTML = html + (typeof emptyAgua === 'function'
-      ? emptyAgua('Todavía no hay nada que comparar', 'Invita a tu equipo y activa el reparto automático en Configuración → Equipo. En cuanto los leads tengan dueño, este informe se llena solo.')
-      : '<div style="font-size:12.5px;color:var(--muted2)">Sin datos.</div>');
-    return;
-  }
-
-  // Totales de la cuenta, para leer cada fila en contexto
-  const tot = rows.reduce((a, f) => ({
-    recibidos: a.recibidos + f.recibidos, contactados: a.contactados + f.contactados,
-    ganados: a.ganados + f.ganados, importe: a.importe + f.importe,
-    tiempos: a.tiempos.concat(f.tiempos),
-  }), { recibidos: 0, contactados: 0, ganados: 0, importe: 0, tiempos: [] });
-
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:20px">' +
-    salesCard('Leads del periodo', tot.recibidos, rows.length + ' persona' + (rows.length > 1 ? 's' : '')) +
-    salesCard('Contactados', (tot.recibidos ? Math.round(tot.contactados / tot.recibidos * 100) : 0) + '%', tot.contactados + ' de ' + tot.recibidos) +
-    salesCard('1.er contacto (mediana)', eqFmtDur(eqMediana(tot.tiempos)), tot.tiempos.length + ' leads medidos') +
-    salesCard('Cerrados', tot.ganados, (tot.recibidos ? Math.round(tot.ganados / tot.recibidos * 100) : 0) + '% del total') +
-  '</div>';
-
-  const maxR = Math.max(1, ...rows.map(f => f.recibidos));
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px;overflow-x:auto">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Comparativa del equipo</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">Leads recibidos en el periodo y qué pasó con ellos</div>' +
-    '<table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px">' +
-    '<thead><tr style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em">' +
-      '<th style="text-align:left;padding:0 8px 8px 0">Comercial</th>' +
-      '<th style="text-align:left;padding:0 8px 8px">Recibidos</th>' +
-      '<th style="text-align:right;padding:0 8px 8px">Contactados</th>' +
-      '<th style="text-align:right;padding:0 8px 8px">1.er contacto</th>' +
-      '<th style="text-align:right;padding:0 8px 8px">Cerrados</th>' +
-      '<th style="text-align:right;padding:0 0 8px 8px">Importe</th>' +
-    '</tr></thead><tbody>' +
-    rows.map(f => {
-      const pc = f.recibidos ? Math.round(f.contactados / f.recibidos * 100) : 0;
-      const cierre = f.recibidos ? Math.round(f.ganados / f.recibidos * 100) : 0;
-      const huerfano = f.id === '_sin';
-      return '<tr style="border-top:1px solid var(--border)">' +
-        '<td style="padding:10px 8px 10px 0;font-weight:600' + (huerfano ? ';color:#B45309' : '') + '">' + esc(f.nombre) + '</td>' +
-        '<td style="padding:10px 8px">' +
-          '<div style="display:flex;align-items:center;gap:8px">' +
-            '<div style="flex:1;min-width:70px;height:8px;background:var(--bg-muted);border-radius:5px;overflow:hidden">' +
-              '<div style="height:100%;width:' + Math.round(f.recibidos / maxR * 100) + '%;background:' + (huerfano ? '#F59E0B' : 'var(--blue)') + ';border-radius:5px"></div>' +
-            '</div>' +
-            '<span style="font-weight:700;width:28px;text-align:right">' + f.recibidos + '</span>' +
-          '</div></td>' +
-        '<td style="text-align:right;padding:10px 8px;color:' + (pc < 60 ? '#B45309' : 'var(--text)') + '">' + pc + '%</td>' +
-        '<td style="text-align:right;padding:10px 8px">' + eqFmtDur(eqMediana(f.tiempos)) + '</td>' +
-        '<td style="text-align:right;padding:10px 8px">' + f.ganados + ' <span style="color:var(--muted2)">(' + cierre + '%)</span></td>' +
-        '<td style="text-align:right;padding:10px 0 10px 8px;font-weight:700">' + (f.importe ? '$' + f.importe.toLocaleString('es') : '—') + '</td>' +
-      '</tr>';
-    }).join('') +
-    '</tbody></table></div>';
-
-  // Motivos de pérdida: dónde se cae el equipo
-  const perdidos = delPeriodo.filter(l => l.stage === 'perdido');
-  const porMotivo = {};
-  perdidos.forEach(l => { const k = l.close_reason || 'Sin motivo registrado'; porMotivo[k] = (porMotivo[k] || 0) + 1; });
-  const motivos = Object.entries(porMotivo).sort((a, b) => b[1] - a[1]);
-  const maxM = Math.max(1, ...motivos.map(m => m[1]));
-
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px">' +
-    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-      '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Motivos de pérdida</div>' +
-      '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">' + perdidos.length + ' oportunidades perdidas en el periodo</div>' +
-      (motivos.length
-        ? motivos.map(([k, v]) => salesBar(k, v, maxM, '#DC2626', Math.round(v / perdidos.length * 100) + '%')).join('')
-        : '<div style="font-size:12px;color:var(--muted2)">Ninguna pérdida registrada en el periodo</div>') +
-    '</div>';
-
-  // Sin contactar: la lista accionable, no un número
-  const sinContactar = delPeriodo
-    .filter(l => !primera[l.id] && !['ganado', 'perdido'].includes(l.stage))
-    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-    .slice(0, 12);
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px">' +
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:3px">Sin contactar todavía</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Los más antiguos primero — aquí es donde se pierde dinero</div>' +
-    (sinContactar.length ? sinContactar.map(l => {
-      const dias = Math.floor((Date.now() - new Date(l.created_at).getTime()) / 86400000);
-      return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">' +
-        '<div style="flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="tarAbrirLead(\'' + esc(l.id) + '\')">' + esc(l.name || 'Sin nombre') + '</div>' +
-        '<div style="font-size:11.5px;color:var(--muted2)">' + esc(l.assigned_name || 'sin asignar') + '</div>' +
-        '<div style="font-size:11.5px;font-weight:700;color:' + (dias >= 3 ? '#B91C1C' : 'var(--muted)') + ';width:56px;text-align:right">' + (dias ? dias + ' d' : 'hoy') + '</div>' +
-      '</div>';
-    }).join('') : '<div style="font-size:12px;color:var(--muted2)">Todos los leads del periodo tienen al menos un contacto registrado</div>') +
-  '</div></div>';
-
-  box.innerHTML = html;
+  const M = informesListo(eqRender);
+  if (!M) { box.innerHTML = INFORME_CARGANDO; return; }
+  const ctx = informeCtx();
+  ctx.inter = M.actsDelInforme(_eqData.inter, ctx.leads, true);
+  box.innerHTML = M.htmlEquipo(Object.assign(ctx, {
+    equipo: _eqData.equipo, falla: !!_eqData.falla,
+    rango: _eqRange, botones: rangoBotones(_eqRange, 'eqSetRange'),
+  }));
 }
 
 

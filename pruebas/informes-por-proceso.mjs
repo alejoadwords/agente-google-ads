@@ -10,6 +10,8 @@ import { dirname, join } from 'node:path';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const app = readFileSync(join(RAIZ, 'public/app.js'), 'utf8');
+// Desde el 09-10-2026 el cálculo de los informes vive en el módulo compartido.
+const mod = readFileSync(join(RAIZ, 'public/informes.js'), 'utf8');
 let mal = 0;
 const ok = (c, m, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (c || extra === undefined ? '' : ' → ' + extra)); if (!c) mal++; };
 const trozo = (firma) => { const i = app.indexOf(firma); return i < 0 ? '' : app.slice(i, app.indexOf('\n}\n', i) + 3); };
@@ -53,14 +55,15 @@ ok(/return soloMiGestion\(soloDelProceso\(todos\)\);/.test(trozo('function leads
 ok(/if \(enInforme\(\)\) return pipeCambiarEnInforme\(id\);/.test(trozo('async function pipeCambiar(')), 'pipeCambiar deriva a los informes');
 ok(/crmSetView\(crmView\);/.test(trozo('async function pipeCambiarEnInforme(')), 'y se repinta la vista que se está mirando');
 ok(/crmView === 'list' \|\| enInforme\(\)/.test(trozo('function pipeAbrirSelector(')), '«Todos los procesos» se ofrece en los informes');
-ok(/actsDelProceso\(actsDeMisLeads\(actsTodas, leads\), leads\)/.test(app), 'Productividad cuenta las actividades del proceso');
+ok(/M\.actsDelInforme\(actsDeMisLeads\(_prodData\.acts, ctx\.leads\), ctx\.leads, conProceso\)/.test(app), 'Productividad cuenta las actividades del proceso');
 
 console.log('\nEl Resumen tiene fechas\n');
 const res = trozo('function crmRenderAnalytics(');
-ok(/rangoBotones\(_resumenRange, 'resumenSetRange'\)/.test(res), 'la botonera de fechas de los demás informes');
-ok(/t >= desdeR && t <= hastaR/.test(res) && /l\.created_at/.test(res), 'cuenta los leads que entraron en el periodo');
+const resMod = mod.slice(mod.indexOf('export function htmlResumen('), mod.indexOf('// ── Ventas'));
+ok(/rangoBotones\(_resumenRange, 'resumenSetRange'\)/.test(res) && /todos: informeTodos\(\)/.test(app), 'la botonera de fechas de los demás informes');
+ok(/t >= desdeR && t <= hastaR/.test(resMod) && /l\.created_at/.test(resMod), 'cuenta los leads que entraron en el periodo');
 ok(/let _resumenRange = 0;/.test(app), '«Todo» por defecto, que es lo que enseñaba');
-ok(/informeTodos\(\)\s*\?\s*\[\{ key: '__abiertos'/.test(res), 'con todos los procesos, el embudo no mezcla etapas ajenas');
+ok(/c\.todos\s*\?\s*\[\{ key: '__abiertos'/.test(resMod), 'con todos los procesos, el embudo no mezcla etapas ajenas');
 
 console.log(mal ? `\n${mal} fallo(s)\n` : '\nTodo en orden\n');
 process.exit(mal ? 1 : 0);
