@@ -69,6 +69,15 @@ const limpiar = () => sql(`
   delete from public.campaigns where user_id in ('${CUENTA}','${OTRA}');
   delete from public.leads where user_id in ('${CUENTA}','${OTRA}');`);
 await limpiar();
+// Una pasada que se cae a mitad no llega al limpiar() del final, y como cada
+// una lleva su sufijo nadie volvía a borrar lo suyo: el 09-10-2026 había 36
+// campañas, 9 leads y 36 eventos de pruebas viejas en la base. Se barren las de
+// más de una hora, para no pisar otra pasada que esté corriendo ahora.
+await sql(`
+  delete from public.campaign_recipients where campaign_id in (select id from public.campaigns where user_id like 'user\\_prueba\\_camp\\_%' and created_at < now() - interval '1 hour');
+  delete from public.campaigns where user_id like 'user\\_prueba\\_camp\\_%' and created_at < now() - interval '1 hour';
+  delete from public.leads where user_id like 'user\\_prueba\\_camp\\_%' and created_at < now() - interval '1 hour';
+  delete from public.email_events where to_email like 'quemado.prueba.%@ejemplo-acuarius.test' and created_at < now() - interval '1 hour';`);
 
 await sql(`
 insert into public.leads (id, user_id, client_id, name, email, stage, source)

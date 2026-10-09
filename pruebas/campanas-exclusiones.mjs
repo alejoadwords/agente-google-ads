@@ -67,6 +67,14 @@ const limpiar = () => sql(`
   delete from public.lead_lists where user_id='${CUENTA}';
   delete from public.leads where user_id='${CUENTA}';`);
 await limpiar();
+// Lo que dejó una pasada que se cayó a mitad (no llegó al limpiar() del
+// final). Solo lo de más de una hora, para no pisar otra pasada en curso.
+await sql(`
+  delete from public.campaign_recipients where campaign_id in (select id from public.campaigns where user_id like 'user\\_prueba\\_excl\\_%' and created_at < now() - interval '1 hour');
+  delete from public.campaigns where user_id like 'user\\_prueba\\_excl\\_%' and created_at < now() - interval '1 hour';
+  delete from public.lead_lists where user_id like 'user\\_prueba\\_excl\\_%' and created_at < now() - interval '1 hour';
+  delete from public.leads where user_id like 'user\\_prueba\\_excl\\_%' and created_at < now() - interval '1 hour';
+  delete from public.email_events where to_email like 'excl.%@ejemplo-acuarius.test' and created_at < now() - interval '1 hour';`);
 
 await sql(`
 insert into public.leads (id, user_id, client_id, name, email, stage, source, tags) values
