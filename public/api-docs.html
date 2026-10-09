@@ -70,6 +70,7 @@ td{border-bottom:1px solid var(--border);padding:7px 10px;vertical-align:top;col
     <li><a href="#conversaciones">Conversaciones</a></li>
     <li><a href="#webhooks">Webhooks</a></li>
     <li><a href="#agentes">Para agentes de IA</a></li>
+    <li><a href="#mcp">Servidor MCP</a></li>
   </ul>
 </header>
 
@@ -258,6 +259,26 @@ function avisoValido(cuerpoCrudo, cabeceraFirma, secreto) {
 <p><strong>Deja que los errores le enseñen.</strong> Los mensajes están escritos para que un modelo los entienda y corrija solo: una etapa inexistente devuelve las válidas; un cierre sin motivo, los motivos de la cuenta.</p>
 <p><strong>Usa <code>Idempotency-Key</code></strong> en todo lo que escriba: un agente reintenta más que una persona.</p>
 <p><strong>Una llave por agente</strong>, con su nombre: así el historial dice cuál de tus agentes hizo cada cosa, y puedes apagar uno sin tocar a los demás.</p>
+
+<h2 id="mcp">Servidor MCP</h2>
+<p>Si tu agente habla MCP (Model Context Protocol), no tienes que programar las herramientas: conéctalo a <code>https://app.acuarius.app/api/mcp</code> con la misma llave y verá solo las herramientas del CRM que esa llave permite, con su explicación (<code>buscar_prospectos</code>, <code>ver_prospecto</code>, <code>mover_etapa</code>, <code>crear_tarea</code>, <code>dejar_nota</code>…). Pasan por las mismas reglas, permisos, límites y firma que la API, porque por dentro son la API.</p>
+<p><strong>Con la API de Claude</strong> (conector MCP):</p>
+<pre><code>curl https://api.anthropic.com/v1/messages \
+  -H 'x-api-key: TU_CLAVE_DE_ANTHROPIC' -H 'anthropic-version: 2023-06-01' \
+  -H 'anthropic-beta: mcp-client-2025-11-20' -H 'content-type: application/json' \
+  -d '{
+    "model": "claude-opus-5-5", "max_tokens": 16000,
+    "mcp_servers": [{ "type": "url", "name": "acuarius",
+                      "url": "https://app.acuarius.app/api/mcp",
+                      "authorization_token": "acu_live_…" }],
+    "tools": [{ "type": "mcp_toolset", "mcp_server_name": "acuarius" }],
+    "messages": [{ "role": "user",
+      "content": "¿Qué prospectos abiertos llevan 5 días sin movimiento?" }]
+  }'</code></pre>
+<p><strong>Con Claude Code:</strong></p>
+<pre><code>claude mcp add --transport http acuarius https://app.acuarius.app/api/mcp \
+  --header "Authorization: Bearer acu_live_…"</code></pre>
+<p>Transporte «Streamable HTTP» sin sesión (cada mensaje por <code>POST</code>, respuesta en JSON). Cada petición al servidor MCP comprueba la llave y luego ejecuta la herramienta, así que cuenta <strong>dos</strong> llamadas en tu límite por minuto. Por ahora se entra solo con la llave: conectar Acuarius desde la aplicación de un asistente sin copiar llaves (con inicio de sesión) llegará más adelante.</p>
 
 <p style="margin-top:48px;font-size:13px;color:var(--muted)">¿Dudas o un caso que la API no cubre? Escríbenos a <a href="mailto:soporte@acuarius.app">soporte@acuarius.app</a>.</p>
 </div>

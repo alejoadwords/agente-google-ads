@@ -2,6 +2,14 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-08-api-mcp",
+      "fecha": "2026-10-08",
+      "tipo": "nuevo",
+      "titulo": "Conecta tu agente de IA por MCP",
+      "texto": "Si tu agente de IA habla MCP, ya no hace falta programarle las herramientas del CRM: se conecta a Acuarius con la llave de la API y ve solo lo que esa llave permite —buscar prospectos, moverlos de etapa, crear tareas, dejar notas— con las mismas reglas que tu equipo.",
+      "accion": { "texto": "Abrir API y agentes", "ir": "ajustes-api" }
+    },
+    {
       "id": "2026-10-08-academia-tour-prueba",
       "fecha": "2026-10-08",
       "tipo": "mejora",
