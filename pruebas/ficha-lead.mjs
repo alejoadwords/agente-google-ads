@@ -105,8 +105,11 @@ console.log('\nNo se duplica lo que ya existía\n');
 {
   // Escribir una segunda versión de «agendar» o «propuesta» garantiza que un
   // día arreglen una y se olviden de la otra.
+  // La sugerencia: desde el 09-10-2026 la ficha ya no pasa por
+  // crmSuggestNextAction (era del panel viejo y siempre fallaba), sino por
+  // crmPedirProximaAccion, el único camino al Copiloto que comparten los dos.
   for (const fn of ['agnScheduleForLead', 'prpOpenForLead', 'crmSendLeadToConsultor',
-                    'crmMoverProcesoAbrir', 'crmTareaHecha', 'crmChangeStage', 'crmSuggestNextAction']) {
+                    'crmMoverProcesoAbrir', 'crmTareaHecha', 'crmChangeStage', 'crmPedirProximaAccion']) {
     chk(`reutiliza ${fn}`, new RegExp(fn + '\\(').test(bloque) &&
         (js.match(new RegExp('function ' + fn + '\\(', 'g')) || []).length === 1);
   }

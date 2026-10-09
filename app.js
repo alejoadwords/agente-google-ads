@@ -20118,7 +20118,11 @@ function crmPintarTotal(filtered) {
     totalEl.className = 'crm-pipeline-total';
     container.parentNode.insertBefore(totalEl, container);
   }
-  totalEl.style.display = totalValue > 0 ? 'flex' : 'none';
+  // Solo en el tablero y la lista. Una recarga de leads que llega mientras se
+  // mira Análisis o el inbox pintaba aquí y el total se colaba encima del
+  // informe, con el importe de otro proceso.
+  const enTablero = crmView === 'kanban' || crmView === 'list';
+  totalEl.style.display = (totalValue > 0 && enTablero) ? 'flex' : 'none';
   if (totalValue > 0) totalEl.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg> Pipeline total: $' + totalValue.toLocaleString('es-CO');
 }
 
