@@ -17784,7 +17784,40 @@ function leadsInforme(repintar) {
   const todos = _leadsAmbitoDe === crmAmbitoCliente()
     ? crmLeadsAmbito
     : (typeof crmLeads !== 'undefined' ? crmLeads : []);
-  return soloMiGestion(todos);
+  return soloMiGestion(soloDelProceso(todos));
+}
+
+// ── El proceso de venta en los informes ─────────────────────────────────────
+// El selector de proceso de la cabecera se veía en Análisis pero no hacía
+// nada: los informes sumaban los leads de TODOS los procesos del cliente y, al
+// cambiarlo, se repintaba el tablero (oculto) en vez del informe. Certain lo
+// notó en Ventas con «Captación» elegido (09-10-2026). Ahora el proceso elegido
+// recorta todos los informes de leads, y en ellos se puede elegir «Todos».
+const VISTAS_INFORME = ['analytics', 'sales', 'prod', 'mk', 'equipo'];
+let _informeTodos = false;
+function enInforme() { return VISTAS_INFORME.includes(crmView); }
+function informeTodos() { return _informeTodos && crmPipelines.length > 1; }
+
+// El proceso por el que se recortan los informes, o null si van todos.
+function informePipelineId() {
+  if (informeTodos() || crmPipelines.length < 2) return null;
+  return crmPipelineId || (crmPipelines.find(p => p.is_default) || crmPipelines[0] || {}).id || null;
+}
+
+function soloDelProceso(leads) {
+  const id = informePipelineId();
+  if (!id) return leads || [];
+  // Un lead sin proceso es del principal: así se migraron los de antes de que
+  // hubiera varios, y dejarlos fuera los borraría de los informes.
+  const esPrincipal = !!(crmPipelines.find(p => p.id === id) || {}).is_default;
+  return (leads || []).filter(l => l.pipeline_id === id || (!l.pipeline_id && esPrincipal));
+}
+
+// Las actividades de los leads del proceso. Sin proceso elegido, todas.
+function actsDelProceso(actividades, leadsDelProceso) {
+  if (!informePipelineId()) return actividades || [];
+  const ids = new Set((leadsDelProceso || []).map(l => l.id));
+  return (actividades || []).filter(a => a.lead_id && ids.has(a.lead_id));
 }
 
 // Los tres informes —Ventas, Productividad y Por comercial— pasan por aquí, así
@@ -17865,7 +17898,7 @@ function pipeRenderSelector() {
   cont.style.display = 'flex';
   sel.style.display = crmPipelines.length ? 'inline-flex' : 'none';
   const actual = crmPipelines.find(p => p.id === crmPipelineId) || crmPipelines[0] || {};
-  txt.textContent = crmTodosActivo() ? 'Todos los procesos' : (actual.name || '');
+  txt.textContent = (crmTodosActivo() || (enInforme() && informeTodos())) ? 'Todos los procesos' : (actual.name || '');
   const cliente = pipeAmbitoNombre();
   sel.title = cliente ? 'Procesos de ' + cliente : 'Procesos sin cliente asignado';
 }
@@ -17875,13 +17908,16 @@ const PIPE_TODOS = '__todos';
 function pipeAbrirSelector(btn) {
   const ops = crmPipelines.map(p => ({ id: p.id, name: p.name }));
   // «Todos» solo se ofrece en la Lista: en el Tablero no hay columnas comunes.
-  if (crmView === 'list' && crmPipelines.length > 1) {
+  // Y en los informes, donde sumar todos los procesos sí tiene sentido.
+  if ((crmView === 'list' || enInforme()) && crmPipelines.length > 1) {
     ops.unshift({ id: PIPE_TODOS, name: 'Todos los procesos' }, { sep: true });
   }
-  ddAbrir(btn, ops, crmTodosActivo() ? PIPE_TODOS : crmPipelineId, id => pipeCambiar(id));
+  const marcado = (crmTodosActivo() || (enInforme() && informeTodos())) ? PIPE_TODOS : crmPipelineId;
+  ddAbrir(btn, ops, marcado, id => pipeCambiar(id));
 }
 
 async function pipeCambiar(id) {
+  if (enInforme()) return pipeCambiarEnInforme(id);
   if (id === PIPE_TODOS) {
     if (crmTodosActivo()) return;
     crmListaTodos = true;
@@ -17911,6 +17947,29 @@ async function pipeCambiar(id) {
   crmStagesLoaded = false; crmLeadsLoaded = false;
   await Promise.all([crmLoadStages(), crmLoadLeads()]);
   crmRender();
+}
+
+// En Análisis el proceso no recarga el tablero: recorta el informe que se está
+// viendo y lo repinta. Las etapas sí se recargan, porque el embudo del Resumen
+// se dibuja con las del proceso elegido.
+async function pipeCambiarEnInforme(id) {
+  if (id === PIPE_TODOS) {
+    _informeTodos = true;
+  } else {
+    _informeTodos = false;
+    if (id && id !== crmPipelineId) {
+      crmPipelineId = id;
+      try { localStorage.setItem(pipeClave(), id); } catch {}
+      crmStagesLoaded = false; crmLeadsLoaded = false;
+      await crmLoadStages();
+    }
+  }
+  pipeRenderSelector();
+  // Los informes que guardan sus datos se vuelven a pedir: cuentan sobre los
+  // leads del proceso.
+  if (typeof _prodData !== 'undefined') _prodData = null;
+  if (typeof _eqData !== 'undefined') _eqData = null;
+  crmSetView(crmView);
 }
 
 // ── Gestor de pipelines ─────────────────────────────────────────────────────
@@ -26216,11 +26275,22 @@ function inboxSetFilter(status, btn) {
   crmLoadInbox(status);
 }
 
+// El Resumen no tenía rango: siempre contaba toda la historia. Ahora, como los
+// demás informes, se puede acotar. Cuenta los leads que ENTRARON en el periodo
+// (por `created_at`): es la foto de esa cosecha —cuántos llegaron, dónde están
+// hoy, cuánto se ganó de ellos—. «Todo» por defecto, que es lo que enseñaba.
+let _resumenRange = 0;
+function resumenSetRange(d) { _resumenRange = d; crmRenderAnalytics(); crmRenderNps(); }
+
 function crmRenderAnalytics() {
   const container = document.getElementById('crm-analytics-view');
   if (!container) return;
   const now = Date.now();
-  const leads = leadsInforme(crmRenderAnalytics);
+  const delAmbito = leadsInforme(crmRenderAnalytics);
+  const desdeR = rangoIni(_resumenRange), hastaR = rangoFin(_resumenRange);
+  const leads = _resumenRange
+    ? delAmbito.filter(l => { const t = new Date(l.created_at || 0).getTime(); return t >= desdeR && t <= hastaR; })
+    : delAmbito;
   const active = leads.filter(l => l.stage !== 'ganado' && l.stage !== 'perdido');
   const won = leads.filter(l => l.stage === 'ganado');
   const total = leads.length;
@@ -26228,10 +26298,18 @@ function crmRenderAnalytics() {
   const wonValue = won.reduce((s, l) => s + (Number(l.value) || 0), 0);
   const avgValue = total > 0 ? Math.round(pipelineValue / Math.max(active.length, 1)) : 0;
   const convRate = total > 0 ? Math.round((won.length / total) * 100) : 0;
-  const maxCount = Math.max(...crmStages.map(s => leads.filter(l => l.stage === s.key).length), 1);
-  const stageFunnel = crmStages.map(s => {
-    const cnt = leads.filter(l => l.stage === s.key).length;
-    const val = leads.filter(l => l.stage === s.key).reduce((sum, l) => sum + (Number(l.value) || 0), 0);
+  // Con «Todos los procesos» cada uno trae sus etapas y no hay un embudo común:
+  // se resume en abiertos, ganados y perdidos en vez de mezclar etapas ajenas.
+  const etapasEmbudo = informeTodos()
+    ? [{ key: '__abiertos', label: 'Abiertos', color: 'var(--blue)' },
+       { key: 'ganado', label: 'Ganados', color: 'var(--success)' },
+       { key: 'perdido', label: 'Perdidos', color: 'var(--muted2)' }]
+    : crmStages;
+  const enEtapa = (l, k) => k === '__abiertos' ? !leadCerrado(l) : l.stage === k;
+  const maxCount = Math.max(...etapasEmbudo.map(s => leads.filter(l => enEtapa(l, s.key)).length), 1);
+  const stageFunnel = etapasEmbudo.map(s => {
+    const cnt = leads.filter(l => enEtapa(l, s.key)).length;
+    const val = leads.filter(l => enEtapa(l, s.key)).reduce((sum, l) => sum + (Number(l.value) || 0), 0);
     return { label: s.label, color: s.color, key: s.key, count: cnt, value: val, pct: Math.round((cnt / maxCount) * 100) };
   });
   const sourceCounts = {};
@@ -26263,7 +26341,12 @@ function crmRenderAnalytics() {
         '</div>';
       }).join('') + '</div>'
     : '';
-  container.innerHTML = '<div class="crm-analytics-grid"><div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Pipeline activo</div><div class="crm-analytics-stat" style="font-size:20px">$' + pipelineValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Valor en proceso</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Deals ganados</div><div class="crm-analytics-stat" style="font-size:20px">$' + wonValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">' + convRate + '% tasa de cierre</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Valor promedio</div><div class="crm-analytics-stat" style="font-size:20px">$' + avgValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Por deal activo</div></div></div><div id="crm-nps-section"></div><div class="crm-analytics-section"><div class="crm-analytics-section-title">Embudo del pipeline</div>' + stageFunnel.map(s => '<div class="crm-analytics-stage-row"><div class="crm-analytics-dot" style="background:' + s.color + '"></div><div class="crm-analytics-stage-name">' + esc(s.label) + '</div><div class="crm-analytics-bar-wrap"><div class="crm-analytics-bar" style="width:' + s.pct + '%;background:' + s.color + '"></div></div><div class="crm-analytics-stage-count">' + s.count + '</div><div class="crm-analytics-stage-val">' + (s.value > 0 ? '$' + s.value.toLocaleString('es-CO') : '') + '</div></div>').join('') + '</div>' + (Object.keys(sourceCounts).length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Fuentes de leads</div>' + Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, cnt]) => '<div class="crm-source-row"><div class="crm-source-label">' + esc(fuenteLabel(src)) + '</div><div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((cnt / maxSrc) * 100) + '%"></div></div><div class="crm-source-count">' + cnt + '</div></div>').join('') + '</div>' : '') + tagSection + (needsAttention.length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title" style="color:#D97706">Requieren atencion (' + needsAttention.length + ')</div>' + needsAttention.map(l => { const days = Math.floor((now - new Date(l.updated_at || l.created_at).getTime()) / 86400000); const st = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' }; return '<div class="crm-attention-item" onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><div class="crm-attention-days">' + days + 'd</div><div style="flex:1">' + esc(l.name) + (l.company ? '<span style="color:var(--muted);margin-left:4px">- ' + esc(l.company) + '</span>' : '') + '</div><div class="crm-attention-stage" style="background:' + st.color + '20;color:' + st.color + '">' + esc(st.label) + '</div></div>'; }).join('') + '</div>' : '');
+  const cabResumen = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">' +
+    '<div><div style="font-size:var(--fs-lg);font-weight:800">Resumen</div>' +
+    '<div style="font-size:12px;color:var(--muted)">' + (_resumenRange ? 'Los leads que entraron en el periodo y dónde están hoy' : 'Todos los leads, desde el primero') +
+      (informeTodos() ? ' · todos los procesos' : '') + '</div></div>' +
+    rangoBotones(_resumenRange, 'resumenSetRange') + '</div>';
+  container.innerHTML = cabResumen + '<div class="crm-analytics-grid"><div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Pipeline activo</div><div class="crm-analytics-stat" style="font-size:20px">$' + pipelineValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Valor en proceso</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Deals ganados</div><div class="crm-analytics-stat" style="font-size:20px">$' + wonValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">' + convRate + '% tasa de cierre</div></div><div class="crm-analytics-card"><div class="crm-analytics-card-title">Valor promedio</div><div class="crm-analytics-stat" style="font-size:20px">$' + avgValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Por deal activo</div></div></div><div id="crm-nps-section"></div><div class="crm-analytics-section"><div class="crm-analytics-section-title">Embudo del pipeline</div>' + stageFunnel.map(s => '<div class="crm-analytics-stage-row"><div class="crm-analytics-dot" style="background:' + s.color + '"></div><div class="crm-analytics-stage-name">' + esc(s.label) + '</div><div class="crm-analytics-bar-wrap"><div class="crm-analytics-bar" style="width:' + s.pct + '%;background:' + s.color + '"></div></div><div class="crm-analytics-stage-count">' + s.count + '</div><div class="crm-analytics-stage-val">' + (s.value > 0 ? '$' + s.value.toLocaleString('es-CO') : '') + '</div></div>').join('') + '</div>' + (Object.keys(sourceCounts).length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title">Fuentes de leads</div>' + Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, cnt]) => '<div class="crm-source-row"><div class="crm-source-label">' + esc(fuenteLabel(src)) + '</div><div class="crm-source-bar-wrap"><div class="crm-source-bar" style="width:' + Math.round((cnt / maxSrc) * 100) + '%"></div></div><div class="crm-source-count">' + cnt + '</div></div>').join('') + '</div>' : '') + tagSection + (needsAttention.length > 0 ? '<div class="crm-analytics-section"><div class="crm-analytics-section-title" style="color:#D97706">Requieren atencion (' + needsAttention.length + ')</div>' + needsAttention.map(l => { const days = Math.floor((now - new Date(l.updated_at || l.created_at).getTime()) / 86400000); const st = crmStages.find(s => s.key === l.stage) || { label: l.stage, color: 'var(--muted)' }; return '<div class="crm-attention-item" onclick="crmOpenDetail(\'' + esc(l.id) + '\')"><div class="crm-attention-days">' + days + 'd</div><div style="flex:1">' + esc(l.name) + (l.company ? '<span style="color:var(--muted);margin-left:4px">- ' + esc(l.company) + '</span>' : '') + '</div><div class="crm-attention-stage" style="background:' + st.color + '20;color:' + st.color + '">' + esc(st.label) + '</div></div>'; }).join('') + '</div>' : '');
 }
 
 // ── Widget NPS en Análisis (async — se pinta al llegar los datos) ───────────
@@ -35359,8 +35442,8 @@ async function prodRender() {
   // recortado a la gestión propia si el perfil lo pide, así que las tareas se
   // recortan a esos mismos leads: si no, un comercial vería su propio nombre
   // con los números de todo el equipo, que es peor que no recortar nada.
-  const acts = actsDeMisLeads(actsTodas, leads);
-  const inter = actsDeMisLeads(interTodas, leads);
+  const acts = actsDelProceso(actsDeMisLeads(actsTodas, leads), leads);
+  const inter = actsDelProceso(actsDeMisLeads(interTodas, leads), leads);
   const now = Date.now();
   const from = rangoIni(_prodRange, 3650);
   const hastaP = rangoFin(_prodRange);

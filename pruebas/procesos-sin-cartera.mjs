@@ -28,8 +28,9 @@ console.log('\nEl selector del tablero\n');
 {
   const dom = { 'pipe-selector': el(), 'pipe-select': el(), 'pipe-select-txt': el() };
   // crmTodosActivo: «Todos los procesos» de la Lista (01-10-2026); aquí, apagado.
+  // enInforme/informeTodos: «Todos los procesos» de los informes (09-10-2026); apagado.
   const f = new Function('document', 'crmPipelines', 'crmPipelineId', 'pipeAmbitoNombre', 'crmTodosActivo',
-    cuerpo('function pipeRenderSelector() {') + '; return pipeRenderSelector;');
+    'const enInforme = () => false, informeTodos = () => false;' + cuerpo('function pipeRenderSelector() {') + '; return pipeRenderSelector;');
   f({ getElementById: id => dom[id] }, [], null, () => null, () => false)();
   ok(dom['pipe-selector'].style.display === 'flex' && dom['pipe-select'].style.display === 'none', 'sin procesos se ve el engranaje para crear el primero');
   f({ getElementById: id => dom[id] }, [{ id: 'p1', name: 'Cierre de venta vehículos', is_default: true }], 'p1', () => null, () => false)();
