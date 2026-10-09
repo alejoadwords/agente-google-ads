@@ -203,6 +203,7 @@
     line-height: 1.65;
   }
   strong { color: var(--text); font-weight: 600; }
+  section h3 { font-size: 15px; font-weight: 700; color: var(--text); margin: 22px 0 8px; }
   a { color: var(--blue); text-decoration: none; }
   a:hover { text-decoration: underline; }
 
@@ -313,7 +314,7 @@
   <div class="hero-label">Legal</div>
   <h1>Términos de Servicio</h1>
   <p>Al usar Acuarius, aceptas los siguientes términos. Léelos con atención antes de comenzar.</p>
-  <span class="hero-date">Última actualización: 5 de octubre de 2026</span>
+  <span class="hero-date">Última actualización: 9 de octubre de 2026</span>
 </div>
 
 <!-- CONTENT -->
@@ -374,7 +375,7 @@
     <h2><span class="sec-num">3</span>Cuentas, equipo y accesos</h2>
     <ul>
       <li>Debes dar información veraz y mantenerla actualizada.</li>
-      <li>Eres responsable de la seguridad de tu acceso y de toda la actividad de tu cuenta, incluida la de las personas que invites a tu equipo.</li>
+      <li>Eres responsable de la seguridad de tu acceso y de toda la actividad de tu cuenta, incluida la de las personas que invites a tu equipo y la de los sistemas que conectes con una llave de la API.</li>
       <li>Como dueño de la cuenta decides quién entra y con qué perfil (administración, ventas o mercadeo). Los asientos de equipo dependen de tu plan.</li>
       <li>Si una agencia administra varias marcas desde Acuarius, la agencia responde por el uso que haga de los datos de cada una.</li>
       <li>Avísanos de inmediato a <a href="mailto:ceo@acuarius.app">ceo@acuarius.app</a> si sospechas un acceso no autorizado.</li>
@@ -459,7 +460,7 @@
     <p>Al usar los SMS, además:</p>
     <ul>
       <li>Cumples la ley colombiana aplicable, entre otras la Ley 1581 de 2012 de protección de datos, la Ley 2300 de 2023 y la regulación de la Comisión de Regulación de Comunicaciones (CRC), incluido el Registro de Números Excluidos.</li>
-      <li>Atiendes las solicitudes de baja: quien responda «SALIR» o pida por cualquier medio no recibir más mensajes deja de recibirlos. Los contactos marcados con la etiqueta «no-sms» no vuelven a recibir SMS desde la plataforma.</li>
+      <li>Atiendes las solicitudes de baja. Cada SMS termina con un enlace para darse de baja: quien lo usa deja de recibir tus SMS sin que tengas que hacer nada. Si alguien te lo pide por otro medio, márcalo con la etiqueta «no-sms» y no volverá a recibir SMS desde la plataforma. Los SMS se envían desde un código corto que no recibe respuestas, así que responder al mensaje no sirve para darse de baja.</li>
       <li>No envías contenido engañoso, fraudulento ni ilegal: suplantación de marcas o entidades, enlaces maliciosos (<em>smishing</em>), cobranzas abusivas o mensajes que el destinatario no espera de tu negocio.</li>
       <li>Aceptas que la plataforma solo envía en el horario permitido (lunes a viernes de 7:00 a 19:00 y sábados de 8:00 a 15:00, sin domingos ni festivos) y que las cuentas nuevas tienen un límite de mensajes por campaña durante sus primeros días.</li>
     </ul>
@@ -490,6 +491,15 @@
       <li>Nos autorizas a acceder solo a lo necesario para la función que activaste; puedes desconectarlos cuando quieras</li>
       <li>Acuarius no responde por cambios, caídas o decisiones de esos servicios (por ejemplo, la suspensión de una cuenta publicitaria o de un número de WhatsApp)</li>
     </ul>
+    <h3>La API, tus llaves y los sistemas que conectes</h3>
+    <p>Acuarius tiene una API, un servidor MCP y avisos a tu sistema (webhooks) para que conectes a tu cuenta sistemas externos: el agente de inteligencia artificial de tu empresa, tu aplicación, tu ERP u otros. Al crear una llave de la API o un webhook:</p>
+    <ul>
+      <li>Lo que haga un sistema con tu llave se considera hecho por tu cuenta, igual que lo que hace una persona de tu equipo. Tú eliges los permisos de cada llave y eres responsable de supervisar lo que hacen esos sistemas y las decisiones que toman, incluidas las de un agente de inteligencia artificial que actúe sin intervención humana.</li>
+      <li>Al conectar un sistema o un webhook decides enviar a ese tercero (tu proveedor de inteligencia artificial, tu servidor u otro) datos de tu cuenta y de tus contactos. Esa entrega la haces tú como responsable del tratamiento: debes contar con la autorización de tus contactos, informarla en tu propia política de tratamiento de datos y tener un acuerdo con quien los recibe. Lo que ese tercero haga con los datos queda fuera de nuestro control.</li>
+      <li>Guarda tus llaves y los secretos de tus webhooks como una contraseña: no los publiques ni los pongas en una página web o en una aplicación que se instale en un teléfono. Si uno se filtra, revócalo de inmediato desde Configuración → API y agentes y avísanos.</li>
+      <li>Para reducir el riesgo pedimos verificación en dos pasos a quien crea una llave o un webhook, le avisamos al dueño de la cuenta cada vez que se crea o cambia uno, y revocamos las llaves y desactivamos los webhooks de quien deja de ser administrador de tu equipo. Estas medidas no reemplazan tu supervisión.</li>
+      <li>Cada llave tiene límites de uso. Podemos limitar, suspender o revocar una llave o un webhook que ponga en riesgo la seguridad de tu cuenta, la de otros clientes o la estabilidad de la plataforma; te avisaremos cuando sea posible.</li>
+    </ul>
     <div class="warning-box">
       ⚠️ <strong>Importante:</strong> las decisiones sobre tus campañas publicitarias y tus presupuestos son tuyas. Acuarius no garantiza resultados de ventas ni de publicidad.
     </div>
@@ -518,6 +528,7 @@
       <li>El contenido que tú o tu equipo envían, ni por la falta de autorización de tus contactos</li>
       <li>Resultados de campañas o respuestas de la IA que no hayas revisado</li>
       <li>Decisiones o fallas de servicios de terceros conectados</li>
+      <li>Lo que hagan los sistemas y agentes que conectes con tus llaves de la API, ni el uso que terceros hagan de los datos que les envías por la API o los webhooks</li>
     </ul>
     <p>En cualquier caso, nuestra responsabilidad total no superará lo que hayas pagado por el servicio en los 3 meses anteriores al hecho que origine el reclamo. Nada de esta sección limita derechos que la ley no permita limitar.</p>
   </section>

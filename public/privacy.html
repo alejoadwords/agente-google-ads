@@ -43,7 +43,7 @@ a:hover{text-decoration:underline}
   </div>
 
   <h1>Política de Tratamiento de Datos Personales</h1>
-  <p class="updated">Vigente desde el 5 de octubre de 2026</p>
+  <p class="updated">Vigente desde el 9 de octubre de 2026</p>
 
   <p>Esta política explica cómo tratamos los datos personales en Acuarius (<a href="https://app.acuarius.app">app.acuarius.app</a> y <a href="https://acuarius.app">acuarius.app</a>), conforme a la Ley 1581 de 2012, el Decreto 1377 de 2013 (compilado en el Decreto 1074 de 2015) y demás normas colombianas de protección de datos, y a las leyes de los demás países donde prestamos el servicio.</p>
 
@@ -66,6 +66,7 @@ a:hover{text-decoration:underline}
     <li><strong>Pagos:</strong> los procesa Stripe (y Hotmart, en las suscripciones contratadas antes por esa vía). Recibimos el correo del comprador, el producto y el estado del pago; nunca los datos de tu tarjeta.</li>
     <li><strong>Lo que cargas y produces:</strong> contactos, conversaciones de la bandeja de entrada, tareas, notas, campañas, plantillas, propuestas y archivos.</li>
     <li><strong>Integraciones:</strong> los permisos de acceso a las cuentas que conectas (Google, Meta, TikTok, LinkedIn, Mercado Pago y otras). Los de Google, Meta y los canales de mensajería se guardan cifrados; estamos terminando de cifrar los demás.</li>
+    <li><strong>API:</strong> si creas llaves de la API o webhooks, de cada llave guardamos solo una huella que no permite usarla; el secreto de cada webhook se guarda cifrado; y registramos lo que hace cada llave y los avisos que enviamos a tus sistemas.</li>
     <li><strong>Uso y técnicos:</strong> registros de actividad y errores, dirección IP, navegador y las cookies descritas en la sección 8.</li>
   </ul>
   <p>No pedimos datos sensibles. Si una conversación de un cliente llega a contenerlos, su tratamiento es responsabilidad de la empresa a la que pertenece esa conversación.</p>
@@ -93,6 +94,8 @@ a:hover{text-decoration:underline}
     <li><strong>Autoridades:</strong> cuando una ley o una orden judicial lo exija.</li>
   </ul>
   <p><strong>SMS.</strong> Si envías mensajes de texto, el número de cada destinatario y el contenido del mensaje pasan a LabsMobile, que los usa solo para entregarlos. LabsMobile conserva el historial de envíos 12 meses accesible y hasta 4 años más en copias de seguridad, y parte de su personal de soporte está en Colombia y Uruguay, bajo cláusulas contractuales tipo de la Comisión Europea.</p>
+  <p><strong>Sistemas que conectas por la API.</strong> Si creas una llave de la API, conectas un agente por MCP o configuras un webhook, los datos que ese sistema consulte o que el webhook envíe (por ejemplo, datos de tus prospectos, sus conversaciones y sus tareas) llegan al destino que tú elegiste. Esa entrega la ordenas tú, como responsable de los datos de tus contactos; quien los recibe no es un proveedor nuestro, y lo que haga con ellos queda bajo su responsabilidad y la tuya. Solo enviamos lo que permiten los permisos de cada llave y lo que eligiste para cada webhook, y solo a direcciones seguras (https). Puedes revocar una llave o eliminar un webhook cuando quieras, y el envío se detiene en ese momento.</p>
+
   <p><strong>Medición de compras.</strong> Cuando compras un plan o un complemento, informamos esa compra a Meta por su API de conversiones para medir nuestra publicidad. Enviamos el valor, la moneda y tu correo cifrado con SHA-256, un formato que Meta solo puede usar para reconocer si ya te conoce, no para leerlo.</p>
 
   <p><strong>Datos que recibimos de Meta (Facebook e Instagram).</strong> Cuando conectas tu cuenta de Meta, tus páginas o tu cuenta de Instagram, recibimos solo lo que la función que activas necesita: el rendimiento de tus campañas, la lista de tus portafolios, páginas y cuentas para que elijas cuáles conectar, el nombre y la foto de esas cuentas, y los mensajes que te escriben por Messenger e Instagram, con el nombre de quien escribe. Los usamos únicamente para mostrártelos en Acuarius, responder desde el inbox y las acciones que tú ordenas (como pausar una campaña). No los vendemos, no los compartimos con terceros para publicidad y no los usamos para entrenar modelos de inteligencia artificial. Puedes revocar el acceso cuando quieras: al desconectar Meta en Configuración → Integraciones borramos su token, y al desconectar un canal en Fuentes → Configurar canales borramos su token y la página deja de enviarnos mensajes. También puedes quitar a Acuarius desde la configuración de tu cuenta de Facebook. Para pedir que borremos los datos recibidos de Meta, escríbenos a ceo@acuarius.app.</p>
@@ -111,6 +114,7 @@ a:hover{text-decoration:underline}
     <li>Los datos de tu cuenta, mientras la cuenta exista.</li>
     <li>Lo que borras dentro de la aplicación, como contactos, pasa a una papelera por 30 días y luego se elimina.</li>
     <li>Si eliminas tu cuenta, borramos sus datos y los de sus contactos; las copias de seguridad se sobrescriben en unos 7 días.</li>
+    <li>El registro de lo que hacen las llaves de la API y de los avisos enviados a tus sistemas, 30 días.</li>
     <li>Los registros de facturación y pagos, el tiempo que exijan las normas comerciales y tributarias.</li>
   </ul>
 

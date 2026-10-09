@@ -33402,6 +33402,7 @@ function cfgApiPintar() {
       '<div style="font-size:11.5px;color:var(--muted);margin:10px 0 2px">Qué puede hacer</div>' + permisos +
       cfgApiSelectorCliente('cfg-api-cliente') +
       '<button class="btn-pri sm" id="cfg-api-crear" style="margin-top:12px" onclick="cfgApiCrearLlave()"' + bloqueo + '>Crear llave</button>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5">Lo que haga un sistema con esta llave se considera hecho por tu cuenta, y los datos que consulte salen hacia ese sistema. Ver los <a href="https://acuarius.app/terms.html#integraciones" target="_blank" rel="noopener" style="color:var(--blue)">términos</a> y la <a href="https://acuarius.app/privacy.html" target="_blank" rel="noopener" style="color:var(--blue)">política de datos</a>.</div>' +
     '</div>' +
 
     '<div class="api-bloque">' +
