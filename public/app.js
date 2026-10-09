@@ -22624,39 +22624,51 @@ async function crmTareaAplazar(id) {
   } catch { showToast('No se pudo aplazar', 'error'); }
 }
 
+/**
+ * La próxima acción que sugiere el Copiloto para un lead. Va por
+ * /api/lead-copilot y no por /api/chat: el chat solo acepta `messages`, solo
+ * responde en stream y se apaga con los agentes, así que esta caja salía
+ * siempre con «No se pudo generar la sugerencia». El Copiloto funciona con los
+ * agentes en pausa, cuenta su cupo en el servidor y registra el gasto.
+ *
+ * Devuelve el texto o lanza un Error con el motivo que dio el servidor, para
+ * que quien llame lo enseñe tal cual en vez de un «falló» genérico.
+ */
+async function crmPedirProximaAccion(leadId) {
+  let res;
+  try {
+    res = await fetchAuth('/api/lead-copilot', {
+      method: 'POST',
+      body: JSON.stringify({ lead_id: leadId, action: 'next_action' }),
+    });
+  } catch (e) {
+    throw new Error('Sin conexión con el servidor. Revisa tu internet y reintenta.');
+  }
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) {
+    throw new Error((data && data.error) || ('No se pudo generar la sugerencia (error ' + res.status + ').'));
+  }
+  const texto = ((data && data.result) || '').trim();
+  if (!texto) throw new Error('La IA devolvió una respuesta vacía. Reintenta.');
+  return texto;
+}
+
+// El botón del panel viejo (#crm-detail-panel, oculto desde el 08-10-2026)
+// todavía existe en index.html y llama aquí: se deja apuntando al mismo camino.
 async function crmSuggestNextAction() {
   if (!crmDetailLead) return;
   const btn = document.getElementById('crm-suggest-btn');
   const resultEl = document.getElementById('crm-d-suggest-result');
   if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Analizando...'; }
   try {
-    const lead = crmDetailLead;
-    const stage = (crmStages.find(function(s){ return s.key === lead.stage; }) || { label: lead.stage }).label;
-    const lastActive = lead.updated_at ? new Date(lead.updated_at).getTime() : new Date(lead.created_at || 0).getTime();
-    const daysSince = Math.floor((Date.now() - lastActive) / 86400000);
-    // Fetch recent activities for context
-    let actContext = '';
-    try {
-      const ar = await fetchAuth('/api/lead-activities?lead_id=' + encodeURIComponent(lead.id));
-      const ad = await ar.json();
-      const acts = (ad.activities || []).slice(0, 5);
-      const typeLabels = { nota: 'Nota', llamada: 'Llamada', email: 'Email', reunion: 'Reunión', tarea: 'Tarea', stage_change: 'Cambio etapa', creacion: 'Creación' };
-      actContext = acts.map(function(a){ return typeLabels[a.type] + ': ' + (a.content || '').slice(0, 80); }).join('\n');
-    } catch(e) {}
-    const prompt = 'Eres un experto en ventas y CRM. Analiza este lead y sugiere la próxima acción concreta.\n\nLead: ' + lead.name + (lead.company ? ' (' + lead.company + ')' : '') + '\nEtapa: ' + stage + '\nDías sin actividad: ' + daysSince + '\nFuente: ' + (lead.source || 'Manual') + '\nValor del deal: ' + (lead.value ? '$' + Number(lead.value).toLocaleString('es-CO') : 'No definido') + '\nNotas: ' + (lead.notes || 'Sin notas') + '\n\nÚltimas actividades:\n' + (actContext || 'Sin actividades registradas') + '\n\nResponde en 2-3 oraciones máximo con una acción específica, concreta y con urgencia apropiada. Empieza directamente con la recomendación (no digas "te recomiendo" ni "sugiero"). Sé directo.';
-    const res = await fetchAuth('/api/chat', {
-      method: 'POST',
-      body: JSON.stringify({ message: prompt, agent: 'consultor', noPersist: true }),
-    });
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    const suggestion = data.reply || data.content || '';
-    if (resultEl && suggestion) {
+    const sugerencia = await crmPedirProximaAccion(crmDetailLead.id);
+    if (resultEl) {
       resultEl.style.display = 'block';
-      resultEl.innerHTML = '<div class="crm-suggest-result"><div class="crm-suggest-result-title">Próxima acción sugerida</div>' + esc(suggestion) + '</div>';
+      resultEl.innerHTML = '<div class="crm-suggest-result"><div class="crm-suggest-result-title">Próxima acción sugerida</div>' + esc(sugerencia) + '</div>';
     }
-  } catch(e) {
-    if (resultEl) { resultEl.style.display = 'block'; resultEl.innerHTML = '<div style="font-size:12px;color:var(--muted)">No se pudo generar la sugerencia.</div>'; }
+  } catch (e) {
+    if (resultEl) { resultEl.style.display = 'block'; resultEl.innerHTML = '<div style="font-size:12px;color:var(--muted)">' + esc(e.message) + '</div>'; }
   }
   if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Sugerir próxima acción'; }
 }
@@ -26300,7 +26312,11 @@ async function crmCopilotAction(action, btn) {
       method: 'POST',
       body: JSON.stringify({ lead_id: crmDetailLead.id, action }),
     });
-    if (!res.ok) throw new Error();
+    // El servidor dice por qué falló (cupo del mes, IA saturada…): se enseña.
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error((err && err.error) || '');
+    }
     const data = await res.json();
 
     if (action === 'score' && data.score) {
@@ -26335,7 +26351,8 @@ async function crmCopilotAction(action, btn) {
       content.innerHTML = `<div class="crm-copilot-panel"><div class="crm-copilot-result">${esc(data.result).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</div></div>`;
     }
   } catch(e) {
-    content.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:10px 0">Error al consultar la IA. Intenta de nuevo.</div>';
+    content.innerHTML = '<div style="color:var(--danger);font-size:12px;padding:10px 0">' +
+      esc((e && e.message) || 'Error al consultar la IA. Intenta de nuevo.') + '</div>';
   }
   copilotLoading = false;
 }
@@ -45053,7 +45070,9 @@ function lfAcciones(l) {
   if (l.email) b.push('<a class="btn-ghost sm" href="mailto:' + esc(l.email) + '">Email</a>');
   // Las acciones que ya existen se reutilizan tal cual. Todas trabajan sobre
   // `crmDetailLead`, que la ficha deja apuntando al mismo lead al abrirse.
-  b.push('<button class="btn-ghost sm" onclick="crmSendLeadToConsultor()">Enviar al Consultor</button>');
+  // Con los agentes en pausa el botón solo daba el aviso de pausa: se oculta,
+  // igual que el resto de botones «…con el agente».
+  if (AGENTES_ACTIVOS) b.push('<button class="btn-ghost sm" onclick="crmSendLeadToConsultor()">Enviar al Consultor</button>');
   b.push('<button class="btn-ghost sm" onclick="agnScheduleForLead()">Agendar</button>');
   // El Copiloto vive en un panel `position:fixed` FUERA del panel lateral, así
   // que se abre igual desde aquí: solo necesita `crmDetailLead`.
@@ -45419,7 +45438,7 @@ function lfQueFalta(l) {
       '<div class="lf-tit" style="color:var(--violet)">Próxima acción</div>' +
       '<div id="lf-sugerencia" style="font-size:13px;line-height:1.55;color:var(--text-2)">' +
         '<span class="lf-vacio">El Copiloto mira el lead y te dice qué hacer ahora.</span></div>' +
-      '<button class="btn-ghost sm" style="margin-top:10px;width:100%" onclick="lfSugerir()">Sugerir</button>' +
+      '<button class="btn-ghost sm" style="margin-top:10px;width:100%" onclick="lfSugerir(this)">Sugerir</button>' +
     '</div>' +
 
     '<div class="lf-caja">' +
@@ -45439,21 +45458,26 @@ function lfCuando(iso) {
 }
 
 /**
- * La sugerencia del Copiloto. Se reutiliza la del panel, que ya tiene el prompt
- * y la puerta de gasto; solo se copia el resultado a esta pantalla.
+ * La sugerencia del Copiloto en la ficha. Pide directo a /api/lead-copilot
+ * (ver crmPedirProximaAccion) y, si falla, deja a la vista el motivo que dio el
+ * servidor: cupo agotado, IA saturada, sin conexión…
  */
-async function lfSugerir() {
+async function lfSugerir(btn) {
   const caja = document.getElementById('lf-sugerencia');
-  if (!caja) return;
+  if (!caja || !crmDetailLead) return;
+  const leadId = crmDetailLead.id;
   caja.innerHTML = '<span class="lf-vacio">Pensando…</span>';
+  if (btn) btn.disabled = true;
   try {
-    await crmSuggestNextAction();
-    const del = document.getElementById('crm-d-suggest-result');
-    caja.innerHTML = del && del.innerHTML.trim()
-      ? del.innerHTML
-      : '<span class="lf-vacio">No hubo respuesta. Inténtalo otra vez.</span>';
+    const texto = await crmPedirProximaAccion(leadId);
+    // Si mientras pensaba se abrió otro lead, esta respuesta ya no es suya.
+    if (!crmDetailLead || crmDetailLead.id !== leadId) return;
+    caja.innerHTML = esc(texto).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   } catch (e) {
-    caja.innerHTML = '<span class="lf-vacio">' + esc(String(e.message || e)) + '</span>';
+    if (!crmDetailLead || crmDetailLead.id !== leadId) return;
+    caja.innerHTML = '<span style="color:var(--danger)">' + esc(e.message || 'No se pudo generar la sugerencia.') + '</span>';
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 

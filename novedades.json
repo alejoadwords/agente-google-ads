@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-09-ficha-proxima-accion",
+      "fecha": "2026-10-09",
+      "tipo": "arreglo",
+      "titulo": "«Próxima acción» de la ficha del lead ya responde",
+      "texto": "El botón «Sugerir» de la ficha del lead devolvía siempre «No se pudo generar la sugerencia». Ahora el Copiloto mira el lead y te dice qué hacer en dos o tres frases, y si algo falla te dice por qué. Además, el botón «Enviar al Consultor» ya no aparece mientras el chat con los agentes está en pausa."
+    },
+    {
       "id": "2026-10-08-api-mcp",
       "fecha": "2026-10-08",
       "tipo": "nuevo",
