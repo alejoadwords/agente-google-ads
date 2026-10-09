@@ -30681,6 +30681,10 @@ function cmpBuilderOpen(id, canal) {
       : (c && c.audience && c.audience.list_id) ? 'list' : 'filters',
     list_id: (c && c.audience && c.audience.list_id) || '',
     lead_ids: (c && c.audience && Array.isArray(c.audience.lead_ids)) ? c.audience.lead_ids.slice() : [],
+    // «No enviar a»: viaja con la audiencia guardada. Si no se carga aquí, al
+    // editar un borrador la tarjeta sale vacía y el siguiente guardado la borra.
+    exclude_list_ids: (c && c.audience && Array.isArray(c.audience.exclude_list_ids)) ? c.audience.exclude_list_ids.slice() : [],
+    exclude_tags: (c && c.audience && Array.isArray(c.audience.exclude_tags)) ? c.audience.exclude_tags.slice() : [],
     schedule: '', count: null, breakdown: null,
     // La plantilla aprobada de WhatsApp y que campo del lead va en cada hueco.
     wa_template: (c && c.wa_template) || null,
@@ -31822,11 +31826,16 @@ function cmpPreview() {
       const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
       const qs = '?preview=1&channel=' + _cmpChannel + '&audience=' + encodeURIComponent(JSON.stringify(cmpAudience())) + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
       const d = await fetchAuth('/api/campaigns' + qs).then(r => r.json());
+      // Una exclusión que no se pudo aplicar (lista borrada, fallo de red) se
+      // dice tal cual: un número sin ella sería un número falso.
+      if (d.error) { if (_cmpW) _cmpW.count = null; el.innerHTML = '<span class="cmp-txt-error">' + esc(d.error) + '</span>'; return; }
       if (_cmpW) { _cmpW.count = d.count; _cmpW.breakdown = d.breakdown || null; }
       const b = d.breakdown || {};
       const excl = [];
       if (b.unsubscribed) excl.push(b.unsubscribed + ' dados de baja');
       if (b.missing) excl.push(b.missing + (_cmpChannel === 'email' ? ' sin email' : _cmpChannel === 'sms' ? ' sin móvil válido' : ' sin teléfono'));
+      if (b.excluidos) excl.push(b.excluidos + ' en «No enviar a»');
+      if (b.rebotados) excl.push(b.rebotados + ' con correo rebotado');
       el.innerHTML = '<div>' + icn('users', 14) + ' <b>' + Number(d.count || 0).toLocaleString('es-CO') + '</b> destinatarios</div>' +
         (d.sample?.length ? '<div style="font-size:12px;color:var(--muted)">Por ejemplo: ' + d.sample.slice(0, 3).map(esc).join(', ') + '</div>' : '') +
         (excl.length ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:4px">Excluidos: ' + excl.join(' · ') + '</div>' : '') +
@@ -31860,6 +31869,13 @@ function cmpWStep4() {
   const audParts = w.mode === 'manual' ? 'Selección manual: ' + w.lead_ids.length + ' contactos'
     : w.mode === 'list' ? 'Lista: ' + esc((_cmpLists.find(l => l.id === w.list_id) || {}).name || '—')
     : [w.tags.length ? 'Etiquetas: ' + w.tags.map(esc).join(', ') : 'Todas las etiquetas', w.stage ? 'Etapa: ' + esc(w.stage) : '', w.source ? 'Fuente: ' + esc(w.source) : ''].filter(Boolean).join(' · ');
+  // Lo que se quita también se enseña en la revisión: es lo último que se mira
+  // antes de enviar.
+  const exclParts = [
+    ...(w.exclude_list_ids || []).map(id => 'lista ' + esc((_cmpLists.find(l => l.id === id) || {}).name || '(borrada)')),
+    ...(w.exclude_tags || []).map(t => 'etiqueta ' + esc(t)),
+  ];
+  const audConExcl = audParts + (exclParts.length ? '<div style="font-size:12px;color:var(--muted)">No enviar a: ' + exclParts.join(', ') + '</div>' : '');
 
   const contenido = isEmail && w.html
     ? 'Diseño' + (w.template_nombre ? ': ' + esc(w.template_nombre) : '')
@@ -31882,7 +31898,7 @@ function cmpWStep4() {
         row(isEmail ? 'Contenido' : 'Mensaje', contenido, 2) +
         (isEmail && !w.html ? row('Botón', w.cta_text && w.cta_url ? esc(w.cta_text) + ' → ' + esc(w.cta_url) : '—', 2) : '') +
         (isEmail ? row('UTM en links', w.utm ? 'Sí, utm_source=acuarius' : 'No', 2) : '') +
-        row('Audiencia', audParts, 3) +
+        row('Audiencia', audConExcl, 3) +
       '</div>' +
 
       '<div id="cmpw-destinatarios" class="cmpw-card">' +
@@ -31994,6 +32010,11 @@ async function cmpWPintarDestinatarios() {
     const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
     const qs = '?preview=1&channel=' + w.channel + '&audience=' + encodeURIComponent(JSON.stringify(cmpAudience())) + (clientId ? '&client_id=' + encodeURIComponent(clientId) : '');
     const d = await fetchAuth('/api/campaigns' + qs).then(r => r.json());
+    if (d.error) {
+      w.count = null;
+      cont.innerHTML = '<div class="cmp-txt-error" style="font-size:12.5px">' + esc(d.error) + ' <a href="#" onclick="cmpWGo(3);return false">Ir a Audiencia</a></div>';
+      return;
+    }
     w.count = d.count; w.breakdown = d.breakdown || null;
     const b = d.breakdown || {};
     const linea = (etq, n, nota) =>
@@ -32151,9 +32172,13 @@ async function cmpWSave() {
   const w = _cmpW;
   const clientId = typeof agencyActiveClientId !== 'undefined' ? agencyActiveClientId : null;
   const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
-  const audience = w.mode === 'manual' ? { lead_ids: w.lead_ids }
-    : w.mode === 'list' ? { list_id: w.list_id }
-    : { tags: w.tags, stage: w.stage || null, source: w.source || null };
+  // Las exclusiones van en la audiencia GUARDADA: el encolado lee c.audience,
+  // no lo que se vio en pantalla. Sin ellas el contador decía «Excluidos» y el
+  // envío real le llegaba a todos.
+  const fuera = { exclude_list_ids: w.exclude_list_ids || [], exclude_tags: w.exclude_tags || [] };
+  const audience = w.mode === 'manual' ? { lead_ids: w.lead_ids, ...fuera }
+    : w.mode === 'list' ? { list_id: w.list_id, ...fuera }
+    : { tags: w.tags, stage: w.stage || null, source: w.source || null, ...fuera };
   const payload = {
     name: w.name, channel: w.channel, subject: w.subject || null, body: w.body,
     from_name: w.from_name || null, audience,
