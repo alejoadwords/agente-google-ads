@@ -126,11 +126,19 @@
       "destination": "/registro.html"
     },
     {
+      "source": "/api/v1/:ruta*",
+      "destination": "/api/v1?ruta=:ruta*"
+    },
+    {
       "source": "/((?!api/|_vercel/).*)",
       "destination": "/index.html"
     }
   ],
   "crons": [
+    {
+      "path": "/api/cron-webhooks",
+      "schedule": "* * * * *"
+    },
     {
       "path": "/api/cron-automations",
       "schedule": "*/10 * * * *"

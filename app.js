@@ -10708,6 +10708,7 @@ function irA(destino) {
         case 'partners':      partnersAbrir(); break;
         case 'integraciones': openSettings(); setTimeout(() => { try { switchSettingsTab('integraciones'); } catch {} }, 220); break;
         case 'ajustes-equipo': openSettings(); setTimeout(() => { try { switchSettingsTab('equipo'); } catch {} }, 220); break;
+        case 'ajustes-api': openSettings(); setTimeout(() => { try { switchSettingsTab('api'); } catch {} }, 220); break;
         case 'tareas':        navGo('crm'); setTimeout(() => crmSetView('tareas'), 150); break;
         case 'reservas':      navGo('crm'); setTimeout(() => crmSetView('reservas'), 150); break;
         case 'crm':           navGo('crm'); break;
@@ -15307,7 +15308,7 @@ function switchSettingsTab(tab) {
   if (tab === 'referral' && !REFERIDOS_ACTIVOS) tab = 'perfil';
   if (tab === 'notificaciones' && typeof pushPintar === 'function') pushPintar();
   // All cfg-sec-* section IDs (redesigned settings panel)
-  const sections = ['perfil','plan','integraciones','notificaciones','seguridad','equipo','referral'];
+  const sections = ['perfil','plan','integraciones','notificaciones','seguridad','equipo','api','referral'];
   sections.forEach(t => {
     const sec = document.getElementById('cfg-sec-'+t);
     if (sec) sec.style.display = t === tab ? 'block' : 'none';
@@ -15327,6 +15328,7 @@ function switchSettingsTab(tab) {
   // «Cambiar» o «crear» contraseña según tenga una (quien entró con Google no).
   if (tab === 'seguridad') cfgClaveTextos();
   if (tab === 'equipo') teamRenderSettings();
+  if (tab === 'api') cfgApiCargar();
 }
 
 // =============================================
@@ -28313,6 +28315,7 @@ function seoGeoExportReport() {
 // ── SET DE ÍCONOS SVG (un solo lenguaje: stroke 2, esquinas redondas) ─────────
 // Reemplaza los emojis funcionales de la UI. Uso: icn('alert', 14)
 const ICN_PATHS = {
+  llave: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
   archivar: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
   movil: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
@@ -33228,6 +33231,9 @@ function teamAplicarPerfil() {
   if (!yo.gestiona_equipo) {
     const tab = document.querySelector('.cfg-nav-item[data-tab="equipo"]');
     if (tab) tab.style.display = 'none';
+    // La API opera la cuenta entera: la gestiona quien gestiona el equipo.
+    const tabApi = document.querySelector('.cfg-nav-item[data-tab="api"]');
+    if (tabApi) tabApi.style.display = 'none';
   }
 
   // Si está parado en un módulo que no le toca —por una URL guardada o por el
@@ -33251,6 +33257,316 @@ function teamApplyMemberUI() {
 }
 
 // ── Sección Equipo en Configuración (solo dueño) ─────────────────────────────
+// ── Configuración → API y agentes ────────────────────────────────────────────
+// Llaves de la API pública (api/v1.js) y avisos salientes (webhooks). El
+// servidor (api/llaves-api.js) decide quién puede y qué plan lo incluye; aquí
+// solo se pinta. La llave y el secreto se ven UNA vez, al crearlos: después
+// el servidor ya no los tiene en claro para devolverlos.
+let _cfgApi = null;
+
+async function cfgApiCargar() {
+  const caja = document.getElementById('cfg-api-cuerpo');
+  if (!caja) return;
+  caja.innerHTML = '<div style="font-size:12px;color:var(--muted2)">Cargando…</div>';
+  try {
+    const r = await fetchAuth('/api/llaves-api', { noCache: true });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    _cfgApi = d;
+    cfgApiPintar();
+  } catch (e) {
+    caja.innerHTML = '<div class="api-fila-error">No se pudo cargar la API: ' + esc(e.message) + '</div>' +
+      '<button class="btn-ghost sm" style="margin-top:8px" onclick="cfgApiCargar()">Reintentar</button>';
+  }
+}
+
+function cfgApiFecha(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+  catch { return iso; }
+}
+
+function cfgApiClientes() {
+  const lista = (typeof agencyClients !== 'undefined' && Array.isArray(agencyClients)) ? agencyClients : [];
+  return (esCuentaAgencia() && lista.length) ? lista : [];
+}
+
+function cfgApiSelectorCliente(id) {
+  const lista = cfgApiClientes();
+  if (!lista.length || _cfgApi.cliente_fijo) return '';
+  return '<label style="display:block;font-size:11.5px;color:var(--muted);margin:10px 0 4px">A qué cliente entra</label>' +
+    '<select class="auto-input" id="' + id + '" style="width:100%">' +
+      '<option value="">Toda la cuenta — todos los clientes</option>' +
+      lista.map(c => '<option value="' + esc(c.id) + '">' + esc(c.name || c.id) + '</option>').join('') +
+    '</select>';
+}
+
+function cfgApiPintar() {
+  const caja = document.getElementById('cfg-api-cuerpo');
+  const d = _cfgApi;
+  if (!caja || !d) return;
+  const nombreCliente = id => (cfgApiClientes().find(c => c.id === id) || {}).name || id;
+
+  if (!d.plan_permite) {
+    caja.innerHTML = emptyAgua('llave', 'La API está en los planes Pro y Agency',
+      'Con ella el agente de IA de tu empresa, tu app o tu ERP gestionan el CRM por su cuenta.',
+      '<button class="btn-pri sm" onclick="switchSettingsTab(\'plan\')">Ver planes</button>') +
+      (d.llaves.some(l => !l.revocada_at) ? cfgApiListaLlaves(d, nombreCliente) : '');
+    return;
+  }
+
+  const permisos = d.permisos.map(p =>
+    '<label class="api-opcion"><input type="checkbox" name="cfg-api-permiso" value="' + esc(p.clave) + '"' +
+    (['leads:leer', 'tareas:leer'].includes(p.clave) ? ' checked' : '') + '>' +
+    '<span>' + esc(p.nombre) + '<small>' + esc(p.detalle) + '</small></span></label>').join('');
+  const eventos = d.eventos.map(e =>
+    '<label class="api-opcion"><input type="checkbox" name="cfg-api-evento" value="' + esc(e.clave) + '">' +
+    '<span>' + esc(e.nombre) + '<small>' + esc(e.clave) + '</small></span></label>').join('');
+
+  caja.innerHTML =
+    '<div class="api-bloque-titulo">Llaves</div>' +
+    '<div class="api-bloque-sub">Cada sistema que se conecte lleva su propia llave, con solo los permisos que necesita. Si una llave se filtra o deja de usarse, revócala: deja de funcionar al instante.</div>' +
+    cfgApiListaLlaves(d, nombreCliente) +
+    '<div style="border:1px solid var(--border);border-radius:11px;padding:14px;margin-top:10px">' +
+      '<div style="font-weight:700;font-size:12.5px;margin-bottom:8px">Crear una llave</div>' +
+      '<input class="auto-input" id="cfg-api-nombre" maxlength="60" placeholder="Nombre que firmará en el historial, p. ej. «Agente de seguimiento»" style="width:100%;box-sizing:border-box">' +
+      '<div style="font-size:11.5px;color:var(--muted);margin:10px 0 2px">Qué puede hacer</div>' + permisos +
+      cfgApiSelectorCliente('cfg-api-cliente') +
+      '<button class="btn-pri sm" id="cfg-api-crear" style="margin-top:12px" onclick="cfgApiCrearLlave()">Crear llave</button>' +
+    '</div>' +
+
+    '<div class="api-bloque">' +
+      '<div class="api-bloque-titulo">Avisos a tu sistema (webhooks)</div>' +
+      '<div class="api-bloque-sub">Acuarius le avisa a una URL tuya cuando pasa algo, en menos de un minuto. Cada aviso va firmado para que tu sistema compruebe que salió de aquí. Si tu servidor no responde, se reintenta durante un día.</div>' +
+      cfgApiListaWebhooks(d, nombreCliente) +
+      '<div style="border:1px solid var(--border);border-radius:11px;padding:14px;margin-top:10px">' +
+        '<div style="font-weight:700;font-size:12.5px;margin-bottom:8px">Añadir un webhook</div>' +
+        '<input class="auto-input" id="cfg-api-url" maxlength="500" placeholder="https://tu-servidor.com/acuarius" style="width:100%;box-sizing:border-box">' +
+        '<div style="font-size:11.5px;color:var(--muted);margin:10px 0 2px">Avisar cuando</div>' + eventos +
+        cfgApiSelectorCliente('cfg-api-wh-cliente') +
+        '<button class="btn-pri sm" id="cfg-api-wh-crear" style="margin-top:12px" onclick="cfgApiCrearWebhook()">Añadir webhook</button>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="api-bloque">' +
+      '<div class="api-bloque-titulo">Actividad</div>' +
+      '<div class="api-bloque-sub">Lo que hizo cada llave en los últimos 30 días: cada cambio y cada error.</div>' +
+      '<button class="btn-sec sm" onclick="cfgApiVerRegistro()">' + icn('eye', 13) + ' Ver actividad de la API</button>' +
+    '</div>';
+}
+
+function cfgApiListaLlaves(d, nombreCliente) {
+  if (!d.llaves.length) return '<div style="font-size:12px;color:var(--muted2);margin-bottom:8px">Todavía no hay llaves.</div>';
+  const nombrePermiso = c => (d.permisos.find(p => p.clave === c) || {}).nombre || c;
+  return d.llaves.map(l => {
+    const viva = !l.revocada_at;
+    const sub = [
+      esc(l.prefijo) + '…',
+      l.client_id ? 'Cliente: ' + esc(nombreCliente(l.client_id)) : 'Toda la cuenta',
+      'Creada ' + cfgApiFecha(l.created_at) + (l.creada_por_nombre ? ' por ' + esc(l.creada_por_nombre) : ''),
+      viva ? (l.ultimo_uso_at ? 'Último uso ' + cfgApiFecha(l.ultimo_uso_at) : 'Sin usar todavía') : 'Revocada ' + cfgApiFecha(l.revocada_at),
+    ].join(' · ');
+    return '<div class="api-fila' + (viva ? '' : ' apagada') + '">' +
+      '<div style="color:var(--blue);margin-top:2px">' + icn('llave', 16) + '</div>' +
+      '<div class="api-fila-info">' +
+        '<div class="api-fila-nombre">' + esc(l.nombre) + ' <span class="int-badge ' + (viva ? 'on' : 'off') + '">' + (viva ? 'Activa' : 'Revocada') + '</span></div>' +
+        '<div class="api-fila-sub">' + sub + '</div>' +
+        '<div>' + (l.permisos || []).map(p => '<span class="api-chip">' + esc(nombrePermiso(p)) + '</span>').join('') + '</div>' +
+      '</div>' +
+      (viva ? '<div class="api-fila-acciones"><button class="btn-ghost sm" onclick="cfgApiRevocar(\'' + esc(l.id) + '\')">Revocar</button></div>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function cfgApiListaWebhooks(d, nombreCliente) {
+  if (!d.webhooks.length) return '<div style="font-size:12px;color:var(--muted2);margin-bottom:8px">Todavía no hay webhooks.</div>';
+  const nombreEvento = c => (d.eventos.find(e => e.clave === c) || {}).nombre || c;
+  return d.webhooks.map(w => {
+    const sub = [
+      w.client_id ? 'Cliente: ' + esc(nombreCliente(w.client_id)) : 'Toda la cuenta',
+      w.ultimo_ok_at ? 'Último aviso entregado ' + cfgApiFecha(w.ultimo_ok_at) : 'Ningún aviso entregado todavía',
+    ].join(' · ');
+    const error = w.desactivado_motivo || (w.fallos_seguidos ? w.fallos_seguidos + ' fallos seguidos. Último: ' + (w.ultimo_error || '') : '');
+    return '<div class="api-fila' + (w.activo ? '' : ' apagada') + '">' +
+      '<div style="color:var(--blue);margin-top:2px">' + icn('send', 16) + '</div>' +
+      '<div class="api-fila-info">' +
+        '<div class="api-fila-nombre">' + esc(w.url) + ' <span class="int-badge ' + (w.activo ? 'on' : 'off') + '">' + (w.activo ? 'Activo' : 'Desactivado') + '</span></div>' +
+        '<div class="api-fila-sub">' + sub + '</div>' +
+        '<div>' + (w.eventos || []).map(e => '<span class="api-chip">' + esc(nombreEvento(e)) + '</span>').join('') + '</div>' +
+        (error ? '<div class="api-fila-error">' + esc(error) + '</div>' : '') +
+      '</div>' +
+      '<div class="api-fila-acciones">' +
+        '<button class="btn-ghost sm" onclick="cfgApiProbar(\'' + esc(w.id) + '\', this)">Probar</button>' +
+        '<button class="btn-ghost sm" onclick="cfgApiVerEntregas(\'' + esc(w.id) + '\')">Entregas</button>' +
+        '<button class="btn-ghost sm" onclick="cfgApiMasWebhook(\'' + esc(w.id) + '\', this)">' + icn('dots', 13) + '</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function cfgApiPost(cuerpo) {
+  const r = await fetchAuth('/api/llaves-api', { method: 'POST', body: JSON.stringify(cuerpo) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+  return d;
+}
+
+async function cfgApiCrearLlave() {
+  const btn = document.getElementById('cfg-api-crear');
+  const nombre = (document.getElementById('cfg-api-nombre')?.value || '').trim();
+  const permisos = [...document.querySelectorAll('input[name="cfg-api-permiso"]:checked')].map(i => i.value);
+  const cliente = document.getElementById('cfg-api-cliente')?.value || null;
+  if (nombre.length < 3) { showToast('Ponle un nombre a la llave: es el que firma en el historial.', 'error'); return; }
+  if (!permisos.length) { showToast('Elige al menos un permiso.', 'error'); return; }
+  btn.disabled = true;
+  try {
+    const d = await cfgApiPost({ accion: 'crear_llave', nombre, permisos, client_id: cliente });
+    cfgApiMostrarUnaVez('Tu llave nueva', 'Cópiala ahora y guárdala en tu sistema. Por seguridad no se vuelve a mostrar: si la pierdes, revócala y crea otra.', d.llave);
+    await cfgApiCargar();
+  } catch (e) {
+    showToast('No se creó la llave: ' + e.message, 'error');
+  } finally { btn.disabled = false; }
+}
+
+async function cfgApiRevocar(id) {
+  const l = (_cfgApi?.llaves || []).find(x => x.id === id);
+  if (!await confirmarAguaP({
+    titulo: 'Revocar «' + (l?.nombre || 'llave') + '»',
+    texto: 'El sistema que la use deja de poder entrar en este mismo momento. Lo que ya hizo queda en el historial.\n\nNo se puede deshacer: para volver a conectarlo hará falta una llave nueva.',
+    confirmar: 'Revocar', peligro: true,
+  })) return;
+  try { await cfgApiPost({ accion: 'revocar_llave', id }); showToast('Llave revocada'); await cfgApiCargar(); }
+  catch (e) { showToast('No se revocó: ' + e.message, 'error'); }
+}
+
+async function cfgApiCrearWebhook() {
+  const btn = document.getElementById('cfg-api-wh-crear');
+  const url = (document.getElementById('cfg-api-url')?.value || '').trim();
+  const eventos = [...document.querySelectorAll('input[name="cfg-api-evento"]:checked')].map(i => i.value);
+  const cliente = document.getElementById('cfg-api-wh-cliente')?.value || null;
+  if (!url) { showToast('Escribe la URL de tu servidor.', 'error'); return; }
+  if (!eventos.length) { showToast('Elige al menos un aviso.', 'error'); return; }
+  btn.disabled = true;
+  try {
+    const d = await cfgApiPost({ accion: 'crear_webhook', url, eventos, client_id: cliente });
+    cfgApiMostrarUnaVez('Secreto del webhook', 'Con este secreto tu sistema comprueba la firma de cada aviso (cabecera X-Acuarius-Firma). Cópialo ahora: no se vuelve a mostrar. Si lo pierdes, genera otro desde el menú del webhook.', d.secreto);
+    await cfgApiCargar();
+  } catch (e) {
+    showToast('No se añadió: ' + e.message, 'error');
+  } finally { btn.disabled = false; }
+}
+
+async function cfgApiProbar(id, btn) {
+  btn.disabled = true;
+  const antes = btn.textContent;
+  btn.textContent = 'Enviando…';
+  try {
+    const d = await cfgApiPost({ accion: 'probar_webhook', id });
+    if (d.resultado?.ok) showToast('Tu servidor recibió el aviso de prueba (' + d.resultado.estado + ').');
+    else showToast('El aviso no llegó: ' + (d.resultado?.error || 'sin respuesta'), 'error');
+  } catch (e) {
+    showToast('No se pudo probar: ' + e.message, 'error');
+  } finally { btn.disabled = false; btn.textContent = antes; }
+}
+
+function cfgApiMasWebhook(id, ancla) {
+  const w = (_cfgApi?.webhooks || []).find(x => x.id === id);
+  if (!w) return;
+  ddAbrir(ancla, [
+    { id: 'activo', name: w.activo ? 'Desactivar' : 'Activar' },
+    { id: 'secreto', name: 'Generar un secreto nuevo' },
+    { sep: true },
+    { id: 'eliminar', name: 'Eliminar' },
+  ], null, async (op) => {
+    try {
+      if (op === 'activo') {
+        await cfgApiPost({ accion: 'editar_webhook', id, activo: !w.activo });
+        showToast(w.activo ? 'Webhook desactivado' : 'Webhook activado');
+      } else if (op === 'secreto') {
+        if (!await confirmarAguaP({ titulo: 'Generar un secreto nuevo', texto: 'El secreto actual deja de valer: los avisos siguientes vendrán firmados con el nuevo, así que tu sistema tendrá que usarlo desde ya.', confirmar: 'Generar' })) return;
+        const d = await cfgApiPost({ accion: 'rotar_secreto', id });
+        cfgApiMostrarUnaVez('Secreto nuevo del webhook', 'Cópialo ahora y ponlo en tu sistema: no se vuelve a mostrar.', d.secreto);
+      } else if (op === 'eliminar') {
+        if (!await confirmarAguaP({ titulo: 'Eliminar el webhook', texto: 'Acuarius deja de avisar a ' + w.url + '. Los avisos pendientes se descartan.\n\nTus datos del CRM no se tocan.', confirmar: 'Eliminar', peligro: true })) return;
+        await cfgApiPost({ accion: 'eliminar_webhook', id });
+        showToast('Webhook eliminado');
+      }
+      await cfgApiCargar();
+    } catch (e) { showToast('No se pudo: ' + e.message, 'error'); }
+  });
+}
+
+// Ventana para lo que solo se enseña una vez. No se cierra al pulsar fuera:
+// cerrarla sin querer es perder la llave.
+function cfgApiMostrarUnaVez(titulo, texto, valor) {
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.innerHTML = '<div class="auto-modal" style="max-width:520px">' +
+    '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">' + esc(titulo) + '</div></div>' +
+    '<div class="auto-modal-body">' +
+      '<div style="font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:12px">' + esc(texto) + '</div>' +
+      '<input class="api-secreto" readonly value="' + esc(valor) + '" onclick="this.select()">' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-sec sm" data-copiar>' + icn('copy', 13) + ' Copiar</button>' +
+      '<button class="btn-pri sm" data-x>Ya la guardé</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  const campo = ov.querySelector('.api-secreto');
+  ov.querySelector('[data-copiar]').onclick = async (ev) => {
+    try { await navigator.clipboard.writeText(valor); ev.currentTarget.innerHTML = icn('check', 13) + ' Copiado'; }
+    catch { campo.select(); showToast('Cópialo con ⌘C', 'info'); }
+  };
+  ov.querySelector('[data-x]').onclick = () => ov.remove();
+  campo.select();
+}
+
+function cfgApiTablaModal(titulo, html) {
+  const ov = document.createElement('div');
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:760px">' +
+    '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">' + esc(titulo) + '</div>' +
+    '<div style="flex:1"></div><button class="btn-ghost sm" data-x>&#10005;</button></div>' +
+    '<div class="auto-modal-body" style="max-height:65vh;overflow:auto">' + html + '</div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector('[data-x]').onclick = () => ov.remove();
+}
+
+async function cfgApiVerRegistro() {
+  try {
+    const r = await fetchAuth('/api/llaves-api?registro=1', { noCache: true });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    const nombre = id => ((_cfgApi?.llaves || []).find(l => l.id === id) || {}).nombre || 'Llave borrada';
+    const filas = d.registro || [];
+    cfgApiTablaModal('Actividad de la API', filas.length
+      ? '<table class="api-tabla"><thead><tr><th>Cuándo</th><th>Llave</th><th>Qué</th><th>Resultado</th></tr></thead><tbody>' +
+        filas.map(f => '<tr><td>' + cfgApiFecha(f.created_at) + '</td><td>' + esc(nombre(f.llave_id)) + '</td>' +
+          '<td>' + esc(f.metodo + ' ' + f.ruta) + '</td>' +
+          '<td><span class="' + (f.estado < 400 ? 'api-ok' : 'api-mal') + '">' + f.estado + '</span>' +
+          (f.error ? ' ' + esc(f.error) : '') + '</td></tr>').join('') + '</tbody></table>'
+      : emptyAgua('llave', 'Sin actividad todavía', 'Aquí aparece cada cambio que haga una llave y cada error que reciba.'));
+  } catch (e) { showToast('No se pudo cargar la actividad: ' + e.message, 'error'); }
+}
+
+async function cfgApiVerEntregas(id) {
+  try {
+    const r = await fetchAuth('/api/llaves-api?entregas=' + encodeURIComponent(id), { noCache: true });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    const estado = e => e.estado === 'enviada' ? '<span class="api-ok">Entregado</span>'
+      : e.estado === 'fallida' ? '<span class="api-mal">No se entregó</span>'
+      : 'Reintenta ' + cfgApiFecha(e.proximo_at);
+    const filas = d.entregas || [];
+    cfgApiTablaModal('Últimos avisos', filas.length
+      ? '<table class="api-tabla"><thead><tr><th>Cuándo</th><th>Aviso</th><th>Estado</th><th>Intentos</th><th>Detalle</th></tr></thead><tbody>' +
+        filas.map(e => '<tr><td>' + cfgApiFecha(e.created_at) + '</td><td>' + esc(e.evento) + '</td><td>' + estado(e) + '</td>' +
+          '<td>' + e.intentos + '</td><td>' + esc(e.ultimo_error || (e.ultimo_estado ? 'Respondió ' + e.ultimo_estado : '')) + '</td></tr>').join('') + '</tbody></table>'
+      : emptyAgua('send', 'Sin avisos todavía', 'Cuando pase algo de lo que elegiste, aquí verás si tu servidor lo recibió.'));
+  } catch (e) { showToast('No se pudieron cargar los avisos: ' + e.message, 'error'); }
+}
+
 async function teamRenderSettings() {
   teamPintarClientes();
   asgRender();

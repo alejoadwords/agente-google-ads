@@ -2524,6 +2524,27 @@ html:not([data-theme="dark"]) .sb-sub-action:hover{color:#fff}
 .toggle.on{background:var(--blue);border-color:var(--blue)}
 .toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--bg);box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s var(--ease)}
 .toggle.on::after{transform:translateX(16px)}
+/* API y agentes (Configuración) */
+.api-fila{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border:1px solid var(--border);border-radius:11px;background:var(--bg-subtle);margin-bottom:8px}
+.api-fila.apagada{opacity:.6}
+.api-fila-info{flex:1;min-width:0}
+.api-fila-nombre{font-size:13px;font-weight:700;color:var(--text);overflow-wrap:anywhere}
+.api-fila-sub{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5;overflow-wrap:anywhere}
+.api-fila-error{font-size:11.5px;color:var(--danger);margin-top:4px;line-height:1.5;overflow-wrap:anywhere}
+.api-fila-acciones{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.api-chip{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--blue-lt);color:var(--blue);margin:4px 4px 0 0}
+.api-opcion{display:flex;align-items:flex-start;gap:8px;padding:7px 0;font-size:12.5px;color:var(--text);cursor:pointer;line-height:1.45}
+.api-opcion input{margin-top:3px;flex-shrink:0}
+.api-opcion small{display:block;color:var(--muted);font-size:11.5px}
+.api-bloque{border-top:1px solid var(--border);padding-top:16px;margin-top:18px}
+.api-bloque-titulo{font-weight:700;font-size:13px;margin-bottom:4px}
+.api-bloque-sub{font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.55}
+.api-secreto{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;width:100%;padding:10px 12px;border:1.5px solid var(--blue-ring);border-radius:var(--r);background:var(--bg-subtle);color:var(--text);box-sizing:border-box}
+.api-tabla{width:100%;border-collapse:collapse;font-size:11.5px}
+.api-tabla th{text-align:left;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+.api-tabla td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top;overflow-wrap:anywhere}
+.api-ok{color:var(--success);font-weight:700}
+.api-mal{color:var(--danger);font-weight:700}
 .cfg-danger-btn{padding:9px 18px;border-radius:9px;background:rgba(220,38,38,.07);color:var(--danger);font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid rgba(220,38,38,.2);cursor:pointer;transition:all .15s var(--ease)}
 .cfg-danger-btn:hover{background:rgba(220,38,38,.12);border-color:rgba(220,38,38,.35)}
 /* Settings responsive */
@@ -6758,6 +6779,10 @@ if (window.AGENTES_ACTIVOS) {
           <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Equipo
         </button>
+        <button type="button" class="cfg-nav-item" data-tab="api" onclick="switchSettingsTab('api')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+          API y agentes
+        </button>
         <button type="button" class="cfg-nav-item" data-tab="referral" onclick="switchSettingsTab('referral')">
           <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Referidos
@@ -7206,6 +7231,14 @@ if (window.AGENTES_ACTIVOS) {
             </div>
           </div>
         </div>
+        <!-- API y agentes: llaves de la API pública (api/v1.js) y avisos
+             salientes. Todo se pinta desde cfgApiCargar() en app.js. -->
+        <div id="cfg-sec-api" style="display:none">
+          <div style="font-size:16px;font-weight:800;margin-bottom:4px">API y agentes</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.55">Conecta un sistema externo —el agente de IA de tu empresa, tu app, tu ERP— para que gestione el CRM como una persona del equipo: leer prospectos, moverlos de etapa, asignarlos, dejar notas y agendar citas. Pasa por las mismas reglas que tu equipo y todo lo que haga queda firmado en el historial con el nombre de la llave. Nunca borra nada. <a href="/api-docs.html" target="_blank" rel="noopener" style="color:var(--blue);font-weight:600">Ver la documentación</a></div>
+          <div id="cfg-api-cuerpo"></div>
+        </div>
+
         <div id="cfg-sec-referral" style="display:none">
           <!-- Link de referido -->
           <div class="cfg-section">

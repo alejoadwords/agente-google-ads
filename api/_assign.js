@@ -115,7 +115,7 @@ export async function comercialesActivos(userId) {
 // El dueño, visto como comercial. Se lee del espejo `users` y no de Clerk
 // porque aquí basta con el nombre y el correo, y no conviene depender de una
 // llamada externa en el camino de entrada de un lead.
-async function duenoComoComercial(userId) {
+export async function duenoComoComercial(userId) {
   try {
     const filas = await fetch(
       `${SUPABASE_URL}/rest/v1/users?id=eq.${encodeURIComponent(userId)}&select=name,email&limit=1`,
@@ -262,7 +262,7 @@ export async function avisarImportacion(com, cantidad, etiqueta) {
 
 // Aviso al comercial. Si no hay Resend configurado simplemente no se manda:
 // el lead ya quedó asignado, que es lo importante.
-async function avisarComercial(com, lead, fuente) {
+export async function avisarComercial(com, lead, fuente) {
   const key = process.env.RESEND_API_KEY;
   if (!key || !com?.email) return;
   const nombre = lead.name || 'Sin nombre';

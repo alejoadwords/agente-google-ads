@@ -135,6 +135,11 @@ export async function enqueueAutomations(userId, lead, triggerType, extra) {
     const autos = await sb(`/automations?user_id=eq.${encodeURIComponent(userId)}${scope}&active=eq.true&select=id,trigger`);
     let matching = (autos || []).filter(a => {
       if (a.trigger?.type !== triggerType) return false;
+      // Igual que en api/leads.js. Hasta que la API pública la usó para mover
+      // etapas, esta copia solo veía lead_created y tag_added, y sin este
+      // filtro una automatización «cuando pasa a Ganado» habría corrido al
+      // entrar a CUALQUIER etapa.
+      if (triggerType === 'stage_changed') return !a.trigger.stage || a.trigger.stage === extra;
       if (triggerType === 'tag_added') return !a.trigger.tag || (extra || []).includes(a.trigger.tag);
       return true;
     });

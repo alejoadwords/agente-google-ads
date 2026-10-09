@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API de Acuarius</title>
+<meta name="description" content="Documentación de la API pública de Acuarius: conecta tu agente de IA, tu app o tu ERP al CRM.">
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#1E2BCC;--blue-lt:#EEF0FD;--blue-md:#C5CAF8;
+  --text:#0F1222;--text-2:#3B4058;--muted:#6B7084;
+  --border:#E4E6F0;--bg:#FFFFFF;--bg-subtle:#F7F8FC;--bg-code:#0F1222;--code-text:#E7E9F5;
+  --success:#059669;--danger:#DC2626;--warning:#D97706;
+  --r:10px;--font:'Outfit',system-ui,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --blue:#7C8CFF;--blue-lt:#1B2040;--blue-md:#37407A;
+    --text:#ECEEF8;--text-2:#C2C6DA;--muted:#9096B0;
+    --border:#262B45;--bg:#0E1120;--bg-subtle:#151930;--bg-code:#070912;--code-text:#E7E9F5;
+    --success:#34D399;--danger:#F87171;--warning:#FBBF24;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.65}
+.envoltura{max-width:880px;margin:0 auto;padding:40px 16px 80px}
+header{border-bottom:1px solid var(--border);padding-bottom:22px;margin-bottom:8px}
+.marca{font-weight:800;color:var(--blue);font-size:13px;letter-spacing:.4px;text-transform:uppercase}
+h1{font-size:34px;line-height:1.15;margin:8px 0 10px;letter-spacing:-.02em}
+h2{font-size:22px;margin:44px 0 10px;letter-spacing:-.01em;padding-top:8px}
+h3{font-size:16px;margin:26px 0 6px}
+p{margin:8px 0;color:var(--text-2)}
+a{color:var(--blue)}
+code{font-family:var(--mono);font-size:.88em;background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;padding:1px 5px;overflow-wrap:anywhere}
+pre{background:var(--bg-code);color:var(--code-text);border-radius:var(--r);padding:14px 16px;overflow-x:auto;font-size:13px;line-height:1.55;margin:10px 0}
+pre code{background:none;border:none;padding:0;color:inherit;font-size:inherit}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0;display:block;overflow-x:auto}
+th{text-align:left;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);padding:7px 10px;white-space:nowrap}
+td{border-bottom:1px solid var(--border);padding:7px 10px;vertical-align:top;color:var(--text-2)}
+.ruta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:28px 0 6px}
+.metodo{font-family:var(--mono);font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;color:#fff}
+.GET{background:var(--success)}.POST{background:var(--blue)}.PATCH{background:var(--warning)}
+.camino{font-family:var(--mono);font-size:14.5px;font-weight:600;overflow-wrap:anywhere}
+.permiso{font-size:12px;color:var(--muted)}
+.nota{background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:var(--r);padding:12px 14px;margin:14px 0;color:var(--text-2);font-size:14px}
+.indice{columns:2;column-gap:28px;font-size:14px;margin:14px 0 0;padding-left:18px}
+@media(max-width:600px){h1{font-size:27px}.indice{columns:1}}
+</style>
+</head>
+<body>
+<div class="envoltura">
+
+<header>
+  <div class="marca">Acuarius · API v1</div>
+  <h1>Conecta tu sistema al CRM</h1>
+  <p>La API de Acuarius deja que un sistema externo —el agente de IA de tu empresa, tu app, tu ERP— gestione el CRM como una persona del equipo: leer prospectos, moverlos de etapa, cerrarlos, asignarlos, dejar notas y agendar tareas y citas. Y con los <a href="#webhooks">webhooks</a>, Acuarius le avisa a tu sistema cuando pasa algo.</p>
+  <ul class="indice">
+    <li><a href="#empezar">Empezar</a></li>
+    <li><a href="#reglas">Las reglas</a></li>
+    <li><a href="#limites">Límites</a></li>
+    <li><a href="#errores">Errores</a></li>
+    <li><a href="#idempotencia">Reintentos seguros</a></li>
+    <li><a href="#cuenta">Procesos, equipo y motivos</a></li>
+    <li><a href="#leads">Prospectos</a></li>
+    <li><a href="#etapa">Mover de etapa y cerrar</a></li>
+    <li><a href="#tareas">Tareas y citas</a></li>
+    <li><a href="#conversaciones">Conversaciones</a></li>
+    <li><a href="#webhooks">Webhooks</a></li>
+    <li><a href="#agentes">Para agentes de IA</a></li>
+  </ul>
+</header>
+
+<h2 id="empezar">Empezar</h2>
+<p>1. En Acuarius, entra a <strong>Configuración → API y agentes</strong> y crea una llave. Ponle el nombre que quieres ver firmado en el historial («Agente de seguimiento») y marca solo los permisos que necesita. La llave se muestra una sola vez.</p>
+<p>2. Envíala en cada llamada, en la cabecera <code>Authorization</code>:</p>
+<pre><code>curl https://app.acuarius.app/api/v1/leads?estado=abiertos \
+  -H 'Authorization: Bearer acu_live_…'</code></pre>
+<p>La dirección base es <code>https://app.acuarius.app/api/v1</code>. Todo va y viene en JSON. Las fechas con hora van en ISO 8601 <strong>con zona horaria</strong> (<code>2026-10-09T15:00:00-05:00</code>); sin zona se rechazan, porque «las 3» en Bogotá y en Madrid son horas distintas.</p>
+<div class="nota">La llave da acceso a tu cuenta: úsala solo desde un servidor, nunca en una página web ni en una app que se instale en el teléfono. Por eso la API no responde a llamadas desde un navegador. Si una llave se filtra, revócala en Configuración: deja de funcionar en ese mismo momento.</div>
+
+<h3>Permisos</h3>
+<table>
+  <tr><th>Permiso</th><th>Qué deja hacer</th></tr>
+  <tr><td><code>leads:leer</code></td><td>Ver prospectos con su historial, procesos y etapas, equipo, etiquetas y motivos de cierre.</td></tr>
+  <tr><td><code>leads:escribir</code></td><td>Crear prospectos, cambiar sus datos y etiquetas, y dejar notas.</td></tr>
+  <tr><td><code>leads:etapa</code></td><td>Mover entre etapas y procesos, y cerrar como ganado o perdido.</td></tr>
+  <tr><td><code>leads:asignar</code></td><td>Cambiar el responsable. La persona recibe el aviso.</td></tr>
+  <tr><td><code>tareas:leer</code></td><td>Ver tareas y citas.</td></tr>
+  <tr><td><code>tareas:escribir</code></td><td>Crear tareas y citas, cambiarlas y marcarlas como hechas.</td></tr>
+  <tr><td><code>conversaciones:leer</code></td><td>Leer las conversaciones del inbox y sus mensajes.</td></tr>
+</table>
+
+<h2 id="reglas">Las reglas</h2>
+<p><strong>Las mismas que una persona.</strong> La API no tiene atajos: mover a Ganado pide motivo y sella la fecha de cierre; cerrar anula las tareas pendientes; cada cambio dispara las automatizaciones de la cuenta y, al ganar, la venta se reporta a las plataformas de pauta conectadas. Una etapa que pide agendar una cita no se puede alcanzar sin la cita.</p>
+<p><strong>Todo queda firmado.</strong> Cada cambio aparece en el historial del prospecto con el nombre de la llave, igual que si lo hubiera hecho alguien del equipo.</p>
+<p><strong>Nunca borra.</strong> No existe ninguna ruta para borrar prospectos, tareas ni notas.</p>
+<p><strong>Plan.</strong> La API está en los planes Pro y Agency (y durante la prueba de 14 días). Si la cuenta pasa a gratis, sus llaves dejan de funcionar.</p>
+
+<h2 id="limites">Límites</h2>
+<p>Cada llave tiene <strong>120 llamadas por minuto</strong> y <strong>20.000 por día</strong> (el día se reinicia a medianoche UTC). Cada respuesta trae cuánto llevas: <code>X-Uso-Minuto</code>, <code>X-Limite-Minuto</code>, <code>X-Uso-Dia</code> y <code>X-Limite-Dia</code>. Al pasarte recibes <code>429</code> con <code>Retry-After</code> en segundos. Las listas devuelven como mucho 100 elementos por página. Si tu caso necesita más, escríbenos.</p>
+
+<h2 id="errores">Errores</h2>
+<p>Todo error trae un mensaje en español y un código estable para que tu sistema decida sin leer el texto:</p>
+<pre><code>{ "error": "Para pasar a «Perdido» hace falta «motivo».",
+  "codigo": "falta_motivo",
+  "motivos": ["Sin presupuesto", "Eligió a la competencia"] }</code></pre>
+<table>
+  <tr><th>Estado</th><th>Códigos</th><th>Qué hacer</th></tr>
+  <tr><td>401</td><td><code>sin_llave</code> <code>llave_invalida</code> <code>llave_revocada</code></td><td>Revisa la llave.</td></tr>
+  <tr><td>403</td><td><code>sin_permiso</code> <code>plan_sin_api</code> <code>cuenta_suspendida</code> <code>limite_del_plan</code></td><td>No se arregla reintentando.</td></tr>
+  <tr><td>404</td><td><code>no_encontrado</code> <code>ruta_desconocida</code></td><td>Ese id no existe en esta cuenta.</td></tr>
+  <tr><td>409</td><td><code>duplicado</code> <code>idempotencia_en_curso</code> <code>anulada</code></td><td>Mira el detalle de la respuesta.</td></tr>
+  <tr><td>422</td><td><code>falta_campo</code> <code>campo_invalido</code> <code>fecha_invalida</code> <code>etapa_desconocida</code> <code>falta_motivo</code> <code>motivo_desconocido</code> <code>etapa_pide_cita</code> <code>etapa_de_cierre</code> <code>usa_otra_ruta</code></td><td>Corrige lo que pide el mensaje. Muchas respuestas traen las opciones válidas.</td></tr>
+  <tr><td>429</td><td><code>limite_minuto</code> <code>limite_dia</code></td><td>Espera lo que dice <code>Retry-After</code>.</td></tr>
+  <tr><td>5xx</td><td><code>error_interno</code> <code>plan_no_disponible</code> <code>limite_no_disponible</code></td><td>Reintenta con espera creciente.</td></tr>
+</table>
+
+<h2 id="idempotencia">Reintentos seguros</h2>
+<p>Si se corta la red justo después de pedir algo, no sabes si se hizo. Envía en los <code>POST</code> y <code>PATCH</code> una cabecera <code>Idempotency-Key</code> con un identificador tuyo (hasta 100 caracteres): si repites la llamada con la misma clave en las 24 horas siguientes, recibes la primera respuesta con la cabecera <code>Idempotent-Replayed: true</code> y no se crea nada dos veces.</p>
+
+<h2 id="cuenta">Procesos, equipo y motivos</h2>
+
+<div class="ruta"><span class="metodo GET">GET</span><span class="camino">/</span><span class="permiso">cualquier llave</span></div>
+<p>Quién eres: nombre de la llave, permisos, límites y uso de hoy.</p>
+
+<div class="ruta"><span class="metodo GET">GET</span><span class="camino">/procesos</span><span class="permiso">leads:leer</span></div>
+<p>Los procesos de venta con sus etapas. Cada etapa trae <code>key</code> (lo que usa la API), <code>label</code> (lo que ve el equipo), <code>cierre</code> (<code>ganado</code>, <code>perdido</code> o nulo) y <code>pide_cita</code>.</p>
+
+<div class="ruta"><span class="metodo GET">GET</span><span class="camino">/equipo</span><span class="permiso">leads:leer</span></div>
+<p>Las personas a las que se puede asignar un prospecto: el dueño de la cuenta y los miembros activos, con su <code>id</code>.</p>
+
+<div class="ruta"><span class="metodo GET">GET</span><span class="camino">/motivos-cierre</span><span class="permiso">leads:leer</span></div>
+<p><code>{ "ganado": [...], "perdido": [...] }</code>: los motivos que la cuenta acepta al cerrar.</p>
+
+<div class="ruta"><span class="metodo GET">GET</span><span class="camino">/etiquetas</span><span class="permiso">leads:leer</span></div>
+
+<h2 id="leads">Prospectos</h2>
+
+<div class="ruta"><span class="metodo GET">GET</span><span class="camino">/leads</span><span class="permiso">leads:leer</span></div>
+<table>
+  <tr><th>Parámetro</th><th>Qué filtra</th></tr>
+  <tr><td><code>etapa</code></td><td>Una o varias claves separadas por coma.</td></tr>
+  <tr><td><code>proceso</code></td><td>Id del proceso.</td></tr>
+  <tr><td><code>asignado</code></td><td>Id de una persona, o <code>nadie</code>.</td></tr>
+  <tr><td><code>estado</code></td><td><code>abiertos</code>, <code>cerrados</code> o <code>todos</code> (por defecto).</td></tr>
+  <tr><td><code>sin_actividad_dias</code></td><td>Sin ningún movimiento en los últimos N días. Para encontrar a quién hacerle seguimiento.</td></tr>
+  <tr><td><code>buscar</code></td><td>En nombre, correo, teléfono y empresa.</td></tr>
+  <tr><td><code>fuente</code>, <code>etiqueta</code></td><td>Por origen o etiqueta.</td></tr>
+  <tr><td><code>actualizado_desde</code>, <code>creado_desde</code></td><td>Fecha y hora con zona.</td></tr>
+  <tr><td><code>orden</code></td><td><code>actualizado</code> (por defecto) o <code>creado</code>, del más reciente al más antiguo.</td></tr>
+  <tr><td><code>limite</code>, <code>desde</code></td><td>Página: hasta 100. La respuesta trae <code>siguiente</code> con el <code>desde</code> de la próxima, o <code>null</code>.</td></tr>
+</table>
+
+<div class="ruta"><span class="metodo GET">GET</span><span class="camino">/leads/{id}</span><span class="permiso">leads:leer</span></div>
+<p>La ficha: el prospecto, sus últimas 50 líneas de historial (con autor), sus tareas y citas (si la llave tiene <code>tareas:leer</code>) y sus conversaciones (si tiene <code>conversaciones:leer</code>).</p>
+
+<div class="ruta"><span class="metodo POST">POST</span><span class="camino">/leads</span><span class="permiso">leads:escribir</span></div>
+<pre><code>{ "name": "Ana Gómez", "email": "ana@correo.com", "phone": "+57 310 555 1234",
+  "company": "Transportes Gómez", "value": 95000000,
+  "etapa": "nuevo", "proceso": "id-opcional",
+  "etiquetas": ["test drive"], "campos": { "Vehículo": "Corolla" },
+  "nota": "Pidió cotización desde la app", "fuente": "app",
+  "asignado_a": "id-opcional (requiere leads:asignar)",
+  "si_existe": "error" }</code></pre>
+<p>Entra igual que un prospecto de un formulario: se reparte según las reglas de la cuenta, se le crea la tarea de primer contacto y corren las automatizaciones de «lead creado». Si ya existe uno con el mismo correo o teléfono responde <code>409</code> con su id; con <code>"si_existe": "actualizar"</code> completa ese en vez de crear otro. No se puede crear directamente en una etapa de cierre ni en una que pide cita: créalo y muévelo.</p>
+
+<div class="ruta"><span class="metodo PATCH">PATCH</span><span class="camino">/leads/{id}</span><span class="permiso">leads:escribir</span></div>
+<p>Cambia <code>name</code>, <code>email</code>, <code>phone</code>, <code>company</code>, <code>value</code>, <code>expected_close_date</code> (AAAA-MM-DD) o <code>campos</code>. Los campos propios se <strong>suman</strong> a los que hay; para quitar uno, envíalo con valor <code>null</code>. La etapa, el responsable y las etiquetas tienen su propia ruta.</p>
+
+<div class="ruta"><span class="metodo POST">POST</span><span class="camino">/leads/{id}/asignar</span><span class="permiso">leads:asignar</span></div>
+<p><code>{ "asignado_a": "id-de-la-persona" }</code>, o <code>null</code> para dejarlo sin responsable. A la persona le llega el correo y el aviso al teléfono.</p>
+
+<div class="ruta"><span class="metodo POST">POST</span><span class="camino">/leads/{id}/etiquetas</span><span class="permiso">leads:escribir</span></div>
+<p><code>{ "agregar": ["vip"], "quitar": ["frío"] }</code>. Las nuevas disparan las automatizaciones de «etiqueta añadida».</p>
+
+<div class="ruta"><span class="metodo POST">POST</span><span class="camino">/leads/{id}/notas</span><span class="permiso">leads:escribir</span></div>
+<p><code>{ "texto": "Le escribí por WhatsApp", "tipo": "nota" }</code>. <code>tipo</code> puede ser <code>nota</code>, <code>llamada</code>, <code>email</code>, <code>reunion</code> o <code>visita</code>. Con <code>"avisar_responsable": true</code> le llega a la persona que lleva el prospecto, por correo y al teléfono, como una nota de la dirección.</p>
+
+<h2 id="etapa">Mover de etapa y cerrar</h2>
+<div class="ruta"><span class="metodo POST">POST</span><span class="camino">/leads/{id}/etapa</span><span class="permiso">leads:etapa</span></div>
+<p><code>etapa</code> acepta la clave (<code>calificado</code>) o el nombre que ve el equipo («Visita al concesionario»). Si no existe en el proceso del prospecto, la respuesta trae la lista de las que sí.</p>
+<pre><code>// Mover
+{ "etapa": "calificado" }
+
+// Cerrar como ganado: el motivo es obligatorio y tiene que ser uno de /motivos-cierre
+{ "etapa": "ganado", "motivo": "Compró el vehículo",
+  "valor": 95000000, "moneda": "COP", "fecha_cierre": "2026-10-08",
+  "nota": "Firmó en el concesionario de la 80" }
+
+// Etapa que pide cita (pide_cita: true en /procesos)
+{ "etapa": "Visita al concesionario",
+  "cita": { "inicio": "2026-10-10T10:00:00-05:00", "titulo": "Test drive",
+            "invitar_lead": true } }
+
+// Pasar a otro proceso (y opcionalmente a una etapa de ese proceso)
+{ "proceso": "id-del-proceso", "etapa": "nuevo" }</code></pre>
+<p>Al cerrar se sella la fecha de cierre (el día de <code>fecha_cierre</code>, o ahora) y se anulan las tareas pendientes del prospecto. Ganar sin <code>valor</code> se permite, pero la respuesta lo advierte en <code>avisos</code>: la venta llegaría sin importe a la pauta y a los reportes. Volver a abrir un prospecto cerrado limpia su fecha de cierre. Si la cuenta tiene Google Calendar conectado, la cita se crea también allí, y con <code>invitar_lead</code> al prospecto le llega la invitación.</p>
+
+<h2 id="tareas">Tareas y citas</h2>
+<div class="ruta"><span class="metodo GET">GET</span><span class="camino">/tareas</span><span class="permiso">tareas:leer</span></div>
+<p>Filtros: <code>lead_id</code>, <code>estado</code> (<code>pendientes</code> por defecto, <code>hechas</code>, <code>todas</code>), <code>tipo</code> (<code>tarea</code> o <code>cita</code>), <code>desde</code> y <code>hasta</code> (sobre el vencimiento), <code>limite</code> y <code>pagina_desde</code>.</p>
+
+<div class="ruta"><span class="metodo POST">POST</span><span class="camino">/tareas</span><span class="permiso">tareas:escribir</span></div>
+<pre><code>{ "lead_id": "id-opcional", "tipo": "tarea",
+  "titulo": "Llamar para confirmar la visita",
+  "vence": "2026-10-09T09:00:00-05:00" }
+
+{ "lead_id": "…", "tipo": "cita", "titulo": "Test drive",
+  "vence": "2026-10-10T10:00:00-05:00", "termina": "2026-10-10T11:00:00-05:00",
+  "invitar_lead": true }</code></pre>
+
+<div class="ruta"><span class="metodo PATCH">PATCH</span><span class="camino">/tareas/{id}</span><span class="permiso">tareas:escribir</span></div>
+<p><code>{ "hecha": true }</code> la marca como hecha. También acepta <code>titulo</code>, <code>descripcion</code>, <code>vence</code> y <code>termina</code>. Una tarea anulada (porque su prospecto se cerró) no se puede cambiar.</p>
+
+<h2 id="conversaciones">Conversaciones</h2>
+<div class="ruta"><span class="metodo GET">GET</span><span class="camino">/conversaciones</span><span class="permiso">conversaciones:leer</span></div>
+<p>Filtros: <code>lead_id</code>, <code>estado</code> (<code>bot</code> = la atiende un agente, <code>human</code> = una persona, <code>resolved</code>), <code>canal</code>, <code>actualizado_desde</code>, <code>limite</code> y <code>desde</code>.</p>
+<div class="ruta"><span class="metodo GET">GET</span><span class="camino">/conversaciones/{id}/mensajes</span><span class="permiso">conversaciones:leer</span></div>
+<p>Los mensajes en orden, del más viejo al más nuevo. <code>de</code> es <code>contacto</code> o <code>negocio</code>. Para ir hacia atrás: <code>antes</code> con la fecha del primero que tienes.</p>
+
+<h2 id="webhooks">Webhooks</h2>
+<p>Se crean en <strong>Configuración → API y agentes</strong>. Acuarius hace un <code>POST</code> a tu URL (solo <code>https</code>) en menos de un minuto cuando pasa algo de lo que elegiste:</p>
+<table>
+  <tr><th>Evento</th><th>Cuándo</th><th>Datos</th></tr>
+  <tr><td><code>lead.creado</code></td><td>Entra un prospecto, venga de donde venga.</td><td><code>lead</code></td></tr>
+  <tr><td><code>lead.etapa_cambiada</code></td><td>Cambia de etapa, lo mueva quien lo mueva.</td><td><code>lead</code>, <code>etapa_anterior</code></td></tr>
+  <tr><td><code>lead.asignado</code></td><td>Cambia de responsable.</td><td><code>lead</code>, <code>asignado_antes</code></td></tr>
+  <tr><td><code>mensaje.recibido</code></td><td>Un contacto escribe al inbox.</td><td><code>mensaje</code>, <code>conversacion</code></td></tr>
+  <tr><td><code>conversacion.estado_cambiado</code></td><td>Una conversación pasa a agente, a persona o a resuelta. Si tu agente atiende un canal, esta es la señal para que se calle cuando una persona toma la conversación.</td><td><code>conversacion</code> con <code>estado</code> y <code>estado_anterior</code></td></tr>
+</table>
+<pre><code>POST https://tu-servidor.com/acuarius
+X-Acuarius-Evento: lead.etapa_cambiada
+X-Acuarius-Entrega: 5b0c…   (el mismo en cada reintento: úsalo para no procesar dos veces)
+X-Acuarius-Firma: t=1760000000,v1=9f2c…
+
+{ "id": "5b0c…", "evento": "lead.etapa_cambiada", "creado": "2026-10-08T20:15:00Z",
+  "datos": { "lead": { "id": "…", "name": "Ana Gómez", "stage": "visita", … },
+             "etapa_anterior": "calificado" } }</code></pre>
+<p>Responde con un <code>2xx</code> en menos de 8 segundos. Cualquier otra cosa (incluida una redirección) cuenta como fallo y se reintenta a los 1, 5 y 15 minutos y a las 1, 4 y 12 horas. Un webhook con 200 fallos seguidos y ningún aviso entregado en tres días se desactiva solo, y Configuración dice por qué.</p>
+<h3>Comprobar la firma</h3>
+<p>La firma es un HMAC-SHA256, con tu secreto, de <code>t</code> + <code>.</code> + el cuerpo tal como llegó. Rechaza los avisos con <code>t</code> de hace más de 5 minutos.</p>
+<pre><code>import crypto from 'node:crypto';
+
+function avisoValido(cuerpoCrudo, cabeceraFirma, secreto) {
+  const { t, v1 } = Object.fromEntries(cabeceraFirma.split(',').map(p => p.split('=')));
+  if (Math.abs(Date.now() / 1000 - Number(t)) > 300) return false;
+  const esperada = crypto.createHmac('sha256', secreto).update(t + '.' + cuerpoCrudo).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(esperada), Buffer.from(v1));
+}</code></pre>
+
+<h2 id="agentes">Para agentes de IA</h2>
+<p>La API está pensada para que la use un agente con herramientas (por ejemplo, uno hecho con Claude). Algunas recomendaciones:</p>
+<p><strong>Una herramienta por ruta.</strong> Dale al agente <code>buscar_prospectos</code> (GET /leads), <code>ver_prospecto</code> (GET /leads/{id}), <code>mover_etapa</code>, <code>crear_tarea</code>, <code>dejar_nota</code>… y que consulte <code>/procesos</code> y <code>/motivos-cierre</code> al empezar, en vez de adivinar etapas o motivos.</p>
+<p><strong>Deja que los errores le enseñen.</strong> Los mensajes están escritos para que un modelo los entienda y corrija solo: una etapa inexistente devuelve las válidas; un cierre sin motivo, los motivos de la cuenta.</p>
+<p><strong>Usa <code>Idempotency-Key</code></strong> en todo lo que escriba: un agente reintenta más que una persona.</p>
+<p><strong>Una llave por agente</strong>, con su nombre: así el historial dice cuál de tus agentes hizo cada cosa, y puedes apagar uno sin tocar a los demás.</p>
+
+<p style="margin-top:48px;font-size:13px;color:var(--muted)">¿Dudas o un caso que la API no cubre? Escríbenos a <a href="mailto:soporte@acuarius.app">soporte@acuarius.app</a>.</p>
+</div>
+</body>
+</html>
