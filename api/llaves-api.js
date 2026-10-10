@@ -15,7 +15,7 @@ import { quienPregunta } from './_perfiles.js';
 import {
   sbHeaders, PERMISOS, CLAVES_PERMISOS, EVENTOS, CLAVES_EVENTOS, MAX_LLAVES, MAX_WEBHOOKS,
   generarLlave, generarSecretoWebhook, validarUrlWebhook, cuentaConApi, entregarAviso,
-  tieneDosPasos, avisarDueno, fechaAviso,
+  enviarCodigo, verificarCodigo, liberarCodigo, avisarDueno, fechaAviso,
 } from './_api-llaves.js';
 import { cifrar } from './_cifrado.js';
 
@@ -44,7 +44,17 @@ async function sb(ruta, { method = 'GET', body, prefer } = {}) {
   return t ? JSON.parse(t) : null;
 }
 
+// Si una acción que abre una puerta gastó un código de confirmación y luego
+// falló (URL inválida, tope de llaves…), el código vuelve a valer: quien se
+// equivocó en un campo no tiene que esperar otro correo.
 export default async function handler(req) {
+  const estado = {};
+  const resp = await atender(req, estado);
+  if (estado.codigo && resp.status >= 300) await liberarCodigo(estado.codigo.actor, estado.codigo.hash);
+  return resp;
+}
+
+async function atender(req, estado) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
   const sesion = await verificarSesion(req);
@@ -85,13 +95,8 @@ export default async function handler(req) {
         sb(`/api_llaves?user_id=eq.${encodeURIComponent(cuenta)}&select=${COLS_LLAVE}&order=created_at.desc`),
         sb(`/api_webhooks?user_id=eq.${encodeURIComponent(cuenta)}&select=${COLS_WEBHOOK}&order=created_at.asc`),
       ]);
-      // Si quien mira puede crear o no: la pantalla lo dice antes de que lo
-      // intente. Si Clerk no responde se pinta como «no», y crear lo vuelve
-      // a comprobar de todos modos.
-      const dosPasos = await tieneDosPasos(quien.actorId).catch(() => null);
       return jsonResp({
         plan_permite: plan.permitido,
-        dos_pasos: dosPasos,
         permisos: PERMISOS, eventos: EVENTOS,
         llaves: llaves || [], webhooks: webhooks || [],
         cliente_fijo: quien.cliente || null,
@@ -105,26 +110,31 @@ export default async function handler(req) {
 
     // Lo que crea algo nuevo exige el plan; revocar y desactivar, nunca: una
     // cuenta que bajó de plan tiene que poder apagar lo que dejó encendido.
-    const crea = ['crear_llave', 'crear_webhook', 'rotar_secreto', 'probar_webhook'].includes(accion);
+    const crea = ['crear_llave', 'crear_webhook', 'rotar_secreto', 'probar_webhook', 'pedir_codigo'].includes(accion);
     if (crea && !plan.permitido) {
       return jsonResp({ error: 'La API está en los planes Pro y Agency. Mejora tu plan para conectar sistemas externos.', plan_sin_api: true }, 403);
     }
-    // Abrir o redirigir una puerta a la cuenta exige la verificación en dos
-    // pasos de QUIEN lo hace (no del dueño): una contraseña robada no basta
+    // Abrir o redirigir una puerta a la cuenta exige un código que llega al
+    // correo de QUIEN lo hace (no del dueño): una contraseña robada no basta
     // para crear una llave que luego sobrevive al cambio de contraseña.
-    // Revocar, desactivar y eliminar nunca la piden: cerrar tiene que ser fácil.
+    // Revocar, desactivar y eliminar nunca lo piden: cerrar tiene que ser fácil.
+    if (accion === 'pedir_codigo') {
+      const para = {
+        crear_llave: 'crear una llave de la API', crear_webhook: 'añadir un webhook',
+        rotar_secreto: 'generar un secreto nuevo para un webhook', editar_webhook: 'cambiar la dirección de un webhook',
+      }[b.para] || 'un cambio en la API';
+      const r = await enviarCodigo(quien.actorId, cuenta, para);
+      return r.ok ? jsonResp(r) : jsonResp({ error: r.error }, r.status);
+    }
     const abre = ['crear_llave', 'crear_webhook', 'rotar_secreto'].includes(accion) ||
       (accion === 'editar_webhook' && b.url !== undefined);
     if (abre) {
-      let ok;
-      try { ok = await tieneDosPasos(quien.actorId); }
-      catch { return jsonResp({ error: 'No se pudo comprobar tu verificación en dos pasos. Reintenta en unos segundos.' }, 503); }
-      if (!ok) {
-        return jsonResp({
-          error: 'Para esto necesitas activar la verificación en dos pasos en tu usuario: Configuración → Seguridad → Configurar 2FA.',
-          requiere_2fa: true,
-        }, 403);
+      if (!b.codigo) {
+        return jsonResp({ error: 'Para esto hace falta confirmar con el código que te enviamos al correo.', requiere_codigo: true }, 403);
       }
+      const v = await verificarCodigo(quien.actorId, b.codigo);
+      if (!v.ok) return jsonResp({ error: v.error, requiere_codigo: true, codigo_vencido: !!v.vencido }, 403);
+      estado.codigo = { actor: quien.actorId, hash: v.hash };
     }
     const quienLoHizo = quien.esDueno ? 'El dueño de la cuenta' : (quien.nombre || 'Un administrador del equipo');
     // Un administrador atado a un cliente solo crea llaves de ese cliente.

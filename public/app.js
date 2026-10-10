@@ -33830,22 +33830,13 @@ function cfgApiPintar() {
     '<label class="api-opcion"><input type="checkbox" name="cfg-api-evento" value="' + esc(e.clave) + '">' +
     '<span>' + esc(e.nombre) + '<small>' + esc(e.clave) + '</small></span></label>').join('');
 
-  // Crear o redirigir exige la verificación en dos pasos de quien mira (el
-  // servidor lo vuelve a comprobar). Revocar y apagar, nunca.
-  const sin2fa = d.dos_pasos !== true;
-  const bloqueo = sin2fa ? ' disabled title="Activa la verificación en dos pasos para crear"' : '';
+  // Crear o redirigir pide un código que llega al correo de quien lo hace (el
+  // servidor lo comprueba). Revocar y apagar, nunca. Los botones no se
+  // desactivan: el código se pide al pulsarlos, con la ventana a la vista.
   caja.innerHTML =
-    (sin2fa
-      ? '<div style="border:1.5px solid var(--warning);background:var(--warning-bg);border-radius:11px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;line-height:1.55">' +
-          '<strong>Activa la verificación en dos pasos para crear llaves y webhooks.</strong> ' +
-          (d.dos_pasos === null
-            ? 'No pudimos comprobar si la tienes activa; vuelve a intentarlo en un momento.'
-            : 'Una llave abre tu cuenta a otro sistema: pedimos que quien la crea confirme que es de verdad quien dice ser. Revocar y desactivar siguen disponibles.') +
-          '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
-            '<button class="btn-pri sm" onclick="clerkInstance?.openUserProfile?.()">Activar ahora</button>' +
-            '<button class="btn-ghost sm" onclick="cfgApiCargar()">Ya la activé</button>' +
-          '</div></div>'
-      : '') +
+    '<div style="border:1px solid var(--border);border-radius:11px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;line-height:1.55;color:var(--muted)">' +
+      icn('llave', 13) + ' Para crear una llave o un webhook te enviaremos un código a tu correo: así confirmamos que eres tú y no alguien con tu contraseña. Revocar y desactivar no lo piden.' +
+    '</div>' +
     '<div class="api-bloque-titulo">Llaves</div>' +
     '<div class="api-bloque-sub">Cada sistema que se conecte lleva su propia llave, con solo los permisos que necesita. Si una llave se filtra o deja de usarse, revócala: deja de funcionar al instante.</div>' +
     cfgApiListaLlaves(d, nombreCliente) +
@@ -33854,7 +33845,7 @@ function cfgApiPintar() {
       '<input class="auto-input" id="cfg-api-nombre" maxlength="60" placeholder="Nombre que firmará en el historial, p. ej. «Agente de seguimiento»" style="width:100%;box-sizing:border-box">' +
       '<div style="font-size:11.5px;color:var(--muted);margin:10px 0 2px">Qué puede hacer</div>' + permisos +
       cfgApiSelectorCliente('cfg-api-cliente') +
-      '<button class="btn-pri sm" id="cfg-api-crear" style="margin-top:12px" onclick="cfgApiCrearLlave()"' + bloqueo + '>Crear llave</button>' +
+      '<button class="btn-pri sm" id="cfg-api-crear" style="margin-top:12px" onclick="cfgApiCrearLlave()">Crear llave</button>' +
       '<div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5">Lo que haga un sistema con esta llave se considera hecho por tu cuenta, y los datos que consulte salen hacia ese sistema. Ver los <a href="https://acuarius.app/terms.html#integraciones" target="_blank" rel="noopener" style="color:var(--blue)">términos</a> y la <a href="https://acuarius.app/privacy.html" target="_blank" rel="noopener" style="color:var(--blue)">política de datos</a>.</div>' +
     '</div>' +
 
@@ -33867,7 +33858,7 @@ function cfgApiPintar() {
         '<input class="auto-input" id="cfg-api-url" maxlength="500" placeholder="https://tu-servidor.com/acuarius" style="width:100%;box-sizing:border-box">' +
         '<div style="font-size:11.5px;color:var(--muted);margin:10px 0 2px">Avisar cuando</div>' + eventos +
         cfgApiSelectorCliente('cfg-api-wh-cliente') +
-        '<button class="btn-pri sm" id="cfg-api-wh-crear" style="margin-top:12px" onclick="cfgApiCrearWebhook()"' + bloqueo + '>Añadir webhook</button>' +
+        '<button class="btn-pri sm" id="cfg-api-wh-crear" style="margin-top:12px" onclick="cfgApiCrearWebhook()">Añadir webhook</button>' +
       '</div>' +
     '</div>' +
 
@@ -33930,7 +33921,7 @@ function cfgApiListaWebhooks(d, nombreCliente) {
 async function cfgApiPost(cuerpo) {
   const r = await fetchAuth('/api/llaves-api', { method: 'POST', body: JSON.stringify(cuerpo) });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+  if (!r.ok) { const e = new Error(d.error || 'HTTP ' + r.status); e.datos = d; throw e; }
   // Cada cambio le manda un aviso de seguridad al dueño. Si no salió, se dice:
   // el dueño cree que se entera de todo.
   if (d.aviso && d.aviso.enviado === false) {
@@ -33948,7 +33939,8 @@ async function cfgApiCrearLlave() {
   if (!permisos.length) { showToast('Elige al menos un permiso.', 'error'); return; }
   btn.disabled = true;
   try {
-    const d = await cfgApiPost({ accion: 'crear_llave', nombre, permisos, client_id: cliente });
+    const d = await cfgApiConCodigo('crear_llave', codigo => cfgApiPost({ accion: 'crear_llave', nombre, permisos, client_id: cliente, codigo }));
+    if (!d) return;
     cfgApiMostrarUnaVez('Tu llave nueva', 'Cópiala ahora y guárdala en tu sistema. Por seguridad no se vuelve a mostrar: si la pierdes, revócala y crea otra.', d.llave);
     await cfgApiCargar();
   } catch (e) {
@@ -33976,7 +33968,8 @@ async function cfgApiCrearWebhook() {
   if (!eventos.length) { showToast('Elige al menos un aviso.', 'error'); return; }
   btn.disabled = true;
   try {
-    const d = await cfgApiPost({ accion: 'crear_webhook', url, eventos, client_id: cliente });
+    const d = await cfgApiConCodigo('crear_webhook', codigo => cfgApiPost({ accion: 'crear_webhook', url, eventos, client_id: cliente, codigo }));
+    if (!d) return;
     cfgApiMostrarUnaVez('Secreto del webhook', 'Con este secreto tu sistema comprueba la firma de cada aviso (cabecera X-Acuarius-Firma). Cópialo ahora: no se vuelve a mostrar. Si lo pierdes, genera otro desde el menú del webhook.', d.secreto);
     await cfgApiCargar();
   } catch (e) {
@@ -34012,7 +34005,8 @@ function cfgApiMasWebhook(id, ancla) {
         showToast(w.activo ? 'Webhook desactivado' : 'Webhook activado');
       } else if (op === 'secreto') {
         if (!await confirmarAguaP({ titulo: 'Generar un secreto nuevo', texto: 'El secreto actual deja de valer: los avisos siguientes vendrán firmados con el nuevo, así que tu sistema tendrá que usarlo desde ya.', confirmar: 'Generar' })) return;
-        const d = await cfgApiPost({ accion: 'rotar_secreto', id });
+        const d = await cfgApiConCodigo('rotar_secreto', codigo => cfgApiPost({ accion: 'rotar_secreto', id, codigo }));
+        if (!d) return;
         cfgApiMostrarUnaVez('Secreto nuevo del webhook', 'Cópialo ahora y ponlo en tu sistema: no se vuelve a mostrar.', d.secreto);
       } else if (op === 'eliminar') {
         if (!await confirmarAguaP({ titulo: 'Eliminar el webhook', texto: 'Acuarius deja de avisar a ' + w.url + '. Los avisos pendientes se descartan.\n\nTus datos del CRM no se tocan.', confirmar: 'Eliminar', peligro: true })) return;
@@ -34021,6 +34015,69 @@ function cfgApiMasWebhook(id, ancla) {
       }
       await cfgApiCargar();
     } catch (e) { showToast('No se pudo: ' + e.message, 'error'); }
+  });
+}
+
+// Ventana del código de confirmación. Pide el código al abrirse, y llama a
+// `ejecutar(codigo)` al confirmar. Si el servidor rechaza el código, la
+// ventana sigue abierta con el motivo; cualquier otro error la cierra y sube
+// a quien llamó. Devuelve lo que devolvió `ejecutar`, o null si se canceló.
+function cfgApiConCodigo(para, ejecutar) {
+  return new Promise((resolver, rechazar) => {
+    const ov = document.createElement('div');
+    ov.className = 'auto-modal-overlay';
+    ov.innerHTML = '<div class="auto-modal" style="max-width:420px">' +
+      '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">Confirma que eres tú</div></div>' +
+      '<div class="auto-modal-body">' +
+        '<div data-estado style="font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:12px">Enviando un código a tu correo…</div>' +
+        '<input class="auto-input" data-codigo inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Código de 6 números" style="width:100%;box-sizing:border-box;font-size:18px;letter-spacing:.25em;text-align:center">' +
+        '<div class="api-fila-error" data-error></div>' +
+        '<button class="btn-ghost sm" data-reenviar style="margin-top:10px">Enviar otro código</button>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+        '<button class="btn-ghost sm" data-x>Cancelar</button>' +
+        '<button class="btn-pri sm" data-ok>Confirmar</button>' +
+      '</div></div>';
+    document.body.appendChild(ov);
+    const $ = sel => ov.querySelector(sel);
+    const campo = $('[data-codigo]'), error = $('[data-error]'), estado = $('[data-estado]'), ok = $('[data-ok]');
+    const cerrar = () => ov.remove();
+
+    const pedir = async () => {
+      error.textContent = '';
+      estado.textContent = 'Enviando un código a tu correo…';
+      try {
+        const d = await cfgApiPost({ accion: 'pedir_codigo', para });
+        estado.textContent = 'Te enviamos un código a ' + d.correo + '. Vale ' + d.minutos + ' minutos. Si no lo ves, revisa la carpeta de spam.';
+      } catch (e) {
+        // «Ya te enviamos uno» no es un fallo: el código anterior sigue valiendo.
+        estado.textContent = 'Escribe el código que te llegó al correo.';
+        error.textContent = e.message;
+      }
+      campo.focus();
+    };
+
+    const confirmar = async () => {
+      const codigo = campo.value.replace(/\D/g, '');
+      if (codigo.length !== 6) { error.textContent = 'El código tiene 6 números.'; campo.focus(); return; }
+      ok.disabled = true; ok.textContent = 'Comprobando…'; error.textContent = '';
+      try {
+        const d = await ejecutar(codigo);
+        cerrar(); resolver(d);
+      } catch (e) {
+        if (e.datos?.requiere_codigo) {
+          error.textContent = e.message;
+          if (e.datos.codigo_vencido) campo.value = '';
+          campo.focus();
+        } else { cerrar(); rechazar(e); }
+      } finally { ok.disabled = false; ok.textContent = 'Confirmar'; }
+    };
+
+    $('[data-x]').onclick = () => { cerrar(); resolver(null); };
+    $('[data-reenviar]').onclick = pedir;
+    ok.onclick = confirmar;
+    campo.onkeydown = ev => { if (ev.key === 'Enter') confirmar(); };
+    pedir();
   });
 }
 

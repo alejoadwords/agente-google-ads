@@ -2,6 +2,14 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-10-api-codigo-correo",
+      "fecha": "2026-10-10",
+      "tipo": "arreglo",
+      "titulo": "Ya puedes crear llaves de la API y webhooks",
+      "texto": "Pedíamos la verificación en dos pasos para crear llaves y webhooks, pero no había forma de activarla, así que el botón «Crear llave» no hacía nada. Ahora, al pulsarlo, te enviamos un código de 6 números a tu correo. Lo escribes y la llave se crea. El código vale 10 minutos y sirve una sola vez. Revocar una llave o desactivar un webhook no lo pide.",
+      "accion": { "texto": "Ir a API y agentes", "ir": "ajustes-api" }
+    },
+    {
       "id": "2026-10-09-responder-notas",
       "fecha": "2026-10-09",
       "tipo": "nuevo",

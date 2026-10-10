@@ -248,17 +248,146 @@ export async function creadorVigente(cuenta, creador) {
   return valor;
 }
 
-// ── ¿Tiene la verificación en dos pasos? ───────────────────────────────────
-// Para crear una llave o un webhook se exige: quien abre una puerta a la
-// cuenta entera tiene que ser de verdad quien dice ser. Se pregunta a Clerk en
-// el momento, sin caché: es una acción rara y no puede valer un dato viejo.
-export async function tieneDosPasos(userId) {
+// ── Código de confirmación por correo ──────────────────────────────────────
+// Quien abre una puerta a la cuenta entera tiene que demostrar que es quien
+// dice ser, no solo que tiene la sesión abierta: una contraseña robada no debe
+// bastar para crear una llave que sobrevive al cambio de contraseña. Antes se
+// exigía la verificación en dos pasos de Clerk, pero en el plan Hobby de Clerk
+// el segundo factor es de pago y nadie podía activarlo (10-10-2026). Ahora se
+// manda un código al correo de QUIEN lo hace (no del dueño).
+//
+// Una fila por persona en api_codigos: pedir otro reemplaza el anterior.
+// Sirve 10 minutos, una sola vez y con 5 intentos. Se guarda solo el hash.
+export const CODIGO_MINUTOS = 10;
+const CODIGO_INTENTOS = 5;
+const CODIGO_ESPERA_S = 60;
+
+async function hashCodigo(actorId, codigo) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(actorId + ':' + codigo));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function sbCodigos(ruta, { method = 'GET', body, prefer } = {}) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/api_codigos${ruta}`, {
+    method, headers: sbHeaders(prefer ? { Prefer: prefer } : {}),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`api_codigos ${method} → ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  if (r.status === 204 || prefer === 'return=minimal') return null;
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
+}
+
+// «alejandro@gmail.com» → «al•••••••@gmail.com»: lo justo para que reconozca
+// a qué buzón mirar sin enseñar la dirección entera en pantalla.
+function enmascarar(correo) {
+  const [u, d] = String(correo).split('@');
+  return u.slice(0, 2) + '•'.repeat(Math.max(3, u.length - 2)) + '@' + d;
+}
+
+// Correo principal de una persona en Clerk. Se pregunta en el momento: si
+// acaba de cambiarlo, el código tiene que ir al nuevo.
+async function correoDe(userId) {
   const r = await fetch('https://api.clerk.com/v1/users/' + encodeURIComponent(userId), {
     headers: { Authorization: 'Bearer ' + process.env.CLERK_SECRET_KEY },
   });
   if (!r.ok) throw new Error('Clerk respondió ' + r.status);
   const u = await r.json();
-  return u.two_factor_enabled === true;
+  const p = (u.email_addresses || []).find(e => e.id === u.primary_email_address_id) || (u.email_addresses || [])[0];
+  return p?.email_address || null;
+}
+
+// Genera un código, lo guarda y lo manda. Devuelve { ok, correo } o
+// { ok: false, error, status } con un motivo que la pantalla puede enseñar.
+export async function enviarCodigo(actorId, cuenta, para) {
+  const previo = (await sbCodigos(`?actor_id=eq.${encodeURIComponent(actorId)}&select=created_at,usado_at`))?.[0];
+  if (previo && !previo.usado_at) {
+    const faltan = CODIGO_ESPERA_S - Math.floor((Date.now() - new Date(previo.created_at).getTime()) / 1000);
+    if (faltan > 0) return { ok: false, status: 429, error: `Ya te enviamos un código hace un momento. Revisa tu correo (también la carpeta de spam) o pide otro en ${faltan} s.` };
+  }
+  const correo = await correoDe(actorId);
+  if (!correo) return { ok: false, status: 400, error: 'Tu usuario no tiene un correo principal. Añádelo en tu perfil y vuelve a intentarlo.' };
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return { ok: false, status: 503, error: 'El correo no está configurado en el servidor. Escríbenos a soporte@acuarius.app.' };
+
+  const n = new Uint32Array(1);
+  crypto.getRandomValues(n);
+  const codigo = String(n[0] % 1000000).padStart(6, '0');
+  await sbCodigos('?on_conflict=actor_id', {
+    method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+    body: {
+      actor_id: actorId, cuenta, hash: await hashCodigo(actorId, codigo), intentos: 0,
+      expira_at: new Date(Date.now() + CODIGO_MINUTOS * 60000).toISOString(),
+      usado_at: null, created_at: new Date().toISOString(),
+    },
+  });
+
+  const { emailHtml, bloque, esc, RESPONDER_A } = await import('./_email-layout.js');
+  const { enviarResend } = await import('./_correo.js');
+  const r = await enviarResend('api-codigo', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'Acuarius <crm@app.acuarius.app>', reply_to: RESPONDER_A,
+      to: correo, subject: 'Tu código para confirmar en Acuarius',
+      html: emailHtml({
+        titulo: 'Confirma que eres tú',
+        intro: esc(`Pediste ${para} en Configuración → API y agentes. Escribe este código en la pantalla:`),
+        preheader: esc(`Tu código vale ${CODIGO_MINUTOS} minutos.`),
+        cuerpo: bloque(`<div style="font-size:30px;font-weight:800;letter-spacing:.3em;text-align:center">${codigo}</div>`) +
+          `<p style="font-size:13px;color:#5B6072">Vale ${CODIGO_MINUTOS} minutos y una sola vez.</p>`,
+        pie: 'Si no fuiste tú, alguien tiene tu contraseña: cámbiala ya y escríbenos a soporte@acuarius.app. Sin este código no puede crear la llave.' +
+          '<br><br>Equipo de Soporte — Acuarius',
+      }),
+    }),
+  }, cuenta);
+  if (!r?.ok) {
+    // Sin correo no hay código que escribir: se borra para que pueda pedir
+    // otro enseguida en vez de esperar el minuto.
+    await sbCodigos(`?actor_id=eq.${encodeURIComponent(actorId)}`, { method: 'DELETE', prefer: 'return=minimal' }).catch(() => {});
+    return { ok: false, status: 502, error: 'No pudimos enviarte el código por correo (' + (r?.status || 'sin respuesta') + '). Reintenta en unos minutos o escríbenos a soporte@acuarius.app.' };
+  }
+  return { ok: true, correo: enmascarar(correo), minutos: CODIGO_MINUTOS };
+}
+
+// Comprueba el código y lo marca como usado. Si después la acción falla por
+// otra cosa, quien llama lo libera con liberarCodigo(): una URL mal escrita
+// no debe obligar a pedir otro código.
+// Cada intento suma antes de comparar, con un PATCH condicionado al valor que
+// se leyó: dos intentos en paralelo no pueden contar como uno.
+export async function verificarCodigo(actorId, codigo) {
+  const limpio = String(codigo || '').replace(/\D/g, '');
+  if (limpio.length !== 6) return { ok: false, error: 'Escribe el código de 6 números que te llegó al correo.' };
+  const id = encodeURIComponent(actorId);
+  const f = (await sbCodigos(`?actor_id=eq.${id}&select=hash,intentos,expira_at,usado_at`))?.[0];
+  if (!f || f.usado_at || new Date(f.expira_at).getTime() < Date.now()) {
+    return { ok: false, vencido: true, error: 'Ese código ya no sirve (venció o ya se usó). Pide uno nuevo.' };
+  }
+  if (f.intentos >= CODIGO_INTENTOS) {
+    return { ok: false, vencido: true, error: 'Demasiados intentos con ese código. Pide uno nuevo.' };
+  }
+  const sumado = await sbCodigos(`?actor_id=eq.${id}&intentos=eq.${f.intentos}`, {
+    method: 'PATCH', prefer: 'return=representation', body: { intentos: f.intentos + 1 },
+  });
+  if (!sumado?.length) return { ok: false, error: 'Se cruzaron dos intentos. Vuelve a escribir el código.' };
+  if (await hashCodigo(actorId, limpio) !== f.hash) {
+    const quedan = CODIGO_INTENTOS - f.intentos - 1;
+    return quedan > 0
+      ? { ok: false, error: `El código no es correcto. Te ${quedan === 1 ? 'queda 1 intento' : `quedan ${quedan} intentos`}.` }
+      : { ok: false, vencido: true, error: 'El código no es correcto y ya no quedan intentos. Pide uno nuevo.' };
+  }
+  const reservado = await sbCodigos(`?actor_id=eq.${id}&usado_at=is.null&hash=eq.${f.hash}`, {
+    method: 'PATCH', prefer: 'return=representation', body: { usado_at: new Date().toISOString() },
+  });
+  if (!reservado?.length) return { ok: false, vencido: true, error: 'Ese código ya se usó. Pide uno nuevo.' };
+  return { ok: true, hash: f.hash };
+}
+
+// La acción falló después de verificar: el código vuelve a valer.
+export async function liberarCodigo(actorId, hash) {
+  await sbCodigos(`?actor_id=eq.${encodeURIComponent(actorId)}&hash=eq.${hash}`, {
+    method: 'PATCH', prefer: 'return=minimal', body: { usado_at: null },
+  }).catch(() => {});
 }
 
 // ── Aviso de seguridad al dueño ─────────────────────────────────────────────
