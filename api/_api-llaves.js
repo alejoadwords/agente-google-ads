@@ -376,8 +376,10 @@ export async function verificarCodigo(actorId, codigo) {
       ? { ok: false, error: `El código no es correcto. Te ${quedan === 1 ? 'queda 1 intento' : `quedan ${quedan} intentos`}.` }
       : { ok: false, vencido: true, error: 'El código no es correcto y ya no quedan intentos. Pide uno nuevo.' };
   }
+  // Acertar no gasta intento: quien corrige tres veces una URL mal escrita con
+  // el código bueno no debe quedarse sin intentos.
   const reservado = await sbCodigos(`?actor_id=eq.${id}&usado_at=is.null&hash=eq.${f.hash}`, {
-    method: 'PATCH', prefer: 'return=representation', body: { usado_at: new Date().toISOString() },
+    method: 'PATCH', prefer: 'return=representation', body: { usado_at: new Date().toISOString(), intentos: f.intentos },
   });
   if (!reservado?.length) return { ok: false, vencido: true, error: 'Ese código ya se usó. Pide uno nuevo.' };
   return { ok: true, hash: f.hash };

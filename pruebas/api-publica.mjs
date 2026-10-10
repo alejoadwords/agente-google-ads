@@ -26,9 +26,9 @@ const sbH = { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'appl
 
 // ── Clerk, Resend y el receptor de avisos, simulados ────────────────────────
 const usuarios = {
-  [DUENO]:  { id: DUENO, public_metadata: { plan: 'pro' }, two_factor_enabled: true, primary_email_address_id: 'e1', email_addresses: [{ id: 'e1', email_address: `dueno${T}@prueba.test` }] },
-  [ADMIN]:  { id: ADMIN, public_metadata: { plan: 'trial' }, two_factor_enabled: true, email_addresses: [{ email_address: `admin${T}@prueba.test` }] },
-  [MIEMBRO]: { id: MIEMBRO, public_metadata: { plan: 'trial' }, two_factor_enabled: false, email_addresses: [{ email_address: `miembro${T}@prueba.test` }] },
+  [DUENO]:  { id: DUENO, public_metadata: { plan: 'pro' }, primary_email_address_id: 'e1', email_addresses: [{ id: 'e1', email_address: `dueno${T}@prueba.test` }] },
+  [ADMIN]:  { id: ADMIN, public_metadata: { plan: 'trial' }, email_addresses: [{ email_address: `admin${T}@prueba.test` }] },
+  [MIEMBRO]: { id: MIEMBRO, public_metadata: { plan: 'trial' }, email_addresses: [{ email_address: `miembro${T}@prueba.test` }] },
   [GRATIS]: { id: GRATIS, public_metadata: { plan: 'free' }, email_addresses: [{ email_address: `gratis${T}@prueba.test` }] },
   [OTRA]:   { id: OTRA, public_metadata: { plan: 'pro' }, email_addresses: [{ email_address: `otra${T}@prueba.test` }] },
 };
@@ -73,7 +73,31 @@ async function api(llave, metodo, ruta, cuerpo, extra = {}) {
   }));
   return { s: r.status, d: await r.json().catch(() => ({})), h: r.headers };
 }
-async function panel(sub, metodo = 'GET', cuerpo, q = '') {
+// Lo que abre una puerta pide el código del correo. `panel()` lo hace como la
+// pantalla: si el servidor lo pide, solicita uno, lo lee del correo simulado y
+// reintenta. Un código que la acción liberó (falló por otra cosa) se reutiliza,
+// porque pedir otro antes de un minuto da 429. `sinCodigo` lo salta para
+// probar justo eso.
+const ultimoCodigo = {};
+const ABREN = ['crear_llave', 'crear_webhook', 'rotar_secreto'];
+function codigoDelCorreo(sub) {
+  const para = usuarios[sub].email_addresses[0].email_address;
+  const c = [...correos].reverse().find(x => x.to === para && /Tu código/.test(x.subject));
+  return c?.html.match(/letter-spacing:\.3em;text-align:center">(\d{6})</)?.[1];
+}
+async function panel(sub, metodo = 'GET', cuerpo, q = '', { sinCodigo = false } = {}) {
+  const abre = cuerpo && (ABREN.includes(cuerpo.accion) || (cuerpo.accion === 'editar_webhook' && cuerpo.url !== undefined));
+  if (abre && !sinCodigo && !cuerpo.codigo) {
+    let p = await panelCrudo(sub, metodo, { ...cuerpo, codigo: ultimoCodigo[sub] }, q);
+    if (!(p.s === 403 && p.d.requiere_codigo)) return p;
+    const pedido = await panelCrudo(sub, 'POST', { accion: 'pedir_codigo', para: cuerpo.accion });
+    if (pedido.s !== 200) return pedido;
+    ultimoCodigo[sub] = codigoDelCorreo(sub);
+    return panelCrudo(sub, metodo, { ...cuerpo, codigo: ultimoCodigo[sub] }, q);
+  }
+  return panelCrudo(sub, metodo, cuerpo, q);
+}
+async function panelCrudo(sub, metodo = 'GET', cuerpo, q = '') {
   const r = await llavesApi(new Request('https://app.acuarius.app/api/llaves-api' + q, {
     method: metodo, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await jwt(sub) },
     body: cuerpo ? JSON.stringify(cuerpo) : undefined,
@@ -125,15 +149,31 @@ await sbPost('team_members', { owner_user_id: DUENO, member_user_id: ADMIN, memb
   ok(p.s === 403, 'una asesora (perfil Ventas) no gestiona la API');
   ok(correos.some(c => c.to === `dueno${T}@prueba.test` && /Se creó una llave/.test(c.subject) && /Agente de prueba/.test(c.html)), 'al dueño le llega el aviso de la llave nueva');
 
-  console.log('Verificación en dos pasos');
-  usuarios[DUENO].two_factor_enabled = false;
-  p = await panel(DUENO);
-  ok(p.s === 200 && p.d.dos_pasos === false, 'la pantalla sabe que no la tiene');
-  p = await panel(DUENO, 'POST', { accion: 'crear_llave', nombre: 'Sin dos pasos', permisos: ['leads:leer'] });
-  ok(p.s === 403 && p.d.requiere_2fa === true, 'sin verificación en dos pasos no se crea una llave');
-  p = await panel(DUENO, 'POST', { accion: 'crear_webhook', url: `https://receptor-${T}.prueba.test/x`, eventos: ['lead.creado'] });
-  ok(p.s === 403 && p.d.requiere_2fa === true, 'ni un webhook');
-  usuarios[DUENO].two_factor_enabled = true;
+  console.log('Código de confirmación por correo');
+  p = await panel(DUENO, 'POST', { accion: 'crear_llave', nombre: 'Sin código', permisos: ['leads:leer'] }, '', { sinCodigo: true });
+  ok(p.s === 403 && p.d.requiere_codigo === true, 'sin código no se crea una llave');
+  p = await panel(DUENO, 'POST', { accion: 'crear_webhook', url: `https://receptor-${T}.prueba.test/x`, eventos: ['lead.creado'] }, '', { sinCodigo: true });
+  ok(p.s === 403 && p.d.requiere_codigo === true, 'ni un webhook');
+  // Un código nuevo, propio de esta sección.
+  await sbDel(`api_codigos?actor_id=eq.${DUENO}`);
+  p = await panelCrudo(DUENO, 'POST', { accion: 'pedir_codigo', para: 'crear_llave' });
+  const COD = codigoDelCorreo(DUENO);
+  ok(p.s === 200 && /^\d{6}$/.test(COD || '') && p.d.correo?.endsWith('@prueba.test') && !p.d.correo.startsWith('dueno' + T), 'el código llega al correo de quien lo pide, enmascarado en pantalla');
+  ok(correos.at(-1)?.html.includes('Equipo de Soporte — Acuarius'), 'el correo va firmado por Soporte');
+  const filaCod = (await sbGet(`api_codigos?actor_id=eq.${DUENO}&select=*`))[0];
+  ok(filaCod && !JSON.stringify(filaCod).includes(COD), 'en la base NO está el código, solo su hash');
+  p = await panelCrudo(DUENO, 'POST', { accion: 'pedir_codigo', para: 'crear_llave' });
+  ok(p.s === 429, 'pedir otro antes de un minuto: 429');
+  const MALO = COD === '000000' ? '111111' : '000000';
+  p = await panelCrudo(DUENO, 'POST', { accion: 'crear_llave', nombre: 'Con código malo', permisos: ['leads:leer'], codigo: MALO });
+  ok(p.s === 403 && p.d.requiere_codigo && /quedan 4/.test(p.d.error), 'código incorrecto: 403 y cuántos intentos quedan');
+  p = await panelCrudo(DUENO, 'POST', { accion: 'crear_llave', nombre: 'x', permisos: ['leads:leer'], codigo: COD });
+  ok(p.s === 400, 'código bueno pero nombre corto: 400…');
+  p = await panelCrudo(DUENO, 'POST', { accion: 'crear_llave', nombre: 'Con código', permisos: ['leads:leer'], codigo: COD });
+  ok(p.s === 201 && p.d.llave, '…y el mismo código sigue valiendo para corregir');
+  p = await panelCrudo(DUENO, 'POST', { accion: 'crear_llave', nombre: 'Código reusado', permisos: ['leads:leer'], codigo: COD });
+  ok(p.s === 403 && p.d.codigo_vencido === true, 'usado una vez, ya no vale');
+  ultimoCodigo[DUENO] = null;
 
   console.log('Puerta');
   let r = await api(null, 'GET', '');
@@ -319,11 +359,9 @@ await sbPost('team_members', { owner_user_id: DUENO, member_user_id: ADMIN, memb
   await sbPost('api_llaves', { user_id: GRATIS, nombre: 'Llave vieja', prefijo: g.prefijo, hash: g.hash, permisos: ['leads:leer'], creada_por: GRATIS });
   r = await api(g.llave, 'GET', 'leads');
   ok(r.s === 403 && r.d.codigo === 'plan_sin_api', 'una cuenta que bajó a gratis: su llave deja de servir (403)');
-  usuarios[DUENO].two_factor_enabled = false;
   p = await panel(DUENO, 'POST', { accion: 'revocar_llave', id: filaLlave.id });
-  ok(p.s === 200, 'revoca desde Configuración (revocar no pide verificación en dos pasos)');
+  ok(p.s === 200, 'revoca desde Configuración (revocar no pide código)');
   ok(correos.some(c => /Se revocó una llave/.test(c.subject)), 'y el dueño recibe el aviso');
-  usuarios[DUENO].two_factor_enabled = true;
   r = await api(LLAVE, 'GET', '');
   ok(r.s === 401 && r.d.codigo === 'llave_revocada', 'la llave revocada ya no entra');
 
@@ -407,6 +445,7 @@ await sbPost('team_members', { owner_user_id: DUENO, member_user_id: ADMIN, memb
   }
   await sbDel(`api_registro?user_id=in.${cuentas}`);
   await sbDel(`api_llaves?user_id=in.${cuentas}`);
+  await sbDel(`api_codigos?actor_id=in.(${[DUENO, ADMIN, GRATIS, OTRA].join(',')})`);
   const resto = await sbGet(`leads?user_id=in.${cuentas}&select=id`);
   ok(resto.length === 0, 'limpieza: no queda nada de la prueba');
 }
