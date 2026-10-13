@@ -77,6 +77,68 @@ async function correr(respuesta) {
   ok(o.toasts.includes('error'), 'y se dice');
 }
 
+// ── Abrir un lead que entró DESPUÉS de cargar el tablero ────────────────────
+//
+// crmInit() pide los leads una sola vez por sesión. Quien deja la pestaña
+// abierta toda la mañana tiene en memoria la foto de las ocho, mientras el
+// Pulso sí se refresca solo: ofrecía leads que el tablero juraba no conocer, y
+// el mensaje decía «no encontramos ese lead en tus tableros» sobre un lead que
+// existe y es suyo (INVERSIONES HBS, 13-10-2026). Se ejecuta de verdad.
+console.log('\nUn lead recién entrado se abre, no se niega\n');
+{
+  const irFuente = (app.match(/async function crmIrALeadODecirlo[\s\S]*?\n}\n/) || [''])[0];
+  const correrIr = async (mundo) => {
+    const toasts = [], abiertos = [], hechos = [];
+    const f = new Function('m', 'reg', `
+      let crmLeads = m.crmLeads, crmLeadsLoaded = m.crmLeadsLoaded;
+      const crmPipelines = m.crmPipelines, agencyActiveClientId = m.clienteActivo;
+      let crmPipelineId = m.crmPipelineId;
+      const document = { getElementById: () => null };
+      const navGo = () => {};
+      const crmTodosActivo = () => false;
+      const showToast = (t, k) => reg.toasts.push({ t, k });
+      const lfAbrir = async (l) => { reg.abiertos.push(l.id); };
+      const fetchAuth = async () => { reg.hechos.push('fetch'); return { ok: true, status: 200, json: async () => ({ lead: m.enServidor }) }; };
+      const crmLoadPipelines = async () => { reg.hechos.push('pipelines'); };
+      const pipeCambiar = async (id) => { reg.hechos.push('pipeCambiar'); crmPipelineId = id; crmLeads = m.trasCambiar || crmLeads; };
+      const crmLoadLeads = async () => { reg.hechos.push('recarga'); crmLeads = m.trasRecarga || crmLeads; crmLeadsLoaded = true; };
+      ${irFuente}
+      return crmIrALeadODecirlo(m.id);
+    `);
+    const r = await f(mundo, { toasts, abiertos, hechos });
+    return { r, toasts, abiertos, hechos };
+  };
+  const TABLERO = 'p-arke';
+  const base = {
+    id: 'L9', crmLeadsLoaded: true, clienteActivo: 'pro_main', crmPipelineId: TABLERO,
+    crmPipelines: [{ id: TABLERO, name: 'VENTA ARKÉ55' }],
+    enServidor: { id: 'L9', name: 'Carlos Flores', client_id: 'pro_main', pipeline_id: TABLERO },
+  };
+
+  // 1. El caso de HBS: su tablero, pero el lead entró después de cargarlo.
+  const a = await correrIr({ ...base, crmLeads: [{ id: 'L1' }], trasRecarga: [{ id: 'L1' }, { id: 'L9' }] });
+  ok(a.r === true && a.abiertos.includes('L9'), 'un lead de MI tablero que entró después: se abre');
+  ok(a.hechos.includes('recarga'), 'y para eso se vuelve a pedir el tablero');
+  ok(!a.toasts.some(t => t.k === 'error'), 'sin decirle que su lead no existe');
+
+  // 2. Otro proceso del mismo cliente: se cambia de tablero (no se rompió).
+  const b = await correrIr({
+    ...base, crmPipelineId: 'p-otro',
+    crmPipelines: [{ id: 'p-otro', name: 'Otro' }, { id: TABLERO, name: 'VENTA ARKÉ55' }],
+    crmLeads: [{ id: 'L1' }], trasCambiar: [{ id: 'L9' }],
+  });
+  ok(b.r === true && b.hechos.includes('pipeCambiar') && b.abiertos.includes('L9'), 'un lead de otro proceso: cambia de tablero y abre');
+  ok(!b.hechos.includes('recarga'), 'y ahí no hace falta recargar');
+
+  // 3. El tablero nació después de cargar la lista de procesos.
+  const c = await correrIr({ ...base, crmPipelines: [], crmLeads: [{ id: 'L1' }], trasRecarga: [{ id: 'L9' }] });
+  ok(c.hechos.includes('pipelines'), 'un tablero que no conocíamos: se vuelve a pedir la lista de procesos');
+
+  // 4. Si de verdad no está, se dice — el aviso no se perdió por el camino.
+  const d = await correrIr({ ...base, crmLeads: [{ id: 'L1' }], trasRecarga: [{ id: 'L1' }] });
+  ok(d.r === false && d.toasts.some(t => t.k === 'error'), 'si tras recargar sigue sin estar, se dice en voz alta');
+}
+
 console.log('\nEl servidor no marca en bloque\n');
 const patch = api.slice(api.indexOf("if (req.method === 'PATCH' && url.searchParams.get('avisos') === '1')"));
 const bloque = patch.slice(0, patch.indexOf('return jsonResp({ marcadas: 1 });'));

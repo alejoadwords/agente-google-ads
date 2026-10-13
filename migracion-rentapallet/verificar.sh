@@ -10,7 +10,7 @@ while read slug; do
   if [ "$code" != "200" ]; then echo "✗ $slug — responde $code"; mal=$((mal+1)); continue; fi
   if ! echo "$html" | grep -q 'elementor-element'; then echo "✗ $slug — la página existe pero sin contenido de Elementor"; mal=$((mal+1)); continue; fi
   rotas=0
-  for img in $(echo "$html" | grep -oE 'https://colestibassa.com/wp-content/uploads/2026/09/[^"'"'"' )]+' | sort -u); do
+  for img in $(echo "$html" | grep -oE 'https://colestibassa.com/wp-content/uploads/2026/[0-9][0-9]/[^"'"'"' )]+' | sort -u); do
     c=$(curl -s -o /dev/null -I -A "Mozilla/5.0" -w "%{http_code}" "$img"); [ "$c" = "200" ] || { rotas=$((rotas+1)); echo "   imagen rota: $img"; }
   done
   if [ "$rotas" -gt 0 ]; then echo "✗ $slug — $rotas imágenes rotas"; mal=$((mal+1)); else echo "✓ $slug"; ok=$((ok+1)); fi

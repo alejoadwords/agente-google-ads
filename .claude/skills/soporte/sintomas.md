@@ -293,6 +293,28 @@ debe ser `active` y `member_user_id` no puede estar vacío. Desde el 14-09-2026
 la invitación se aplica sola al entrar con el correo invitado **verificado**;
 si su correo no está verificado en Clerk, no se ata y es correcto que no se ate.
 
+## «El Pulso me ofrece un lead y al abrirlo dice que no existe»
+
+El mensaje exacto: «No encontramos ese lead en tus tableros. Búscalo por su
+nombre: …». Arreglado el 13-10-2026 (lo reportó INVERSIONES HBS).
+
+**La pista que lo delata: al dueño le falla y a ti, entrando desde tu cuenta,
+no.** No es permisos ni datos — es la antigüedad de la pestaña. `crmInit()`
+pide los leads **una sola vez por sesión**; el Pulso, en cambio, se refresca
+solo. Quien deja Acuarius abierto toda la mañana tiene en el tablero la foto de
+las ocho y en el Pulso la de ahora, así que el Pulso le ofrece leads que el
+tablero no conoce. Quien acaba de entrar lo ve todo bien.
+
+Se nota más en cuentas de **un solo tablero**: ahí el lead siempre cae en el
+proceso que ya está activo, y el código saltaba el cambio de tablero sin
+intentar nada más.
+
+Ahora, antes de rendirse, se vuelve a pedir el tablero (y la lista de procesos,
+por si el tablero nació después) y se reintenta. Si el cliente lo sigue
+viendo: que recargue la página — tiene el `app.js` viejo.
+
+Protegido con ejecución real en `pruebas/campana-por-clic.mjs`.
+
 ## «Creé un proceso y no lo encuentro» / «no veo mis etapas, veo otras columnas»
 
 Lo que le pasó a Karvio en plena capacitación. Dos causas que se parecen:

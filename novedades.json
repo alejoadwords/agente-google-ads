@@ -2,12 +2,26 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-13-abrir-lead-recien-entrado",
+      "fecha": "2026-10-13",
+      "tipo": "arreglo",
+      "titulo": "Los leads nuevos del día ya se abren desde el Pulso",
+      "texto": "Si dejabas Acuarius abierto toda la mañana y en el Pulso tocabas uno de los contactos que habían entrado ese día, te decía que no lo encontraba en tus tableros. El contacto estaba, y bien guardado: lo que pasaba es que el tablero se había cargado antes de que él llegara y no se volvía a mirar. Ahora, si un contacto no está en pantalla, se vuelve a pedir el tablero y se abre su ficha. Y si de verdad no estuviera, te lo dice igual que antes.",
+      "accion": {
+        "texto": "Ir al CRM",
+        "ir": "crm"
+      }
+    },
+    {
       "id": "2026-10-10-api-codigo-correo",
       "fecha": "2026-10-10",
       "tipo": "arreglo",
       "titulo": "Ya puedes crear llaves de la API y webhooks",
       "texto": "Pedíamos la verificación en dos pasos para crear llaves y webhooks, pero no había forma de activarla, así que el botón «Crear llave» no hacía nada. Ahora, al pulsarlo, te enviamos un código de 6 números a tu correo. Lo escribes y la llave se crea. El código vale 10 minutos y sirve una sola vez. Revocar una llave o desactivar un webhook no lo pide.",
-      "accion": { "texto": "Ir a API y agentes", "ir": "ajustes-api" }
+      "accion": {
+        "texto": "Ir a API y agentes",
+        "ir": "ajustes-api"
+      }
     },
     {
       "id": "2026-10-09-responder-notas",
@@ -22,7 +36,10 @@
       "tipo": "nuevo",
       "titulo": "Descarga tus informes en PDF o compártelos con un enlace en vivo",
       "texto": "En Análisis tienes dos botones nuevos. «Descargar PDF» arma un documento con los informes que elijas, cada uno en su página y con su periodo. «Compartir» crea un enlace que tu jefe o tu junta pueden abrir sin usuario: los informes se ven en vivo, con las cifras del momento, y sin nombres ni datos de contacto de tus leads. Puedes desactivar el enlace cuando quieras.",
-      "accion": { "texto": "Ir a Análisis", "ir": "analisis" }
+      "accion": {
+        "texto": "Ir a Análisis",
+        "ir": "analisis"
+      }
     },
     {
       "id": "2026-10-09-marketing-aperturas-reales",
@@ -62,7 +79,10 @@
       "tipo": "mejora",
       "titulo": "Actualizamos los términos y la política de datos por la API",
       "texto": "Añadimos lo que aplica cuando conectas un sistema externo a tu cuenta con una llave de la API o un webhook: lo que ese sistema haga se considera hecho por tu cuenta, los datos que consulte salen hacia el destino que elegiste bajo tu responsabilidad, y cómo cuidar tus llaves. Si no usas la API, nada cambia para ti.",
-      "accion": { "texto": "Abrir API y agentes", "ir": "ajustes-api" }
+      "accion": {
+        "texto": "Abrir API y agentes",
+        "ir": "ajustes-api"
+      }
     },
     {
       "id": "2026-10-09-api-seguridad",
@@ -70,7 +90,10 @@
       "tipo": "mejora",
       "titulo": "Más seguridad en la API y los agentes",
       "texto": "Para crear llaves de la API o webhooks ahora hace falta tener activa la verificación en dos pasos. El dueño de la cuenta recibe un correo cada vez que alguien crea o revoca una llave, o añade, cambia o elimina un webhook. Si quien la creó sale del equipo o deja de ser administrador, su llave se revoca sola. Y cada llave tiene un límite propio de cambios por minuto, para frenar a un agente que se equivoque.",
-      "accion": { "texto": "Abrir API y agentes", "ir": "ajustes-api" }
+      "accion": {
+        "texto": "Abrir API y agentes",
+        "ir": "ajustes-api"
+      }
     },
     {
       "id": "2026-10-09-bienvenida-google-ads",
@@ -78,7 +101,10 @@
       "tipo": "arreglo",
       "titulo": "La invitación a conectar Google Ads dice lo que pasa de verdad",
       "texto": "La ventana que invita a conectar tu cuenta de anuncios prometía una auditoría por el chat con los agentes, que está en pausa. Ahora te cuenta lo que ves al conectar Google Ads: lo que gastó cada campaña y qué pasó con esos leads, el diagnóstico con los errores que te cuestan plata y el Analista IA. Y al terminar de conectar, el botón te lleva directo al diagnóstico. Meta Ads aparece como «Pronto» hasta que Meta apruebe nuestra aplicación.",
-      "accion": { "texto": "Ver Plataformas de pauta", "ir": "pauta" }
+      "accion": {
+        "texto": "Ver Plataformas de pauta",
+        "ir": "pauta"
+      }
     },
     {
       "id": "2026-10-09-ficha-proxima-accion",
@@ -93,7 +119,10 @@
       "tipo": "nuevo",
       "titulo": "Conecta tu agente de IA por MCP",
       "texto": "Si tu agente de IA habla MCP, ya no hace falta programarle las herramientas del CRM: se conecta a Acuarius con la llave de la API y ve solo lo que esa llave permite —buscar prospectos, moverlos de etapa, crear tareas, dejar notas— con las mismas reglas que tu equipo.",
-      "accion": { "texto": "Abrir API y agentes", "ir": "ajustes-api" }
+      "accion": {
+        "texto": "Abrir API y agentes",
+        "ir": "ajustes-api"
+      }
     },
     {
       "id": "2026-10-08-academia-tour-prueba",

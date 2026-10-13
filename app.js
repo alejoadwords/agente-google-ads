@@ -20937,7 +20937,12 @@ async function crmIrALeadODecirlo(leadId, leadSuelto) {
     showToast('Ese lead pertenece a otro cliente. Cámbialo en el selector de arriba para abrirlo.', 'info');
     return false;
   }
-  const proceso = lead.pipeline_id && (crmPipelines || []).find(p => p.id === lead.pipeline_id);
+  let proceso = lead.pipeline_id && (crmPipelines || []).find(p => p.id === lead.pipeline_id);
+  // El tablero pudo crearse después de que se cargara la lista de procesos.
+  if (lead.pipeline_id && !proceso) {
+    await crmLoadPipelines();
+    proceso = (crmPipelines || []).find(p => p.id === lead.pipeline_id);
+  }
   if (proceso && (proceso.id !== crmPipelineId || crmTodosActivo())) {
     await pipeCambiar(proceso.id);
     if (crmLeads.some(l => l.id === leadId)) {
@@ -20946,6 +20951,16 @@ async function crmIrALeadODecirlo(leadId, leadSuelto) {
       return true;
     }
   }
+  // El lead existe y es de un tablero suyo: si no está en pantalla, es que el
+  // tablero se cargó ANTES que él. crmInit() pide los leads una sola vez por
+  // sesión, así que quien deja la pestaña abierta toda la mañana tiene en
+  // memoria la foto de las ocho — y el Pulso, que sí se refresca solo, le
+  // ofrecía leads que el tablero juraba no conocer. Se vuelve a pedir y se
+  // reintenta antes de rendirse. Le pasó a INVERSIONES HBS el 13-10-2026.
+  crmLeadsLoaded = false;
+  await crmLoadLeads();
+  const recien = crmLeads.find(l => l.id === leadId);
+  if (recien) { await lfAbrir(recien); return true; }
   showToast('No encontramos ese lead en tus tableros. Búscalo por su nombre: ' + (lead.name || ''), 'error');
   return false;
 }
