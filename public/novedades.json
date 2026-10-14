@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-14-agente-horas-de-llamada",
+      "fecha": "2026-10-14",
+      "tipo": "mejora",
+      "titulo": "El agente ofrece horas para llamar dentro de tu horario",
+      "texto": "Cuando el agente pregunta cuándo contactar a alguien, ahora ofrece dos o tres horas concretas dentro de tu horario de atención, en vez de dejar la pregunta abierta. Si la persona pide una hora en la que no atiendes (fin de semana, festivo, mediodía o fuera de oficina), se lo explica y le ofrece la más cercana. El horario se toma del contexto de tu agente."
+    },
+    {
       "id": "2026-10-14-agente-no-repite",
       "fecha": "2026-10-14",
       "tipo": "mejora",

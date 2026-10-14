@@ -1092,6 +1092,96 @@ export function veredictoHorario(franjas, dia, min, festivo = () => false) {
   return null;
 }
 
+// ── Horas para llamar ───────────────────────────────────────────────────────
+//
+// «¿Cuál es el mejor horario para que te contacte un asesor?» dejaba la
+// pregunta abierta, y el agente de Certain aceptó «el viernes a las 12:30»,
+// en plena pausa del almuerzo (14-10-2026). Las opciones las calcula el
+// código dentro de la franja —el modelo solo las ofrece— y un guardián no deja
+// salir una hora confirmada fuera del horario.
+
+// El horario en palabras: «lunes a viernes de 8:00 a. m. a 12:00 m. y de 2:00 p. m. a 5:00 p. m.»
+export function describirHorario(franjas) {
+  if (!franjas || !franjas.length) return '';
+  const nombre = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  const grupos = new Map();
+  for (const f of franjas) {
+    const k = [...f.dias].sort((a, b) => a - b).join(',');
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(f);
+  }
+  return [...grupos.entries()].map(([k, fs]) => {
+    const d = k.split(',').map(Number);
+    const consecutivos = d.every((x, i) => i === 0 || x === d[i - 1] + 1);
+    const dias = d.length === 1 ? nombre[d[0]] : consecutivos ? nombre[d[0]] + ' a ' + nombre[d[d.length - 1]] : d.map(x => nombre[x]).join(', ');
+    return dias + ' ' + fs.sort((a, b) => a.desde - b.desde).map(f => 'de ' + horaBonita(f.desde) + ' a ' + horaBonita(f.hasta)).join(' y ');
+  }).join('; ');
+}
+
+// Hasta `n` horas concretas para llamar, dentro de las franjas y sin festivos:
+// la primera posible (con una hora de margen), y luego mañana y tarde de los
+// días siguientes, para dar a elegir. [{ enDias, desde }]
+export function opcionesDeLlamada(franjas, dia, min, festivo = () => false, n = 3) {
+  if (!franjas || !franjas.length) return [];
+  const out = [];
+  const media = (m) => Math.ceil(m / 30) * 30;
+  for (let k = 0; k <= 14 && out.length < n; k++) {
+    if (festivo(k)) continue;
+    const delDia = franjas.filter(f => f.dias.has((dia + k) % 7)).sort((a, b) => a.desde - b.desde);
+    for (const f of delDia) {
+      // Hoy, no antes de una hora desde ahora; los demás días, una hora
+      // después de abrir (a la apertura en punto rara vez contesta nadie).
+      const t = k === 0 ? Math.max(media(min + 60), f.desde) : Math.min(f.desde + 60, f.hasta - 30);
+      if (t + 30 <= f.hasta && out.length < n) out.push({ enDias: k, desde: t });
+    }
+  }
+  return out;
+}
+
+// ¿Esta respuesta confirma una hora fuera del horario? Devuelve la primera que
+// encuentra ({ texto, enDias, desde }) o null. Solo cuenta una frase con día
+// Y hora que afirma —«te llamamos el viernes a las 12:30»—; la que explica el
+// horario («atendemos hasta las 5») no trae día, y la que rechaza («a esa hora
+// no estamos») lleva negación.
+export function horaFueraDeHorario(texto, franjas, dia, min, festivo = () => false) {
+  if (!franjas || !franjas.length) return null;
+  const DIAS_TXT = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+  const HORA = /(?:a\s+las|a\s+la|las)\s+(\d{1,2})(?::(\d{2}))?\s*(a\.?\s?m\.?|p\.?\s?m\.?|m\.(?!\w)|del mediod[ií]a|de la (?:tarde|manana|mañana))?|(\d{1,2}):(\d{2})\s*(a\.?\s?m\.?|p\.?\s?m\.?|m\.(?!\w))?|\b(\d{1,2})\s*(a\.?\s?m\.?|p\.?\s?m\.?)/gi;
+  for (const frase of String(texto || '').split(/(?<=[.!?\n])/)) {
+    const f = sinTildes(frase);
+    if (/\b(no|ya no|fuera|cerrad\w*|no hay)\b/.test(f)) continue;
+    let k = null;
+    if (/\bpasado manana\b/.test(f)) k = 2;
+    else if (/\bmanana\b/.test(f.replace(/\b(de|por|en) la manana\b/g, ''))) k = 1;
+    else if (/\bhoy\b/.test(f)) k = 0;
+    else {
+      const d = DIAS_TXT.findIndex(x => new RegExp('\\b' + x + 's?\\b').test(f));
+      if (d >= 0) k = (d - dia + 7) % 7;
+    }
+    if (k === null) continue;
+    HORA.lastIndex = 0;
+    let m;
+    while ((m = HORA.exec(f))) {
+      let h, mm, suf;
+      if (m[1]) { h = +m[1]; mm = +(m[2] || 0); suf = m[3] || ''; }
+      else if (m[4]) { h = +m[4]; mm = +m[5]; suf = m[6] || ''; }
+      else { h = +m[7]; mm = 0; suf = m[8] || ''; }
+      if (h > 23 || mm > 59) continue;
+      suf = suf.replace(/\s/g, '');
+      let t;
+      if (/tarde/.test(suf)) t = (h < 12 ? h + 12 : h) * 60 + mm;
+      else if (/manana|mañana/.test(suf)) t = (h === 12 ? 0 : h) * 60 + mm;
+      else if (/mediod/.test(suf)) t = 12 * 60 + mm;
+      else t = minutosDe(h, mm, suf, null);
+      let kk = k;
+      if (kk === 0 && t <= min) { if (/\bhoy\b/.test(f)) return { texto: frase.trim(), enDias: 0, desde: t }; kk = 7; }
+      const valida = !festivo(kk) && franjas.some(fr => fr.dias.has((dia + kk) % 7) && t >= fr.desde && t + 0 < fr.hasta);
+      if (!valida) return { texto: frase.trim(), enDias: kk, desde: t };
+    }
+  }
+  return null;
+}
+
 // ── Festivos de Colombia ─────────────────────────────────────────────────────
 // Calculados, no copiados de una lista que habría que actualizar cada año:
 // los fijos; los que la Ley Emiliani (Ley 51 de 1983) pasa al lunes siguiente;
@@ -1141,6 +1231,46 @@ export function festivoDeColombia(ymd) {
   return festivosColombia(+ymd.slice(0, 4)).get(ymd) || null;
 }
 
+// El reloj del negocio: día y minuto de ahora en su zona, sus franjas de
+// atención (leídas del contexto) y qué días son festivo. Lo usan el bloque de
+// la hora del prompt y el guardián de horas fuera de horario, para que los dos
+// cuenten igual. null si la zona no sirve.
+export function relojDelNegocio(zona, ahora = new Date(), contexto = '') {
+  const tz = zona || 'America/Bogota';
+  try {
+    const partes = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(ahora);
+    const v = t => partes.find(p => p.type === t)?.value;
+    const dia = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(v('weekday'));
+    const min = (+v('hour') % 24) * 60 + +v('minute');
+    const hoyYmd = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ahora);
+    const ymdEn = (k) => clave(Date.parse(hoyYmd + 'T00:00:00Z') + k * DIA_MS);
+    const colombia = tz === 'America/Bogota';
+    const festivo = (k) => (colombia ? !!festivoDeColombia(ymdEn(k)) : false);
+    return { tz, dia, min, hoyYmd, ymdEn, festivo, colombia, franjas: horarioDelTexto(contexto) };
+  } catch { return null; }
+}
+
+// «hoy a las 3:00 p. m.», «mañana a las 9:00 a. m.», «el lunes 19 de octubre a las …»
+function cuandoEs(reloj, enDias, desde) {
+  if (enDias === 0) return 'hoy a las ' + horaBonita(desde);
+  if (enDias === 1) return 'mañana a las ' + horaBonita(desde);
+  return 'el ' + new Intl.DateTimeFormat('es-CO', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })
+    .format(new Date(reloj.ymdEn(enDias) + 'T12:00:00Z')).replace(',', '') + ' a las ' + horaBonita(desde);
+}
+
+// El contexto del que se lee el horario: el mismo que ve bloqueDeAhora.
+function contextoDeHorario(agent) {
+  return [agent?.business_ctx, (agent?.faqs || []).map(f => `P: ${f.q}\nR: ${f.a}`).join('\n\n')].filter(Boolean).join('\n');
+}
+
+// Lo que se le dice al modelo cuando confirmó una hora fuera del horario.
+function avisoHoraFuera(reloj, fuera) {
+  const opciones = opcionesDeLlamada(reloj.franjas, reloj.dia, reloj.min, reloj.festivo, 3).map(o => cuandoEs(reloj, o.enDias, o.desde));
+  return 'Tu mensaje anterior NO se envió: confirmabas o proponías «' + fuera.texto + '», y esa hora está FUERA del horario en que un asesor puede llamar (' +
+    describirHorario(reloj.franjas) + (reloj.colombia ? ', sin festivos' : '') + '). Escríbelo otra vez: dile con amabilidad que a esa hora no hay asesores y ofrécele opciones dentro del horario, por ejemplo: ' +
+    opciones.join('; ') + '. No confirmes ninguna hora fuera del horario. El contacto no vio nada y no te ha corregido: no te disculpes ni lo menciones.';
+}
+
 export function bloqueDeAhora(zona, ahora = new Date(), contexto = '') {
   const tz = zona || 'America/Bogota';
   let cuando, manana, dia, min, hoyYmd;
@@ -1184,12 +1314,23 @@ export function bloqueDeAhora(zona, ahora = new Date(), contexto = '') {
           .format(new Date(ymdEn(p.enDias) + 'T12:00:00Z')).replace(',', '') + ' a las ' + horaBonita(p.desde);
     estado += `AHORA MISMO SE ESTA FUERA DEL HORARIO DE ATENCION: nadie puede llamar ahora. La proxima franja en la que un asesor puede contactar es ${cuandoAbre}; si piden que les llamen ya, dilo con naturalidad y ofrece esa franja. Por chat sigues atendiendo, pero una llamada no es ahora.\n`;
   }
+  let llamadas = '';
+  if (franjas) {
+    const reloj = { ymdEn };
+    const opciones = opcionesDeLlamada(franjas, dia, min, festivo, 3).map(o => cuandoEs(reloj, o.enDias, o.desde));
+    llamadas = `
+HORARIO PARA LLAMAR O CONTACTAR (un asesor solo llama dentro de él): ${describirHorario(franjas)}${colombia ? ', sin festivos' : ''}.
+- Cuando preguntes cuándo contactarle, NO dejes la pregunta abierta: ofrécele dos o tres horas concretas. Las próximas posibles son: ${opciones.join('; ')}
+- Si pide una hora fuera de ese horario (antes de abrir, después de cerrar, en la pausa del mediodía, fin de semana o festivo), dile con amabilidad que a esa hora no hay asesores y ofrécele la opción válida más cercana
+- Nunca confirmes ni des por registrada una hora fuera del horario
+`;
+  }
   return `QUE DIA Y HORA ES AHORA MISMO (${donde}):
 ${cuando}
 Mañana es ${manana}.
 ${estado}- Esta es la hora real: no la supongas ni la deduzcas de la conversacion
 - "Hoy", "mañana" y los dias de la semana se cuentan desde esta fecha
-
+${llamadas}
 `;
 }
 
@@ -1650,6 +1791,13 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
       'Escríbelo otra vez con palabras normales y sin atribuirle cosas que no dijo. ' +
       'El contacto no vio nada: no te disculpes ni lo menciones.');
     if (sinEtiqueta && !etiquetaInterna(cleanForUser(sinEtiqueta), regla, deUsuario)) { bruto = sinEtiqueta; texto = cleanForUser(sinEtiqueta).trim(); }
+  }
+
+  const reloj = relojDelNegocio(reservas?.zona, new Date(), contextoDeHorario(agent));
+  const fuera = reloj?.franjas ? horaFueraDeHorario(texto, reloj.franjas, reloj.dia, reloj.min, reloj.festivo) : null;
+  if (fuera) {
+    const dentro = await reintento(avisoHoraFuera(reloj, fuera));
+    if (dentro && !horaFueraDeHorario(cleanForUser(dentro), reloj.franjas, reloj.dia, reloj.min, reloj.festivo)) { bruto = dentro; texto = cleanForUser(dentro).trim(); }
   }
 
   if (quiereOfrecerInmueble(limpios) && descartaAlContacto(texto)) {
@@ -2532,6 +2680,22 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     await registrarError({
       origen: 'inbox', donde: 'el agente usó una etiqueta interna del enrutado',
       error: new Error((arreglado ? 'corregido: ' : 'NO corregido: ') + interna),
+      usuario: connection.user_id,
+    }).catch(() => {});
+  }
+
+  const reloj = relojDelNegocio(reservas?.zona, new Date(), contextoDeHorario(agent));
+  const fuera = !fija && reloj?.franjas ? horaFueraDeHorario(cleanForUser(reply), reloj.franjas, reloj.dia, reloj.min, reloj.festivo) : null;
+  if (fuera) {
+    const dentro = await responderViendo(system, hist, [
+      { role: 'assistant', content: reply },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) ' + avisoHoraFuera(reloj, fuera) },
+    ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
+    const arreglado = dentro && !horaFueraDeHorario(cleanForUser(dentro), reloj.franjas, reloj.dia, reloj.min, reloj.festivo);
+    if (arreglado) reply = dentro;
+    await registrarError({
+      origen: 'inbox', donde: 'el agente confirmó una hora fuera del horario',
+      error: new Error((arreglado ? 'corregido: ' : 'NO corregido: ') + fuera.texto.slice(0, 160)),
       usuario: connection.user_id,
     }).catch(() => {});
   }
