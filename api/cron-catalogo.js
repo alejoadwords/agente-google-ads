@@ -19,6 +19,7 @@
 export const config = { runtime: 'edge' };
 
 import { fuentesConWeb, sincronizarLote } from './_catalogo.js';
+import { fuentesDeHoja, sincronizarHoja } from './_hoja-productos.js';
 import { latir } from './_latido.js';
 
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -69,10 +70,31 @@ export default async function handler(req) {
     }
   }
 
-  await latir('cron-catalogo', { fuentes: fuentes.length, fallos, barridos: barridosTotal, sinTiempo },
-    sinTiempo ? sinTiempo + ' fuente(s) quedan para la próxima pasada' : null);
+  // Las hojas de productos (joyería y demás), después de las webs. Leer una
+  // hoja es una sola petición, así que caben casi siempre; las que no, van
+  // primero la próxima vez (fuentesDeHoja ordena por ultimo_sync). Que no se
+  // puedan listar NO tumba lo de las webs, que ya está hecho: se cuenta como
+  // fallo y se dice en el latido.
+  let hojas = [];
+  let errorHojas = null;
+  try { hojas = await fuentesDeHoja(); } catch (e) { errorHojas = e?.message || String(e); fallos++; }
+  for (const h of hojas) {
+    if (Date.now() >= hasta) { sinTiempo++; continue; }
+    try {
+      const r = await sincronizarHoja(h);
+      if (r.error) fallos++;
+      resumen.push({ hoja: h.client_id || '(cuenta)', ...(r.error ? { error: r.error } : { guardadas: r.guardadas, quitadas: r.quitadas }) });
+    } catch (e) {
+      fallos++;
+      resumen.push({ hoja: h.client_id || '(cuenta)', error: e?.message || 'error desconocido' });
+    }
+  }
 
-  return new Response(JSON.stringify({ fuentes: fuentes.length, fallos, sinTiempo, resumen }), {
+  await latir('cron-catalogo', { fuentes: fuentes.length, hojas: hojas.length, fallos, barridos: barridosTotal, sinTiempo },
+    errorHojas ? 'no se pudieron leer las hojas de productos: ' + errorHojas
+      : sinTiempo ? sinTiempo + ' fuente(s) quedan para la próxima pasada' : null);
+
+  return new Response(JSON.stringify({ fuentes: fuentes.length, hojas: hojas.length, fallos, sinTiempo, resumen }), {
     headers: { 'Content-Type': 'application/json' },
   });
 }

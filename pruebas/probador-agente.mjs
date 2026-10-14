@@ -93,7 +93,9 @@ ok(argsDe(cuerpo) === argsDe(prod),
    'le pasa a buildSystemPrompt los mismos argumentos que la conversación real',
    'ensayo: ' + argsDe(cuerpo) + ', producción: ' + argsDe(prod));
 
-ok(/propiedadesParaPrompt\(/.test(cuerpo), 'usa el mismo filtro de catálogo');
+// catalogoParaPrompt elige entre inmuebles y productos (hoja de Google); es la
+// misma puerta que usa la conversación real.
+ok(/catalogoParaPrompt\(/.test(cuerpo) && /catalogoParaPrompt\(/.test(prod), 'usa el mismo filtro de catálogo');
 ok(/getRegla\(/.test(cuerpo) && /evaluar\(/.test(cuerpo),
    'y la misma regla de calificación, evaluada por el mismo código');
 

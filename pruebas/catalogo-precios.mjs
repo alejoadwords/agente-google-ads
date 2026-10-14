@@ -254,7 +254,9 @@ ok(/NO TIENES NADA QUE ENCAJE CON LO QUE TE HAN PEDIDO/.test(eng),
    'el prompt avisa explícitamente cuando no hay ni una opción');
 ok(/Ni un barrio, ni un precio, ni una administración/.test(eng),
    'y le nombra lo que no puede inventarse');
-ok(/\$\{propiedades && !propiedades\.lineas\.length \?/.test(eng),
+// El catálogo de productos trae su propio aviso de «no hay nada»
+// (bloqueProductos): el de inmuebles no se le pinta encima.
+ok(/\$\{propiedades && propiedades\.clase !== 'productos' && !propiedades\.lineas\.length \?/.test(eng),
    'solo cuando de verdad se buscó y no salió nada, no cuando aún no se ha buscado');
 
 console.log('\nY el tipo de inmueble también filtra');
