@@ -51,7 +51,7 @@ for (const [t, e] of [
   ['Claro, le mando las fotos del de Riomar. Y para que un asesor le confirme disponibilidad, ¿me comparte un número?', false],
   ['Antes de agendar la visita, revise que el horario le sirva. ¿Le queda bien el martes?', false],
 ]) ok(m.condicionaAlDato(t) === e, (e ? 'se detecta: ' : 'pasa: ') + t.slice(0, 60));
-ok((eng.match(/if \(condicionaAlDato\(/g) || []).length === 2, 'el guardián está en producción y en el probador');
+ok((eng.match(/if \((!fija && )?condicionaAlDato\(/g) || []).length === 2, 'el guardián está en producción y en el probador');
 console.log('No se pide un número que ya tenemos');
 for (const [t, e] of [
   ['¿Me comparte un número para que un asesor le confirme disponibilidad?', true],

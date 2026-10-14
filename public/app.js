@@ -23482,6 +23482,7 @@ function crmOpenAgentModal(agentId) {
     document.getElementById('cag-f-persona').value = ag.persona || '';
     document.getElementById('cag-f-business').value = ag.business_ctx || '';
     document.getElementById('cag-f-escalate').value = ag.escalate_phrase || '';
+    document.getElementById('cag-f-bienvenida').value = ag.bienvenida || '';
     document.getElementById('cag-f-tone').value = ag.tone || 'informal';
     agFaqs = (ag.faqs || []).map(f => ({ ...f }));
     // Show channels section
@@ -23493,6 +23494,7 @@ function crmOpenAgentModal(agentId) {
     document.getElementById('cag-f-persona').value = '';
     document.getElementById('cag-f-business').value = '';
     document.getElementById('cag-f-escalate').value = 'Claro, en un momento te comunico con un asesor. ¿Me das un segundo?';
+    document.getElementById('cag-f-bienvenida').value = '';
     document.getElementById('cag-f-tone').value = 'informal';
     const chSect = document.getElementById('ag-channels-section');
     if (chSect) chSect.style.display = 'none';
@@ -23795,6 +23797,7 @@ async function crmSaveAgent() {
     persona: document.getElementById('cag-f-persona').value.trim(),
     business_ctx: document.getElementById('cag-f-business').value.trim(),
     escalate_phrase: document.getElementById('cag-f-escalate').value.trim(),
+    bienvenida: document.getElementById('cag-f-bienvenida').value.trim(),
     tone: document.getElementById('cag-f-tone').value,
     faqs: agFaqs.filter(f => f.q && f.a),
   };
@@ -24135,7 +24138,9 @@ async function kbEstado() {
   if (!box) return;
   const cliente = crmAmbitoCliente();
   if (!cliente) {
-    box.innerHTML = 'El catálogo es de cada cliente. Activa uno arriba para conectarlo.';
+    // Una cuenta sin cliente activo sí puede tener su hoja de productos (la
+    // caja de arriba). Lo que es por cliente es el catálogo de inmuebles.
+    box.innerHTML = 'El catálogo de inmuebles (web o Domus) es de cada cliente. Activa uno arriba para conectarlo.';
     return;
   }
   try {
@@ -24570,6 +24575,183 @@ async function kbSincronizar() {
     }
   } catch { showToast('Se interrumpió la sincronización', 'error'); }
   finally { _kbSincronizando = false; await kbEstado(); }
+}
+
+// ── Hoja de productos (joyas y demás) ───────────────────────────────────────
+// Un catálogo de PRODUCTOS leído de una hoja de Google compartida por enlace.
+// Nació con AMETT (joyería): sin web al día y migrando a Shopify, la hoja es lo
+// que el equipo puede mantener desde el móvil. Se relee cada media hora
+// (cron-catalogo) y con «Sincronizar ahora». El alcance es el cliente activo o,
+// si no hay, la cuenta entera: un negocio sin perfil también la necesita.
+function prodAlcance() {
+  const c = crmAmbitoCliente();
+  return c ? '?client_id=' + encodeURIComponent(c) : '';
+}
+
+async function prodEstado() {
+  const box = document.getElementById('src-prod');
+  if (!box) return;
+  try {
+    const r = await fetchAuth('/api/catalogo-hoja' + prodAlcance());
+    const d = await leerRespuesta(r);
+    if (!r.ok) { box.innerHTML = '<span style="color:var(--danger)">No se pudo consultar la hoja de productos: ' + esc(d.error || 'HTTP ' + r.status) + '</span>'; return; }
+    if (!d.fuente) {
+      box.innerHTML = '<div style="color:var(--text);font-weight:700">Hoja de productos</div>' +
+        '<div style="margin-top:3px;line-height:1.5">Sin hoja conectada. Si vendes productos (joyas, ropa, repuestos…), conecta una hoja de Google con tu inventario ' +
+        'y el agente ofrecerá solo lo que hay, con su precio exacto.</div>';
+      return;
+    }
+    const f = d.fuente;
+    const cuando = f.ultimo_sync ? new Date(f.ultimo_sync).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }) : 'nunca';
+    const av = f.avisos || {};
+    const notas = [];
+    if (av.sin_precio) notas.push(av.sin_precio + ' sin precio (el agente dirá que lo confirma un asesor)');
+    if (av.sin_referencia) notas.push(av.sin_referencia + ' filas sin referencia (no se cargan)');
+    if (av.repetidas) notas.push(av.repetidas + ' referencias repetidas (vale la última fila)');
+    if (av.ejemplos) notas.push(av.ejemplos + ' filas de ejemplo de la plantilla (no se cargan)');
+    box.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<div style="flex:1;min-width:200px">' +
+          '<div style="color:var(--text);font-weight:700">Hoja de productos · <a href="' + esc(f.hoja_url) + '" target="_blank" rel="noopener" style="color:var(--blue)">abrir la hoja</a></div>' +
+          '<div style="margin-top:3px">' + d.productos + ' piezas' + (d.agotados ? ' (' + d.agotados + ' agotadas, que no se ofrecen)' : '') +
+            ' · última lectura: ' + esc(cuando) + ' · se relee cada media hora</div>' +
+        '</div>' +
+        '<button class="btn-sec sm" id="prod-btn-sync" onclick="prodSincronizar()">Sincronizar ahora</button>' +
+        '<button class="btn-ghost sm" onclick="prodAbrir()">Cambiar hoja</button>' +
+        '<button class="btn-ghost sm" onclick="prodDesconectar()">Desconectar</button>' +
+      '</div>' +
+      (f.ultimo_estado === 'error' ? '<div style="margin-top:10px;padding:9px 11px;background:var(--danger-bg);border:1px solid var(--danger);border-radius:9px;color:var(--danger);line-height:1.5">' +
+        'La última lectura falló: ' + esc(f.ultimo_error || 'sin detalle') + '</div>' : '') +
+      (notas.length ? '<div style="margin-top:8px;color:var(--muted2);line-height:1.5">' + esc(notas.join(' · ')) + '</div>' : '') +
+      (av.faltan && av.faltan.includes('Precio') ? '<div style="margin-top:8px;padding:9px 11px;background:var(--warning-bg);border-radius:9px;color:var(--text);line-height:1.5">' +
+        'La hoja no tiene columna «Precio»: el agente no dará ningún precio y pasará esas consultas a un asesor.</div>' : '');
+  } catch (e) {
+    box.innerHTML = '<span style="color:var(--danger)">No se pudo consultar la hoja de productos</span>';
+  }
+}
+
+function prodAbrir() {
+  document.getElementById('prod-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'prod-overlay';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:600px">' +
+    '<div class="auto-modal-head">' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">Hoja de productos</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Tu inventario en una hoja de Google, para que el agente ofrezca solo lo que hay</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
+    '</div>' +
+    '<div class="auto-modal-body">' +
+      '<ol style="font-size:12.5px;color:var(--muted);line-height:1.7;margin:0 0 14px 18px;padding:0">' +
+        '<li><b>Descarga la plantilla</b> y ábrela en Google Sheets (<b>Archivo → Importar → Subir</b>). Si ya tienes tu hoja, basta con que tenga una columna <b>Referencia</b>.</li>' +
+        '<li>Llena una fila por pieza. Borra las filas de ejemplo: las que empiezan por «EJEMPLO» no se cargan nunca.</li>' +
+        '<li>En la hoja: <b>Compartir → Acceso general → «Cualquier persona con el enlace»</b>, como lector.</li>' +
+        '<li>Copia la dirección de la barra del navegador y pégala aquí.</li>' +
+      '</ol>' +
+      '<button class="btn-ghost sm" onclick="prodPlantilla()" style="margin-bottom:14px">Descargar plantilla</button>' +
+      '<label class="auto-label">Enlace de la hoja</label>' +
+      '<input class="auto-input" id="prod-url" placeholder="https://docs.google.com/spreadsheets/d/…" ' +
+        'onkeydown="if(event.key===\'Enter\'){event.preventDefault();prodConectar()}">' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5">Se lee la pestaña que tengas abierta al copiar el enlace. ' +
+        'Lo que borres de la hoja deja de ofrecerse; lo marcado como agotado (o con 0 unidades) no se ofrece.</div>' +
+      '<div id="prod-res" style="margin-top:14px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="prod-btn-conectar" onclick="prodConectar()">Conectar y leer</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('prod-url')?.focus(), 80);
+}
+
+// Las columnas que entiende el lector (api/_hoja-productos.js, COLUMNAS). Con
+// dos filas de ejemplo para que se vea el formato; empiezan por «EJEMPLO» y el
+// lector las salta, así una plantilla sin limpiar no pone a vender piezas que
+// no existen.
+function prodPlantilla() {
+  const filas = [
+    ['Referencia', 'Nombre', 'Tipo de joya', 'Colección', 'Material', 'Color del oro', 'Gemas', 'Talla o medida', 'Precio', 'Disponible', 'Unidades', 'Foto', 'Enlace', 'Descripción'],
+    ['EJEMPLO-AN-001', 'Solitario clásico', 'Anillos', 'Novias', 'Oro 18k', 'Amarillo', 'Diamante natural 0,30 ct', '7', '4850000', 'Sí', '1', '', '', 'Engaste de cuatro garras'],
+    ['EJEMPLO-AR-001', 'Topos con esmeralda', 'Aretes', 'Diseño de autor', 'Oro 18k', 'Blanco', 'Esmeralda colombiana', '', '2100000', 'Sí', '2', '', '', ''],
+  ];
+  const celda = v => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  // Con BOM para que las tildes lleguen bien; con coma, que es lo que Google
+  // Sheets detecta solo al importar.
+  const csv = '﻿' + filas.map(f => f.map(celda).join(',')).join('\n') + '\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'plantilla-productos-acuarius.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+function prodResumen(d) {
+  const av = d.avisos || {};
+  const partes = [d.guardadas + ' piezas cargadas'];
+  if (d.quitadas) partes.push(d.quitadas + ' quitadas porque ya no están en la hoja');
+  if (av.agotadas) partes.push(av.agotadas + ' agotadas');
+  if (av.sin_precio) partes.push(av.sin_precio + ' sin precio');
+  return partes.join(' · ');
+}
+
+async function prodConectar() {
+  const enlace = String(document.getElementById('prod-url')?.value || '').trim();
+  const res = document.getElementById('prod-res');
+  const btn = document.getElementById('prod-btn-conectar');
+  if (!enlace) { res.innerHTML = '<div style="color:var(--danger);font-size:12px">Pega el enlace de la hoja.</div>'; return; }
+  btn.disabled = true; btn.textContent = 'Leyendo la hoja…';
+  res.innerHTML = '<div style="font-size:12px;color:var(--muted)">Leyendo la hoja…</div>';
+  try {
+    const r = await fetchAuth('/api/catalogo-hoja' + prodAlcance(), { method: 'PUT', body: JSON.stringify({ hoja_url: enlace }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    document.getElementById('prod-overlay')?.remove();
+    showToast('Hoja conectada: ' + prodResumen(d), 'success');
+    prodEstado();
+  } catch (e) {
+    res.innerHTML = '<div style="color:var(--danger);font-size:12px;line-height:1.5">' + esc(String(e.message || e)) + '</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Conectar y leer';
+  }
+}
+
+// «Sincronizar ahora» es una persona diciendo «la hoja está bien así»: salta
+// el freno que, en el cron, impide borrar medio catálogo de golpe.
+async function prodSincronizar() {
+  const btn = document.getElementById('prod-btn-sync');
+  if (btn) { btn.disabled = true; btn.textContent = 'Leyendo…'; }
+  try {
+    const r = await fetchAuth('/api/catalogo-hoja' + prodAlcance(), { method: 'POST', body: JSON.stringify({ forzar: true }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo leer la hoja', 'error'); return; }
+    showToast('Catálogo al día: ' + prodResumen(d), 'success');
+  } catch (e) {
+    showToast('No se pudo leer la hoja: ' + (e?.message || 'error de red'), 'error');
+  } finally {
+    await prodEstado();
+  }
+}
+
+async function prodDesconectar() {
+  const si = await confirmarAguaP({
+    titulo: 'Desconectar la hoja de productos',
+    texto: 'El agente dejará de ofrecer las piezas de la hoja y se borrará el catálogo que se había leído. La hoja de Google no se toca.',
+    confirmar: 'Desconectar', peligro: true,
+  });
+  if (!si) return;
+  try {
+    const r = await fetchAuth('/api/catalogo-hoja' + prodAlcance(), { method: 'DELETE' });
+    const d = await leerRespuesta(r);
+    if (!r.ok) { showToast(d.error || 'No se pudo desconectar', 'error'); return; }
+    showToast('Hoja desconectada', 'success');
+  } catch (e) {
+    showToast('No se pudo desconectar: ' + (e?.message || 'error de red'), 'error');
+  } finally {
+    prodEstado();
+  }
 }
 
 // ── Gestor de canales ───────────────────────────────────────────────────────
@@ -32935,8 +33117,12 @@ async function srcRender() {
     '<div style="max-width:860px;margin-bottom:26px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
         '<div style="font-weight:800;font-size:var(--fs-md)">📚 Lo que sabe tu agente</div>' +
-        '<button class="btn-sec sm" onclick="kbAbrir()">Conectar catálogo</button>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="btn-sec sm" onclick="prodAbrir()">Hoja de productos</button>' +
+          '<button class="btn-sec sm" onclick="kbAbrir()">Conectar catálogo</button>' +
+        '</div>' +
       '</div>' +
+      '<div id="src-prod" style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel);font-size:12.5px;color:var(--muted);margin-bottom:10px">Cargando…</div>' +
       '<div id="src-kb" style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel);font-size:12.5px;color:var(--muted)">Cargando…</div>' +
     '</div>' +
     '<div style="max-width:860px">' +
@@ -32947,6 +33133,7 @@ async function srcRender() {
   view.innerHTML = header + formsSection + conectoresSection + rest;
   srcLoadWebhook();
   srcLoadChannels();
+  prodEstado();
   kbEstado();
 }
 

@@ -354,6 +354,181 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
   } catch { return { lineas: [], total: 0 }; }
 }
 
+// ── Catálogo de productos (joyería y demás) ─────────────────────────────────
+// El de inmuebles filtra por operación, barrio y habitaciones; una joya no
+// tiene nada de eso. Este lee client_products, que llena una hoja de Google
+// (_hoja-productos.js) y mañana Shopify. Nació con AMETT, 14-10-2026.
+//
+// El alcance: el del cliente MÁS el de la cuenta. Un negocio que conectó su
+// hoja sin tener perfil (client_id NULL) y luego crea el perfil no puede
+// quedarse con el agente mudo porque el canal ahora apunta al perfil.
+function alcanceProductos(userId, clientId) {
+  return `user_id=eq.${encodeURIComponent(userId)}` +
+    (clientId ? `&or=(client_id.eq.${encodeURIComponent(clientId)},client_id.is.null)` : '&client_id=is.null');
+}
+
+// ¿Esta cuenta vende productos? Una sola fila basta para saberlo.
+export async function tieneProductos(userId, clientId) {
+  if (!userId) return false;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/client_products?${alcanceProductos(userId, clientId)}&select=id&limit=1`, { headers: sb() });
+  if (!r.ok) throw new Error('No se pudo consultar el catálogo de productos (HTTP ' + r.status + ')');
+  return (await r.json()).length > 0;
+}
+
+// «Aretes» → «arete», «collares» → «collar», «anillos» → «anillo». Lo justo
+// para que quien escribe «busco un anillo» encuentre el tipo «Anillos» de la
+// hoja. Las palabras cortas no se tocan («oro», «dijes» sí: dije+s).
+export function singular(t) {
+  return sinTildes(t).split(/\s+/).map(w => {
+    if (w.length > 4 && /[lrndz]es$/.test(w)) return w.slice(0, -2);
+    if (w.length > 3 && w.endsWith('s')) return w.slice(0, -1);
+    return w;
+  }).join(' ');
+}
+
+// El tipo de joya que nombra el texto, de entre los que tiene la hoja del
+// cliente (sin lista fija que mantener). Gana el que aparece MÁS TARDE —la
+// gente se corrige: «un dije, no, mejor unos aretes»— y, a igualdad, el más
+// largo: «anillo de compromiso» antes que «anillo».
+export function tipoDeJoyaEnTexto(texto, tipos) {
+  const t = ' ' + singular(String(texto || '').replace(/[^\p{L}\p{N}\s]/gu, ' ')) + ' ';
+  let mejor = null;
+  for (const original of tipos || []) {
+    const s = singular(original);
+    if (s.length < 3) continue;
+    const donde = t.lastIndexOf(' ' + s + ' ');
+    if (donde < 0) continue;
+    if (!mejor || donde > mejor.donde || (donde === mejor.donde && s.length > mejor.s.length)) mejor = { original, s, donde };
+  }
+  return mejor?.original || null;
+}
+
+// «En oro blanco», «oro rosa», «de amarillo». Solo con «oro» o «en/de» delante:
+// «un diamante blanco» no es un color del oro.
+export function colorDeOroEnTexto(texto) {
+  const t = sinTildes(texto);
+  const m = [...t.matchAll(/\b(?:oro|en|de)\s+(amarillo|blanco|rosado|rosa)\b/g)].pop();
+  if (!m) return null;
+  return m[1] === 'rosa' ? 'rosado' : m[1];
+}
+
+// Las gemas por su raíz, para que «rubí» encuentre «Rubí» y «rubies».
+const GEMAS = { diamante: 'diamant', esmeralda: 'esmeralda', rubi: 'rub', zafiro: 'zafir', perla: 'perla',
+  amatista: 'amatista', topacio: 'topacio', aguamarina: 'aguamarina', morganita: 'morganita', turmalina: 'turmalina',
+  tanzanita: 'tanzanita', citrino: 'citrino', granate: 'granate', cuarzo: 'cuarzo', opalo: 'palo', onix: 'nix' };
+export function gemaEnTexto(texto) {
+  const t = sinTildes(texto);
+  let mejor = null;
+  for (const [gema] of Object.entries(GEMAS)) {
+    const re = new RegExp('\\b' + gema + '(s|es)?\\b', 'g');
+    for (const m of t.matchAll(re)) if (!mejor || m.index > mejor.donde) mejor = { gema, donde: m.index };
+  }
+  return mejor ? mejor.gema : null;
+}
+
+export async function pistasDeProductos(userId, clientId, mensajes = []) {
+  const suyos = (mensajes || []).filter(m => m && m.role === 'user').map(m => String(m.content || '')).filter(t => t.trim());
+  if (!suyos.length) return {};
+  const filas = await fetch(`${SUPABASE_URL}/rest/v1/client_products?${alcanceProductos(userId, clientId)}&select=tipo`, { headers: sb() })
+    .then(r => (r.ok ? r.json() : [])).catch(() => []);
+  const tipos = [...new Set((filas || []).map(f => f.tipo).filter(Boolean))];
+  // Del último mensaje hacia atrás, y gana el primero que diga algo de cada
+  // cosa: lo último que dijo es lo que quiere (misma lección que en inmuebles).
+  const buscar = (fn) => { for (let i = suyos.length - 1; i >= 0; i--) { const v = fn(suyos[i]); if (v != null) return v; } return null; };
+  const plata = buscar(presupuestoDelTexto);
+  return {
+    tipo: buscar(t => tipoDeJoyaEnTexto(t, tipos)),
+    color: buscar(colorDeOroEnTexto),
+    gema: buscar(gemaEnTexto),
+    presupuesto: plata === 'libre' ? null : plata,
+  };
+}
+
+export async function productosParaPrompt(userId, clientId, pistas = {}) {
+  if (!userId) return { lineas: [], total: 0, clase: 'productos', pistas };
+  // Lo agotado no se ofrece. Lo que no dice si hay o no, sí, pero marcado
+  // «disponibilidad por confirmar»: la regla de AMETT es confirmar disponibilidad
+  // con el catálogo, y un vacío en la hoja no es un «sí».
+  const base = `${SUPABASE_URL}/rest/v1/client_products?${alcanceProductos(userId, clientId)}` +
+    '&disponible=not.is.false&select=referencia,nombre,tipo,coleccion,material,color_oro,gemas,talla,precio,disponible,unidades,fotos,url' +
+    `&order=precio.asc.nullslast&limit=${TOPE_PROPIEDADES}`;
+  const fTipo = pistas.tipo ? `&tipo=eq.${encodeURIComponent(pistas.tipo)}` : '';
+  const fColor = pistas.color ? `&color_oro=ilike.*${encodeURIComponent(pistas.color === 'rosado' ? 'ros' : pistas.color)}*` : '';
+  const fGema = pistas.gema ? `&gemas=ilike.*${encodeURIComponent(GEMAS[pistas.gema] || pistas.gema)}*` : '';
+  // 15 % de margen, como en inmuebles: quien dice «unos cuatro millones» mira
+  // una de 4,4.
+  const fPlata = pistas.presupuesto ? `&precio=lte.${Math.round(pistas.presupuesto * 1.15)}` : '';
+  const traer = (u) => fetch(u, { headers: sb() }).then(r => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))));
+
+  // Se suelta de lo menos a lo más importante. El tipo NUNCA se suelta: a quien
+  // pide aretes no se le ofrece un anillo como «lo más parecido».
+  let filas = await traer(base + fTipo + fColor + fGema + fPlata);
+  let sinDetalle = false, sinPresupuesto = false;
+  if (!filas.length && (fColor || fGema)) {
+    filas = await traer(base + fTipo + fPlata);
+    if (filas.length) sinDetalle = true;
+  }
+  if (!filas.length && fPlata) {
+    filas = await traer(base + fTipo + fColor + fGema);
+    if (!filas.length && (fColor || fGema)) filas = await traer(base + fTipo);
+    if (filas.length) sinPresupuesto = true;
+  }
+
+  const plata = (n) => '$' + Number(n).toLocaleString('es-CO');
+  const lineas = filas.map(f => [
+    f.referencia,
+    f.nombre,
+    f.tipo,
+    [f.material, f.color_oro].filter(Boolean).join(' '),
+    f.gemas,
+    f.talla ? 'talla ' + f.talla : null,
+    f.coleccion ? 'colección ' + f.coleccion : null,
+    f.precio ? plata(f.precio) : 'precio a confirmar',
+    f.disponible === true ? 'disponible' : 'disponibilidad por confirmar',
+    f.fotos?.length ? 'con fotos' : null,
+  ].filter(Boolean).join(' · '));
+  return { lineas, total: lineas.length, clase: 'productos', pistas, sinDetalle, sinPresupuesto };
+}
+
+// El catálogo que toca: el de productos si la cuenta tiene, el de inmuebles si
+// no. Si no se puede saber cuál, se usa el de inmuebles, que es lo de siempre.
+export async function catalogoParaPrompt(userId, clientId, pistasInmueble, mensajesDelContacto) {
+  let productos = false;
+  try { productos = await tieneProductos(userId, clientId); } catch { productos = false; }
+  if (!productos) return propiedadesParaPrompt(userId, clientId, pistasInmueble);
+  const pistas = await pistasDeProductos(userId, clientId, mensajesDelContacto).catch(() => ({}));
+  return productosParaPrompt(userId, clientId, pistas);
+}
+
+// Lo que se le dice al agente sobre la lista de productos. Va en la parte
+// variable del prompt, igual que la de inmuebles.
+function bloqueProductos(p) {
+  if (!p.lineas.length) {
+    return `NO TIENES NINGUNA PIEZA QUE ENCAJE CON LO QUE TE HAN PEDIDO.
+Busqué en el catálogo vigente y no hay nada disponible con esas características. Esto es lo que toca hacer:
+- Dilo con naturalidad: "en este momento no tengo una pieza así disponible en el catálogo"
+- NO te inventes piezas, referencias ni precios. Ni "algo parecido" que no esté en una lista
+- Puedes preguntar si le sirve otro tipo de joya, otro color de oro u otro presupuesto, o pasarle la conversación a un asesor, que puede ver piezas por encargo o en taller. En ese caso incluye [ESCALAR] al final
+
+`;
+  }
+  return `PIEZAS DEL CATÁLOGO VIGENTE QUE ENCAJAN (${p.total}):
+${p.lineas.join('\n')}
+
+Sobre esta lista:${p.sinDetalle ? `
+- OJO: con el color de oro o la gema que pidió no hay nada disponible. Estas son del mismo tipo pero con otro color o gema: dilo antes de enseñarlas y no las presentes como si fueran lo pedido` : ''}${p.sinPresupuesto ? `
+- OJO: dentro de su presupuesto no hay nada. Estas cuestan MÁS: dilo con tacto antes de enseñarlas —"en ese rango no tengo ahora mismo; lo más cercano es…"— y no las presentes como si entraran en su presupuesto` : ''}
+- Es lo único del catálogo que puedes ofrecer. Si preguntan por una pieza que no está aquí, no la inventes: dilo y ofrece confirmarlo con un asesor
+- Menciona como mucho tres piezas por mensaje, cada una en su propia línea, y pregunta cuál le interesa
+- En cada línea: el nombre o tipo, el oro, la gema si la tiene, el precio y la referencia entre paréntesis
+- Los precios son los de la lista, literales: sin redondear, sin descuentos y sin calcular otros
+- "disponibilidad por confirmar" significa que NO sabes si hay: no digas que está disponible, di que lo confirmas con un asesor
+- Una pieza personalizada o hecha a medida NO está en esta lista y no tiene precio: eso lo cotiza el equipo
+- Para mandar fotos de una pieza marcada «con fotos», escribe al final [FOTOS: referencia] con su referencia exacta
+
+`;
+}
+
 // Cómo trata el agente a la persona.
 //
 // Esto era media línea colgada de otra instrucción —«Habla como una persona
@@ -475,6 +650,41 @@ export function operacionDelTexto(texto) {
   return null;
 }
 
+// ── El mensaje de bienvenida ────────────────────────────────────────────────
+//
+// El saludo lo improvisaba el modelo en cada conversación: a Certain le
+// preguntaba «¿comprar, arrendar o vender?» y se le olvidaba «dar en arriendo»
+// (14-10-2026). Ahora cada agente puede tener un saludo fijo que sale TAL CUAL.
+//
+// Solo cuando toca: es la primera respuesta del agente y la persona no ha dicho
+// qué busca («hola», «buenas tardes, quisiera información»). Si ya escribió
+// «busco apartamento en arriendo en el norte», el menú sería hacerle elegir lo
+// que ya dijo: responde el modelo. Tampoco si viene de un anuncio (el modelo
+// sabe de qué anuncio) ni si mandó una foto o un audio.
+const PALABRAS_DE_SALUDO = new Set(('hola holi ola buenas buenos buen buena dia dias tarde tardes noche noches que tal como ' +
+  'estas esta estan saludos saludo hi hello hey info informacion quisiera quiero queria deseo desearia me podrias ' +
+  'podria podrian puedes puede pueden ustedes nos ayudar ayuda ayudame ayudarme por favor gracias un una unos unas el la los las de del mas ' +
+  'para mi sobre con y o a al le se senor senora necesito necesitaria tengo una pregunta consulta pregunta').split(' '));
+
+export function esSoloSaludo(texto) {
+  const t = sinTildes(String(texto || '')).replace(/[^a-z0-9ñ\s]/g, ' ').trim();
+  if (!t) return false;
+  return t.split(/\s+/).every(p => PALABRAS_DE_SALUDO.has(p));
+}
+
+/**
+ * El saludo fijo, si toca mandarlo ahora; si no, null y responde el modelo.
+ * `mensajes` es el historial en orden ({ role, content }).
+ */
+export function bienvenidaQueToca(agent, mensajes, { referral = null, adjunto = false } = {}) {
+  const fija = String(agent?.bienvenida || '').trim();
+  if (!fija || referral || adjunto) return null;
+  const lista = Array.isArray(mensajes) ? mensajes : [];
+  if (lista.some(m => m.role === 'assistant')) return null;
+  const delContacto = lista.filter(m => m.role === 'user').map(m => String(m.content || '')).join(' ');
+  return esSoloSaludo(delContacto) ? fija : null;
+}
+
 // Cuántas habitaciones pidió: «3 habitaciones», «de 3 alcobas», «3 hab».
 export function habitacionesDelTexto(texto) {
   const t = sinTildes(texto);
@@ -571,7 +781,16 @@ export async function fotosPedidas(texto, userId, clientId) {
       `&codigo=eq.${encodeURIComponent(m[1])}&select=fotos&limit=1`,
       { headers: sb() }
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-    return (filas?.[0]?.fotos || []).slice(0, 4);
+    if (filas?.[0]?.fotos?.length) return filas[0].fotos.slice(0, 4);
+    // Si no es un inmueble, puede ser una pieza del catálogo de productos. Se
+    // busca por su referencia exacta y dentro de la cuenta: una referencia
+    // inventada no trae fotos, y no se manda nada.
+    const piezas = await fetch(
+      `${SUPABASE_URL}/rest/v1/client_products?${alcanceProductos(userId, clientId)}` +
+      `&referencia=eq.${encodeURIComponent(m[1])}&select=fotos&limit=1`,
+      { headers: sb() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    return (piezas?.[0]?.fotos || []).slice(0, 4);
   } catch { return []; }
 }
 
@@ -1071,7 +1290,7 @@ LO QUE NO PUEDES INVENTAR — ESTO ES INNEGOCIABLE:
 - Puedes hablar de lo general que si este en tu contexto, y puedes preguntar lo que necesites para entender que busca la persona
 - Vale mucho mas decir "eso te lo confirmo con un asesor" que dar un dato que luego resulte falso: un precio inventado lo tiene que desmentir despues una persona
 
-${propiedades && propiedades.lineas.length ? `LO QUE HAY DISPONIBLE AHORA MISMO (${propiedades.total} opciones que encajan con lo que te dijeron):
+${propiedades?.clase === 'productos' ? bloqueProductos(propiedades) : propiedades && propiedades.lineas.length ? `LO QUE HAY DISPONIBLE AHORA MISMO (${propiedades.total} opciones que encajan con lo que te dijeron):
 ${propiedades.lineas.join('\n')}
 
 Sobre esta lista:${propiedades.otroTamano ? `
@@ -1090,7 +1309,7 @@ PUEDES ENSEÑAR FOTOS:
 - De una opción que NO esté marcada «con fotos», no las ofrezcas ni prometas mandarlas: dile que se las hace llegar un asesor
 - Videos no tienes de ninguna. Si los piden, eso lo ve un asesor
 
-${propiedades && !propiedades.lineas.length ? `NO TIENES NADA QUE ENCAJE CON LO QUE TE HAN PEDIDO.
+${propiedades && propiedades.clase !== 'productos' && !propiedades.lineas.length ? `NO TIENES NADA QUE ENCAJE CON LO QUE TE HAN PEDIDO.
 Busqué en el inventario y no hay ni una opción con esas características. Esto es lo que toca hacer, y no hay alternativa:
 - Dilo claramente: "en este momento no tengo nada así"
 - NO te inventes opciones. Ni un barrio, ni un precio, ni una administración, ni "algo parecido". Si escribes un inmueble que no existe, esa persona va a pedir verlo
@@ -1250,8 +1469,8 @@ export async function sugerirRespuesta(userId, conversationId) {
   const clienteDelCanal = connection?.client_id || agent.client_id || null;
   const suyos = await suyosDeLaConversacion(conv);
   const delContacto = await pistasDelContacto(userId, clienteDelCanal, suyos.length ? suyos : hist).catch(() => ({}));
-  const inventario = await propiedadesParaPrompt(userId, clienteDelCanal,
-    pistasDeBusqueda(capturedData, previas, delContacto)).catch(() => ({ lineas: [], total: 0 }));
+  const inventario = await catalogoParaPrompt(userId, clienteDelCanal,
+    pistasDeBusqueda(capturedData, previas, delContacto), suyos.length ? suyos : hist).catch(() => ({ lineas: [], total: 0 }));
 
   // Sin la regla de calificación: los bloques ocultos solo tienen sentido cuando
   // el mensaje se guarda, y este no se guarda.
@@ -1331,7 +1550,7 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   // un agente que luego se comporta distinto.
   const delContacto = await pistasDelContacto(userId, agent.client_id || null, todos).catch(() => ({}));
   const pistas = pistasDeBusqueda(capturado, previas, delContacto);
-  const inventario = await propiedadesParaPrompt(userId, agent.client_id || null, pistas)
+  const inventario = await catalogoParaPrompt(userId, agent.client_id || null, pistas, todos)
     .catch(() => ({ lineas: [], total: 0 }));
 
   // Las mismas citas que en la conversación real, pero en el ensayo NUNCA se
@@ -1341,6 +1560,20 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   // propósito para que el prompt se arme con los mismos argumentos que en la
   // conversación real.
   const system = partesDelPrompt(agent, capturado, regla, inventario, canal, null, reservas, null);
+
+  // El saludo fijo sale igual que en la conversación real: el probador es
+  // donde el cliente lo ve por primera vez.
+  const fija = bienvenidaQueToca(agent, limpios);
+  if (fija) {
+    return {
+      ok: true, texto: fija, fotos: [], bruto: fija, bienvenida: true,
+      capturado, escalar: false, reserva: null,
+      calificacion: { activa: !!regla?.activo, estado: evaluar(regla, previas).estado, cumplidas: null, total: null,
+        resumen: regla?.activo ? resumenLegible(regla, previas) : '' },
+      ruta: null,
+      catalogo: { pistas, ofrecidas: inventario.total, lineas: inventario.lineas },
+    };
+  }
 
   let bruto;
   try {
@@ -1468,7 +1701,7 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
       asignar_nombre: destino?.asignar_nombre || null,
       por_turnos: destino?.asignar_a ? 0 : porTurnos,
     } : null,
-    catalogo: { pistas, ofrecidas: inventario.total, lineas: inventario.lineas },
+    catalogo: { pistas: inventario.clase === 'productos' ? inventario.pistas : pistas, ofrecidas: inventario.total, lineas: inventario.lineas },
   };
 }
 
@@ -2089,8 +2322,8 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   const previas = extraerCalificacion(hist.filter(m => m.role === 'assistant').map(m => m.content).join('\n'));
   const suyos = await suyosDeLaConversacion(conv);
   const delContacto = await pistasDelContacto(connection.user_id, clienteDelCanal, suyos.length ? suyos : hist).catch(() => ({}));
-  const inventario = await propiedadesParaPrompt(connection.user_id, clienteDelCanal,
-    pistasDeBusqueda(capturedData, previas, delContacto)).catch(() => ({ lineas: [], total: 0 }));
+  const inventario = await catalogoParaPrompt(connection.user_id, clienteDelCanal,
+    pistasDeBusqueda(capturedData, previas, delContacto), suyos.length ? suyos : hist).catch(() => ({ lineas: [], total: 0 }));
 
   // Lo que el agente puede agendar, con sus próximos huecos. Si esto falla, el
   // agente contesta igual pero sin ofrecer citas —dirá que lo confirma un
@@ -2125,7 +2358,11 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     await escribiendo(connection, providerMessageId).catch(() => {});
   }
 
-  let reply = await responderViendo(system, hist, [], { userId: connection.user_id, origen: 'whatsapp' });
+  // El saludo fijo del agente, si toca (ver bienvenidaQueToca). Es texto del
+  // cliente, escrito y aprobado por él: no pasa por los guardianes ni cuenta
+  // como respuesta del agente en el cupo, porque no consulta al modelo.
+  const fija = bienvenidaQueToca(agent, hist, { referral: conv.referral || null, adjunto: !!media });
+  let reply = fija || await responderViendo(system, hist, [], { userId: connection.user_id, origen: 'whatsapp' });
 
   // ── El guardián ──────────────────────────────────────────────────────────
   // Si el agente citó un importe o un código que no está en ninguna parte, ese
@@ -2139,7 +2376,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // Y el trato: un agente en «usted» que tutea en el primer mensaje arrastra el
   // registro toda la conversación. Se comprueba aquí, por lo mismo que los
   // inventos: pedírselo mejor al modelo ya se intentó y no basta siempre.
-  if (agent.tone === 'formal' && tutea(cleanForUser(reply))) {
+  if (!fija && agent.tone === 'formal' && tutea(cleanForUser(reply))) {
     const deUsted = await responderViendo(system, hist, [
       { role: 'assistant', content: reply },
       { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió: tuteaste, y este cliente pidió trato de usted. ' +
@@ -2166,7 +2403,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // Quien viene a ofrecernos algo es una oportunidad, y quien decide si encaja
   // es un asesor con el caso delante.
   const numeroSabido = capturedData.celular || conocido.celular || null;
-  if (numeroSabido && pideNumero(cleanForUser(reply))) {
+  if (!fija && numeroSabido && pideNumero(cleanForUser(reply))) {
     const sinPedir = await responderViendo(system, hist, [
       { role: 'assistant', content: reply },
       { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió: le pedías su número, y YA lo tienes (' + numeroSabido + '). ' +
@@ -2176,7 +2413,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     if (sinPedir && !pideNumero(cleanForUser(sinPedir))) reply = sinPedir;
   }
 
-  if (condicionaAlDato(cleanForUser(reply))) {
+  if (!fija && condicionaAlDato(cleanForUser(reply))) {
     const sinCobrar = await responderViendo(system, hist, [
       { role: 'assistant', content: reply },
       { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió: le condicionabas lo que pidió a que te diera un dato («antes de…», «primero necesito…»). ' +
@@ -2192,7 +2429,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     }).catch(() => {});
   }
 
-  if (quiereOfrecerInmueble(hist) && descartaAlContacto(cleanForUser(reply))) {
+  if (!fija && quiereOfrecerInmueble(hist) && descartaAlContacto(cleanForUser(reply))) {
     const sinDescarte = await responderViendo(system, hist, [
       { role: 'assistant', content: reply },
       { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió. ' +
@@ -2210,7 +2447,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   }
 
   const citable = loQuePuedeCitar(agent, inventario, hist);
-  let invento = inventos(cleanForUser(reply), citable);
+  let invento = fija ? [] : inventos(cleanForUser(reply), citable);
   // Lo que se inventó la PRIMERA vez, para el registro. `invento` se vacía al
   // corregirse, y al escribirlo después quedaba la nota sin ningún dato: un
   // instrumento que no mide nada.
@@ -2247,7 +2484,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // confirmación que nunca sale. Se le pide al modelo UNA vez que lo escriba;
   // si tampoco, la conversación pasa a una persona (más abajo).
   let promesaSinBloque = false;
-  if ((reservas || suyas) && !reply.includes('[ESCALAR]') && prometeAccion(cleanForUser(reply)) && !traeBloqueDeCita(reply) && !pideConfirmacion(cleanForUser(reply))) {
+  if (!fija && (reservas || suyas) && !reply.includes('[ESCALAR]') && prometeAccion(cleanForUser(reply)) && !traeBloqueDeCita(reply) && !pideConfirmacion(cleanForUser(reply))) {
     const otra = await responderViendo(system, hist, [
       { role: 'assistant', content: reply },
       { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) En tu mensaje anterior dijiste que estabas haciendo la cita, pero no escribiste el bloque, así que no se hizo nada. Repite tu mensaje y añade al final el bloque [RESERVA], [CAMBIAR_CITA] o [CANCELAR_CITA] que corresponde. Si en realidad la persona todavía no te ha dicho que sí, reescríbelo como pregunta.' },

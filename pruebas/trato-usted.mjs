@@ -96,7 +96,9 @@ const eng = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'u
 // hay conversación que pasar a nadie.
 const iReal = eng.indexOf('export async function processIncoming(');
 const g = eng.slice(
-  eng.indexOf("if (agent.tone === 'formal' && tutea(", iReal),
+  // «!fija &&»: el saludo fijo del agente (bienvenidaQueToca) no pasa por
+  // los guardianes; todo lo demás, sí.
+  eng.indexOf("if (!fija && agent.tone === 'formal' && tutea(", iReal),
   eng.indexOf('const citable = loQuePuedeCitar', iReal) + 400,
 );
 ok(g.length > 200, 'el guardián del trato existe en la conversación real');

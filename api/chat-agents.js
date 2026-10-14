@@ -84,7 +84,7 @@ export default async function handler(req) {
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
-    const { name, persona, business_ctx, faqs, capture_fields, tone, escalate_phrase } = body;
+    const { name, persona, business_ctx, faqs, capture_fields, tone, escalate_phrase, bienvenida } = body;
     if (!name) return jsonResp({ error: 'El nombre es requerido' }, 400);
     const payload = {
       user_id: userId,
@@ -96,6 +96,8 @@ export default async function handler(req) {
       capture_fields: capture_fields || ['nombre', 'celular'],
       tone: tone || 'informal',
       escalate_phrase: escalate_phrase?.trim() || 'Claro, en un momento te comunico con un asesor. ¿Me das un segundo?',
+      // Saludo fijo opcional: vacío = lo redacta el modelo (ver bienvenidaQueToca).
+      bienvenida: String(bienvenida || '').trim().slice(0, 1000) || null,
       is_active: true,
     };
     const res = await fetch(`${SUPABASE_URL}/rest/v1/chat_agents`, {
@@ -115,6 +117,7 @@ export default async function handler(req) {
     const allowed = ['name','persona','business_ctx','faqs','capture_fields','tone','escalate_phrase','is_active'];
     const update = { updated_at: new Date().toISOString() };
     for (const k of allowed) { if (fields[k] !== undefined) update[k] = fields[k]; }
+    if (fields.bienvenida !== undefined) update.bienvenida = String(fields.bienvenida || '').trim().slice(0, 1000) || null;
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${id}&user_id=eq.${userId}`,
       { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(update) }

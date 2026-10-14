@@ -62,7 +62,7 @@ for (const t of [
 
 console.log('\nEl guardián está donde tiene que estar');
 {
-  const i = eng.indexOf('if (quiereOfrecerInmueble(hist) && descartaAlContacto(');
+  const i = eng.indexOf('if (!fija && quiereOfrecerInmueble(hist) && descartaAlContacto(');
   ok(i > 0, 'se comprueba antes de enviar');
 
   // Las dos condiciones juntas: solo cuando la persona ofrece Y se le dice que

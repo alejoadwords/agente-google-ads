@@ -41,7 +41,7 @@ ok(/escribiendo: \(connection, messageId\) => marcarEscribiendo/.test(wh),
 
 console.log('\nCuándo se manda');
 ok(/const empezoAPensar = Date\.now\(\);/.test(eng), 'el reloj arranca al recibir el mensaje');
-ok(eng.indexOf('await escribiendo(connection, providerMessageId)') < eng.indexOf('let reply = await responderViendo'),
+ok(eng.indexOf('await escribiendo(connection, providerMessageId)') < eng.indexOf('let reply = fija || await responderViendo'),
    'el indicador sale ANTES de pensar la respuesta, no después');
 ok(/typeof escribiendo === 'function'/.test(eng),
    'y si quien llama no lo trae —el simulador, por ejemplo— no revienta');
