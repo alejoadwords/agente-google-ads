@@ -1236,7 +1236,7 @@ const CORTE_CACHE = 'un precio inventado lo tiene que desmentir despues una pers
 export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null, canal = 'whatsapp', referral = null, reservas = null, suyas = null) {
   const faqs = (agent.faqs || []).map(f => `P: ${f.q}\nR: ${f.a}`).join('\n\n');
   const captured = Object.entries(capturedData || {})
-    .filter(([, v]) => v)
+    .filter(([k, v]) => v && !k.startsWith('_'))
     .map(([k, v]) => `${k}: ${v}`)
     .join(', ') || 'Ninguno aún';
 
@@ -1328,6 +1328,10 @@ SI TE MANDAN UNA FOTO:
 ${bloqueDeAhora(reservas?.zona, new Date(), [agent.business_ctx, faqs].filter(Boolean).join('\n'))}${bloqueDeAnuncio(referral)}${bloqueReservas(reservas, canal)}${bloqueCitas(suyas)}${capturedData?.celular ? `YA TIENES SU NUMERO: ${capturedData.celular}${canal === 'whatsapp' ? ' (es el de este mismo WhatsApp)' : ''}.
 - NO se lo vuelvas a pedir, ni aunque haya pasado mucho rato. Pedir un dato que ya dio es lo que mas delata a un bot
 - Si van a llamarle, a lo sumo confirma: «¿le llamamos a este mismo numero?». La regla de pedir el telefono pronto ya esta cumplida
+
+` : ''}${capturedData?._propietario === 'arrendar' || capturedData?._propietario === 'vender' ? `YA SABES QUÉ QUIERE HACER CON SU INMUEBLE: ${capturedData._propietario === 'arrendar' ? 'DARLO EN ARRIENDO' : 'VENDERLO'}. Lo dijo esta persona.
+- NO le preguntes si quiere vender o arrendar: ya lo contestó
+- Tampoco le digas que «mencionó» palabras que no escribió
 
 ` : ''}DATOS CAPTURADOS HASTA AHORA:
 ${captured}
@@ -1559,7 +1563,8 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   // Sin citas propias (null): el ensayo no tiene contacto en el CRM. Se pasa a
   // propósito para que el prompt se arme con los mismos argumentos que en la
   // conversación real.
-  const system = partesDelPrompt(agent, capturado, regla, inventario, canal, null, reservas, null);
+  const propietario = operacionDelPropietario(todos);
+  const system = partesDelPrompt(agent, { ...capturado, _propietario: propietario }, regla, inventario, canal, null, reservas, null);
 
   // El saludo fijo sale igual que en la conversación real: el probador es
   // donde el cliente lo ve por primera vez.
@@ -1629,6 +1634,22 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
       'Escríbelo otra vez dándole PRIMERO lo que pidió —las opciones, las fotos, la respuesta— y, al final y sin condiciones, pide el dato que te falte. ' +
       'El contacto no vio nada: no te disculpes ni lo menciones.');
     if (sinCobrar && !condicionaAlDato(cleanForUser(sinCobrar))) { bruto = sinCobrar; texto = cleanForUser(sinCobrar).trim(); }
+  }
+
+  if ((propietario === 'arrendar' || propietario === 'vender') && preguntaVenderOArrendar(texto)) {
+    const sinRepetir = await reintento('Tu mensaje anterior NO se envió: le preguntabas si quiere vender o arrendar, y YA lo dijo: quiere ' +
+      (propietario === 'arrendar' ? 'DAR SU INMUEBLE EN ARRIENDO' : 'VENDER SU INMUEBLE') + '. Escríbelo otra vez sin esa pregunta y sigue con lo siguiente que falte. ' +
+      'El contacto no vio nada: no te disculpes ni lo menciones.');
+    if (sinRepetir && !preguntaVenderOArrendar(cleanForUser(sinRepetir))) { bruto = sinRepetir; texto = cleanForUser(sinRepetir).trim(); }
+  }
+
+  const deUsuario = todos.filter(m => m.role === 'user').map(m => m.content);
+  const interna = etiquetaInterna(texto, regla, deUsuario);
+  if (interna) {
+    const sinEtiqueta = await reintento('Tu mensaje anterior NO se envió: decía «' + interna + '», que es una etiqueta interna nuestra y el contacto nunca la escribió. ' +
+      'Escríbelo otra vez con palabras normales y sin atribuirle cosas que no dijo. ' +
+      'El contacto no vio nada: no te disculpes ni lo menciones.');
+    if (sinEtiqueta && !etiquetaInterna(cleanForUser(sinEtiqueta), regla, deUsuario)) { bruto = sinEtiqueta; texto = cleanForUser(sinEtiqueta).trim(); }
   }
 
   if (quiereOfrecerInmueble(limpios) && descartaAlContacto(texto)) {
@@ -2032,6 +2053,55 @@ export function quiereOfrecerInmueble(mensajes = []) {
     || /\btengo (un|una|el|la|unos|unas)\s+[\wáéíóúñ]+.{0,40}?\bpara\s+(vender|arrendar|alquilar|administrar|promocionar)/.test(suyo);
 }
 
+// ¿Qué quiere hacer el propietario con su inmueble: venderlo o darlo en arriendo?
+//
+// «Quiero dejar un inmueble en arriendo» y, cinco mensajes después, el agente
+// de Certain preguntó «¿quieres venderla o ponerla en arriendo?» — dos veces —
+// (14-10-2026). Se lee de lo que escribió la persona, no del modelo, y entra al
+// prompt como dato sabido; además hay un guardián por si aun así lo pregunta.
+// «Arrendar el apartamento AP-1042» es de quien BUSCA: solo cuenta «arrendar
+// MI…», «dejar/dar/poner … en arriendo» o «tengo … para arrendar».
+export function operacionDelPropietario(mensajes = []) {
+  const t = sinTildes((mensajes || []).filter(m => m?.role === 'user').map(m => String(m.content || '')).join(' . '));
+  const arrendar = /\b(dejar|dar|poner|entregar|consignar|meter|ofrecer)\w*\b[^.?!]{0,40}\ben (arriendo|alquiler|renta)\b/.test(t)
+    || /\b(arrendar|alquilar|rentar)\s+(mi|mis|nuestro|nuestra)\b/.test(t)
+    || /\btengo\b[^.?!]{0,50}\bpara\s+(arrendar|alquilar|rentar)\b/.test(t);
+  const vender = /\bvender\s+(mi|mis|nuestro|nuestra)\b/.test(t)
+    || /\b(dejar|poner|entregar|consignar|ofrecer)\w*\b[^.?!]{0,40}\ben venta\b/.test(t)
+    || /\btengo\b[^.?!]{0,50}\bpara\s+vender\b/.test(t)
+    || /\bquiero vender\b/.test(t) || /\bvender(lo|la|los|las)\b/.test(t);
+  if (arrendar && vender) return 'ambas';
+  return arrendar ? 'arrendar' : vender ? 'vender' : null;
+}
+
+// ¿La respuesta le pregunta si quiere vender o arrendar?
+export function preguntaVenderOArrendar(texto) {
+  // Por frase (punto o salto de línea): «¿vender o arrendar tu casa, ¿cuál es?» es una sola.
+  return String(texto || '').split(/(?<=[.!\n])/).some(f => /\?/.test(f) &&
+    /(vend|venta)[^?]{0,60}(arrend|arriendo|alquil)|(arrend|arriendo|alquil)[^?]{0,60}(vend|venta)/i.test(sinTildes(f)));
+}
+
+// Las etiquetas del enrutado son nuestras, no de quien escribe. El agente de
+// Certain le dijo «veo que mencionaste que es para captación»: había leído su
+// propia ruta en el bloque oculto y se la atribuyó a la persona. Se señala la
+// etiqueta que aparece en la respuesta sin que la persona la haya escrito;
+// las palabras de todos los días (arriendo, venta…) no cuentan.
+const PALABRAS_COMUNES_DE_RUTA = new Set(['arriendo', 'arriendos', 'venta', 'ventas', 'compra', 'compras', 'alquiler']);
+export function etiquetaInterna(texto, regla, textosDelUsuario = []) {
+  const rutas = regla?.enrutado?.rutas || [];
+  const resp = sinTildes(texto);
+  const suyo = sinTildes((textosDelUsuario || []).join(' '));
+  for (const r of rutas) {
+    for (const et of [r.clave, r.etiqueta]) {
+      const e = sinTildes(et || '').trim();
+      if (e.length < 4 || PALABRAS_COMUNES_DE_RUTA.has(e)) continue;
+      const raiz = e.slice(0, Math.max(4, e.length - 2));   // «captacion» → «captaci»
+      if (resp.includes(raiz) && !suyo.includes(raiz)) return et;
+    }
+  }
+  return null;
+}
+
 // ¿Le estamos cobrando un dato por lo que pidió?
 //
 // «Antes de mostrarle las disponibles, ¿cuál es su nombre? Y también un
@@ -2345,7 +2415,11 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // Lo ya sabido va DEBAJO de lo capturado: si en la conversación dio otro
   // número para que le llamen, manda ese.
   const conocido = await conocidoDeLaConversacion(conv, suyos).catch(() => ({}));
-  const system = partesDelPrompt(agent, { ...conocido, ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas);
+  // Lo que el propietario quiere hacer con su inmueble, leído de lo que
+  // escribió en TODA la conversación (ver operacionDelPropietario).
+  const textosSuyos = suyos.length ? suyos : hist.filter(m => m.role === 'user');
+  const propietario = operacionDelPropietario(textosSuyos);
+  const system = partesDelPrompt(agent, { ...conocido, ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}), _propietario: propietario }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas);
   // «Escribiendo…» antes de pensar.
   //
   // El modelo contesta en medio segundo y eso delata al bot más que cualquier
@@ -2425,6 +2499,39 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     await registrarError({
       origen: 'inbox', donde: 'el agente condicionó lo pedido a un dato de contacto',
       error: new Error((arreglado ? 'corregido: ' : 'NO corregido: ') + cleanForUser(reply).slice(0, 160)),
+      usuario: connection.user_id,
+    }).catch(() => {});
+  }
+
+  if (!fija && (propietario === 'arrendar' || propietario === 'vender') && preguntaVenderOArrendar(cleanForUser(reply))) {
+    const sinRepetir = await responderViendo(system, hist, [
+      { role: 'assistant', content: reply },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió: le preguntabas si quiere vender o arrendar, y YA lo dijo: quiere ' +
+        (propietario === 'arrendar' ? 'DAR SU INMUEBLE EN ARRIENDO' : 'VENDER SU INMUEBLE') + '. Escríbelo otra vez sin esa pregunta y sigue con lo siguiente que falte. ' +
+        'El contacto no vio nada y no te ha corregido: no te disculpes ni lo menciones.' },
+    ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
+    const arreglado = sinRepetir && !preguntaVenderOArrendar(cleanForUser(sinRepetir));
+    if (arreglado) reply = sinRepetir;
+    await registrarError({
+      origen: 'inbox', donde: 'el agente preguntó vender o arrendar a quien ya lo dijo',
+      error: new Error((arreglado ? 'corregido: ' : 'NO corregido: ') + cleanForUser(reply).slice(0, 160)),
+      usuario: connection.user_id,
+    }).catch(() => {});
+  }
+
+  const interna = !fija && etiquetaInterna(cleanForUser(reply), reglaCal, textosSuyos.map(m => m.content));
+  if (interna) {
+    const sinEtiqueta = await responderViendo(system, hist, [
+      { role: 'assistant', content: reply },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió: decía «' + interna + '», que es una etiqueta interna nuestra y el contacto nunca la escribió. ' +
+        'Escríbelo otra vez con palabras normales y sin atribuirle cosas que no dijo. ' +
+        'El contacto no vio nada y no te ha corregido: no te disculpes ni lo menciones.' },
+    ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
+    const arreglado = sinEtiqueta && !etiquetaInterna(cleanForUser(sinEtiqueta), reglaCal, textosSuyos.map(m => m.content));
+    if (arreglado) reply = sinEtiqueta;
+    await registrarError({
+      origen: 'inbox', donde: 'el agente usó una etiqueta interna del enrutado',
+      error: new Error((arreglado ? 'corregido: ' : 'NO corregido: ') + interna),
       usuario: connection.user_id,
     }).catch(() => {});
   }

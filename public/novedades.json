@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-14-agente-no-repite",
+      "fecha": "2026-10-14",
+      "tipo": "mejora",
+      "titulo": "El agente no vuelve a preguntar lo que el propietario ya dijo",
+      "texto": "Si alguien escribe que quiere dar su inmueble en arriendo o venderlo, el agente lo recuerda durante toda la conversación y no le vuelve a preguntar si quiere vender o arrendar. Tampoco usa palabras internas de tu configuración que la persona nunca escribió."
+    },
+    {
       "id": "2026-10-14-bienvenida-agente",
       "fecha": "2026-10-14",
       "tipo": "nuevo",
