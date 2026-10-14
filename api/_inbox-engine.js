@@ -2298,8 +2298,10 @@ export function condicionaAlDato(texto) {
 export function pideNumero(texto) {
   const t = sinTildes(texto);
   if (/(este|ese|mismo|este mismo) (numero|celular|whatsapp)/.test(t)) return false;
-  return /\b(me (comparte|da|regala|indica|pasa|deja|facilita|confirma)|comparta(me)?|compartame|regaleme|indiqueme|digame|me podria (dar|compartir|pasar)|puede (darme|compartirme|pasarme)|cual es)\b[^.?!]{0,40}\b(numero|celular|telefono|whatsapp)\b/.test(t)
-    || /\b(su|tu) (numero|celular|telefono)( de contacto| celular)?\s*\?/.test(t);
+  // Con usted y con tú: el agente de Certain tutea y «¿me compartes tu número de
+  // celular?» se colaba (14-10-2026), porque solo se miraba «me comparte».
+  return /\b(me (comparte|compartes|da|das|regala|regalas|indica|indicas|pasa|pasas|deja|dejas|facilita|facilitas|confirma|confirmas|escribe|escribes)|comparta(me)?|compartame|compartemelo|regaleme|regalame|indiqueme|indicame|digame|dime|pasame|me podria(s)? (dar|compartir|pasar)|puede(s)? (darme|compartirme|pasarme)|cual es)\b[^.?!]{0,40}\b(numero|celular|telefono|whatsapp)\b/.test(t)
+    || /\b(su|tu) (numero|celular|telefono)( de contacto| celular| de celular| de telefono| de whatsapp)?\s*\?/.test(t);
 }
 
 // ¿Le estamos diciendo que no?

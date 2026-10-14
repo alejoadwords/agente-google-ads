@@ -60,6 +60,14 @@ for (const [t, e] of [
   ['¿Me dice su nombre para dejarlo anotado?', false],
 ]) ok(m.pideNumero(t) === e, (e ? 'se detecta: ' : 'pasa: ') + t);
 ok((eng.match(/pideNumero\(/g) || []).length >= 4, 'el guardián está en producción y en el probador');
+// Con tú también (Certain tutea): «¿me compartes tu número de celular?» se colaba.
+for (const [t, e] of [
+  ['Para pasarte con un asesor, ¿me compartes tu número de celular?', true],
+  ['¿me regalas un número de contacto?', true],
+  ['¿Me pasas tu celular?', true],
+  ['¿Te llamamos a este mismo número?', false],
+  ['¿Cuál es tu nombre completo?', false],
+]) ok(m.pideNumero(t) === e, (e ? 'pide número (tú): ' : 'no lo pide: ') + t);
 ok(m.tutea('Déjame mostrarle las opciones') && !m.tutea('Déjeme mostrarle las opciones'), '«déjame» es tuteo; «déjeme», no');
 console.log('Metraje');
 const A = t => JSON.stringify(m.areaDelTexto(t));
