@@ -5,7 +5,7 @@
 // ofrece horas concretas y no puede confirmar una fuera del horario.
 
 import { readFileSync } from 'fs';
-import { horarioDelTexto, describirHorario, opcionesDeLlamada, horaFueraDeHorario, bloqueDeAhora } from '../api/_inbox-engine.js';
+import { horarioDelTexto, describirHorario, opcionesDeLlamada, horaFueraDeHorario, bloqueDeAhora, sinLlamarYo } from '../api/_inbox-engine.js';
 
 let mal = 0;
 const ok = (c, m, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c && extra !== undefined ? ' → ' + JSON.stringify(extra) : '')); if (!c) mal++; };
@@ -55,6 +55,20 @@ console.log('\nEl prompt ofrece las opciones');
   ok(/HORARIO PARA LLAMAR O CONTACTAR/.test(b) && /lunes a viernes de 8:00 a\. m\. a 12:00 m\./.test(b), 'el bloque trae el horario');
   ok(/NO dejes la pregunta abierta/.test(b) && /hoy a las 11:30 a\. m\./.test(b), 'y las horas concretas para ofrecer', b.slice(b.indexOf('HORARIO')));
 }
+
+console.log('\nQuién llama y por qué no se puede');
+ok(sinLlamarYo('¿Te llamo el viernes a las 2:00 p. m.?') === '¿Te llamamos el viernes a las 2:00 p. m.?', '«¿Te llamo…?» → «¿Te llamamos…?»');
+ok(sinLlamarYo('Perfecto, le llamo mañana') === 'Perfecto, le llamamos mañana', 'también en usted');
+ok(sinLlamarYo('Un asesor te llama mañana') === 'Un asesor te llama mañana', '«un asesor te llama» se queda igual');
+ok(sinLlamarYo('Te llamamos el viernes') === 'Te llamamos el viernes', 'lo que ya está bien no se toca');
+ok(sinLlamarYo('Me llamo Aura') === 'Me llamo Aura', '«me llamo Aura» es su nombre, no una llamada');
+{
+  const b = bloqueDeAhora('America/Bogota', new Date('2026-10-14T15:10:00Z'), CERTAIN);
+  ok(/los sábados no atendemos/.test(b), 'el prompt pide decir el motivo exacto (día sin atención)');
+  ok(/nunca «te llamo»/.test(b), 'y que no diga «te llamo»');
+}
+const eng2 = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
+ok((eng2.match(/sinLlamarYo\(/g) || []).length >= 4, 'la corrección de «te llamo» está en la conversación real y en el probador');
 
 console.log('\nCableado');
 const eng = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');

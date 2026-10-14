@@ -1258,16 +1258,35 @@ function cuandoEs(reloj, enDias, desde) {
     .format(new Date(reloj.ymdEn(enDias) + 'T12:00:00Z')).replace(',', '') + ' a las ' + horaBonita(desde);
 }
 
+// El agente no llama a nadie: llama un asesor. «¿Te llamo el viernes?» hace
+// creer que el bot va a marcar (revisión de Certain, 14-10-2026). Se corrige
+// en el texto, sin otra consulta al modelo: el cambio es siempre el mismo.
+export function sinLlamarYo(texto) {
+  return String(texto || '')
+    .replace(/\b([Tt]e|[Ll]e)\s+llamo\b/g, (m, p) => p + ' llamamos')
+    .replace(/\b([Tt]e|[Ll]e)\s+marco\b/g, (m, p) => p + ' marcamos')
+    .replace(/\b[Yy]o\s+(te|le)\s+llamamos\b/g, (m, p) => p.charAt(0).toUpperCase() + p.slice(1) + ' llamamos');
+}
+
 // El contexto del que se lee el horario: el mismo que ve bloqueDeAhora.
 function contextoDeHorario(agent) {
   return [agent?.business_ctx, (agent?.faqs || []).map(f => `P: ${f.q}\nR: ${f.a}`).join('\n\n')].filter(Boolean).join('\n');
 }
 
 // Lo que se le dice al modelo cuando confirmó una hora fuera del horario.
+function motivoFuera(reloj, fuera) {
+  if (reloj.festivo(fuera.enDias)) return 'ese día es festivo';
+  const delDia = reloj.franjas.filter(f => f.dias.has((reloj.dia + fuera.enDias) % 7)).sort((a, b) => a.desde - b.desde);
+  if (!delDia.length) return 'ese día de la semana no se atiende';
+  if (fuera.desde < delDia[0].desde) return 'a esa hora todavía no se ha abierto';
+  if (fuera.desde >= delDia[delDia.length - 1].hasta) return 'a esa hora ya se cerró';
+  return 'a esa hora es la pausa del mediodía';
+}
+
 function avisoHoraFuera(reloj, fuera) {
   const opciones = opcionesDeLlamada(reloj.franjas, reloj.dia, reloj.min, reloj.festivo, 3).map(o => cuandoEs(reloj, o.enDias, o.desde));
-  return 'Tu mensaje anterior NO se envió: confirmabas o proponías «' + fuera.texto + '», y esa hora está FUERA del horario en que un asesor puede llamar (' +
-    describirHorario(reloj.franjas) + (reloj.colombia ? ', sin festivos' : '') + '). Escríbelo otra vez: dile con amabilidad que a esa hora no hay asesores y ofrécele opciones dentro del horario, por ejemplo: ' +
+  return 'Tu mensaje anterior NO se envió: confirmabas o proponías «' + fuera.texto + '», y esa hora está FUERA del horario en que un asesor puede llamar (' + motivoFuera(reloj, fuera) + '; el horario es ' +
+    describirHorario(reloj.franjas) + (reloj.colombia ? ', sin festivos' : '') + '). Escríbelo otra vez: dile con amabilidad ese motivo exacto y ofrécele opciones dentro del horario, por ejemplo: ' +
     opciones.join('; ') + '. No confirmes ninguna hora fuera del horario. El contacto no vio nada y no te ha corregido: no te disculpes ni lo menciones.';
 }
 
@@ -1323,6 +1342,8 @@ HORARIO PARA LLAMAR O CONTACTAR (un asesor solo llama dentro de él): ${describi
 - Cuando preguntes cuándo contactarle, NO dejes la pregunta abierta: ofrécele dos o tres horas concretas. Las próximas posibles son: ${opciones.join('; ')}
 - Si pide una hora fuera de ese horario (antes de abrir, después de cerrar, en la pausa del mediodía, fin de semana o festivo), dile con amabilidad que a esa hora no hay asesores y ofrécele la opción válida más cercana
 - Nunca confirmes ni des por registrada una hora fuera del horario
+- Di el motivo exacto: si es un día en que no se atiende (fin de semana o festivo), di que ESE DÍA no se atiende —«los sábados no atendemos»—, no que «a esa hora ya no estamos»; si es la pausa del mediodía, di que a esa hora es la pausa
+- Tú no llamas a nadie: llama un asesor. Escribe «te llamamos» o «un asesor te llama», nunca «te llamo»
 `;
   }
   return `QUE DIA Y HORA ES AHORA MISMO (${donde}):
@@ -1806,6 +1827,8 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
       'zonas que no se manejan ni a que quizá no podamos ayudarle. El contacto no vio nada: no te disculpes ni lo menciones.');
     if (sinDescarte && !descartaAlContacto(cleanForUser(sinDescarte))) { bruto = sinDescarte; texto = cleanForUser(sinDescarte).trim(); }
   }
+
+  if (!fija) { bruto = sinLlamarYo(bruto); texto = sinLlamarYo(texto); }
 
   // Si el agente agendó, se enseña lo que habría pasado: la confirmación que
   // saldría, o el mensaje que sustituiría al suyo si la hora no está libre.
@@ -2772,6 +2795,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // Se ejecuta ANTES de guardar y enviar su mensaje, porque de lo que pase
   // depende qué se envía: si la hora ya no está libre, el «te agendo» del
   // agente no puede salir.
+  if (!fija) reply = sinLlamarYo(reply);
   let guardado = reply;            // lo que queda en el historial
   let visible = cleanForUser(reply);
   let confirmacionCita = null;
