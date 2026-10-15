@@ -5,7 +5,7 @@
 // ofrece horas concretas y no puede confirmar una fuera del horario.
 
 import { readFileSync } from 'fs';
-import { horarioDelTexto, describirHorario, opcionesDeLlamada, horaFueraDeHorario, bloqueDeAhora, sinLlamarYo } from '../api/_inbox-engine.js';
+import { horarioDelTexto, describirHorario, opcionesDeLlamada, horaFueraDeHorario, bloqueDeAhora, sinLlamarYo, respuestaSeguraDeHorario, relojDelNegocio } from '../api/_inbox-engine.js';
 
 let mal = 0;
 const ok = (c, m, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c && extra !== undefined ? ' → ' + JSON.stringify(extra) : '')); if (!c) mal++; };
@@ -69,6 +69,26 @@ ok(sinLlamarYo('Me llamo Aura') === 'Me llamo Aura', '«me llamo Aura» es su no
 }
 const eng2 = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
 ok((eng2.match(/sinLlamarYo\(/g) || []).length >= 4, 'la corrección de «te llamo» está en la conversación real y en el probador');
+
+console.log('\nLa última red: si insiste, sale un mensaje seguro');
+{
+  // Miércoles 5:30 p. m. en Bogotá; el agente insistió en «hoy a las 5:30» (captura de Certain).
+  const reloj = relojDelNegocio('America/Bogota', new Date('2026-10-14T22:30:00Z'), CERTAIN);
+  const orig = 'Perfecto, voy a registrar que te llamen hoy a las 5:30 p. m. [CALIFICACION: {"criterio_4": {"valor": "llamada", "cumple": true}}]';
+  const f = horaFueraDeHorario(orig, reloj.franjas, reloj.dia, reloj.min, reloj.festivo);
+  ok(!!f, 'la respuesta de la captura se detecta');
+  const r = respuestaSeguraDeHorario(reloj, f, orig);
+  ok(horaFueraDeHorario(r, reloj.franjas, reloj.dia, reloj.min, reloj.festivo) === null, 'el mensaje seguro nunca tiene una hora fuera', r);
+  ok(/^A esa hora ya cerramos\./.test(r), 'dice el motivo exacto', r);
+  ok(/mañana a las 9:00 a\. m\. o mañana a las 3:00 p\. m\./.test(r), 'y ofrece dos horas válidas', r);
+  ok(/\[CALIFICACION: \{"criterio_4"/.test(r), 'conserva la calificación oculta de la respuesta original');
+  ok(!/p\. m\.\./.test(r), 'sin puntos dobles');
+  ok(/¿Le sirve/.test(respuestaSeguraDeHorario(reloj, f, orig, true)), 'con trato de usted');
+  const sabado = horaFueraDeHorario('Listo, te llamamos el sábado a la 1 p. m.', reloj.franjas, reloj.dia, reloj.min, reloj.festivo);
+  ok(/^Ese día no atendemos/.test(respuestaSeguraDeHorario(reloj, sabado, '')), 'sábado → «Ese día no atendemos»');
+}
+const eng3 = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
+ok((eng3.match(/respuestaSeguraDeHorario\(reloj, fuera, (bruto|reply)/g) || []).length === 2, 'la última red está en la conversación real y en el probador');
 
 console.log('\nCableado');
 const eng = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');

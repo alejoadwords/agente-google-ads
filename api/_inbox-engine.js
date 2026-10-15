@@ -1360,6 +1360,30 @@ function motivoFuera(reloj, fuera) {
   return 'a esa hora es la pausa del mediodía';
 }
 
+// La última red: si el agente insiste en una hora fuera del horario aun
+// después de corregirlo, NO se envía lo suyo. Sale este mensaje, armado por el
+// código con el motivo y dos horas válidas: así es imposible que una hora fuera
+// de franja llegue al contacto (pedido de Certain, 14-10-2026: «no puede
+// pasar»). Los bloques ocultos (captura, calificación) de la respuesta original
+// se conservan para que no se pierda lo que la persona contó.
+const MOTIVO_EN_FRASE = {
+  'ese día es festivo': 'Ese día es festivo y no hay asesores disponibles',
+  'ese día de la semana no se atiende': 'Ese día no atendemos',
+  'a esa hora todavía no se ha abierto': 'A esa hora todavía no hemos abierto',
+  'a esa hora ya se cerró': 'A esa hora ya cerramos',
+  'a esa hora es la pausa del mediodía': 'A esa hora es nuestra pausa del mediodía',
+};
+export function respuestaSeguraDeHorario(reloj, fuera, original = '', formal = false) {
+  const motivo = MOTIVO_EN_FRASE[motivoFuera(reloj, fuera)] || 'A esa hora no hay asesores disponibles';
+  const op = opcionesDeLlamada(reloj.franjas, reloj.dia, reloj.min, reloj.festivo, 2).map(o => cuandoEs(reloj, o.enDias, o.desde));
+  const horario = describirHorario(reloj.franjas);
+  const pregunta = op.length
+    ? (formal ? '¿Le sirve ' : '¿Te sirve ') + op.join(' o ') + '?'
+    : (formal ? '¿En qué horario le queda mejor?' : '¿En qué horario te queda mejor?');
+  const bloques = (String(original).match(/\[(CAPTURA|CALIFICACION)[\s\S]*?\]\s*\]|\[(CAPTURA|CALIFICACION):[^\n]*\]/g) || []).join('\n');
+  return motivo + '. Nuestro horario es de ' + horario.replace(/\.$/, '') + '. ' + pregunta + (bloques ? '\n' + bloques : '');
+}
+
 function avisoHoraFuera(reloj, fuera) {
   const opciones = opcionesDeLlamada(reloj.franjas, reloj.dia, reloj.min, reloj.festivo, 3).map(o => cuandoEs(reloj, o.enDias, o.desde));
   return 'Tu mensaje anterior NO se envió: confirmabas o proponías «' + fuera.texto + '», y esa hora está FUERA del horario en que un asesor puede llamar (' + motivoFuera(reloj, fuera) + '; el horario es ' +
@@ -1900,6 +1924,7 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   if (fuera) {
     const dentro = await reintento(avisoHoraFuera(reloj, fuera));
     if (dentro && !horaFueraDeHorario(cleanForUser(dentro), reloj.franjas, reloj.dia, reloj.min, reloj.festivo)) { bruto = dentro; texto = cleanForUser(dentro).trim(); }
+    else { bruto = respuestaSeguraDeHorario(reloj, fuera, bruto, agent.tone === 'formal'); texto = cleanForUser(bruto).trim(); }
   }
 
   if (quiereOfrecerInmueble(limpios) && descartaAlContacto(texto)) {
@@ -2798,7 +2823,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
       { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) ' + avisoHoraFuera(reloj, fuera) },
     ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
     const arreglado = dentro && !horaFueraDeHorario(cleanForUser(dentro), reloj.franjas, reloj.dia, reloj.min, reloj.festivo);
-    if (arreglado) reply = dentro;
+    reply = arreglado ? dentro : respuestaSeguraDeHorario(reloj, fuera, reply, agent.tone === 'formal');
     await registrarError({
       origen: 'inbox', donde: 'el agente confirmó una hora fuera del horario',
       error: new Error((arreglado ? 'corregido: ' : 'NO corregido: ') + fuera.texto.slice(0, 160)),
