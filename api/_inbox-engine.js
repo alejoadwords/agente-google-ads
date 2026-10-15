@@ -218,12 +218,57 @@ export function zonaEnTexto(texto) {
   return m ? m[1] : null;
 }
 
+// ── Barrios cercanos ────────────────────────────────────────────────────────
+//
+// «¿No tienes más opciones?» — «barrios cercanos», y el agente de Certain no
+// sabía qué barrios quedan cerca de El Prado: lo pasaba a un asesor teniendo
+// inventario a dos cuadras (14-10-2026). Las coordenadas vienen de Domus
+// (client_properties.lat/lng) y SOLO sirven para medir distancia: nunca se le
+// dan al contacto, ni la dirección.
+export const RADIO_CERCANOS_KM = 2;
+
+export function distanciaKm(a, b) {
+  const R = 6371, rad = (g) => g * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// El centro de un barrio: el promedio de los inmuebles del catálogo que están
+// en él. null si no hay ninguno con coordenadas.
+export function centroDelBarrio(filas) {
+  const con = (filas || []).filter(f => Number.isFinite(f.lat) && Number.isFinite(f.lng));
+  if (!con.length) return null;
+  return { lat: con.reduce((s, f) => s + f.lat, 0) / con.length, lng: con.reduce((s, f) => s + f.lng, 0) / con.length };
+}
+
+// De los candidatos, los que quedan a menos de `radio` km del centro y NO son
+// del barrio pedido (esos ya salen en la lista principal), del más cercano al
+// más lejano.
+// Tres como mucho: es lo que el agente puede enseñar en un mensaje, y con
+// seis las listaba todas (ensayo del 14-10-2026).
+export function cercanosAlBarrio(candidatos, centro, barrioPedido, radio = RADIO_CERCANOS_KM, tope = 3) {
+  if (!centro) return [];
+  const mismo = (b) => sinTildes(b || '').trim() === sinTildes(barrioPedido || '').trim();
+  return (candidatos || [])
+    .filter(f => Number.isFinite(f.lat) && Number.isFinite(f.lng) && !mismo(f.barrio))
+    .map(f => ({ ...f, _km: distanciaKm(centro, f) }))
+    .filter(f => f._km <= radio)
+    .sort((a, b) => a._km - b._km)
+    .slice(0, tope);
+}
+
+// ¿Pide expresamente opciones cerca?
+export function pideCercanos(textos) {
+  return /\b(cerca|cercan\w*|alrededor\w*|aleda\w+|vecin\w+|por ahi|al lado|contiguo\w*)\b/.test(sinTildes((textos || []).join(' ')));
+}
+
 export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
   if (!userId) return { lineas: [], total: 0 };
   let q = `${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
     (clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null') +
     '&select=codigo,operacion,tipo,ciudad,barrio,habitaciones,banos,area,precio,' +
-    `precio_arriendo,precio_venta,administracion,fotos,url&limit=${TOPE_PROPIEDADES}`;
+    `precio_arriendo,precio_venta,administracion,fotos,url,lat,lng&limit=${TOPE_PROPIEDADES}`;
 
   // La operacion sale del enrutado: si el agente ya dedujo 'arriendo', no tiene
   // sentido ofrecerle ventas. 'Arriendo/Venta' vale para las dos.
@@ -315,6 +360,24 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
       filas = await traer(sinArea(q));
       if (filas.length) otroTamano = true;
     }
+    // Barrios cercanos: cuando en el barrio pedido hay una opción o ninguna, o
+    // cuando la persona lo pide («¿algo cerca?»). Solo con un BARRIO, no con
+    // una zona («el norte» ya es amplia), y solo si el catálogo trae
+    // coordenadas. Va antes de ampliar a toda la ciudad: cerca es mejor que lejos.
+    let cercanas = [];
+    if (pistas.barrio && !(zona && zona.barrios.length) && (filas.length <= 1 || pistas.cercanos)) {
+      const delBarrio = await traer(`${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
+        (clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null') +
+        `&barrio=ilike.*${encodeURIComponent(pistas.barrio)}*&lat=not.is.null&select=lat,lng&limit=200`);
+      const centro = centroDelBarrio(delBarrio);
+      if (centro) {
+        const candidatos = await traer(q.replace(filtroBarrio, '').replace(`limit=${TOPE_PROPIEDADES}`, 'limit=400') + '&lat=not.is.null');
+        const ya = new Set((filas || []).map(f => f.codigo));
+        cercanas = cercanosAlBarrio(candidatos.filter(f => !ya.has(f.codigo)), centro, pistas.barrio)
+          .map(f => ({ ...f, _cercaDe: pistas.barrio }));
+        filas = [...(filas || []), ...cercanas];
+      }
+    }
     if (!filas.length && pistas.barrio) {
       ampliado = true;
       filas = await traer(q.replace(filtroBarrio, ''));
@@ -332,7 +395,9 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
         f.codigo,
         f.operacion,
         f.tipo,
-        [f.barrio, f.ciudad].filter(Boolean).join(', '),
+        // Las cercanas llevan «barrio» delante: «Colombia» o «Boston» son
+        // barrios de Barranquilla, y sin la palabra el agente decía «En Colombia».
+        [f._cercaDe && f.barrio ? 'barrio ' + f.barrio : f.barrio, f.ciudad].filter(Boolean).join(', '),
         f.habitaciones ? f.habitaciones + ' hab' : null,
         f.banos ? f.banos + ' baños' : null,
         // El área viene de Domus (la web no la daba fiable). Para un local es lo
@@ -344,12 +409,14 @@ export async function propiedadesParaPrompt(userId, clientId, pistas = {}) {
         esArriendo && f.administracion ? 'admón. ' + plata(f.administracion) + ' (por confirmar)' : null,
         // Para que el agente sepa de cuáles PUEDE ofrecer fotos y de cuáles no.
         f.fotos?.length ? 'con fotos' : null,
+        // Las de barrios vecinos, marcadas: no están en el barrio pedido.
+        f._cercaDe ? 'CERCA de ' + f._cercaDe + ' (otro barrio)' : null,
       ].filter(Boolean).join(' · ');
     });
     const tamanoPedido = filtroArea ? (pistas.metraje.min && pistas.metraje.max
       ? `entre ${pistas.metraje.min} y ${pistas.metraje.max} m²`
       : pistas.metraje.min ? `de ${pistas.metraje.min} m² o más` : `de hasta ${pistas.metraje.max} m²`) : null;
-    return { lineas, total: lineas.length, ampliado, barrioPedido: pistas.barrio || null, zona: zona?.zona || null,
+    return { lineas, total: lineas.length, ampliado, cercanas: cercanas.length, enElBarrio: (filas || []).length - cercanas.length, barrioPedido: pistas.barrio || null, zona: zona?.zona || null,
       otroTamano, tamanoPedido };
   } catch { return { lineas: [], total: 0 }; }
 }
@@ -495,7 +562,12 @@ export async function productosParaPrompt(userId, clientId, pistas = {}) {
 export async function catalogoParaPrompt(userId, clientId, pistasInmueble, mensajesDelContacto) {
   let productos = false;
   try { productos = await tieneProductos(userId, clientId); } catch { productos = false; }
-  if (!productos) return propiedadesParaPrompt(userId, clientId, pistasInmueble);
+  if (!productos) {
+    // «¿Algo cerca?» en lo último que escribió: amplía a barrios vecinos aunque
+    // en el pedido haya varias opciones.
+    const recientes = (mensajesDelContacto || []).filter(m => m?.role === 'user').slice(-3).map(m => String(m.content || ''));
+    return propiedadesParaPrompt(userId, clientId, { ...(pistasInmueble || {}), cercanos: pideCercanos(recientes) });
+  }
   const pistas = await pistasDeProductos(userId, clientId, mensajesDelContacto).catch(() => ({}));
   return productosParaPrompt(userId, clientId, pistas);
 }
@@ -1457,7 +1529,11 @@ ${propiedades.lineas.join('\n')}
 
 Sobre esta lista:${propiedades.otroTamano ? `
 - OJO: del tamaño que pidió (${propiedades.tamanoPedido}) no hay NADA. Estas son de otros tamaños: fíjate en los m² de cada una. Dilo antes de enseñarlas —"de ese tamaño no tengo ahora mismo, pero tengo estas"— y no las presentes como si fueran del tamaño pedido` : ''}${propiedades.ampliado ? `
-- OJO: en ${propiedades.zona ? 'la zona ' + propiedades.zona : propiedades.barrioPedido} no hay NADA que encaje. Estas son de OTRAS zonas de la misma ciudad. Dilo antes de enseñarlas —"en ${propiedades.barrioPedido} no tengo nada ahora mismo, pero sí en otras zonas"— y no las presentes como si fueran de ahí` : ''}
+- OJO: en ${propiedades.zona ? 'la zona ' + propiedades.zona : propiedades.barrioPedido} no hay NADA que encaje. Estas son de OTRAS zonas de la misma ciudad. Dilo antes de enseñarlas —"en ${propiedades.barrioPedido} no tengo nada ahora mismo, pero sí en otras zonas"— y no las presentes como si fueran de ahí` : ''}${propiedades.cercanas ? `
+- Las marcadas «CERCA de ${propiedades.barrioPedido}» NO están en ${propiedades.barrioPedido}: están en barrios vecinos, a menos de ${RADIO_CERCANOS_KM} km. Ofrécelas diciendo el barrio de cada una —"en ${propiedades.barrioPedido} tengo esta; muy cerca, en el barrio <barrio>, tengo estas"— y no digas que son de ${propiedades.barrioPedido}. Di siempre «el barrio <nombre>»: hay barrios que se llaman como un país o una ciudad (Colombia, Boston). No des distancias ni direcciones exactas
+- Sigue siendo como mucho tres opciones en total por mensaje, sumando las del barrio pedido y las cercanas
+- Si hay de estas, NO pases la conversación a un asesor para buscar en barrios cercanos: ya las tienes aquí${propiedades.enElBarrio === 0 ? `
+- OJO: en ${propiedades.barrioPedido} NO hay ninguna. Empieza diciéndolo —"en ${propiedades.barrioPedido} no tengo ahora mismo, pero muy cerca sí"— y no digas que tienes opciones en ${propiedades.barrioPedido}` : ''}` : ''}
 - Es lo unico que puedes ofrecer. Si te preguntan por algo que no esta aqui, no lo inventes: dilo y ofrece pasar la conversacion a un asesor
 - Menciona como mucho tres opciones por mensaje y pregunta cual le interesa
 - Cada opcion va en SU PROPIA LINEA, no seguidas dentro de un parrafo. Una linea de presentacion, las opciones debajo separadas por salto de linea, y la pregunta al final. Asi se lee de un vistazo en el movil

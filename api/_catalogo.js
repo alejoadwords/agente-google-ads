@@ -381,6 +381,18 @@ const fechaDomus = (t) => {
   return m ? new Date(m[1] + 'T' + m[2] + '-05:00').toISOString() : null;
 };
 
+// Una coordenada de Domus: número dentro de rango y distinta de 0 (Domus pone
+// 0 cuando no la tiene), o null.
+function coordenada(v, min, max) {
+  const n = Number(v);
+  return Number.isFinite(n) && n !== 0 && n >= min && n <= max ? n : null;
+}
+// La zona de Domus («Zona Riomar»); «SIN ZONA» y vacío no son una zona.
+function zonaDomus(v) {
+  const z = String(v || '').trim();
+  return z && !/^sin zona$/i.test(z) ? z : null;
+}
+
 export function filaDeDomus(p, userId, clientId, fotos, ahora) {
   const operacion = OPERACION_DOMUS[String(p.biz || '').trim().toUpperCase()] || bonito(p.biz);
   const precios = {
@@ -400,6 +412,12 @@ export function filaDeDomus(p, userId, clientId, fotos, ahora) {
     precio: precioPrincipal(operacion, precios),
     ...precios,
     administracion: Number(p.administration) > 0 ? Number(p.administration) : null,
+    // Solo para calcular qué inmuebles quedan cerca de un barrio pedido
+    // (cercanosAlBarrio). NUNCA se le muestran al contacto, y la dirección
+    // exacta (p.address) no se guarda.
+    lat: coordenada(p.latitude, -90, 90),
+    lng: coordenada(p.longitude, -180, 180),
+    zona: zonaDomus(p.city_zone),
     fotos: fotos?.length ? fotos : null,
     url: null,
     modificado: fechaDomus(p.updated_at),

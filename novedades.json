@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-14-barrios-cercanos",
+      "fecha": "2026-10-14",
+      "tipo": "mejora",
+      "titulo": "El agente ofrece opciones en barrios cercanos",
+      "texto": "Si tu catálogo viene de Domus, el agente ahora sabe qué inmuebles quedan cerca del barrio que te piden. Cuando en ese barrio hay pocas opciones o ninguna, o la persona pregunta por algo cerca, le ofrece las de los barrios vecinos diciendo en qué barrio está cada una, en vez de pasarla a un asesor. La ubicación exacta solo se usa para calcular la cercanía: nunca se le muestra al cliente."
+    },
+    {
       "id": "2026-10-14-agente-horas-de-llamada",
       "fecha": "2026-10-14",
       "tipo": "mejora",
