@@ -23483,6 +23483,7 @@ function crmOpenAgentModal(agentId) {
     document.getElementById('cag-f-business').value = ag.business_ctx || '';
     document.getElementById('cag-f-escalate').value = ag.escalate_phrase || '';
     document.getElementById('cag-f-bienvenida').value = ag.bienvenida || '';
+    document.getElementById('cag-f-revela').checked = ag.revela_asistente === true;
     document.getElementById('cag-f-tone').value = ag.tone || 'informal';
     agFaqs = (ag.faqs || []).map(f => ({ ...f }));
     // Show channels section
@@ -23495,6 +23496,7 @@ function crmOpenAgentModal(agentId) {
     document.getElementById('cag-f-business').value = '';
     document.getElementById('cag-f-escalate').value = 'Claro, en un momento te comunico con un asesor. ¿Me das un segundo?';
     document.getElementById('cag-f-bienvenida').value = '';
+    document.getElementById('cag-f-revela').checked = false;
     document.getElementById('cag-f-tone').value = 'informal';
     const chSect = document.getElementById('ag-channels-section');
     if (chSect) chSect.style.display = 'none';
@@ -23798,6 +23800,7 @@ async function crmSaveAgent() {
     business_ctx: document.getElementById('cag-f-business').value.trim(),
     escalate_phrase: document.getElementById('cag-f-escalate').value.trim(),
     bienvenida: document.getElementById('cag-f-bienvenida').value.trim(),
+    revela_asistente: document.getElementById('cag-f-revela').checked,
     tone: document.getElementById('cag-f-tone').value,
     faqs: agFaqs.filter(f => f.q && f.a),
   };

@@ -84,7 +84,7 @@ export default async function handler(req) {
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
-    const { name, persona, business_ctx, faqs, capture_fields, tone, escalate_phrase, bienvenida } = body;
+    const { name, persona, business_ctx, faqs, capture_fields, tone, escalate_phrase, bienvenida, revela_asistente } = body;
     if (!name) return jsonResp({ error: 'El nombre es requerido' }, 400);
     const payload = {
       user_id: userId,
@@ -98,6 +98,9 @@ export default async function handler(req) {
       escalate_phrase: escalate_phrase?.trim() || 'Claro, en un momento te comunico con un asesor. ¿Me das un segundo?',
       // Saludo fijo opcional: vacío = lo redacta el modelo (ver bienvenidaQueToca).
       bienvenida: String(bienvenida || '').trim().slice(0, 1000) || null,
+      // Si puede decir que es un asistente digital cuando se lo preguntan. Apagado
+      // por defecto: así se comportaban todos los agentes antes de la opción.
+      revela_asistente: revela_asistente === true,
       is_active: true,
     };
     const res = await fetch(`${SUPABASE_URL}/rest/v1/chat_agents`, {
@@ -118,6 +121,7 @@ export default async function handler(req) {
     const update = { updated_at: new Date().toISOString() };
     for (const k of allowed) { if (fields[k] !== undefined) update[k] = fields[k]; }
     if (fields.bienvenida !== undefined) update.bienvenida = String(fields.bienvenida || '').trim().slice(0, 1000) || null;
+    if (fields.revela_asistente !== undefined) update.revela_asistente = fields.revela_asistente === true;
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/chat_agents?id=eq.${id}&user_id=eq.${userId}`,
       { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(update) }

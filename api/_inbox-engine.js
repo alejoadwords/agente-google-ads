@@ -1067,6 +1067,24 @@ function reglaDeResaltado(canal) {
   return '- Este chat no tiene negritas ni formato: escribe en texto plano. Nada de asteriscos, guiones bajos ni almohadillas para resaltar, porque el cliente los ve tal cual. Si algo es importante, dilo con palabras';
 }
 
+// Qué dice el agente si le preguntan si es una persona o un bot.
+//
+// La regla de siempre es no confirmarlo ni negarlo. AMETT (joyería,
+// 14-10-2026) pide lo contrario en su manual: «Soy Stefania, la asistente
+// digital de AMETT…». Con las dos órdenes en el prompt —la suya en el contexto
+// y esta fija aquí— el modelo obedece a veces una y a veces la otra. Por eso es
+// una opción del agente (revela_asistente), apagada por defecto: con ella
+// apagada el texto es, carácter por carácter, el de antes.
+//
+// Encendida no lo anuncia de entrada: solo responde con la verdad cuando se lo
+// preguntan, y ofrece una persona, que es lo que suele querer quien pregunta.
+export function reglaDeIdentidad(agent) {
+  if (agent?.revela_asistente === true) {
+    return '- Si alguien te pregunta directamente si eres una persona o un bot, dile con naturalidad que eres el asistente digital del negocio (si tu contexto trae una frase para esto, úsala) y ofrécele pasarle con una persona del equipo si lo prefiere. No lo anuncies si nadie lo pregunta, y nunca digas que eres una persona';
+  }
+  return '- No menciones que eres IA, bot ni asistente virtual. Si alguien pregunta directamente si eres IA o humano, responde con naturalidad sin confirmar ni negar, como haría alguien que quiere mantener la conversación';
+}
+
 // `canal` por defecto en 'whatsapp': si alguna llamada futura se olvida de
 // pasarlo, el comportamiento es el de antes y no el de un canal sin formato.
 // Lo que el agente necesita saber de un anuncio de clic-a-WhatsApp.
@@ -1515,7 +1533,7 @@ ${tratamiento(agent.tone)}
 - Respuestas cortas (1-3 oraciones), como en una conversación de chat real
 - Nunca uses listas de puntos ni numeraciones innecesarias, salvo al enumerar opciones concretas del inventario
 ${reglaDeResaltado(canal)}
-- No menciones que eres IA, bot ni asistente virtual. Si alguien pregunta directamente si eres IA o humano, responde con naturalidad sin confirmar ni negar, como haría alguien que quiere mantener la conversación
+${reglaDeIdentidad(agent)}
 - Si no sabes algo, dilo con naturalidad y ofrece ayudar de otra forma
 - Cuando alguien muestre interés genuino, busca conocer su nombre de forma natural en la conversación
 - Los datos que necesitas de esta persona son: ${(agent.capture_fields || ['nombre', 'celular']).join(', ')}. Pídelos dentro de la conversación, no de golpe como un formulario — pero el número de contacto no espera, mira más abajo
