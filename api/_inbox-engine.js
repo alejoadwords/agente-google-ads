@@ -10,6 +10,7 @@
 import { ensureCatalog, enqueueAutomations, pipelinePrincipal } from './_lead-intake.js';
 import { getPolicy } from './_channel-policy.js';
 import { asignarLead } from './_assign.js';
+import { grupoDe, aCualSeSuma, oportunidadesDe, oportunidadCerrada, laPrimera } from './_oportunidades.js';
 import { getRegla, bloqueDePrompt, extraerCalificacion, evaluar, aplicarVeredicto, resumenLegible, asesoresDelTablero } from './_qualify.js';
 import { estadoDeCupo, sumarUno, avisarDelCupo } from './_cupo-agente.js';
 import { pautaDeReferral } from './_lead-intake.js';
@@ -2148,12 +2149,56 @@ export async function upsertLeadFromConversation(userId, clientId, conv, capture
   if (pol.mode === 'on_contact' && !hasContact) return null;
 
   const channelTag = String(pol.tag || conv.channel || '').toLowerCase().slice(0, 30);
+  const telefono = captureData.celular || conv.contact_phone || telefonoDelCanal(conv.channel, conv.contact_id) || null;
+  const correo = captureData.email || conv.contact_email || null;
+
+  // ¿La persona ya es un lead? Antes cada conversación nueva creaba uno, y
+  // quien ya estaba en el tablero por la web aparecía dos veces sin enlace.
+  // Misma regla que los formularios (api/_oportunidades.js): si el canal tiene
+  // proceso, a la oportunidad de ese proceso o a una nueva enlazada; si no, a
+  // la abierta más reciente.
+  let yaExiste = null;
+  try {
+    const leer = (ruta) => fetch(`${SUPABASE_URL}/rest/v1${ruta}`, { headers: sb() }).then(r => (r.ok ? r.json() : []));
+    const suyas = await oportunidadesDe(leer, userId, clientId || null, { email: correo, phone: telefono });
+    if (suyas.length) {
+      const principal = pipelineId ? await pipelinePrincipal(userId, clientId || null) : null;
+      const suma = aCualSeSuma(suyas, { pipelineId, explicito: !!pipelineId, principalId: principal, cerrado: oportunidadCerrada });
+      if (suma) {
+        await fetch(`${SUPABASE_URL}/rest/v1/chat_conversations?id=eq.${conv.id}`, {
+          method: 'PATCH', headers: sb(),
+          body: JSON.stringify({
+            lead_id: suma.id,
+            contact_name: captureData.nombre || conv.contact_name || suma.name,
+            contact_phone: telefono || suma.phone,
+            contact_email: correo || suma.email,
+          }),
+        });
+        await fetch(`${SUPABASE_URL}/rest/v1/lead_activities`, {
+          method: 'POST', headers: sb(),
+          body: JSON.stringify({
+            lead_id: suma.id, user_id: userId, type: 'nota',
+            content: `Escribió por ${conv.channel}` + (captureData.interes ? `. Interés: ${captureData.interes}` : ''),
+            metadata: { conversation_id: conv.id, channel: conv.channel, sistema: true },
+          }),
+        });
+        // Volver a escribir es actividad: el lead no puede seguir saliendo como inactivo.
+        await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${suma.id}`, {
+          method: 'PATCH', headers: sb(), body: JSON.stringify({ updated_at: new Date().toISOString() }),
+        });
+        return suma.id;
+      }
+      yaExiste = laPrimera(suyas);
+    }
+  } catch (e) { console.error('[inbox] buscar oportunidades:', e?.message); }
+
   const leadPayload = {
     user_id: userId,
     client_id: clientId || null,
-    name: captureData.nombre || conv.contact_name || `Contacto ${conv.channel}`,
-    phone: captureData.celular || conv.contact_phone || telefonoDelCanal(conv.channel, conv.contact_id) || null,
-    email: captureData.email || conv.contact_email || null,
+    name: captureData.nombre || conv.contact_name || (yaExiste && yaExiste.name) || `Contacto ${conv.channel}`,
+    phone: telefono || (yaExiste && yaExiste.phone) || null,
+    email: correo || (yaExiste && yaExiste.email) || null,
+    ...(yaExiste ? { contacto_id: grupoDe(yaExiste) } : {}),
     stage: pol.stage || 'nuevo',
     stage_position: Date.now(),
     // Sin pipeline el lead no se pinta en ninguna columna del tablero, que

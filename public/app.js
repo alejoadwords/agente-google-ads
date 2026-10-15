@@ -22176,6 +22176,9 @@ function crmNombreResponsable(id) {
 // Aviso de duplicado: quién es, dónde está y tres salidas. Fusionar por nuestra
 // cuenta sería peor — dos personas pueden compartir el teléfono de la oficina.
 function crmAvisoDuplicado(dup, payload, clientId) {
+  // En OTRO proceso no es un duplicado: es otra oportunidad de la misma
+  // persona (15-10-2026). Se ofrece abrirla aquí, enlazada a la que ya tiene.
+  const otro = !!dup.otro_proceso;
   document.getElementById('dup-overlay')?.remove();
   const ov = document.createElement('div');
   ov.id = 'dup-overlay';
@@ -22184,7 +22187,7 @@ function crmAvisoDuplicado(dup, payload, clientId) {
   ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
   ov.innerHTML = '<div class="auto-modal" style="max-width:460px">' +
     '<div class="auto-modal-head">' +
-      '<div><div style="font-size:var(--fs-md);font-weight:800">Ya tienes a esta persona</div>' +
+      '<div><div style="font-size:var(--fs-md);font-weight:800">' + (otro ? 'Esta persona ya está en ' + esc(dup.proceso || 'otro proceso') : 'Ya tienes a esta persona') + '</div>' +
       '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Coincide el correo o el teléfono</div></div>' +
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button>' +
     '</div>' +
@@ -22196,21 +22199,26 @@ function crmAvisoDuplicado(dup, payload, clientId) {
         '</div>' +
       '</div>' +
       '<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:14px">' +
-        'Si es la misma persona, ábrela y registra ahí lo nuevo: así queda toda su historia junta. ' +
-        'Si de verdad son dos —dos hermanos con el mismo teléfono de casa, por ejemplo— créalo igual.' +
+        (otro
+          ? 'Puedes abrirle una oportunidad en este proceso: queda enlazada a la que ya tiene, con los mismos datos de contacto, y cada una sigue su camino.'
+          : 'Si es la misma persona, ábrela y registra ahí lo nuevo: así queda toda su historia junta. ' +
+            'Si de verdad son dos —dos hermanos con el mismo teléfono de casa, por ejemplo— créalo igual.') +
       '</div>' +
     '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border);flex-wrap:wrap">' +
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Seguir editando</button>' +
-      '<button class="btn-sec sm" id="dup-crear">Crear igual</button>' +
-      '<button class="btn-pri sm" id="dup-abrir">Abrir el que existe</button>' +
+      (otro
+        ? '<button class="btn-sec sm" id="dup-abrir">Ver la que tiene</button>' +
+          '<button class="btn-pri sm" id="dup-crear">Abrirle una oportunidad aquí</button>'
+        : '<button class="btn-sec sm" id="dup-crear">Crear igual</button>' +
+          '<button class="btn-pri sm" id="dup-abrir">Abrir el que existe</button>') +
     '</div></div>';
   document.body.appendChild(ov);
 
   document.getElementById('dup-abrir').onclick = () => {
     ov.remove();
     crmCloseModal();
-    crmOpenDetail(dup.id);
+    crmIrALeadODecirlo(dup.id);
   };
   document.getElementById('dup-crear').onclick = async () => {
     ov.remove();
@@ -22219,16 +22227,16 @@ function crmAvisoDuplicado(dup, payload, clientId) {
     try {
       const qs = clientId ? '?client_id=' + encodeURIComponent(clientId) : '';
       const res = await fetchAuth('/api/leads' + qs, {
-        method: 'POST', body: JSON.stringify({ ...payload, forzar: true }),
+        method: 'POST', body: JSON.stringify(otro ? { ...payload, oportunidad_de: dup.id } : { ...payload, forzar: true }),
       });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
       if (data.lead) crmLeads.push(data.lead);
       crmCloseModal();
       crmRender();
-      showToast('Lead creado', 'success');
-    } catch {
-      showToast('No se pudo crear el lead', 'error');
+      showToast(otro ? 'Oportunidad abierta y enlazada a la que ya tenía' : 'Lead creado', 'success');
+    } catch (e) {
+      showToast('No se pudo crear: ' + (e.message || 'error'), 'error');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
     }
@@ -22333,6 +22341,7 @@ async function crmSaveLead() {
       if (idx >= 0) crmLeads[idx] = data.lead;
       leadGuardado = data.lead;
       crmAvisarTagsIgnoradas(data.tags_ignoradas);
+      crmAvisarContactoSincronizado(data);
     } else {
       const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
       const res = await fetchAuth(`/api/leads${qs}`, {
@@ -22363,6 +22372,7 @@ async function crmSaveLead() {
       crmLeads.unshift(data.lead);
       leadGuardado = data.lead;
       crmAvisarTagsIgnoradas(data.tags_ignoradas);
+      crmAvisarContactoSincronizado(data);
       track('crm_lead_created', { source: data.lead.source || 'manual' });
       // log creation activity
       fetchAuth('/api/lead-activities', {
@@ -45085,6 +45095,7 @@ async function lfAbrir(lead) {
   _lfAutosHtml = '';
   _lfCampHtml = '';
   _lfNpsHtml = '';
+  _lfOpsHtml = '';
   if (crmView !== 'lead') lfVistaAnterior = crmView;
   crmSetView('lead');
   lfPintar();                                   // se pinta con lo que ya hay
@@ -45225,6 +45236,7 @@ async function lfGuardarCampo(campo, crudo) {
       crmDetailLead = d.lead;
       lfQuienRefrescar();
     }
+    crmAvisarContactoSincronizado(d, campo);
   } catch (e) {
     lead[campo] = antes;
     lfQuienRefrescar();
@@ -45453,6 +45465,10 @@ function lfQuienEs(l) {
           '</select>') +
     '</div>' +
 
+    // Sus otras oportunidades: la misma persona en otro proceso (15-10-2026).
+    '<div class="lf-caja"><div class="lf-tit">Oportunidades de esta persona</div>' +
+      '<div id="lf-ops">' + (_lfOpsHtml || '<div class="lf-vacio">Cargando…</div>') + '</div></div>' +
+
     // De dónde vino. Solo si hay algo: una caja vacía ocupa sitio y no dice nada.
     (pagina || campana
       ? '<div class="lf-caja"><div class="lf-tit">De dónde vino</div>' +
@@ -45644,6 +45660,7 @@ async function lfGuardarActividad() {
 // clic de pestaña o de filtro: si estas dos cajas volvieran a nacer con un
 // «Cargando…», se quedarían así para siempre, porque nadie vuelve a pedirlo.
 let _lfPropsHtml = '';
+let _lfOpsHtml = '';
 let _lfConvsHtml = '';
 let _lfAutosHtml = '';
 let _lfCampHtml = '';
@@ -45778,6 +45795,109 @@ async function lfSugerir(btn) {
   }
 }
 
+// ── Varias oportunidades de una misma persona ───────────────────────────────
+// Cada lead del tablero es una oportunidad dentro de un proceso, y las de la
+// misma persona quedan enlazadas (api/_oportunidades.js). En Certain: quien
+// vende su apartamento por Venta y busca otro en Arriendo (15-10-2026).
+let _lfOportunidades = [];
+
+async function lfCargarOportunidades(leadId) {
+  try {
+    const r = await fetchAuth('/api/leads?oportunidades_de=' + encodeURIComponent(leadId));
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    if (lfLead && lfLead.id !== leadId) return;
+    _lfOportunidades = d.oportunidades || [];
+    const otras = _lfOportunidades.filter(o => !o.actual);
+    const enUso = new Set(_lfOportunidades.map(o => o.pipeline_id));
+    const libres = (crmPipelines || []).filter(p => !enUso.has(p.id));
+    lfGuardarCaja(leadId, 'lf-ops',
+      (otras.length
+        ? otras.map(o =>
+            '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">' +
+              '<div style="flex:1;min-width:0">' +
+                '<div style="font-size:13px;font-weight:700">' + esc(o.proceso || 'Sin proceso') + '</div>' +
+                '<div style="font-size:11.5px;color:var(--muted)">' + esc(o.etapa || o.stage || '') +
+                  ' · ' + esc(o.assigned_name || 'sin responsable') + '</div>' +
+              '</div>' +
+              (o.id
+                ? '<button class="btn-sec sm" onclick="crmIrALeadODecirlo(\'' + esc(o.id) + '\')">Abrir</button>'
+                : '<span style="font-size:11px;color:var(--muted2)" title="La lleva otra persona del equipo">No es tuya</span>') +
+            '</div>').join('')
+        : '<div class="lf-vacio">Solo está en este proceso.</div>') +
+      (libres.length
+        ? '<button class="btn-ghost sm" style="margin-top:8px" onclick="lfNuevaOportunidad()">' + icn('plus', 12) + ' Abrir oportunidad en otro proceso</button>'
+        : ''));
+  } catch (e) {
+    lfGuardarCaja(leadId, 'lf-ops', '<div class="lf-vacio" style="color:var(--danger)">No se pudieron traer sus otras oportunidades: ' + esc(e.message || 'error') + '</div>');
+  }
+}
+
+function lfNuevaOportunidad() {
+  if (!lfLead) return;
+  const enUso = new Set(_lfOportunidades.map(o => o.pipeline_id));
+  const libres = (crmPipelines || []).filter(p => !enUso.has(p.id));
+  if (!libres.length) { showToast('Esta persona ya tiene una oportunidad en cada proceso', 'info'); return; }
+  document.getElementById('op-nueva')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'op-nueva';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:440px">' +
+    '<div class="auto-modal-head"><div><div style="font-size:var(--fs-md);font-weight:800">Abrir oportunidad en otro proceso</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' + esc(lfLead.name || '') + ' · con sus mismos datos de contacto</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button></div>' +
+    '<div class="auto-modal-body">' +
+      '<div class="auto-label" style="margin-bottom:8px">¿En qué proceso?</div>' +
+      libres.map((p, i) =>
+        '<label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px">' +
+          '<input type="radio" name="op-proceso" value="' + esc(p.id) + '"' + (i === 0 ? ' checked' : '') + '>' +
+          '<span style="font-weight:600">' + esc(p.name) + '</span></label>').join('') +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5">Entra en la primera etapa' +
+        (crmSoyMiembro ? ', a tu nombre.' : ', sin responsable: asígnala desde su ficha.') + '</div>' +
+      '<div id="op-msg" style="font-size:12px;color:var(--danger);margin-top:8px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="op-btn" onclick="lfCrearOportunidad()">Abrir oportunidad</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+}
+
+async function lfCrearOportunidad() {
+  const pipelineId = document.querySelector('input[name="op-proceso"]:checked')?.value;
+  const btn = document.getElementById('op-btn');
+  const msg = document.getElementById('op-msg');
+  if (!pipelineId || !lfLead) return;
+  const origen = lfLead;
+  btn.disabled = true; btn.textContent = 'Abriendo…';
+  try {
+    const qs = origen.client_id ? '?client_id=' + encodeURIComponent(origen.client_id) : '';
+    const r = await fetchAuth('/api/leads' + qs, {
+      method: 'POST',
+      body: JSON.stringify({ oportunidad_de: origen.id, pipeline_id: pipelineId, stage: 'nuevo', source: origen.source || 'manual' }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    document.getElementById('op-nueva')?.remove();
+    const p = (crmPipelines || []).find(x => x.id === pipelineId);
+    showToast('Oportunidad abierta en ' + (p ? p.name : 'el otro proceso'), 'success');
+    lfCargarOportunidades(origen.id);
+  } catch (e) {
+    if (msg) msg.textContent = 'No se pudo abrir: ' + (e.message || 'error');
+    btn.disabled = false; btn.textContent = 'Abrir oportunidad';
+  }
+}
+
+// Corregir el contacto en una oportunidad lo corrige en las demás: se dice,
+// para que nadie se sorprenda de ver el cambio en el otro tablero.
+function crmAvisarContactoSincronizado(d, campo) {
+  if (!d || !d.otras_oportunidades_actualizadas) return;
+  if (campo && !['name', 'email', 'phone', 'company'].includes(campo)) return;
+  const n = d.otras_oportunidades_actualizadas;
+  showToast('También se actualizó en ' + (n === 1 ? 'su otra oportunidad' : 'sus otras ' + n + ' oportunidades'), 'info');
+}
+
 /**
  * Las propuestas de este lead. La lista completa y el editor ya viven en el
  * modal de propuestas: aquí solo se ve en qué van, que es lo que se pregunta
@@ -45826,6 +45946,7 @@ function lfGuardarCaja(leadId, id, html) {
   else if (id === 'lf-autos') _lfAutosHtml = html;
   else if (id === 'lf-camp') _lfCampHtml = html;
   else if (id === 'lf-nps') _lfNpsHtml = html;
+  else if (id === 'lf-ops') _lfOpsHtml = html;
   else _lfConvsHtml = html;
   const caja = document.getElementById(id);
   if (caja) caja.innerHTML = html;
@@ -46059,6 +46180,7 @@ function lfHace(iso) {
       lfCargarAutomatizaciones(lfLead.id);
       lfCargarCampanas(lfLead.id);
       lfCargarNps(lfLead.id);
+      lfCargarOportunidades(lfLead.id);
     }
   };
 })();

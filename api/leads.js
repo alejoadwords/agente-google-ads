@@ -3,6 +3,7 @@ export const config = { runtime: 'edge' };
 import { enviarPushA } from './_push.js';
 import { soloSusLeads, estaSuspendido } from './_perfiles.js';
 import { traerTodo } from './_paginado.js';
+import { CAMPOS_DE_CONTACTO, grupoDe, filtroDelGrupo, oportunidadesDe, esDelProceso } from './_oportunidades.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 
 // Cuántos contactos puede traer el tablero de una vez. Es holgado para
@@ -272,6 +273,48 @@ export default async function handler(req) {
 
   const url = new URL(req.url);
   const clientId = clienteDelMiembro || url.searchParams.get('client_id') || null;
+
+  // GET ?oportunidades_de=<id> — las oportunidades de la misma persona en los
+  // procesos de su cliente, para la caja de la ficha. Quien solo ve lo suyo
+  // sabe que existe la otra —proceso, etapa, responsable— pero no la abre: es
+  // la misma regla que el aviso de «ya existe».
+  if (req.method === 'GET' && url.searchParams.get('oportunidades_de')) {
+    const id = url.searchParams.get('oportunidades_de');
+    const base = (await fetch(
+      `${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}&select=id,contacto_id,client_id&limit=1`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []))?.[0];
+    if (!base) return jsonResp({ error: 'Lead no encontrado' }, 404);
+    const grupo = grupoDe(base);
+    const filas = await fetch(
+      `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}&${filtroDelGrupo(grupo)}&deleted_at=is.null` +
+      `&select=id,stage,pipeline_id,assigned_to,assigned_name,value,closed_at,created_at&order=created_at.asc`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (!filas) return jsonResp({ error: 'No se pudieron leer sus otras oportunidades.' }, 502);
+    const ids = [...new Set(filas.map(f => f.pipeline_id).filter(Boolean))];
+    const pipes = ids.length ? await fetch(
+      `${SUPABASE_URL}/rest/v1/pipelines?id=in.(${ids.map(encodeURIComponent).join(',')})&select=id,name`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []) : [];
+    const nombre = Object.fromEntries((pipes || []).map(p => [p.id, p.name]));
+    // El nombre de cada etapa: la ficha solo tiene las del proceso que se mira.
+    const etapas = ids.length ? await fetch(
+      `${SUPABASE_URL}/rest/v1/pipeline_stages?pipeline_id=in.(${ids.map(encodeURIComponent).join(',')})&select=pipeline_id,key,label`,
+      { headers: sbHeaders() }
+    ).then(r => (r.ok ? r.json() : [])).catch(() => []) : [];
+    const etiqueta = (pid, key) => ((etapas || []).find(e => e.pipeline_id === pid && e.key === key) || {}).label || key;
+    return jsonResp({
+      oportunidades: filas.map(f => ({
+        // Sin id si no la puede abrir: ver que existe sí, entrar no.
+        id: (!soloLosMios || f.assigned_to === actorId) ? f.id : null,
+        actual: f.id === id,
+        pipeline_id: f.pipeline_id, proceso: nombre[f.pipeline_id] || null,
+        stage: f.stage, etapa: etiqueta(f.pipeline_id, f.stage), assigned_name: f.assigned_name || null,
+        value: f.value, cerrada: !!f.closed_at, created_at: f.created_at,
+      })),
+    });
+  }
 
   // Build base filter: user_id + optional client_id + not deleted
   const scopeFilter = clientId
@@ -722,6 +765,17 @@ export default async function handler(req) {
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return jsonResp({ error: 'Body inválido' }, 400); }
+    // Abrir una oportunidad para alguien que ya está en otro proceso: los datos
+    // de contacto salen de esa oportunidad y la nueva queda enlazada a ella.
+    let origen = null;
+    if (body.oportunidad_de) {
+      origen = (await fetch(
+        `${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(body.oportunidad_de)}&user_id=eq.${encodeURIComponent(userId)}&deleted_at=is.null&select=*&limit=1`,
+        { headers: sbHeaders() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []))?.[0] || null;
+      if (!origen) return jsonResp({ error: 'No se encontró la oportunidad de esa persona.' }, 404);
+      for (const k of CAMPOS_DE_CONTACTO) if (!body[k] && origen[k]) body[k] = origen[k];
+    }
     const { name, email, phone, company, stage, notes, source, tags, custom_fields } = body;
     if (!name) return jsonResp({ error: 'El nombre es requerido' }, 400);
 
@@ -821,43 +875,44 @@ export default async function handler(req) {
     // miraba nada. La misma persona que llama dos veces acababa como dos fichas
     // en el tablero, cada una con su historia a medias. Aquí no se fusiona —eso
     // sería decidir por quien escribe— se avisa y se deja elegir.
-    if (!body.forzar && (payload.email || payload.phone)) {
-      const alcance = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
-      let ya = null;
-      if (payload.email) {
-        ya = await fetch(
-          `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}${alcance}` +
-          `&email=eq.${encodeURIComponent(payload.email)}&deleted_at=is.null&select=id,name,stage,assigned_name&limit=1`,
-          { headers: sbHeaders() }
-        ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
-      }
-      if (!ya && payload.phone) {
-        // Por los últimos 10 dígitos: el mismo número se escribe con +57, con
-        // espacios o sin nada, y una comparación literal no encontraría nada.
-        const digitos = String(payload.phone).replace(/\D/g, '');
-        if (digitos.length >= 7) {
-          const cola = digitos.slice(-10);
-          const candidatos = await fetch(
-            `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}${alcance}` +
-            `&phone=not.is.null&deleted_at=is.null&select=id,name,stage,assigned_name,phone&order=created_at.desc&limit=500`,
-            { headers: sbHeaders() }
-          ).then(r => (r.ok ? r.json() : [])).catch(() => []);
-          ya = (candidatos || []).find(l => String(l.phone).replace(/\D/g, '').endsWith(cola)) || null;
+    //
+    // Desde el 15-10-2026 mira también el PROCESO: si la persona ya está en este
+    // mismo proceso es un duplicado de verdad; si está en otro, lo que se ofrece
+    // es abrirle una oportunidad aquí enlazada a la que ya tiene.
+    const pipeline = body.pipeline_id || await pipelinePrincipal(userId, clientId);
+    if (pipeline) payload.pipeline_id = pipeline;
+    const principalId = await pipelinePrincipal(userId, clientId);
+    if (origen) {
+      // Ya tiene una en ese proceso: abrir otra sería un duplicado.
+      const grupo = grupoDe(origen);
+      const delGrupo = await fetch(
+        `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}&${filtroDelGrupo(grupo)}&deleted_at=is.null&select=id,name,stage,assigned_name,pipeline_id`,
+        { headers: sbHeaders() }
+      ).then(r => (r.ok ? r.json() : [])).catch(() => []);
+      const ahi = (delGrupo || []).find(l => esDelProceso(l, pipeline, principalId));
+      if (ahi) return jsonResp({ error: 'Esta persona ya tiene una oportunidad en ese proceso.', ya_en_proceso: { id: ahi.id, stage: ahi.stage, assigned_name: ahi.assigned_name || null } }, 409);
+      payload.contacto_id = grupo;
+    } else if (!body.forzar && (payload.email || payload.phone)) {
+      const leer = (ruta) => fetch(`${SUPABASE_URL}/rest/v1${ruta}`, { headers: sbHeaders() }).then(r => (r.ok ? r.json() : []));
+      const suyas = await oportunidadesDe(leer, userId, clientId, { email: payload.email, phone: payload.phone }).catch(() => []);
+      if (suyas.length) {
+        const aqui = suyas.find(l => esDelProceso(l, pipeline, principalId));
+        const ya = aqui || suyas[0];
+        let proceso = null;
+        if (!aqui && ya.pipeline_id) {
+          proceso = (await fetch(`${SUPABASE_URL}/rest/v1/pipelines?id=eq.${encodeURIComponent(ya.pipeline_id)}&select=name&limit=1`, { headers: sbHeaders() })
+            .then(r => (r.ok ? r.json() : [])).catch(() => []))?.[0]?.name || null;
         }
-      }
-      if (ya) {
         return jsonResp({
           duplicado: {
             id: ya.id, name: ya.name, stage: ya.stage,
             assigned_name: ya.assigned_name || null,
+            // En otro proceso: no es un duplicado, es otra oportunidad posible.
+            ...(aqui ? {} : { otro_proceso: true, proceso }),
           },
         }, 409);
       }
     }
-
-    // El lead cae en el pipeline que pida el cliente o, si no, en el principal
-    const pipeline = body.pipeline_id || await pipelinePrincipal(userId, clientId);
-    if (pipeline) payload.pipeline_id = pipeline;
     const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
       method: 'POST',
       headers: sbHeaders(),
@@ -1045,6 +1100,24 @@ export default async function handler(req) {
       }
     }
 
+    // Los datos de contacto son de la PERSONA: corregir el teléfono en su
+    // oportunidad de Venta lo corrige también en la de Arriendo (decisión de
+    // Alejandro, 15-10-2026). Etapa, valor, responsable y notas son de cada una.
+    let sincronizadas = 0;
+    const deContacto = {};
+    for (const k of CAMPOS_DE_CONTACTO) if (update[k] !== undefined) deContacto[k] = update[k];
+    if (rows[0] && Object.keys(deContacto).length) {
+      try {
+        const grupo = grupoDe(rows[0]);
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}&${filtroDelGrupo(grupo)}&id=neq.${encodeURIComponent(id)}&deleted_at=is.null`,
+          { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify({ ...deContacto, updated_at: update.updated_at }) }
+        );
+        if (r.ok) sincronizadas = ((await r.json().catch(() => [])) || []).length;
+        else console.error('[leads] no se sincronizó el contacto con sus otras oportunidades:', r.status);
+      } catch (e) { console.error('[leads] sincronizar contacto:', e.message); }
+    }
+
     // Trigger de automatizaciones: cambio de etapa real
     if (rows[0] && update.stage !== undefined && prevStage !== null && prevStage !== update.stage) {
       await enqueueAutomations(userId, rows[0], 'stage_changed', update.stage);
@@ -1054,7 +1127,7 @@ export default async function handler(req) {
       const added = (update.tags || []).filter(t => !prevTags.includes(t));
       if (added.length) await enqueueAutomations(userId, rows[0], 'tag_added', added);
     }
-    return jsonResp({ lead: rows[0], tags_ignoradas: tagsIgnoradas });
+    return jsonResp({ lead: rows[0], tags_ignoradas: tagsIgnoradas, ...(sincronizadas ? { otras_oportunidades_actualizadas: sincronizadas } : {}) });
   }
 
   // DELETE — soft delete

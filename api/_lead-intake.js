@@ -6,6 +6,7 @@
 // automatizaciones lead_created + tag_added (anti-bucle: una vez por lead).
 
 import { normPlataforma } from './_gclid.js';
+import { grupoDe, aCualSeSuma, oportunidadesDe, oportunidadCerrada, laPrimera } from './_oportunidades.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -274,27 +275,28 @@ export async function intakeLead(userId, clientId, data) {
   await ensureCatalog(userId, clientId, leadTags, autoTag);
 
   const scope = clientId ? `&client_id=eq.${clientId}` : '&client_id=is.null';
-  let lead = null;
-  if (data.email) {
-    const found = await sb(`/leads?user_id=eq.${encodeURIComponent(userId)}${scope}&email=eq.${encodeURIComponent(data.email)}&deleted_at=is.null&select=*&limit=1`);
-    lead = found?.[0] || null;
-  }
-  if (!lead && data.phone) {
-    const digits = String(data.phone).replace(/\D/g, '');
-    if (digits.length >= 7) {
-      // La base filtra por los dos últimos dígitos y aquí se compara el número
-      // entero. Antes se miraban solo los 500 leads más recientes: en una
-      // cuenta grande, quien volvía a escribir meses después entraba duplicado.
-      const cola = digits.slice(-2);
-      const found = [];
-      for (let offset = 0; offset < 20000; offset += 1000) {
-        const pagina = await sb(`/leads?user_id=eq.${encodeURIComponent(userId)}${scope}&deleted_at=is.null&phone=like.*${cola}&select=*&order=created_at.desc,id.asc&limit=1000&offset=${offset}`);
-        found.push(...(pagina || []));
-        if (!pagina || pagina.length < 1000) break;
-      }
-      lead = found.find(l => String(l.phone).replace(/\D/g, '').endsWith(digits.slice(-10))) || null;
-    }
-  }
+  // TODAS las oportunidades de la persona, no la primera que aparezca: una
+  // persona puede estar en Venta y en Arriendo a la vez (15-10-2026). Antes se
+  // fusionaba con cualquiera sin mirar el proceso, y quien ya estaba en Venta
+  // y llenaba el formulario de Arriendo nunca aparecía en Arriendo: quedaba
+  // como una nota escondida en su ficha de Venta.
+  const candidatos = new Map((await oportunidadesDe(
+    (ruta) => sb(ruta), userId, clientId, { email: data.email, phone: data.phone }
+  )).map(l => [l.id, l]));
+
+  // ¿A cuál se suma? Si la entrada dice su proceso, a la oportunidad de ESE
+  // proceso; si la persona no tiene ninguna ahí, se le abre una nueva enlazada
+  // a las demás. Si no lo dice, a la abierta más reciente, como siempre.
+  const explicito = !!data.pipelineId;
+  const destino = explicito ? await pipelineElegido(userId, clientId, data.pipelineId) : null;
+  const principal = candidatos.size && explicito ? await pipelinePrincipal(userId, clientId) : null;
+  let lead = aCualSeSuma([...candidatos.values()], {
+    pipelineId: destino, explicito, principalId: principal,
+    cerrado: oportunidadCerrada,
+  });
+  // La persona ya existe, pero no en este proceso: la nueva oportunidad lleva
+  // sus datos de contacto y queda enlazada al grupo.
+  const yaExiste = !lead && candidatos.size ? laPrimera([...candidatos.values()]) : null;
 
   const noteLine = data.note ? `📥 [${data.sourceLabel || 'Fuente externa'}] ` + String(data.note).slice(0, 600) : null;
 
@@ -303,11 +305,14 @@ export async function intakeLead(userId, clientId, data) {
     ? data.custom_fields : null;
 
   if (!lead) {
-    const pipeline = await pipelineElegido(userId, clientId, data.pipelineId);
+    const pipeline = destino || await pipelineElegido(userId, clientId, data.pipelineId);
     const rows = await sb('/leads', 'POST', {
       user_id: userId, client_id: clientId,
-      name: data.name || 'Lead sin nombre',
-      email: data.email || null, phone: data.phone || null, company: data.company || null,
+      name: data.name || (yaExiste && yaExiste.name) || 'Lead sin nombre',
+      email: data.email || (yaExiste && yaExiste.email) || null,
+      phone: data.phone || (yaExiste && yaExiste.phone) || null,
+      company: data.company || (yaExiste && yaExiste.company) || null,
+      ...(yaExiste ? { contacto_id: grupoDe(yaExiste) } : {}),
       value: data.value ? parseFloat(String(data.value).replace(/[^\d.]/g, '')) || null : null,
       stage: data.stage || 'nuevo',
       stage_position: Date.now(),
@@ -354,7 +359,7 @@ export async function intakeLead(userId, clientId, data) {
     } catch (e) { console.error('asignar en intake:', e); }
     await enqueueAutomations(userId, created, 'lead_created');
     if (leadTags.length) await enqueueAutomations(userId, created, 'tag_added', leadTags);
-    return { lead: created, created: true };
+    return { lead: created, created: true, otraOportunidadDe: yaExiste ? yaExiste.id : null };
   }
 
   const patch = { updated_at: new Date().toISOString() };

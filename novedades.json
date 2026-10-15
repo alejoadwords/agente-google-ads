@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-15-varias-oportunidades",
+      "fecha": "2026-10-15",
+      "tipo": "nuevo",
+      "titulo": "Una misma persona puede estar en varios procesos",
+      "texto": "Si alguien que ya está en un proceso —por ejemplo Venta— llega por un formulario o un canal de otro proceso —por ejemplo Arriendo—, ahora se le abre una oportunidad en Arriendo, repartida con las reglas de ese proceso, en vez de quedar como una nota en su ficha de Venta. Las dos quedan enlazadas: en la ficha verás «Oportunidades de esta persona» y podrás abrirle una en otro proceso con un clic. Si corriges su teléfono o su correo en una, se corrige en todas."
+    },
+    {
       "id": "2026-10-14-agente-asistente-digital",
       "fecha": "2026-10-14",
       "tipo": "nuevo",
