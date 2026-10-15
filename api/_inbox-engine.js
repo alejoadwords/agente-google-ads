@@ -788,9 +788,14 @@ export function presupuestoDelTexto(texto) {
   // De la última frase hacia atrás, por lo mismo: dentro de un mensaje puede
   // corregirse («hasta 3 millones, bueno, mejor hasta 5»).
   for (let i = frases.length - 1; i >= 0; i--) {
-    // Una frase que habla de habitaciones no habla de plata.
-    if (/habitacion|alcoba|cuarto|dormitorio|bano/.test(frases[i])) continue;
-    const v = aPlata(frases[i]);
+    // Las habitaciones y los baños no son plata, pero la frase sí puede
+    // traerla: «3 habitaciones, hasta 4 millones». Antes se descartaba la
+    // frase entera y el presupuesto se perdía: el agente de Certain ofreció
+    // un arriendo de $12.000.000 a quien pidió hasta 4 (14-10-2026). Se quita
+    // solo el trozo de las habitaciones y se lee el resto.
+    const sinCuartos = frases[i].replace(/\d{1,2}\s*(habitacion\w*|alcoba\w*|cuarto\w*|dormitorio\w*|hab\b|alc\b|bano\w*)/g, ' ');
+    if (!/\$|millon|millones|mil\b|presupuesto|pagar|canon|mensual|maximo|hasta/.test(sinCuartos)) continue;
+    const v = aPlata(sinCuartos);
     if (v) return v;
   }
   return null;

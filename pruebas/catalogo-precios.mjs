@@ -187,7 +187,13 @@ for (const [t, e] of [['yo creo que maximo 3 millones', 3000000],
                       // Un número que no habla de dinero no es un presupuesto.
                       ['busco 3 habitaciones', null],
                       ['el codigo 121513056', null],
-                      ['3 habitaciones y 2 baños', null]]) {
+                      ['3 habitaciones y 2 baños', null],
+                      // En la MISMA frase que las habitaciones (Certain, 14-10-2026):
+                      // se perdía y el agente ofreció un arriendo de $12.000.000.
+                      ['3 habitaciones, hasta 4 millones', 4000000],
+                      ['apartamento de 3 habitaciones por 2.5 millones', 2500000],
+                      ['entre 2 y 3 millones, 3 habitaciones', 3000000],
+                      ['presupuesto de 800 mil, 1 habitación', 800000]]) {
   ok(presupuestoDelTexto(t) === e, JSON.stringify(t) + ' → ' + e, presupuestoDelTexto(t));
 }
 
