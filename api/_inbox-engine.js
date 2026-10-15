@@ -1378,6 +1378,98 @@ function motivoFuera(reloj, fuera) {
   return 'a esa hora es la pausa del mediodía';
 }
 
+// ── La hora que PIDE la persona ─────────────────────────────────────────────
+//
+// «¿No me pueden llamar a las 11 am?» a las 10:38 de un jueves, y el agente
+// contestó «a esa hora es la pausa del mediodía» (Certain, 15-10-2026). Las 11
+// no estaban entre las opciones calculadas —quedaban a menos de una hora— y el
+// modelo concluyó que no se podía e inventó el motivo. Igual que el horario, la
+// decisión la toma el código: se lee la hora pedida, se comprueba contra las
+// franjas y al modelo le llega el veredicto.
+export function horaPedida(texto, reloj) {
+  if (!reloj?.franjas) return null;
+  const f = sinTildes(String(texto || ''));
+  const m = f.match(/\b(\d{1,2})(?::(\d{2}))?\s*(a\.?\s?m\.?|p\.?\s?m\.?|am\b|pm\b|de la manana|de la tarde|del mediodia)/)
+    || f.match(/\ba\s+las?\s+(\d{1,2})(?::(\d{2}))?\b/);
+  if (!m) return null;
+  const h = +m[1], mm = +(m[2] || 0);
+  if (h > 23 || mm > 59) return null;
+  const suf = (m[3] || '').replace(/[\s.]/g, '');
+  let t;
+  if (/tarde/.test(suf)) t = (h < 12 ? h + 12 : h) * 60 + mm;
+  else if (/manana/.test(suf)) t = (h === 12 ? 0 : h) * 60 + mm;
+  else if (/mediodia/.test(suf)) t = 12 * 60 + mm;
+  else t = minutosDe(h, mm, suf, null);
+  const DIAS_TXT = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+  let k = null;
+  if (/\bpasado manana\b/.test(f)) k = 2;
+  else if (/\bmanana\b/.test(f.replace(/\b(de|por|en) la manana\b/g, ''))) k = 1;
+  else if (/\bhoy\b/.test(f)) k = 0;
+  else {
+    const d = DIAS_TXT.findIndex(x => new RegExp('\\b' + x + 's?\\b').test(f));
+    if (d >= 0) k = (d - reloj.dia + 7) % 7;
+  }
+  const valeEn = (kk) => !reloj.festivo(kk) && (kk > 0 || t > reloj.min) &&
+    reloj.franjas.some(fr => fr.dias.has((reloj.dia + kk) % 7) && t >= fr.desde && t < fr.hasta);
+  // «No me pueden llamar a las 11?» —con o sin signo— es PEDIR las 11: el
+  // «no» es de cortesía. Lo que dice que NO puede es en primera persona: «a
+  // las 11 no puedo», «no estoy disponible». El modelo leía lo primero como
+  // lo segundo y respondía «entendido, ¿a qué hora entonces?».
+  const comoPregunta = /\bno me (pueden|podrian|puedes|podrias|podran|puede|podria)\b/.test(f);
+  const noPuede = !comoPregunta && /\b(no puedo|no podre|no podria|no estoy|no me queda|no me sirve|no me funciona|estoy ocupad\w*)\b/.test(f);
+  const extra = { comoPregunta, noPuede };
+  if (k !== null) {
+    if (k === 0 && t <= reloj.min && !/\bhoy\b/.test(f)) k = 7;   // «el jueves» dicho un jueves ya pasado: el siguiente
+    return { enDias: k, desde: t, valida: valeEn(k), conDia: true, ...extra };
+  }
+  // Sin día: el primero en que esa hora se puede (hoy si todavía no pasó).
+  for (let kk = 0; kk <= 14; kk++) if (valeEn(kk)) return { enDias: kk, desde: t, valida: true, conDia: false, ...extra };
+  return { enDias: 0, desde: t, valida: false, conDia: false, ...extra };
+}
+
+// El veredicto, en el texto que se le pasa al modelo.
+export function bloqueHoraPedida(reloj, hp) {
+  if (!hp) return '';
+  const cuando = cuandoEs(reloj, hp.enDias, hp.desde);
+  if (hp.noPuede) {
+    return `LA PERSONA DICE QUE NO PUEDE ${cuando.toUpperCase()}: ofrécele otras horas de la lista del horario, sin repetir esa.
+`;
+  }
+  if (hp.valida) {
+    return `LA PERSONA PIDIÓ QUE LE CONTACTEN ${cuando.toUpperCase()}: ESA HORA SÍ ESTÁ DENTRO DEL HORARIO DE ATENCIÓN.${hp.comoPregunta ? `
+- Aunque lo escribió con «no» («no me pueden llamar…»), es una PREGUNTA: está pidiendo que le llamen a esa hora. No lo tomes como que no puede` : ''}
+- Acéptala tal cual: «perfecto, te llamamos ${cuando}». No digas que a esa hora no se puede, ni que es la pausa, ni le ofrezcas otras horas
+`;
+  }
+  const motivo = motivoFuera(reloj, { enDias: hp.enDias, desde: hp.desde });
+  return `LA PERSONA PIDIÓ QUE LE CONTACTEN ${cuando.toUpperCase()}: ESA HORA NO ESTÁ DENTRO DEL HORARIO (${motivo}).
+- Díselo con ese motivo exacto y ofrécele las horas válidas de la lista del horario
+`;
+}
+
+// ¿La respuesta le niega la hora? Para el error contrario: rechazar una hora
+// que sí se puede.
+export function niegaLaHora(texto) {
+  return /\b(no (se )?(puede|podemos|atiend\w*|estamos|hay asesores|es posible)|pausa|ya cerramos|ya no estamos|todavia no (hemos abierto|abrimos)|no atendemos|fuera (del|de) (horario|nuestro horario))\b/.test(sinTildes(texto));
+}
+
+// ¿La respuesta confirma ESA hora? Busca la hora pedida escrita en la respuesta
+// («11:00 a. m.», «a las 11»), sin negación.
+export function aceptaLaHora(texto, reloj, hp) {
+  if (!hp) return false;
+  const h12 = (Math.floor(hp.desde / 60) % 12) || 12, mm = hp.desde % 60;
+  const t = sinTildes(texto);
+  const re = new RegExp('\\b' + h12 + (mm ? ':' + String(mm).padStart(2, '0') : '(:00)?') + '\\b');
+  return re.test(t) && !niegaLaHora(texto);
+}
+
+// Si aun así la niega, se acepta con un texto armado por el código.
+export function respuestaAceptaHora(reloj, hp, original = '', formal = false) {
+  const cuando = cuandoEs(reloj, hp.enDias, hp.desde);
+  const bloques = (String(original).match(/\[(CAPTURA|CALIFICACION):[^\n]*\]/g) || []).join('\n');
+  return (formal ? 'Perfecto, le llamamos ' : 'Perfecto, te llamamos ') + cuando + '.' + (bloques ? '\n' + bloques : '');
+}
+
 // La última red: si el agente insiste en una hora fuera del horario aun
 // después de corregirlo, NO se envía lo suyo. Sale este mensaje, armado por el
 // código con el motivo y dos horas válidas: así es imposible que una hora fuera
@@ -1618,7 +1710,7 @@ ${bloqueDeAhora(reservas?.zona, new Date(), [agent.business_ctx, faqs].filter(Bo
 - NO le preguntes si quiere vender o arrendar: ya lo contestó
 - Tampoco le digas que «mencionó» palabras que no escribió
 
-` : ''}DATOS CAPTURADOS HASTA AHORA:
+` : ''}${capturedData?._horaPedidaTexto || ''}DATOS CAPTURADOS HASTA AHORA:
 ${captured}
 
 Cuando detectes un dato nuevo en la conversación, incluye al final de tu respuesta (invisible para el usuario):
@@ -1849,7 +1941,9 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   // propósito para que el prompt se arme con los mismos argumentos que en la
   // conversación real.
   const propietario = operacionDelPropietario(todos);
-  const system = partesDelPrompt(agent, { ...capturado, _propietario: propietario }, regla, inventario, canal, null, reservas, null);
+  const relojPedido = relojDelNegocio(reservas?.zona, new Date(), contextoDeHorario(agent));
+  const hp = horaPedida(limpios[limpios.length - 1].content, relojPedido);
+  const system = partesDelPrompt(agent, { ...capturado, _propietario: propietario, _horaPedidaTexto: bloqueHoraPedida(relojPedido, hp) }, regla, inventario, canal, null, reservas, null);
 
   // El saludo fijo sale igual que en la conversación real: el probador es
   // donde el cliente lo ve por primera vez.
@@ -1935,6 +2029,13 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
       'Escríbelo otra vez con palabras normales y sin atribuirle cosas que no dijo. ' +
       'El contacto no vio nada: no te disculpes ni lo menciones.');
     if (sinEtiqueta && !etiquetaInterna(cleanForUser(sinEtiqueta), regla, deUsuario)) { bruto = sinEtiqueta; texto = cleanForUser(sinEtiqueta).trim(); }
+  }
+
+  if (hp?.valida && !hp.noPuede && (niegaLaHora(texto) || (hp.comoPregunta && !aceptaLaHora(texto, relojPedido, hp)))) {
+    const acepta = await reintento('Tu mensaje anterior NO se envió: le negabas la hora que pidió, y esa hora SÍ está dentro del horario (' +
+      cuandoEs(relojPedido, hp.enDias, hp.desde) + '). Escríbelo otra vez aceptándola tal cual. El contacto no vio nada: no te disculpes ni lo menciones.');
+    if (acepta && !niegaLaHora(cleanForUser(acepta)) && aceptaLaHora(cleanForUser(acepta), relojPedido, hp)) { bruto = acepta; texto = cleanForUser(acepta).trim(); }
+    else { bruto = respuestaAceptaHora(relojPedido, hp, bruto, agent.tone === 'formal'); texto = cleanForUser(bruto).trim(); }
   }
 
   const reloj = relojDelNegocio(reservas?.zona, new Date(), contextoDeHorario(agent));
@@ -2716,7 +2817,10 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // escribió en TODA la conversación (ver operacionDelPropietario).
   const textosSuyos = suyos.length ? suyos : hist.filter(m => m.role === 'user');
   const propietario = operacionDelPropietario(textosSuyos);
-  const system = partesDelPrompt(agent, { ...conocido, ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}), _propietario: propietario }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas);
+  // La hora que pide en ESTE mensaje, con su veredicto calculado (horaPedida).
+  const relojPedido = relojDelNegocio(reservas?.zona, new Date(), contextoDeHorario(agent));
+  const hp = horaPedida(textoMensaje, relojPedido);
+  const system = partesDelPrompt(agent, { ...conocido, ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}), _propietario: propietario, _horaPedidaTexto: bloqueHoraPedida(relojPedido, hp) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas);
   // «Escribiendo…» antes de pensar.
   //
   // El modelo contesta en medio segundo y eso delata al bot más que cualquier
@@ -2829,6 +2933,21 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     await registrarError({
       origen: 'inbox', donde: 'el agente usó una etiqueta interna del enrutado',
       error: new Error((arreglado ? 'corregido: ' : 'NO corregido: ') + interna),
+      usuario: connection.user_id,
+    }).catch(() => {});
+  }
+
+  if (!fija && hp?.valida && !hp.noPuede && (niegaLaHora(cleanForUser(reply)) || (hp.comoPregunta && !aceptaLaHora(cleanForUser(reply), relojPedido, hp)))) {
+    const acepta = await responderViendo(system, hist, [
+      { role: 'assistant', content: reply },
+      { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió: le negabas la hora que pidió, y esa hora SÍ está dentro del horario (' +
+        cuandoEs(relojPedido, hp.enDias, hp.desde) + '). Escríbelo otra vez aceptándola tal cual. El contacto no vio nada y no te ha corregido: no te disculpes ni lo menciones.' },
+    ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
+    const arreglado = acepta && !niegaLaHora(cleanForUser(acepta)) && aceptaLaHora(cleanForUser(acepta), relojPedido, hp);
+    reply = arreglado ? acepta : respuestaAceptaHora(relojPedido, hp, reply, agent.tone === 'formal');
+    await registrarError({
+      origen: 'inbox', donde: 'el agente negó una hora que sí estaba en el horario',
+      error: new Error((arreglado ? 'corregido: ' : 'mensaje seguro: ') + textoMensaje.slice(0, 120)),
       usuario: connection.user_id,
     }).catch(() => {});
   }

@@ -5,7 +5,7 @@
 // ofrece horas concretas y no puede confirmar una fuera del horario.
 
 import { readFileSync } from 'fs';
-import { horarioDelTexto, describirHorario, opcionesDeLlamada, horaFueraDeHorario, bloqueDeAhora, sinLlamarYo, respuestaSeguraDeHorario, relojDelNegocio } from '../api/_inbox-engine.js';
+import { horarioDelTexto, describirHorario, opcionesDeLlamada, horaFueraDeHorario, bloqueDeAhora, sinLlamarYo, respuestaSeguraDeHorario, relojDelNegocio, horaPedida, bloqueHoraPedida, niegaLaHora, respuestaAceptaHora, aceptaLaHora } from '../api/_inbox-engine.js';
 
 let mal = 0;
 const ok = (c, m, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c && extra !== undefined ? ' → ' + JSON.stringify(extra) : '')); if (!c) mal++; };
@@ -89,6 +89,34 @@ console.log('\nLa última red: si insiste, sale un mensaje seguro');
 }
 const eng3 = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
 ok((eng3.match(/respuestaSeguraDeHorario\(reloj, fuera, (bruto|reply)/g) || []).length === 2, 'la última red está en la conversación real y en el probador');
+
+console.log('\nLa hora que PIDE la persona (el error contrario: negar una hora válida)');
+{
+  // Jueves 15-10-2026 a las 10:38 a. m.: «¿no me pueden llamar a las 11 am?» y el agente dijo «pausa del mediodía».
+  const r1038 = relojDelNegocio('America/Bogota', new Date('2026-10-15T15:38:00Z'), CERTAIN);
+  const hp = horaPedida('no me pueden llamar a las 11 am', r1038);
+  ok(hp && hp.valida && hp.enDias === 0 && hp.desde === h(11), 'a las 10:38, «a las 11 am» → hoy 11:00, VÁLIDA', hp);
+  ok(/SÍ ESTÁ DENTRO DEL HORARIO/.test(bloqueHoraPedida(r1038, hp)) && /hoy a las 11:00 a\. m\./i.test(bloqueHoraPedida(r1038, hp)), 'el modelo recibe el veredicto: sí se puede');
+  ok(niegaLaHora('Los asesores no atienden a esa hora; es la pausa del mediodía. Las opciones que tengo son hoy a las 2:00 p. m.'), 'la respuesta de la captura cuenta como negarla');
+  ok(!niegaLaHora('Perfecto, te llamamos hoy a las 11:00 a. m.'), 'aceptarla no');
+  ok(/^Perfecto, te llamamos hoy a las 11:00 a\. m\./.test(respuestaAceptaHora(r1038, hp, '')), 'si insiste en negarla, se acepta con un texto armado por el código');
+  const r1120 = relojDelNegocio('America/Bogota', new Date('2026-10-15T16:20:00Z'), CERTAIN);
+  const hp2 = horaPedida('a las 11 am', r1120);
+  ok(hp2.valida && hp2.enDias === 1 && hp2.desde === h(11), 'a las 11:20, «a las 11 am» sin día → mañana a las 11 (hoy ya pasó)', hp2);
+  ok(!horaPedida('a las 12:30', r1038).valida, '«a las 12:30» → no (pausa)');
+  ok(!horaPedida('el sábado a las 10am', r1038).valida, '«el sábado a las 10» → no');
+  ok(horaPedida('mañana a las 3', r1038).valida, '«mañana a las 3» → sí (3 p. m.)');
+  ok(!horaPedida('a las 6 pm', r1038).valida, '«a las 6 pm» → no (después de cerrar)');
+  ok(horaPedida('mi presupuesto es de 3 millones', r1038) === null, 'sin hora, nada');
+  // «No me pueden llamar a las 11 am» es PEDIR las 11; «a las 11 no puedo» es que no puede.
+  ok(hp.comoPregunta && !hp.noPuede, '«no me pueden llamar a las 11» → es una petición, no un «no puedo»');
+  ok(/es una PREGUNTA/.test(bloqueHoraPedida(r1038, hp)), 'y el modelo recibe esa aclaración');
+  const np = horaPedida('a las 11 am no puedo, estoy en una reunión', r1038);
+  ok(np.noPuede && !np.comoPregunta, '«a las 11 no puedo» → no puede');
+  ok(/NO PUEDE/.test(bloqueHoraPedida(r1038, np)), 'y se le pide ofrecer otras');
+  ok(aceptaLaHora('Perfecto, te llamamos hoy a las 11:00 a. m.', r1038, hp), 'aceptar = nombrar las 11 sin negarlas');
+  ok(!aceptaLaHora('Entendido. ¿Te llamamos hoy a las 2:00 p. m.?', r1038, hp), 'ofrecer otra hora no es aceptarla');
+}
 
 console.log('\nCableado');
 const eng = readFileSync(new URL('../api/_inbox-engine.js', import.meta.url), 'utf8');
