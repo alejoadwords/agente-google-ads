@@ -50,6 +50,9 @@ ok(/sinAsignar: !asesor/.test(p), 'sin asesor en Palomma, el lead entra sin asig
 ok(/ev\.ts < enlace\.ultimo_ts/.test(p), 'un evento viejo que llega tarde no mueve nada');
 ok(/endsWith\(tel\)/.test(p) && /return \{ leadId: existente\.id, creado: false \}/.test(p), 'si ya existe en Acuarius (teléfono o correo), se enlaza y no se crea otro');
 ok(/nota_conversacion_id/.test(p), 'la conversación es UNA nota que se actualiza, no una por evento');
+ok(/citaAGoogle\(conexion, act\)/.test(p), 'la cita nueva se sube a Google Calendar si la cuenta lo tiene conectado');
+ok(/gcal_event_id=is\.null/.test(p) && /due_at=gt\./.test(p), 'las que quedaron sin subir (calendario conectado después) se suben solas, solo las futuras');
+ok(/palomma\.cita a Google Calendar/.test(p), 'un fallo de Google queda registrado y no tumba el evento');
 
 console.log(mal ? `\n${mal} fallo(s)` : '\nTodo en verde');
 process.exit(mal ? 1 : 0);

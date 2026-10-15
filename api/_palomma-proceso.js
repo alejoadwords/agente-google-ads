@@ -10,6 +10,7 @@
 import { embudoIgnorado, tableroDe, etapaDe, notaDeEstado, resumenDePerfil, telefonoDe } from './_palomma.js';
 import { intakeLead } from './_lead-intake.js';
 import { registrarError } from './_registro-errores.js';
+import { getGcalToken, gcalEventBody, gcalRequest } from './_gcal.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -66,6 +67,37 @@ async function mezclarCampos(lead, campos) {
   for (const [k, v] of Object.entries(campos)) if (v && cf[k] !== v) { cf[k] = v; cambia = true; }
   if (!cambia) return;
   await sb(`/leads?id=eq.${lead.id}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ custom_fields: cf, updated_at: new Date().toISOString() }) });
+}
+
+// ── La cita en Google Calendar ──────────────────────────────────────────────
+// Igual que una reunión creada en la Agenda (api/agenda.js): va al calendario
+// de la cuenta, si está conectado. Si no lo está, la cita queda en Acuarius y
+// subirCitasPendientes() la sube el día que se conecte. Un fallo de Google no
+// tumba el evento: la cita ya está guardada.
+const MARCA_CITA = 'agendada por Palomma';
+async function citaAGoogle(conexion, act) {
+  const conn = await getGcalToken(conexion.user_id).catch(() => null);
+  if (!conn?.token) return false;
+  try {
+    const ev = await gcalRequest(conn.token, 'POST', '', gcalEventBody(act, null, false), false);
+    if (ev?.id) await sb(`/activities?id=eq.${act.id}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ gcal_event_id: ev.id }) });
+    return !!ev?.id;
+  } catch (e) {
+    await registrarError({ origen: 'servidor', donde: 'palomma.cita a Google Calendar', error: e, usuario: conexion.user_id });
+    return false;
+  }
+}
+
+// Las citas de Palomma que aún no están en Google (se crearon antes de conectar
+// el calendario, o Google falló): las futuras, de a pocas por vuelta.
+export async function subirCitasPendientes(conexion, tope = 10) {
+  const conn = await getGcalToken(conexion.user_id).catch(() => null);
+  if (!conn?.token) return 0;
+  const citas = await sb(`/activities?user_id=eq.${encodeURIComponent(conexion.user_id)}&type=eq.meeting&gcal_event_id=is.null&cancelled_at=is.null` +
+    `&due_at=gt.${new Date().toISOString()}&title=ilike.*${encodeURIComponent(MARCA_CITA)}*&select=*&order=due_at.asc&limit=${tope}`) || [];
+  let subidas = 0;
+  for (const c of citas) if (await citaAGoogle(conexion, c)) subidas++;
+  return subidas;
 }
 
 // ── Encontrar o crear el lead de Acuarius ───────────────────────────────────
@@ -183,14 +215,15 @@ async function aplicar(conexion, ctx, ev) {
     // La cita, en la agenda (una sola vez por appointment.id).
     const cita = data.appointment;
     if (estado === 'appointmentPending' && cita?.id && cita.startAt && !(enlace.citas || []).includes(cita.id)) {
-      await sb('/activities', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify({
+      const [act] = await sb('/activities', { method: 'POST', prefer: 'return=representation', body: JSON.stringify({
         user_id: conexion.user_id, client_id: conexion.client_id || null, lead_id: lead.id, type: 'meeting',
-        title: 'Visita' + (cita.listingCode ? ' al inmueble ' + cita.listingCode : '') + ' (agendada por Palomma)',
+        title: 'Visita' + (cita.listingCode ? ' al inmueble ' + cita.listingCode : '') + ' (' + MARCA_CITA + ')',
         description: [cita.branchName, cita.neighborhood, cita.city].filter(Boolean).join(' · ') || null,
         due_at: new Date(cita.startAt).toISOString(), end_at: cita.endAt ? new Date(cita.endAt).toISOString() : null, done: false,
       }) });
       enlace.citas = [...(enlace.citas || []), cita.id];
       hechos.push('cita agendada');
+      if (act && await citaAGoogle(conexion, act)) hechos.push('en Google Calendar');
     }
   }
 
@@ -229,6 +262,15 @@ async function aplicar(conexion, ctx, ev) {
   return hechos.join(', ') || (viejo ? 'evento viejo, sin cambios' : 'sin cambios');
 }
 
+// Citas que quedaron sin Google Calendar (se conectó después, o Google falló),
+// de todas las conexiones encendidas.
+async function citasDeTodas() {
+  let n = 0;
+  const activas = await sb('/palomma_conexiones?activo=eq.true&procesar=eq.true&select=id,user_id,client_id').catch(() => []) || [];
+  for (const c of activas) n += await subirCitasPendientes(c).catch(() => 0);
+  return n;
+}
+
 /**
  * Procesa los eventos pendientes, en orden de timestamp. `conexionId` acota a
  * una conexión (el receptor); sin él, todas (el cron). Devuelve un resumen.
@@ -236,7 +278,9 @@ async function aplicar(conexion, ctx, ev) {
 export async function procesarPendientes({ conexionId = null, limite = 100 } = {}) {
   const filtro = conexionId ? `&conexion_id=eq.${conexionId}` : '';
   const pendientes = await sb(`/palomma_eventos?procesado_at=is.null&intentos=lt.${MAX_INTENTOS}${filtro}&select=id,conexion_id,tipo,palomma_lead_id,ts,payload,intentos&order=ts.asc.nullslast,id.asc&limit=${limite}`) || [];
-  if (!pendientes.length) return { procesados: 0, fallidos: 0 };
+  if (!pendientes.length) {
+    return { procesados: 0, fallidos: 0, citasSubidas: await citasDeTodas() };
+  }
   const conexiones = new Map();
   let procesados = 0, fallidos = 0;
   for (const ev of pendientes) {
@@ -261,5 +305,5 @@ export async function procesarPendientes({ conexionId = null, limite = 100 } = {
       }
     }
   }
-  return { procesados, fallidos };
+  return { procesados, fallidos, citasSubidas: await citasDeTodas() };
 }
