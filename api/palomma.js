@@ -12,7 +12,6 @@
 
 import { secretoValido, filaDeEvento } from './_palomma.js';
 import { registrarError } from './_registro-errores.js';
-import { procesarPendientes } from './_palomma-proceso.js';
 
 export const config = { runtime: 'edge' };
 
@@ -28,7 +27,7 @@ const resp = (status, cuerpo) => new Response(cuerpo ? JSON.stringify(cuerpo) : 
   status, headers: { 'Content-Type': 'application/json' },
 });
 
-export default async function handler(req, contexto) {
+export default async function handler(req) {
   if (req.method !== 'POST') return resp(405, { error: 'Solo POST' });
 
   const token = new URL(req.url).searchParams.get('c') || '';
@@ -82,10 +81,9 @@ export default async function handler(req, contexto) {
     body: JSON.stringify({ eventos: (conexion.eventos || 0) + 1, ultimo_evento_at: new Date().toISOString() }),
   }).catch(() => {});
 
-  // Paso 2, en segundo plano: Palomma ya tiene su 200 y no espera. Lo que no
-  // termine aquí lo recoge cron-palomma.
-  if (contexto && typeof contexto.waitUntil === 'function') {
-    contexto.waitUntil(procesarPendientes({ conexionId: conexion.id, limite: 20 }).catch(() => {}));
-  }
+  // El paso 2 (convertirlo en lead) lo hace SOLO cron-palomma, cada 5 min.
+  // Procesarlo también aquí, en segundo plano, ponía a dos procesos sobre la
+  // misma cola: dos eventos del mismo lead nuevo a la vez podían crear dos
+  // leads. Un único consumidor no tiene carreras.
   return resp(200, { ok: true });
 }

@@ -1,8 +1,8 @@
 // api/cron-palomma.js — convierte en leads los eventos de Palomma pendientes.
 //
-// El receptor (api/palomma.js) ya los procesa en segundo plano al llegar; esto
-// recoge lo que quedó a medias (un fallo de la base, un corte de la función) y
-// los reintentos. Cada 5 minutos. Ver api/_palomma-proceso.js.
+// Es el ÚNICO que los procesa (el receptor solo guarda): un solo consumidor
+// de la cola, sin carreras. Cada 5 minutos, más los reintentos de lo que haya
+// fallado. Ver api/_palomma-proceso.js.
 export const config = { runtime: 'edge' };
 
 import { procesarPendientes } from './_palomma-proceso.js';

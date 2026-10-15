@@ -1,8 +1,8 @@
 // api/_palomma-proceso.js — paso 2 de la integración con Palomma: convertir
 // los eventos guardados (palomma_eventos) en leads de Acuarius.
 //
-// Lo llaman el receptor (api/palomma.js, en segundo plano tras responder) y el
-// cron (api/cron-palomma.js) para lo que quede pendiente. Procesa por orden de
+// Lo llama SOLO el cron (api/cron-palomma.js): un único consumidor, para que
+// dos eventos del mismo lead nuevo no creen dos leads. Procesa por orden de
 // timestamp y es idempotente: cada evento se marca procesado, y el enlace
 // Palomma → Acuarius vive en palomma_leads. Las decisiones están arriba de
 // _palomma.js. Solo se importa desde funciones edge.
