@@ -222,6 +222,10 @@
     {
       "path": "/api/cron-partners",
       "schedule": "17 * * * *"
+    },
+    {
+      "path": "/api/cron-palomma",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

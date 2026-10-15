@@ -46,3 +46,27 @@ create index if not exists palomma_eventos_lead_idx on public.palomma_eventos (c
 alter table public.palomma_eventos enable row level security;
 
 notify pgrst, 'reload schema';
+
+-- Paso 2 (15-10-2026): cada lead de Palomma enlazado a su lead de Acuarius.
+-- Es la llave de todo: Palomma recomienda su lead.id, no el teléfono (puede
+-- faltar). ultimo_ts evita aplicar un evento viejo que llegue tarde.
+create table if not exists public.palomma_leads (
+  conexion_id          uuid not null references public.palomma_conexiones(id) on delete cascade,
+  palomma_lead_id      text not null,
+  lead_id              uuid not null,
+  creado_por_palomma   boolean not null default false,   -- false = se unió a uno que ya existía
+  etapa_palomma        text,
+  ultimo_ts            text,
+  nota_conversacion_id uuid,                              -- la nota con la conversación, se actualiza
+  citas                text[] not null default '{}',     -- appointment.id ya agendados
+  creado_at            timestamptz not null default now(),
+  actualizado_at       timestamptz not null default now(),
+  primary key (conexion_id, palomma_lead_id)
+);
+create index if not exists palomma_leads_lead_idx on public.palomma_leads (lead_id);
+alter table public.palomma_leads enable row level security;
+alter table public.palomma_eventos add column if not exists intentos integer not null default 0;
+notify pgrst, 'reload schema';
+-- Interruptor del paso 2: hasta encenderlo, los eventos solo se guardan.
+alter table public.palomma_conexiones add column if not exists procesar boolean not null default false;
+notify pgrst, 'reload schema';

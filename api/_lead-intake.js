@@ -327,6 +327,11 @@ export async function intakeLead(userId, clientId, data) {
     const created = rows[0];
     // Reparto entre comerciales antes de disparar automatizaciones, para que
     // un flujo que notifique al responsable ya lo encuentre asignado.
+    //
+    // `sinAsignar`: la entrada decide el dueño ella misma, más tarde. Es
+    // Palomma: su agente atiende la conversación y solo cuando la pasa a un
+    // asesor se sabe quién la lleva; repartirla antes se la daría a otro.
+    if (data.sinAsignar !== true) {
     try {
       const { asignarLead } = await import('./_assign.js');
       // repartoClave separa el turno: un conector con reglas reparte arriendo y
@@ -357,6 +362,7 @@ export async function intakeLead(userId, clientId, data) {
         await crearTareaPrimerContacto(userId, created, null).catch(() => {});
       }
     } catch (e) { console.error('asignar en intake:', e); }
+    }
     await enqueueAutomations(userId, created, 'lead_created');
     if (leadTags.length) await enqueueAutomations(userId, created, 'tag_added', leadTags);
     return { lead: created, created: true, otraOportunidadDe: yaExiste ? yaExiste.id : null };

@@ -56,3 +56,97 @@ export function filaDeEvento(evento, conexion) {
     },
   };
 }
+
+// ── Paso 2: traducir un lead de Palomma a Acuarius ──────────────────────────
+//
+// Decisiones de Alejandro (13 y 15-10-2026):
+//   · Arriendo → tablero Arriendo, venta → Venta, embudo de captación → Captación.
+//   · Descartado, cerrado e inactivo en Palomma son solo una NOTA: no mueven a
+//     perdido ni a ganado (lo decide la asesora).
+//   · La conversación se copia como nota en la ficha.
+//   · Embudos de Mantenimiento, Administrativo y Cartera se ignoran.
+//   · Palomma solo ADELANTA un lead, nunca lo retrocede ni pisa a una asesora.
+//   · Sin asesor en Palomma, el lead entra sin asignar (lo atiende su agente);
+//     con un asesor que no está en Acuarius, va por el reparto normal.
+
+// Embudos de Palomma que no son ventas.
+export function embudoIgnorado(pipelineName) {
+  return /mantenimiento|administrativ|cartera/i.test(String(pipelineName || ''));
+}
+
+// ¿Captación (propietarios) o arriendo/venta? Palomma llama al de captación
+// «sourceproperties» por dentro y «Captación» en el portal.
+export function esCaptacion(lead) {
+  return /captaci|sourceproperties/i.test(String(lead?.pipelineName || ''));
+}
+
+// A qué tablero va: devuelve 'captacion' | 'venta' | 'arriendo' | null (aún no se sabe).
+// «rent_and_sale» (busca las dos) va a Arriendo: es lo más común y la asesora
+// lo mueve si resulta ser compra.
+export function tableroDe(lead) {
+  if (esCaptacion(lead)) return 'captacion';
+  const op = String(lead?.profile?.listingType || '').toLowerCase();
+  if (op === 'sale') return 'venta';
+  if (op === 'rent' || op === 'rent_and_sale' || op === 'both') return 'arriendo';
+  return null;
+}
+
+// La etapa de Acuarius a la que lleva un estado de Palomma (claves de Certain:
+// contactado = «Cliente contactado», propuesta = «Cita de inmueble»). Los que
+// no están aquí solo dejan nota.
+const ETAPA_DE_PALOMMA = { appointmentIntent: 'contactado', appointmentPending: 'propuesta', redirected: 'contactado' };
+export function etapaDe(pipelinePositionId) {
+  return ETAPA_DE_PALOMMA[pipelinePositionId] || null;
+}
+
+const fechaCO = (iso) => {
+  try {
+    return new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(iso));
+  } catch { return iso; }
+};
+
+// La nota que deja cada estado en la ficha. null = no deja nota.
+export function notaDeEstado(estado, data = {}) {
+  const L = data.lead || {};
+  const asesor = data.employeeAssigned?.name;
+  const cita = data.appointment;
+  switch (estado) {
+    case 'appointmentIntent': return 'Palomma: mostró interés en agendar una visita.';
+    case 'appointmentPending':
+      return 'Palomma: agendó una visita' + (cita?.startAt ? ' para el ' + fechaCO(cita.startAt) : '') +
+        (cita?.listingCode ? ' al inmueble ' + cita.listingCode : '') + (cita?.branchName ? ' (' + cita.branchName + ')' : '') +
+        (asesor ? ', con ' + asesor : '') + '.';
+    case 'appointmentConfirmed': return 'Palomma: la persona confirmó la visita.';
+    case 'appointmentCancelled': return 'Palomma: la visita se canceló.';
+    case 'redirected': return 'Palomma: pasó la conversación a ' + (asesor || 'un asesor') + '.' + (L.transferReason ? ' Motivo: ' + L.transferReason : '');
+    case 'discarded': return 'Palomma: el agente descartó el prospecto.' + (L.discardedReason ? ' Motivo: ' + L.discardedReason : '');
+    case 'inactive': return 'Palomma: la conversación quedó inactiva (la persona dejó de responder).';
+    case 'closed': return 'Palomma: marcó el negocio como cerrado.';
+    case 'propertyInfoCollected': return 'Palomma: recogió la información del inmueble del propietario.';
+    default: return null;
+  }
+}
+
+// Lo que busca, en una línea para la ficha.
+export function resumenDePerfil(p) {
+  if (!p || typeof p !== 'object') return '';
+  const op = { rent: 'arriendo', sale: 'compra', rent_and_sale: 'arriendo o compra', both: 'arriendo o compra' }[String(p.listingType || '').toLowerCase()];
+  const tipos = { apartment: 'apartamento', studio: 'apartaestudio', house: 'casa', room: 'habitación', office: 'oficina', medical_office: 'consultorio', commercial_space: 'local', warehouse: 'bodega', building: 'edificio', lot: 'lote', farm: 'finca', hotel: 'hotel', parking: 'parqueadero' };
+  const plata = (n) => '$' + Number(n).toLocaleString('es-CO');
+  const precio = p.price || p.priceRange;
+  return [
+    op,
+    (p.propertyTypes || []).map(t => tipos[t] || t).join('/') || null,
+    (p.neighborhoods || p.neighborhoodList || []).length ? 'en ' + (p.neighborhoods || p.neighborhoodList).join(', ') : null,
+    (p.cities || []).length ? (p.cities || []).join(', ') : null,
+    p.bedrooms ? p.bedrooms + ' hab' : null,
+    precio?.max ? 'hasta ' + plata(precio.max) : precio?.min ? 'desde ' + plata(precio.min) : null,
+    p.propertyCode ? 'inmueble ' + p.propertyCode : null,
+  ].filter(Boolean).join(' · ');
+}
+
+// El teléfono de Palomma (57300…, sin +) en el formato de Acuarius.
+export function telefonoDe(lead) {
+  const d = String(lead?.phone || '').replace(/\D/g, '');
+  return d.length >= 7 ? '+' + d : null;
+}

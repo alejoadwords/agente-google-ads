@@ -82,6 +82,7 @@ export const CADA = {
   'cron-ventana': 60,
   'cron-seguimiento': 10,       // */10; fuera de horario también late (fueraDeHora)
   'cron-partners': 60,          // 17 * * * * — comisiones de Partners
+  'cron-palomma': 5,            // */5 * * * * — eventos de Palomma → leads
   'cron-webhooks': 1,           // * * * * * — avisos salientes de la API pública
 };
 
@@ -120,6 +121,7 @@ export const DESDE = '2026-09-23T16:00:00Z';
 export const DESDE_POR_CRON = {
   'cron-webhooks': '2026-10-09T00:00:00Z',
   'cron-partners': '2026-10-06T23:00:00Z',
+  'cron-palomma': '2026-10-15T23:00:00Z',
   'cron-catalogo': '2026-09-28T22:00:00Z',
   'cron-conectores': '2026-09-27T17:00:00Z',
   'cron-integridad': '2026-09-27T17:00:00Z',
