@@ -223,6 +223,38 @@ async function pipelinePrincipal(userId, clientId) {
     return (filas.find(p => p.is_default) || filas[0]).id;
   } catch { return null; }}
 
+// Le pone a cada lead `otros_procesos`: los nombres de los procesos donde la
+// misma persona tiene otra oportunidad. Sin enlaces, no toca nada.
+async function conOtrosProcesos(filas, userId, clientId) {
+  const U = encodeURIComponent(userId);
+  const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '';
+  const enlazadas = (await traerTodo(
+    `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${U}${scope}&deleted_at=is.null&contacto_id=not.is.null&select=id,contacto_id,pipeline_id`,
+    sbHeaders(), { techo: 20000 })).filas || [];
+  if (!enlazadas.length) return;
+  const raices = [...new Set(enlazadas.map(l => l.contacto_id))];
+  const primeras = [];
+  for (let i = 0; i < raices.length; i += 150) {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${U}&deleted_at=is.null&id=in.(${raices.slice(i, i + 150).join(',')})&select=id,contacto_id,pipeline_id`,
+      { headers: sbHeaders() }).then(x => (x.ok ? x.json() : []));
+    primeras.push(...(r || []));
+  }
+  const grupos = {};
+  for (const l of enlazadas.concat(primeras)) (grupos[grupoDe(l)] = grupos[grupoDe(l)] || []).push(l);
+  const ids = [...new Set(enlazadas.concat(primeras).map(l => l.pipeline_id).filter(Boolean))];
+  const pipes = ids.length ? await fetch(
+    `${SUPABASE_URL}/rest/v1/pipelines?id=in.(${ids.map(encodeURIComponent).join(',')})&select=id,name`,
+    { headers: sbHeaders() }).then(x => (x.ok ? x.json() : [])) : [];
+  const nombre = Object.fromEntries((pipes || []).map(p => [p.id, p.name]));
+  for (const l of filas) {
+    const otros = (grupos[grupoDe(l)] || [])
+      .filter(o => o.id !== l.id && o.pipeline_id && o.pipeline_id !== l.pipeline_id)
+      .map(o => nombre[o.pipeline_id]).filter(Boolean);
+    if (otros.length) l.otros_procesos = [...new Set(otros)];
+  }
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
@@ -538,6 +570,11 @@ export default async function handler(req) {
     // una cuenta con 3.000 contactos veía 1.000 y creía que esos eran todos.
     // Ahora se traen todos hasta el techo, y si se llega al techo se avisa.
     const { filas, truncado } = await traerTodo(query, sbHeaders(), { techo: TECHO_TABLERO });
+    // En qué OTROS procesos está cada persona, para el «También en Arriendo»
+    // de la tarjeta (15-10-2026). Solo se miran las oportunidades enlazadas,
+    // que son pocas: no cuesta una segunda pasada por toda la cuenta.
+    try { await conOtrosProcesos(filas || [], userId, clientId); }
+    catch (e) { console.error('[leads] otros procesos:', e.message); }
     return jsonResp({ leads: filas || [], actor_id: actorId, es_miembro: esMiembro, solo_mios: soloLosMios,
                       truncado, techo: TECHO_TABLERO });
   }

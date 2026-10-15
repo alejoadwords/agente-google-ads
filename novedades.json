@@ -2,6 +2,13 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-15-oportunidades-en-todo",
+      "fecha": "2026-10-15",
+      "tipo": "mejora",
+      "titulo": "Quien está en varios procesos se ve en todas partes, y recibe tus campañas una sola vez",
+      "texto": "Las tarjetas del tablero y la lista dicen «También en Arriendo» cuando la persona tiene otra oportunidad, y la conversación del inbox muestra sus otras oportunidades. Tus campañas le llegan una sola vez aunque esté en varios procesos, y si se dio de baja desde una, no recibe por ninguna. Al crear un contacto desde el celular, si ya existe, te dice dónde está y te deja abrirle una oportunidad en este proceso."
+    },
+    {
       "id": "2026-10-15-varias-oportunidades",
       "fecha": "2026-10-15",
       "tipo": "nuevo",

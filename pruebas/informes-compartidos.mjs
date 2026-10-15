@@ -75,7 +75,7 @@ ok(/no se muestra en el informe compartido/.test(todo), 'y se dice que se omiti�
 ok(/Camila/.test(todo), 'los comerciales sí salen: son del equipo');
 
 console.log('\nEl servidor\n');
-ok(/const CAMPOS_LEAD = 'id,stage,value,source,tags,assigned_to,assigned_name,created_at,updated_at,closed_at,close_reason,close_currency,pipeline_id';/.test(api),
+ok(/const CAMPOS_LEAD = 'id,stage,value,source,tags,assigned_to,assigned_name,created_at,updated_at,closed_at,close_reason,close_currency,pipeline_id,contacto_id';/.test(api),
    'de los leads solo pide columnas que cuentan');
 ok(!/CAMPOS_LEAD[^;]*\b(name|email|phone|notes|custom_fields|company)\b/.test(api.match(/const CAMPOS_LEAD[^;]*;/)[0]), 'ni nombre, ni correo, ni teléfono, ni notas');
 ok(/select=id,lead_id,type,due_at,done,created_at,updated_at/.test(api), 'de la agenda, sin el título de las tareas');

@@ -75,7 +75,7 @@ function token() {
 // ── Lo que se ve de un lead por un enlace público ───────────────────────────
 // Lista cerrada a propósito: lo que no esté aquí no sale, aunque mañana se le
 // añada una columna a `leads`.
-const CAMPOS_LEAD = 'id,stage,value,source,tags,assigned_to,assigned_name,created_at,updated_at,closed_at,close_reason,close_currency,pipeline_id';
+const CAMPOS_LEAD = 'id,stage,value,source,tags,assigned_to,assigned_name,created_at,updated_at,closed_at,close_reason,close_currency,pipeline_id,contacto_id';
 
 /**
  * Los datos de los informes de un enlace. Las consultas son las MISMAS que hace

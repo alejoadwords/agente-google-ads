@@ -131,6 +131,14 @@ async function guardar(ruta, cuerpo, metodo, alDeshacer){
     // por bueno lo que devuelve sin mirarlo es volver al fallo de partida.
     var d = {};
     try { d = await r.json(); } catch (e) {}
+    // Ya existe alguien con ese correo o teléfono: no es un fallo, es una
+    // pregunta para quien guarda. Lo decide quien llama (crearLead).
+    if (r.status === 409 && d.duplicado) {
+      if (alDeshacer) alDeshacer();
+      var ch = movilRaiz() && movilRaiz().querySelector('.chicharra');
+      if (ch) ch.remove();   // el «Guardando…» no se puede quedar puesto
+      return { duplicado: d.duplicado };
+    }
     if (!r.ok) {
       if (alDeshacer) alDeshacer();
       chicharra('No se guardó: ' + (d.error || 'el servidor respondió ' + r.status), 'mal');
@@ -1167,6 +1175,45 @@ async function crearLead(){
   if (pipelineActual) cuerpo.pipeline_id = pipelineActual;
   var d = await guardar(conAlcance('/api/leads'), cuerpo, 'POST');
   if (!d) return;
+  if (d.duplicado) { avisoDuplicado(d.duplicado, cuerpo); return; }
+  leadCreado(d);
+}
+
+// Ya hay alguien con ese correo o teléfono. Si está en ESTE proceso es la
+// misma persona dos veces; si está en otro, es otra oportunidad posible
+// (15-10-2026). Mismas salidas que en el computador.
+var _dupCuerpo = null, _dupId = null;
+function avisoDuplicado(dup, cuerpo){
+  _dupCuerpo = cuerpo; _dupId = dup.id;
+  var otro = !!dup.otro_proceso;
+  abrirSheet('<h2>' + (otro ? 'Esta persona ya está en ' + esc(dup.proceso || 'otro proceso') : 'Ya tienes a esta persona') + '</h2>'
+    + '<div class="ac" style="margin:4px 0 12px">' + esc(dup.name || 'Sin nombre') + ' · ' + esc(dup.stage || '')
+    + (dup.assigned_name ? ' · lo lleva ' + esc(dup.assigned_name) : ' · sin responsable') + '</div>'
+    + '<div class="ac" style="margin-bottom:14px;line-height:1.5">' + (otro
+        ? 'Puedes abrirle una oportunidad en este proceso, enlazada a la que ya tiene y con sus mismos datos.'
+        : 'Si es la misma persona, ábrela y anota ahí lo nuevo. Si de verdad son dos, créalo igual.') + '</div>'
+    + (otro
+        ? '<button class="bbtn" onclick="M.dupCrear(true)">Abrirle una oportunidad aquí</button>'
+        : '<button class="bbtn" onclick="M.dupAbrir()">Abrir el que existe</button>'
+          + '<button class="bbtn fantasma" onclick="M.dupCrear(false)">Crear igual</button>'));
+}
+function dupAbrir(){
+  cerrarSheet();
+  var esta = false;
+  (LEADS || []).forEach(function(l){ if (String(l.id) === String(_dupId)) esta = true; });
+  if (esta) abrirLead(_dupId);
+  else chicharra('Ese contacto no está en el tablero que estás mirando.', 'mal');
+}
+async function dupCrear(enlazar){
+  if (!_dupCuerpo) return;
+  var cuerpo = Object.assign({}, _dupCuerpo, enlazar ? { oportunidad_de: _dupId } : { forzar: true });
+  var d = await guardar(conAlcance('/api/leads'), cuerpo, 'POST');
+  if (!d || d.duplicado) return;
+  leadCreado(d);
+  if (enlazar) chicharra('Oportunidad abierta y enlazada a la que ya tenía', 'ok');
+}
+
+function leadCreado(d){
   cerrarSheet();
   if (d.lead && TRADUCTOR) {
     if (LEADS === null) LEADS = [];
@@ -3582,6 +3629,7 @@ function movilMontar(opciones){
     enviarMsg: enviarMsg,
     filtrar: filtrar,
     abrirAviso: abrirAviso, responderAviso: responderAviso, enviarRespuesta: enviarRespuesta,
+    dupAbrir: dupAbrir, dupCrear: dupCrear,
     marcar: marcar,
     meter: meter,
     nuevoLead: nuevoLead,

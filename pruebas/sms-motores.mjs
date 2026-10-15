@@ -57,6 +57,8 @@ function cumple(fila, k, v) {
   if (v.startsWith('like.')) return x != null && new RegExp('^' + v.slice(5).split('*').map(s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$').test(String(x));
   if (v.startsWith('in.(')) return v.slice(4, -1).split(',').map(s => s.replace(/^"|"$/g, '')).includes(String(x));
   if (v.startsWith('not.cs.{')) { const t = v.slice(8, -1).replace(/"/g, ''); return !(x || []).includes(t); }
+  // «contiene»: la consulta de bajas por persona de las campañas (15-10-2026).
+  if (v.startsWith('cs.{')) { const t = v.slice(4, -1).replace(/"/g, ''); return (x || []).includes(t); }
   return true;
 }
 const filtrar = (tabla, sp) => (T[tabla] || []).filter(f => [...sp.entries()].every(([k, v]) => cumple(f, k, v)));

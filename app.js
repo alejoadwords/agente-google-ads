@@ -20256,6 +20256,7 @@ function crmCardHTML(lead, now) {
     (lead.company ? '<div class="crm-card-company"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>' + esc(lead.company) + '</div>' : '') +
     (lead.phone ? '<div class="crm-card-phone"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .13h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.93z"/></svg>' + esc(lead.phone) + '</div>' : '') +
     ((lead.tags || []).length ? '<div class="crm-card-tags">' + lead.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') + (lead.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (lead.tags.length - 3) + '</span>' : '') + '</div>' : '') +
+    crmOtrosProcesosHtml(lead) +
     '<div class="crm-card-footer">' +
     '<div class="crm-card-source">' + esc(fuenteLabel(lead.source)) +
     crmChipComercial(lead) + '</div>' +
@@ -21524,7 +21525,7 @@ function crmColCelda(l, key, sel) {
       const tags = (!sel.includes('tags') && (l.tags || []).length)
         ? '<div class="crm-card-tags" style="margin-top:3px">' + l.tags.slice(0, 3).map(t => tagChipHtml(t)).join('') +
           (l.tags.length > 3 ? '<span class="tag-chip tag-more">+' + (l.tags.length - 3) + '</span>' : '') + '</div>' : '';
-      return '<td style="font-weight:600">' + esc(l.name || '—') + emp + tags + '</td>';
+      return '<td style="font-weight:600">' + esc(l.name || '—') + emp + tags + crmOtrosProcesosHtml(l) + '</td>';
     }
     case 'assigned_name': return '<td>' + crmCeldaComercial(l) + '</td>';
     case 'stage': {
@@ -25420,6 +25421,21 @@ function inboxRenderList() {
   }).join('');
 }
 
+// Las otras oportunidades de la persona, en la cabecera de su conversación:
+// quien escribe por WhatsApp puede estar en Venta y en Arriendo a la vez.
+async function inboxPintarOportunidades(leadId) {
+  try {
+    const r = await fetchAuth('/api/leads?oportunidades_de=' + encodeURIComponent(leadId));
+    if (!r.ok) return;
+    const otras = ((await r.json()).oportunidades || []).filter(o => !o.actual);
+    const box = document.getElementById('inbox-ops');
+    if (!box || !otras.length) return;
+    box.innerHTML = otras.map(o => o.id
+      ? '<button class="btn-ghost sm" title="' + esc((o.etapa || o.stage || '') + ' · ' + (o.assigned_name || 'sin responsable')) + '" onclick="crmIrALeadODecirlo(\'' + esc(o.id) + '\')">' + icn('split', 11) + ' ' + esc(o.proceso || 'Otro proceso') + '</button>'
+      : '<span class="btn-ghost sm" style="cursor:default" title="La lleva ' + esc(o.assigned_name || 'otra persona') + '">' + icn('split', 11) + ' ' + esc(o.proceso || 'Otro proceso') + '</span>').join('');
+  } catch { /* la cabecera vale igual sin esto */ }
+}
+
 async function inboxOpenConv(convId) {
   inboxActiveConvId = convId;
   inboxRenderList();
@@ -25458,9 +25474,10 @@ async function inboxOpenConv(convId) {
     <div class="crm-inbox-chat-head">
       <div style="display:flex;flex-direction:column">
         <div class="crm-inbox-chat-name">${esc(name)}</div>
-        <div style="font-size:11px;color:var(--muted)">${esc(channelLabels[conv.channel] || conv.channel)}${conv.lead_id ? ` · <button class="crm-lead-link-btn" onclick="crmOpenDetail('${esc(conv.lead_id)}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> Ver lead</button>` : ''}</div>
+        <div style="font-size:11px;color:var(--muted)">${esc(channelLabels[conv.channel] || conv.channel)}${conv.lead_id ? ` · <button class="crm-lead-link-btn" onclick="crmIrALeadODecirlo('${esc(conv.lead_id)}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> Ver lead</button>` : ''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
+        ${conv.lead_id ? `<span id="inbox-ops" style="display:flex;gap:4px;flex-wrap:wrap"></span>` : ''}
         ${!conv.lead_id ? `<button class="crm-conv-link-btn" style="width:auto;padding:5px 10px;border-style:solid" onclick="inboxToPipeline('${esc(conv.id)}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Pasar al pipeline</button>` : ''}
         <button class="crm-inbox-status-btn ${conv.status}" title="Cambiar el estado" onclick="inboxCycleStatus('${esc(conv.id)}','${esc(conv.status)}')">${esc(statusLabels[conv.status] || conv.status)}</button>
         <button class="btn-ghost sm" style="display:inline-flex;align-items:center;gap:5px" title="${conv.archivada_at ? 'Devolver a la bandeja' : 'Sacarla de la bandeja. No se borra: vuelve sola si el contacto escribe otra vez'}" onclick="inboxArchivar('${esc(conv.id)}', ${conv.archivada_at ? 'false' : 'true'})">${icn('archivar', 13)} ${conv.archivada_at ? 'Desarchivar' : 'Archivar'}</button>
@@ -25498,6 +25515,7 @@ async function inboxOpenConv(convId) {
       <textarea class="crm-inbox-reply-input" id="inbox-reply-input" placeholder="Escribe un mensaje manual..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inboxSendManual('${esc(convId)}')}" rows="1"></textarea>
       <button class="crm-inbox-reply-btn" onclick="inboxSendManual('${esc(convId)}')">Enviar</button>
     </div>`;
+  if (conv.lead_id) inboxPintarOportunidades(conv.lead_id);
 
   progCargar(convId);        // los que estén esperando salida
   inboxNotaActiva = false;   // cada conversación se abre en modo mensaje
@@ -32348,6 +32366,8 @@ function cmpPreview() {
       if (b.missing) excl.push(b.missing + (_cmpChannel === 'email' ? ' sin email' : _cmpChannel === 'sms' ? ' sin móvil válido' : ' sin teléfono'));
       if (b.excluidos) excl.push(b.excluidos + ' en «No enviar a»');
       if (b.rebotados) excl.push(b.rebotados + ' con correo rebotado');
+      // Una persona con dos oportunidades (Venta y Arriendo) recibe una vez.
+      if (b.repetidos) excl.push(b.repetidos + (b.repetidos === 1 ? ' oportunidad repetida' : ' oportunidades repetidas') + ' de la misma persona');
       el.innerHTML = '<div>' + icn('users', 14) + ' <b>' + Number(d.count || 0).toLocaleString('es-CO') + '</b> destinatarios</div>' +
         (d.sample?.length ? '<div style="font-size:12px;color:var(--muted)">Por ejemplo: ' + d.sample.slice(0, 3).map(esc).join(', ') + '</div>' : '') +
         (excl.length ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:4px">Excluidos: ' + excl.join(' · ') + '</div>' : '') +
@@ -32548,6 +32568,9 @@ async function cmpWPintarDestinatarios() {
       // Los rebotados no los eligió nadie: se apartan solos y hay que decirlo, o
       // el número baja sin explicación y parece un fallo.
       (b.rebotados ? linea('No le llega', b.rebotados, '· su correo rebotó o marcó spam') : '') +
+      // No es que alguien se quede sin el mensaje: la misma persona tiene
+      // varias oportunidades y le llega una sola vez.
+      (b.repetidos ? linea('Una sola vez', b.repetidos, '· misma persona en varios procesos') : '') +
       (restante !== null
         ? '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;' + (pasado ? 'color:#B91C1C;font-weight:700' : 'color:var(--muted2)') + '">' +
           (pasado
@@ -45796,6 +45819,14 @@ async function lfSugerir(btn) {
 }
 
 // ── Varias oportunidades de una misma persona ───────────────────────────────
+// «También en Arriendo»: la misma persona tiene otra oportunidad en otro
+// proceso. Lo calcula el servidor al listar (`otros_procesos`).
+function crmOtrosProcesosHtml(l) {
+  const otros = (l && l.otros_procesos) || [];
+  if (!otros.length) return '';
+  return '<div style="font-size:10.5px;font-weight:700;color:var(--blue);margin-top:4px" title="La misma persona tiene otra oportunidad">' +
+    icn('split', 10) + ' También en ' + esc(otros.join(', ')) + '</div>';
+}
 // Cada lead del tablero es una oportunidad dentro de un proceso, y las de la
 // misma persona quedan enlazadas (api/_oportunidades.js). En Certain: quien
 // vende su apartamento por Venta y busca otro en Arriendo (15-10-2026).

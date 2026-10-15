@@ -254,14 +254,52 @@ async function idsExcluidos(userId, clientId, audience) {
 // Devuelve { leads, truncado }. `truncado` no es decorativo: si viene true la
 // audiencia está incompleta y NO se puede encolar la campaña, porque enviarla
 // dejaría fuera a gente sin que nadie lo sepa.
+// ── Una persona, un envío ──────────────────────────────────────────────────
+// Desde el 15-10-2026 una persona puede tener varias oportunidades (una por
+// proceso, enlazadas por `contacto_id`): la que vende por Venta y busca en
+// Arriendo es UNA persona, y una campaña le llega una vez. Por la dirección
+// a la que se envía —el correo en correo, el teléfono en WhatsApp y SMS— y por
+// su grupo, así que también cubre los duplicados viejos sin enlazar.
+function llaveDeEnvio(l, channel) {
+  if (channel === 'email') return String(l.email || '').trim().toLowerCase() || null;
+  const d = String(l.phone || '').replace(/\D/g, '');
+  return d.length >= 7 ? d.slice(-10) : null;
+}
+
+// La baja es de la PERSONA, no de una oportunidad: si se dio de baja desde su
+// oportunidad de Venta, la de Arriendo no puede seguir recibiendo. Se buscan
+// las direcciones dadas de baja en el ámbito y se quitan de la audiencia.
+async function direccionesDeBaja(userId, clientId, channel) {
+  const etiqueta = channel === 'email' ? 'no-email' : channel === 'sms' ? BAJA_SMS : null;
+  if (!etiqueta) return new Set();
+  const scope = clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null';
+  const r = await traerTodo(
+    `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(userId)}${scope}&deleted_at=is.null&tags=cs.{"${etiqueta}"}&select=id,email,phone`,
+    sbHeaders(), { techo: TECHO_AUDIENCIA });
+  return new Set((r.filas || []).map(l => llaveDeEnvio(l, channel)).filter(Boolean));
+}
+
+export function unaPorPersona(leads, channel) {
+  const vistas = new Set();
+  const salen = [];
+  let repetidos = 0;
+  for (const l of leads) {
+    const llaves = [llaveDeEnvio(l, channel), 'grupo:' + (l.contacto_id || l.id)].filter(Boolean);
+    if (llaves.some(k => vistas.has(k))) { repetidos++; continue; }
+    llaves.forEach(k => vistas.add(k));
+    salen.push(l);
+  }
+  return { leads: salen, repetidos };
+}
+
 export async function resolveAudience(userId, clientId, audience, channel) {
   const a = await normalizeAudience(userId, audience);
   let base, truncado = false;
   if (Array.isArray(a.lead_ids) && a.lead_ids.length) {
-    base = await leadsByIds(userId, clientId, a.lead_ids, channel, 'id,name,email,phone');
+    base = await leadsByIds(userId, clientId, a.lead_ids, channel, 'id,name,email,phone,contacto_id');
   } else {
     const q = audienceQuery(userId, clientId, a, channel);
-    const r = await traerTodo(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id,name,email,phone`,
+    const r = await traerTodo(`${SUPABASE_URL}/rest/v1/leads?${q}&select=id,name,email,phone,contacto_id`,
       sbHeaders(), { techo: TECHO_AUDIENCIA });
     base = r.filas || [];
     truncado = r.truncado;
@@ -273,10 +311,13 @@ export async function resolveAudience(userId, clientId, audience, channel) {
   const quemados = channel === 'email' ? await correosQuemados() : new Set();
   // En SMS solo cuentan los móviles colombianos válidos: un fijo o un número
   // mal escrito no recibe nada y no debe inflar la audiencia ni el costo.
-  const leads = base.filter(l => !fuera.has(l.id)
+  const filtrados = base.filter(l => !fuera.has(l.id)
     && !(channel === 'email' && quemados.has(String(l.email || '').toLowerCase()))
     && !(channel === 'sms' && !normalizarTelefono(l.phone)));
-  return { leads, truncado };
+  const bajas = await direccionesDeBaja(userId, clientId, channel);
+  const sinBaja = filtrados.filter(l => !bajas.has(llaveDeEnvio(l, channel)));
+  const { leads, repetidos } = unaPorPersona(sinBaja, channel);
+  return { leads, truncado, repetidos, bajaPorOtra: filtrados.length - sinBaja.length };
 }
 
 /**
@@ -301,7 +342,9 @@ export async function contarAudiencia(userId, clientId, audience, channel) {
     idsExcluidos(userId, clientId, audience),
   ]);
   const leads = resuelta.leads;
-  const breakdown = { matched: all.length, unsubscribed: 0, missing: 0, excluidos: 0, rebotados: 0 };
+  const breakdown = { matched: all.length, unsubscribed: resuelta.bajaPorOtra || 0, missing: 0, excluidos: 0, rebotados: 0,
+    // Personas con varias oportunidades en la audiencia: reciben una vez.
+    repetidos: resuelta.repetidos || 0 };
   const quemados = channel === 'email' ? await correosQuemados() : new Set();
   for (const l of all) {
     if (fuera.has(l.id)) { breakdown.excluidos++; continue; }

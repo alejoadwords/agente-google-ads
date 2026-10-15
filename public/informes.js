@@ -196,6 +196,10 @@ export function htmlResumen(ctx) {
   const wonValue = won.reduce((s, l) => s + (Number(l.value) || 0), 0);
   const avgValue = total > 0 ? Math.round(pipelineValue / Math.max(active.length, 1)) : 0;
   const convRate = total > 0 ? Math.round((won.length / total) * 100) : 0;
+  // Con todos los procesos, una persona puede contar varias veces: una por
+  // cada proceso en el que tiene oportunidad (15-10-2026). Se dice cuántas
+  // personas distintas son, para no inflar la cifra.
+  const personas = new Set(leads.map(l => l.contacto_id || l.id)).size;
   // Con «Todos los procesos» cada uno trae sus etapas y no hay un embudo común:
   // se resume en abiertos, ganados y perdidos en vez de mezclar etapas ajenas.
   const etapasEmbudo = c.todos
@@ -265,7 +269,8 @@ export function htmlResumen(ctx) {
 
   return cabResumen +
     '<div class="crm-analytics-grid">' +
-      '<div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados</div></div>' +
+      '<div class="crm-analytics-card"><div class="crm-analytics-card-title">Total leads</div><div class="crm-analytics-stat">' + total + '</div><div class="crm-analytics-sub">' + active.length + ' activos - ' + won.length + ' ganados' +
+        (c.todos && personas < total ? '<br>' + personas + ' personas distintas' : '') + '</div></div>' +
       '<div class="crm-analytics-card"><div class="crm-analytics-card-title">Pipeline activo</div><div class="crm-analytics-stat" style="font-size:20px">$' + pipelineValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Valor en proceso</div></div>' +
       '<div class="crm-analytics-card"><div class="crm-analytics-card-title">Deals ganados</div><div class="crm-analytics-stat" style="font-size:20px">$' + wonValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">' + convRate + '% tasa de cierre</div></div>' +
       '<div class="crm-analytics-card"><div class="crm-analytics-card-title">Valor promedio</div><div class="crm-analytics-stat" style="font-size:20px">$' + avgValue.toLocaleString('es-CO') + '</div><div class="crm-analytics-sub">Por deal activo</div></div>' +

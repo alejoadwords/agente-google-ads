@@ -117,5 +117,50 @@ console.log('\nLas otras puertas siguen la misma regla\n');
   ok(/oportunidad_de: dup\.id/.test(app), 'el aviso de duplicado ofrece abrirla enlazada');
 }
 
+console.log('\nCampañas: una persona, un envío; la baja es de la persona\n');
+{
+  process.env.SUPABASE_URL = 'https://sb.test';
+  const LEADS = [
+    { id: 'A1', name: 'Ana', email: 'ana@x.co', phone: '3001110000', contacto_id: null, tags: [] },
+    { id: 'A2', name: 'Ana', email: 'ANA@x.co ', phone: '3001110000', contacto_id: 'A1', tags: [] },   // misma persona, otro proceso
+    { id: 'B1', name: 'Beto', email: 'beto@x.co', phone: '3002220000', contacto_id: null, tags: [] },
+    { id: 'C1', name: 'Caro', email: 'caro@x.co', phone: '3003330000', contacto_id: null, tags: [] },
+  ];
+  // Caro se dio de baja desde OTRA oportunidad suya (C2), que no está en la audiencia.
+  const BAJAS = [{ id: 'C2', email: 'caro@x.co', phone: '3003330000' }];
+  globalThis.fetch = async (u) => {
+    const url = String(u);
+    let filas = [];
+    if (url.includes('/leads?') && url.includes('tags=cs.')) filas = BAJAS;
+    else if (url.includes('/leads?')) filas = LEADS;
+    const txt = JSON.stringify(filas);
+    return { ok: true, status: 200, json: async () => filas, text: async () => txt, headers: { get: () => null } };
+  };
+  const C = await import('../api/campaigns.js');
+  const r = await C.resolveAudience('u1', 'pro_main', { tags: ['x'] }, 'email');
+  const ids = r.leads.map(l => l.id).sort().join();
+  ok(ids === 'A1,B1', 'Ana recibe una vez y Caro, dada de baja en otra oportunidad, no recibe', ids);
+  ok(r.repetidos === 1 && r.bajaPorOtra === 1, 'y se cuenta cada cosa para enseñarla antes de enviar', JSON.stringify({ rep: r.repetidos, baja: r.bajaPorOtra }));
+  const w = C.unaPorPersona([{ id: 'X', phone: '+57 300 999 8888' }, { id: 'Y', phone: '3009998888', contacto_id: 'Z' }], 'whatsapp');
+  ok(w.leads.length === 1 && w.repetidos === 1, 'en WhatsApp la persona es su teléfono, escrito como venga');
+  const app = leer('public/app.js');
+  ok(/b\.repetidos \? linea\('Una sola vez', b\.repetidos/.test(app), 'el asistente de campañas lo dice');
+}
+
+console.log('\nTablero, inbox, Resumen y móvil\n');
+{
+  const leads = leer('api/leads.js');
+  const app = leer('public/app.js');
+  const movil = leer('public/movil-app.js');
+  const inf = leer('public/informes.js');
+  ok(/await conOtrosProcesos\(filas \|\| \[\], userId, clientId\)/.test(leads), 'la lista trae en qué otros procesos está cada persona');
+  ok(/crmOtrosProcesosHtml\(lead\)/.test(app) && /crmOtrosProcesosHtml\(l\)/.test(app) && /' También en '/.test(app), 'la tarjeta y la lista dicen «También en …»');
+  ok(/inboxPintarOportunidades\(conv\.lead_id\)/.test(app), 'la conversación enseña sus otras oportunidades');
+  ok(/onclick="crmIrALeadODecirlo\('\$\{esc\(conv\.lead_id\)\}'\)"/.test(app), 'y «Ver lead» abre aunque esté en otro tablero');
+  ok(/personas distintas/.test(inf) && /new Set\(leads\.map\(l => l\.contacto_id \|\| l\.id\)\)\.size/.test(inf), 'el Resumen de todos los procesos distingue personas de oportunidades');
+  ok(/if \(r\.status === 409 && d\.duplicado\)/.test(movil) && /oportunidad_de: _dupId/.test(movil), 'el móvil entiende el duplicado y ofrece la oportunidad enlazada');
+  ok(!/cerrarChicharra|bbtn sec"/.test(movil), 'sin nombres ni clases inventadas');
+}
+
 console.log(mal ? `\n${mal} fallo(s)\n` : '\nTodo en orden\n');
 process.exit(mal ? 1 : 0);
