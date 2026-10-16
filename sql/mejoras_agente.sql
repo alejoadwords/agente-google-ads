@@ -82,3 +82,28 @@ returns setof chat_conversations language sql stable as $$
   order by c.last_message_at asc
   limit limite
 $$;
+
+-- Detector «nadie le respondió» (16-10-2026). Conversaciones con agente cuyo
+-- último mensaje es de la persona y lleva rato sin respuesta:
+--   bot   + agente encendido + 10 min → el agente falló (fallo nuestro)
+--   human (ya escalada)      + 30 min → nadie del equipo contestó
+-- Solo las de las últimas 24 h (después ya avisa cron-ventana) y una vez por
+-- mensaje: sin_respuesta_aviso_at se compara con la hora del último mensaje.
+alter table chat_conversations add column if not exists sin_respuesta_aviso_at timestamptz;
+create or replace function conversaciones_sin_respuesta(limite int default 50)
+returns table (id uuid, user_id text, agent_id uuid, lead_id uuid, channel text, status text, contact_name text, contact_phone text, ultimo_at timestamptz, ultimo_texto text)
+language sql stable as $$
+  select c.id, c.user_id, c.agent_id, c.lead_id, c.channel, c.status, c.contact_name, c.contact_phone, u.created_at, left(u.content, 300)
+  from chat_conversations c
+  join chat_agents a on a.id = c.agent_id
+  join lateral (select m.role, m.created_at, m.content from chat_messages m where m.conversation_id = c.id order by m.created_at desc, m.id desc limit 1) u on true
+  where c.archivada_at is null
+    and c.last_message_at > now() - interval '24 hours'
+    and u.role = 'user'
+    and u.created_at > now() - interval '24 hours'
+    and ((c.status = 'bot' and a.is_active and u.created_at < now() - interval '10 minutes')
+      or (c.status = 'human' and u.created_at < now() - interval '30 minutes'))
+    and (c.sin_respuesta_aviso_at is null or c.sin_respuesta_aviso_at < u.created_at)
+  order by u.created_at asc
+  limit limite
+$$;
