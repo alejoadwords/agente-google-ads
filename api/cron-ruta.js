@@ -12,7 +12,7 @@ export const config = { runtime: 'edge' };
 import { emailHtml, bloque, pasos, esc, RESPONDER_A } from './_email-layout.js';
 import { enviarResend } from './_correo.js';
 import { latir } from './_latido.js';
-import { PASOS, DIAS, opcionales, detectar, datosDeLaCuenta, armarRuta, RUTA_DESDE } from './_ruta.js';
+import { pasosPara, DIAS, opcionales, detectar, datosDeLaCuenta, armarRuta, RUTA_DESDE } from './_ruta.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -75,7 +75,7 @@ export default async function handler() {
       if (estado.oculta_at) continue;
       const inicio = Date.parse(a.completado_at);
       const hechos = detectar(await datosDeLaCuenta(a.user_id));
-      const ruta = armarRuta({ pasos: PASOS, hechos, hitos: estado.hitos, opc: opcionales(a.empresa?.sector, a.empresa?.empleados), inicio, ahora });
+      const ruta = armarRuta({ pasos: pasosPara(a.empresa?.sector), hechos, hitos: estado.hitos, opc: opcionales(a.empresa?.sector, a.empresa?.empleados), inicio, ahora });
       // Copia del avance para el panel de cuentas (aunque el dueño no entre).
       if (estado.pct !== ruta.progreso.pct || estado.dia !== ruta.dia_actual || estado.siguiente !== ruta.siguiente) {
         await guardar(a.user_id, { pct: ruta.progreso.pct, dia: ruta.dia_actual, siguiente: ruta.siguiente });

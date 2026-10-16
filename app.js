@@ -18819,10 +18819,13 @@ let _fuentesDe = null;   // para qué cliente se cargaron
 
 // Un lead puede tener una fuente que ya no está en la lista (importada, de un
 // webhook, o borrada después). Se muestra su clave tal cual antes que un hueco.
+// Las que pone el sistema y no están en la lista editable de la cuenta.
+const FUENTES_DEL_SISTEMA = { tienda: 'Tienda en línea' };
+
 function fuenteLabel(key) {
   if (!key) return 'Manual';
   const f = crmSources.find(x => x.key === key);
-  return f ? f.label : String(key).replace(/_/g, ' ');
+  return f ? f.label : (FUENTES_DEL_SISTEMA[key] || String(key).replace(/_/g, ' '));
 }
 
 async function crmLoadSources() {
@@ -25018,6 +25021,145 @@ async function kbSincronizar() {
   finally { _kbSincronizando = false; await kbEstado(); }
 }
 
+// ── Tienda en línea (Shopify, WooCommerce) ─────────────────────────────────
+// Una fuente más, pero la que mueve a quien vende en línea: cada pedido entra
+// con su cliente, los carritos a medias se pueden recuperar y el catálogo con
+// stock alimenta al agente. El servidor es api/tiendas.js; el trabajo de cada
+// aviso lo hace cron-tiendas, así que nada de esto es instantáneo (5 min).
+function tiendaPlata(n, moneda) {
+  if (!n) return '$0';
+  return '$' + Number(n).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + (moneda ? ' ' + moneda : '');
+}
+
+async function tiendaEstado() {
+  const box = document.getElementById('src-tienda');
+  if (!box) return;
+  try {
+    const r = await fetchAuth('/api/tiendas' + prodAlcance());
+    const d = await leerRespuesta(r);
+    if (!r.ok) { box.innerHTML = '<span style="color:var(--danger)">No se pudo consultar la tienda: ' + esc(d.error || 'HTTP ' + r.status) + '</span>'; return; }
+    const tiendas = d.tiendas || [];
+    if (!tiendas.length) {
+      box.innerHTML =
+        '<div style="color:var(--text);font-weight:700">¿Vendes en línea?</div>' +
+        '<div style="margin-top:3px;line-height:1.55">Conecta tu tienda y cada pedido entra solo con su cliente, como venta ganada. Puedes recuperar los carritos abandonados, agradecer cada compra y traer de vuelta a quien dejó de comprar. Tu agente conoce tus productos con su precio y stock.</div>' +
+        '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
+          '<button class="btn-pri sm" onclick="tiendaConectar(\'shopify\')">Conectar Shopify</button>' +
+          '<button class="btn-sec sm" onclick="tiendaConectar(\'woocommerce\')">Conectar WooCommerce</button>' +
+        '</div>';
+      return;
+    }
+    const tieneCarrito = (crmAutomations || []).some(a => a.active && a.trigger?.type === 'carrito_abandonado');
+    box.innerHTML = tiendas.map(t => {
+      const res = t.resumen || {};
+      const ultimo = t.ultimo_evento_at ? cuHace(t.ultimo_evento_at) : 'todavía ninguno';
+      const prod = t.sincronizando ? 'leyendo el catálogo… (' + t.productos + ' hasta ahora)' : t.productos + ' productos';
+      return '<div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">' +
+        '<div style="flex:1;min-width:220px">' +
+          '<div style="color:var(--text);font-weight:700">' + esc(t.nombre || t.dominio) + ' · ' + (t.plataforma === 'shopify' ? 'Shopify' : 'WooCommerce') + '</div>' +
+          '<div style="margin-top:3px">' + esc(prod) + ' · último aviso: ' + esc(ultimo) + '</div>' +
+          '<div style="margin-top:3px">Últimos 30 días: <b style="color:var(--text)">' + (res.pedidos || 0) + ' pedidos</b> por ' + tiendaPlata(res.ventas, t.moneda) +
+            ' · ' + (res.carritos || 0) + ' carritos abandonados · ' + (res.recuperados || 0) + ' recuperados</div>' +
+          (t.ultimo_error ? '<div style="margin-top:6px;color:var(--danger)">' + esc(t.ultimo_error) + '</div>' : '') +
+          ((t.webhooks_fallidos || []).length ? '<div style="margin-top:6px;color:var(--warning)">No se pudieron crear algunos avisos (' + esc(t.webhooks_fallidos.join(', ')) + '). Desconecta y vuelve a conectar después de revisar los permisos de la app.</div>' : '') +
+          (!tieneCarrito && t.plataforma ? '<div style="margin-top:8px"><button class="btn-sec sm" onclick="rutaHazlo(\'auto_carrito\')">Activar recuperación de carritos</button></div>' : '') +
+        '</div>' +
+        '<div style="display:flex;gap:6px">' +
+          '<button class="btn-sec sm" id="tienda-sync-' + esc(t.id) + '" onclick="tiendaSincronizar(\'' + esc(t.id) + '\')">Sincronizar productos</button>' +
+          '<button class="btn-ghost sm" title="Desconectar" onclick="tiendaDesconectar(\'' + esc(t.id) + '\')">&#10005;</button>' +
+        '</div></div>';
+    }).join('<div style="border-top:1px solid var(--border);margin:12px 0"></div>');
+  } catch (e) {
+    box.innerHTML = '<span style="color:var(--danger)">No se pudo consultar la tienda.</span>';
+  }
+}
+
+function tiendaConectar(plataforma) {
+  const shop = plataforma === 'shopify';
+  const pasos = shop
+    ? '<ol style="font-size:12px;color:var(--muted);margin:0 0 12px 18px;line-height:1.7">' +
+        '<li>En Shopify ve a <b>Configuración → Apps → Desarrollar apps</b> y crea una app llamada <b>Acuarius</b> (se abre el Dev Dashboard).</li>' +
+        '<li>En la configuración de la app, en <b>Permisos</b>, marca <b>read_products, read_orders, read_customers</b> y <b>read_inventory</b>.</li>' +
+        '<li>En <b>Acceso a datos protegidos de clientes</b>, marca nombre, correo, teléfono y dirección (sin esto Shopify no manda los pedidos).</li>' +
+        '<li>Publica la versión e <b>instala la app en tu tienda</b>.</li>' +
+        '<li>Copia el <b>Client ID</b> y el <b>secreto</b> de la app y pégalos aquí.</li>' +
+      '</ol>' +
+      '<div class="auto-field"><label class="auto-label">Dirección de la tienda</label><input class="auto-input" id="tienda-dom" placeholder="mitienda.myshopify.com" autocomplete="off"></div>' +
+      '<div class="auto-field"><label class="auto-label">Client ID</label><input class="auto-input" id="tienda-a" autocomplete="off"></div>' +
+      '<div class="auto-field" style="margin-bottom:0"><label class="auto-label">Secreto (Client secret)</label><input class="auto-input" id="tienda-b" type="password" autocomplete="new-password"></div>'
+    : '<ol style="font-size:12px;color:var(--muted);margin:0 0 12px 18px;line-height:1.7">' +
+        '<li>En WordPress ve a <b>WooCommerce → Ajustes → Avanzado → API REST</b> y pulsa <b>Añadir clave</b>.</li>' +
+        '<li>Descripción: <b>Acuarius</b>. Permisos: <b>Lectura/Escritura</b> (la escritura solo se usa para crear los avisos de pedidos).</li>' +
+        '<li>Copia la <b>clave del cliente</b> (ck_…) y el <b>secreto</b> (cs_…) y pégalos aquí.</li>' +
+      '</ol>' +
+      '<div class="auto-field"><label class="auto-label">Dirección de la tienda</label><input class="auto-input" id="tienda-dom" placeholder="https://mitienda.com" autocomplete="off"></div>' +
+      '<div class="auto-field"><label class="auto-label">Clave del cliente</label><input class="auto-input" id="tienda-a" placeholder="ck_…" autocomplete="off"></div>' +
+      '<div class="auto-field" style="margin-bottom:0"><label class="auto-label">Secreto del cliente</label><input class="auto-input" id="tienda-b" type="password" placeholder="cs_…" autocomplete="new-password"></div>';
+  rutaModal('tienda-con', shop ? 'Conectar Shopify' : 'Conectar WooCommerce',
+    pasos + '<div style="font-size:11.5px;color:var(--muted);margin-top:8px">Las llaves se guardan cifradas y solo las usa Acuarius para leer tus pedidos y productos.</div>',
+    '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+    '<button class="btn-pri sm" id="tienda-con-btn" onclick="tiendaGuardar(\'' + plataforma + '\')">Conectar</button>');
+  setTimeout(() => document.getElementById('tienda-dom')?.focus(), 60);
+}
+
+async function tiendaGuardar(plataforma) {
+  const btn = document.getElementById('tienda-con-btn'), msg = document.getElementById('tienda-con-msg');
+  const dominio = (document.getElementById('tienda-dom').value || '').trim();
+  const a = (document.getElementById('tienda-a').value || '').trim();
+  const b = (document.getElementById('tienda-b').value || '').trim();
+  if (!dominio || !a || !b) { msg.textContent = 'Completa los tres campos.'; return; }
+  btn.disabled = true; btn.textContent = 'Conectando… (puede tardar 20 s)';
+  msg.textContent = '';
+  try {
+    const cuerpo = plataforma === 'shopify'
+      ? { accion: 'conectar', plataforma, dominio, client_id: a, client_secret: b }
+      : { accion: 'conectar', plataforma, dominio, ck: a, cs: b };
+    const r = await fetchAuth('/api/tiendas' + prodAlcance(), { method: 'POST', body: JSON.stringify(cuerpo) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    document.getElementById('tienda-con')?.remove();
+    showToast((d.nombre || 'Tienda') + ' conectada · ' + d.productos + ' productos' + (d.terminada ? '' : ' (sigue leyendo el resto)'), 'success');
+    if (d.aviso_catalogo) showToast('El catálogo no se pudo leer todavía: ' + d.aviso_catalogo, 'error');
+    tiendaEstado(); prodEstado();
+    if (typeof rutaPintar === 'function') rutaPintar(true);
+  } catch (e) {
+    msg.textContent = e.message || 'No se pudo conectar';
+    btn.disabled = false; btn.textContent = 'Conectar';
+  }
+}
+
+async function tiendaSincronizar(id) {
+  const btn = document.getElementById('tienda-sync-' + id);
+  if (btn) { btn.disabled = true; btn.textContent = 'Leyendo…'; }
+  try {
+    const r = await fetchAuth('/api/tiendas' + prodAlcance(), { method: 'POST', body: JSON.stringify({ accion: 'sincronizar', id }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    showToast(d.terminada ? 'Catálogo al día · ' + d.vistos + ' productos' : 'Leídos ' + d.vistos + '; el resto se termina en unos minutos', 'success');
+  } catch (e) {
+    showToast('No se pudo sincronizar: ' + (e.message || 'error'), 'error');
+  }
+  tiendaEstado(); prodEstado();
+}
+
+async function tiendaDesconectar(id) {
+  const ok = await confirmarAguaP({
+    titulo: '¿Desconectar la tienda?',
+    texto: 'Dejan de entrar pedidos y carritos, y sus productos salen del catálogo de tu agente.\n\nLos leads y ventas que ya entraron se quedan como están.',
+    confirmar: 'Desconectar', peligro: true,
+  });
+  if (!ok) return;
+  try {
+    const r = await fetchAuth('/api/tiendas' + prodAlcance(), { method: 'POST', body: JSON.stringify({ accion: 'desconectar', id }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    showToast('Tienda desconectada', 'success');
+  } catch (e) {
+    showToast('No se pudo desconectar: ' + (e.message || 'error'), 'error');
+  }
+  tiendaEstado(); prodEstado();
+}
+
 // ── Hoja de productos (joyas y demás) ───────────────────────────────────────
 // Un catálogo de PRODUCTOS leído de una hoja de Google compartida por enlace.
 // Nació con AMETT (joyería): sin web al día y migrando a Shopify, la hoja es lo
@@ -25036,6 +25178,13 @@ async function prodEstado() {
     const r = await fetchAuth('/api/catalogo-hoja' + prodAlcance());
     const d = await leerRespuesta(r);
     if (!r.ok) { box.innerHTML = '<span style="color:var(--danger)">No se pudo consultar la hoja de productos: ' + esc(d.error || 'HTTP ' + r.status) + '</span>'; return; }
+    if (!d.fuente && d.productos > 0) {
+      // Sin hoja, pero con productos: vienen de la tienda en línea.
+      box.innerHTML = '<div style="color:var(--text);font-weight:700">Productos de tu tienda en línea</div>' +
+        '<div style="margin-top:3px;line-height:1.5">' + d.productos + ' productos' + (d.agotados ? ' (' + d.agotados + ' agotados, que no se ofrecen)' : '') +
+        '. Tu agente los ofrece con su precio y stock, y se actualizan solos cada vez que cambias algo en la tienda.</div>';
+      return;
+    }
     if (!d.fuente) {
       box.innerHTML = '<div style="color:var(--text);font-weight:700">Hoja de productos</div>' +
         '<div style="margin-top:3px;line-height:1.5">Sin hoja conectada. Si vendes productos (joyas, ropa, repuestos…), conecta una hoja de Google con tu inventario ' +
@@ -28516,22 +28665,68 @@ function rutaHazlo(que) {
       '<button class="btn-pri sm" id="ruta-hz-btn" onclick="rutaCrearAgente()">Crear agente</button>');
     return;
   }
-  if (que === 'auto_bienvenida' || que === 'auto_rescate') {
-    const bienvenida = que === 'auto_bienvenida';
-    const texto = bienvenida
-      ? 'Hola {{nombre}},\n\nGracias por escribirnos. Ya recibimos tus datos y en breve alguien de nuestro equipo se comunica contigo.\n\nUn saludo,\n' + negocio
-      : 'Hola {{nombre}},\n\nHace unos días hablamos y queríamos saber si sigues interesado. Si tienes cualquier duda, responde este correo y te ayudamos.\n\nUn saludo,\n' + negocio;
-    rutaModal('ruta-hz', bienvenida ? 'Bienvenida automática' : 'Rescate de leads inactivos',
-      '<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">' + (bienvenida
-        ? 'Cada lead nuevo con correo recibe este mensaje al entrar, y a su responsable le queda la tarea de llamarlo.'
-        : 'Si un lead pasa <b>3 días</b> sin movimiento, a su responsable le queda una tarea para retomarlo y el lead recibe este correo.') + '</div>' +
-      '<div class="auto-field"><label class="auto-label">Asunto</label><input class="auto-input" id="ruta-au-asunto" maxlength="120" value="' + esc(bienvenida ? 'Gracias por escribirnos' : '¿Sigues interesado?') + '"></div>' +
-      '<div class="auto-field" style="margin-bottom:0"><label class="auto-label">Mensaje</label><textarea class="auto-input" id="ruta-au-texto" rows="7">' + esc(texto) + '</textarea></div>' +
-      '<div style="font-size:11.5px;color:var(--muted);margin-top:6px">{{nombre}} se cambia por el nombre de cada persona. Queda activa: puedes editarla o apagarla en Marketing → Automatizaciones.</div>',
+  const plantilla = RUTA_AUTOS[que];
+  if (plantilla) {
+    rutaModal('ruta-hz', plantilla.titulo,
+      '<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">' + plantilla.explica + '</div>' +
+      '<div class="auto-field"><label class="auto-label">Asunto</label><input class="auto-input" id="ruta-au-asunto" maxlength="120" value="' + esc(plantilla.asunto) + '"></div>' +
+      '<div class="auto-field" style="margin-bottom:0"><label class="auto-label">Mensaje</label><textarea class="auto-input" id="ruta-au-texto" rows="8">' + esc(plantilla.texto(negocio)) + '</textarea></div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:6px">' + esc(plantilla.vars) + ' se cambian solos por los datos de cada persona. Queda activa: puedes editarla o apagarla en Marketing → Automatizaciones.</div>',
       '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
-      '<button class="btn-pri sm" id="ruta-hz-btn" onclick="rutaCrearAuto(' + (bienvenida ? 'true' : 'false') + ')">Activarla</button>');
+      '<button class="btn-pri sm" id="ruta-hz-btn" onclick="rutaCrearAuto(\'' + que + '\')">Activarla</button>');
   }
 }
+
+// Las automatizaciones de un clic de la ruta. Las de tienda se disparan por
+// los pedidos y carritos (api/_tienda-motor.js); si la persona compra mientras
+// el flujo del carrito espera, el resto se cancela solo.
+const RUTA_AUTOS = {
+  auto_bienvenida: {
+    titulo: 'Bienvenida automática', nombre: 'Bienvenida a leads nuevos', ok: 'Bienvenida activada',
+    explica: 'Cada lead nuevo con correo recibe este mensaje al entrar, y a su responsable le queda la tarea de llamarlo.',
+    asunto: 'Gracias por escribirnos', vars: '{{nombre}}',
+    texto: n => 'Hola {{nombre}},\n\nGracias por escribirnos. Ya recibimos tus datos y en breve alguien de nuestro equipo se comunica contigo.\n\nUn saludo,\n' + n,
+    trigger: { type: 'lead_created' },
+    pasos: (subject, body) => [{ type: 'create_activity', title: 'Primer contacto con el lead nuevo' }, { type: 'condition', field: 'has_email', op: 'eq', value: 'true' }, { type: 'send_email', subject, body }],
+  },
+  auto_rescate: {
+    titulo: 'Rescate de leads inactivos', nombre: 'Rescate de leads inactivos', ok: 'Rescate activado',
+    explica: 'Si un lead pasa 3 días sin movimiento, a su responsable le queda una tarea para retomarlo y el lead recibe este correo.',
+    asunto: '¿Sigues interesado?', vars: '{{nombre}}',
+    texto: n => 'Hola {{nombre}},\n\nHace unos días hablamos y queríamos saber si sigues interesado. Si tienes cualquier duda, responde este correo y te ayudamos.\n\nUn saludo,\n' + n,
+    trigger: { type: 'lead_inactive', days: 3 },
+    pasos: (subject, body) => [{ type: 'create_activity', title: 'Retomar contacto: lleva 3 días sin movimiento' }, { type: 'condition', field: 'has_email', op: 'eq', value: 'true' }, { type: 'send_email', subject, body }],
+  },
+  auto_carrito: {
+    titulo: 'Recuperar carritos abandonados', nombre: 'Recuperar carritos abandonados', ok: 'Recuperación de carritos activada',
+    explica: 'Cuando alguien deja productos sin pagar, a la hora recibe este correo con el enlace para terminar su compra. Si al día siguiente sigue sin comprar, le llega un segundo recordatorio. Si compra antes, no recibe nada más.',
+    asunto: '¿Se te quedó algo en el carrito?', vars: '{{nombre}}, {{productos}}, {{total}} y {{enlace_carrito}}',
+    texto: n => 'Hola {{nombre}},\n\nVimos que dejaste esto en tu carrito: {{productos}}.\n\nLo guardamos para ti. Puedes terminar tu compra aquí: {{enlace_carrito}}\n\nSi tienes alguna duda, responde este correo y te ayudamos.\n\nUn saludo,\n' + n,
+    trigger: { type: 'carrito_abandonado' },
+    pasos: (subject, body) => [
+      { type: 'condition', field: 'has_email', op: 'eq', value: 'true' },
+      { type: 'send_email', subject, body },
+      { type: 'wait', hours: 23 },
+      { type: 'send_email', subject: 'Tu carrito sigue esperándote', body: 'Hola {{nombre}},\n\nTu carrito con {{productos}} sigue guardado, pero no podemos apartarlo por mucho tiempo.\n\nTermina tu compra aquí: {{enlace_carrito}}\n\nUn saludo,\n' + ((_ruta && _ruta.negocio && _ruta.negocio.nombre) || 'nuestro equipo') },
+    ],
+  },
+  auto_postcompra: {
+    titulo: 'Agradecer cada compra', nombre: 'Gracias por tu compra', ok: 'Agradecimiento activado',
+    explica: 'Después de cada pedido pagado, el cliente recibe este mensaje tuyo. Es el mejor momento para que vuelva.',
+    asunto: '¡Gracias por tu compra!', vars: '{{nombre}}, {{pedido}}, {{productos}} y {{total}}',
+    texto: n => 'Hola {{nombre}},\n\n¡Gracias por tu compra! Recibimos tu pedido {{pedido}} ({{productos}}) y ya lo estamos preparando.\n\nSi tienes cualquier pregunta, responde este correo y te ayudamos.\n\nUn abrazo,\n' + n,
+    trigger: { type: 'pedido_pagado' },
+    pasos: (subject, body) => [{ type: 'condition', field: 'has_email', op: 'eq', value: 'true' }, { type: 'send_email', subject, body }],
+  },
+  auto_recompra: {
+    titulo: 'Que vuelvan a comprar', nombre: 'Recompra a los 30 días', ok: 'Recompra activada',
+    explica: 'A los 30 días de su última compra, a quien no ha vuelto a comprar le llega este mensaje. Una sola vez por compra.',
+    asunto: 'Te estábamos esperando', vars: '{{nombre}} y {{productos}}',
+    texto: n => 'Hola {{nombre}},\n\nHace un mes te llevaste {{productos}}. Esperamos que lo estés disfrutando.\n\nTenemos novedades que te pueden gustar. Pásate por la tienda cuando quieras.\n\nUn saludo,\n' + n,
+    trigger: { type: 'sin_comprar', days: 30 },
+    pasos: (subject, body) => [{ type: 'condition', field: 'has_email', op: 'eq', value: 'true' }, { type: 'send_email', subject, body }],
+  },
+};
 
 async function rutaAplicarProceso() {
   const btn = document.getElementById('ruta-hz-btn'), msg = document.getElementById('ruta-hz-msg');
@@ -28578,30 +28773,24 @@ async function rutaCrearAgente() {
   }
 }
 
-async function rutaCrearAuto(bienvenida) {
+async function rutaCrearAuto(que) {
   const btn = document.getElementById('ruta-hz-btn'), msg = document.getElementById('ruta-hz-msg');
+  const p = RUTA_AUTOS[que];
+  if (!p) return;
   const subject = (document.getElementById('ruta-au-asunto').value || '').trim();
   const body = (document.getElementById('ruta-au-texto').value || '').trim();
   if (!subject || !body) { msg.textContent = 'Escribe el asunto y el mensaje.'; return; }
   btn.disabled = true; btn.textContent = 'Activando…';
-  const steps = bienvenida
-    ? [{ type: 'create_activity', title: 'Primer contacto con el lead nuevo' },
-       { type: 'condition', field: 'has_email', op: 'eq', value: 'true' },
-       { type: 'send_email', subject, body }]
-    : [{ type: 'create_activity', title: 'Retomar contacto: lleva 3 días sin movimiento' },
-       { type: 'condition', field: 'has_email', op: 'eq', value: 'true' },
-       { type: 'send_email', subject, body }];
   try {
     const qs = agencyActiveClientId ? '?client_id=' + encodeURIComponent(agencyActiveClientId) : '';
     const r = await fetchAuth('/api/automations' + qs, { method: 'POST', body: JSON.stringify({
-      name: bienvenida ? 'Bienvenida a leads nuevos' : 'Rescate de leads inactivos',
-      trigger: bienvenida ? { type: 'lead_created' } : { type: 'lead_inactive', days: 3 },
-      steps, active: true,
+      name: p.nombre, trigger: p.trigger, steps: p.pasos(subject, body), active: true,
     }) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
     document.getElementById('ruta-hz')?.remove();
-    showToast(bienvenida ? 'Bienvenida activada' : 'Rescate activado', 'success');
+    showToast(p.ok, 'success');
+    if (typeof crmLoadAutomations === 'function') crmLoadAutomations().then(() => { if (document.getElementById('src-tienda')) tiendaEstado(); });
     rutaPintar(true);
   } catch (e) {
     msg.textContent = 'No se pudo activar: ' + (e.message || 'error');
@@ -29973,6 +30162,11 @@ function autoTriggerLabel(a) {
   if (t.type === 'lead_inactive') return 'Cuando lleva ' + (t.days || 3) + '+ días sin actividad' + win;
   if (t.type === 'webhook') return 'Cuando llega un webhook externo' + win;
   if (t.type === 'tag_added') return (t.tag ? 'Cuando recibe la etiqueta "' + t.tag + '"' : 'Cuando recibe cualquier etiqueta') + win;
+  if (t.type === 'pedido_pagado') return 'Tienda: cuando paga un pedido' + win;
+  if (t.type === 'primera_compra') return 'Tienda: cuando compra por primera vez' + win;
+  if (t.type === 'pedido_enviado') return 'Tienda: cuando se envía su pedido' + win;
+  if (t.type === 'carrito_abandonado') return 'Tienda: cuando deja un carrito sin pagar' + win;
+  if (t.type === 'sin_comprar') return 'Tienda: ' + (t.days || 30) + ' días sin comprar' + win;
   return t.type;
 }
 
@@ -30413,7 +30607,15 @@ function autoBuilderRender() {
           '<option value="lead_inactive"' + (t.type === 'lead_inactive' ? ' selected' : '') + '>Cuando lleva días sin actividad</option>' +
           '<option value="webhook"' + (t.type === 'webhook' ? ' selected' : '') + '>Webhook externo (formularios, Zapier...)</option>' +
           '<option value="tag_added"' + (t.type === 'tag_added' ? ' selected' : '') + '>Cuando se le añade una etiqueta</option>' +
+          '<optgroup label="Tienda en línea">' +
+          AUTO_TRIGGERS_TIENDA.map(([v, txt]) => '<option value="' + v + '"' + (t.type === v ? ' selected' : '') + '>' + txt + '</option>').join('') +
+          '</optgroup>' +
         '</select></div>' +
+      (AUTO_TRIGGERS_TIENDA.some(([v]) => v === t.type) ?
+        (t.type === 'sin_comprar' ? '<div class="auto-field"><label class="auto-label">Días desde su última compra</label><select class="auto-input" onchange="_autoDraft.trigger.days=parseInt(this.value);autoRefreshNodes()">' + [15, 30, 45, 60, 90, 180].map(n => '<option value="' + n + '"' + (parseInt(t.days) === n ? ' selected' : '') + '>' + n + ' días</option>').join('') + '</select></div>' : '') +
+        '<div class="auto-vars-hint">' + esc(AUTO_TIENDA_AYUDA[t.type] || '') + ' Necesita una tienda conectada en Marketing → Fuentes. Variables del pedido: {{pedido}}, {{total}}, {{productos}}, {{tienda}}' +
+          (t.type === 'carrito_abandonado' ? ', {{enlace_carrito}} (el enlace para terminar la compra)' : ', {{enlace_pedido}}') + '.</div>'
+      : '') +
       (t.type === 'stage_changed' ? '<div class="auto-field"><label class="auto-label">Etapa destino</label><select class="auto-input" onchange="_autoDraft.trigger.stage=this.value;autoRefreshNodes()"><option value="">Cualquier etapa</option>' + autoStageOptions(t.stage) + '</select></div>' : '') +
       (t.type === 'lead_inactive' ? '<div class="auto-field"><label class="auto-label">Días sin actividad</label><select class="auto-input" onchange="_autoDraft.trigger.days=parseInt(this.value);autoRefreshNodes()">' + [2,3,5,7,14].map(n => '<option value="' + n + '"' + (parseInt(t.days) === n ? ' selected' : '') + '>' + n + ' días</option>').join('') + '</select></div>' : '') +
       (t.type === 'tag_added' ?
@@ -30507,10 +30709,27 @@ function autoRefreshNodes() {
   autoFlatSteps(_autoDraft.steps, []).forEach((s, i) => { if (subs[i + 1]) subs[i + 1].textContent = autoNodeSummary(s); });
 }
 
+// Los disparadores de la tienda en línea (api/_tienda-motor.js los dispara).
+const AUTO_TRIGGERS_TIENDA = [
+  ['pedido_pagado', 'Cuando paga un pedido'],
+  ['primera_compra', 'Cuando compra por primera vez'],
+  ['pedido_enviado', 'Cuando se envía su pedido'],
+  ['carrito_abandonado', 'Cuando deja un carrito sin pagar'],
+  ['sin_comprar', 'Cuando lleva días sin comprar'],
+];
+const AUTO_TIENDA_AYUDA = {
+  pedido_pagado: 'Corre una vez por pedido pagado. El cliente queda como venta ganada con el valor del pedido.',
+  primera_compra: 'Solo la primera vez que esa persona paga algo en tu tienda.',
+  pedido_enviado: 'Cuando el pedido se marca como enviado (Shopify) o completado (WooCommerce).',
+  carrito_abandonado: 'Corre cuando pasa una hora sin que termine de pagar. Si compra mientras el flujo espera, el resto del flujo se cancela solo.',
+  sin_comprar: 'Una vez por cliente, a los días elegidos desde su última compra, si no ha vuelto a comprar.',
+};
+
 function autoTriggerChange(type) {
   const win = _autoDraft.trigger?.window; // conservar la ventana al cambiar de trigger
   _autoDraft.trigger = { type };
   if (type === 'lead_inactive') _autoDraft.trigger.days = 3;
+  if (type === 'sin_comprar') _autoDraft.trigger.days = 30;
   if (win) _autoDraft.trigger.window = win;
   autoBuilderRender();
 }
@@ -33937,7 +34156,16 @@ async function srcRender() {
       '<div style="border:1px dashed var(--border);border-radius:14px;padding:14px 18px;font-size:12.5px;color:var(--muted2)">En preparación — requiere el permiso de la app de Meta que está en trámite. Cuando esté activo, los formularios de tus campañas de clientes potenciales entrarán directo al CRM con su campaña como etiqueta.</div>' +
     '</div>';
 
-  view.innerHTML = header + formsSection + conectoresSection + rest;
+  // La tienda va primero: para quien vende en línea es LA fuente.
+  const tiendaSection =
+    '<div style="max-width:860px;margin-bottom:26px">' +
+      '<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:10px">Tienda en línea (Shopify, WooCommerce)</div>' +
+      '<div id="src-tienda" style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel);font-size:12.5px;color:var(--muted)">Cargando…</div>' +
+    '</div>';
+
+  view.innerHTML = header + tiendaSection + formsSection + conectoresSection + rest;
+  if (typeof crmLoadAutomations === 'function' && !(crmAutomations || []).length) crmLoadAutomations().then(tiendaEstado, tiendaEstado);
+  else tiendaEstado();
   srcLoadWebhook();
   srcLoadChannels();
   prodEstado();
@@ -37543,7 +37771,7 @@ const ASG_FUENTES_LABEL = {
   default: 'Cualquier otra fuente', whatsapp: 'WhatsApp', messenger: 'Messenger',
   instagram: 'Instagram', tiktok: 'TikTok', formulario: 'Formularios web',
   webhook: 'Webhook externo', meta_lead_ads: 'Meta Lead Ads', hotmart: 'Hotmart',
-  importacion: 'Importación', manual: 'Creados a mano',
+  tienda: 'Tienda en línea', importacion: 'Importación', manual: 'Creados a mano',
 };
 let asgData = null;
 

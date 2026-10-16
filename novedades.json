@@ -13,6 +13,17 @@
       }
     },
     {
+      "id": "2026-10-15-tienda-en-linea",
+      "fecha": "2026-10-15",
+      "tipo": "nuevo",
+      "titulo": "Conecta tu tienda de Shopify o WooCommerce",
+      "texto": "En Marketing → Fuentes ahora puedes conectar tu tienda en línea. Cada pedido pagado entra solo con su cliente, como venta ganada y con su valor, y tu agente conoce tus productos con su precio y stock al día. Hay cinco disparadores nuevos para tus automatizaciones: pedido pagado, primera compra, pedido enviado, carrito abandonado y días sin comprar. Puedes recordarle su carrito a quien dejó productos sin pagar, con el enlace para terminar la compra; si compra antes, no le llega nada más. Si vendes en línea, tu ruta de arranque incluye estos pasos con «Hazlo por mí».",
+      "accion": {
+        "texto": "Conectar mi tienda",
+        "ir": "fuentes"
+      }
+    },
+    {
       "id": "2026-10-15-mejorar-agente-inbox",
       "fecha": "2026-10-15",
       "tipo": "nuevo",

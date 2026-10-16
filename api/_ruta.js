@@ -83,6 +83,39 @@ export const PASOS = [
     ir: 'pauta', boton: 'Conectar Google o Meta', academia: 'google-ads' },
 ];
 
+// Quien vende en línea: lo que mueve su negocio son los pedidos de su tienda.
+// Conectarla es esencial (y cuenta como entrada de leads), y sus primeras
+// automatizaciones son las de comercio: carrito, gracias y recompra.
+export function esTienda(sector) { return /E-commerce/i.test(String(sector || '')); }
+
+const PASOS_SOLO_TIENDA = {
+  tienda: { id: 'tienda', dia: 1, titulo: 'Conecta tu tienda en línea',
+    porque: 'Cada pedido entra solo con su cliente, y tu agente conoce tus productos, precios y stock.',
+    ir: 'fuentes', boton: 'Conectar Shopify o WooCommerce', esencial: true, entrada: true, academia: 'marketing' },
+  carrito: { id: 'carrito', dia: 5, titulo: 'Recupera los carritos abandonados',
+    porque: 'Quien dejó productos sin pagar recibe un recordatorio con el enlace para terminar la compra.',
+    ir: 'automatizaciones', boton: 'Activar recuperación', hazlo: 'auto_carrito', esencial: true, academia: 'marketing' },
+  postcompra: { id: 'postcompra', dia: 5, titulo: 'Agradece cada compra',
+    porque: 'Después de cada pedido pagado, un mensaje tuyo que invita a volver.',
+    ir: 'automatizaciones', boton: 'Crear agradecimiento', hazlo: 'auto_postcompra', academia: 'marketing' },
+  recompra: { id: 'recompra', dia: 6, titulo: 'Haz que vuelvan a comprar',
+    porque: 'A los 30 días sin comprar, Acuarius le recuerda a cada cliente que lo esperas.',
+    ir: 'automatizaciones', boton: 'Activar recompra', hazlo: 'auto_recompra', academia: 'marketing' },
+};
+
+/** Los pasos de la ruta para este negocio. */
+export function pasosPara(sector) {
+  if (!esTienda(sector)) return PASOS;
+  const out = [];
+  for (const p of PASOS) {
+    if (p.id === 'cierre') { out.push(PASOS_SOLO_TIENDA.recompra); out.push({ ...p, titulo: 'Tu primera venta registrada', porque: 'Cada pedido pagado de la tienda queda como venta ganada, con su valor.', boton: 'Ver mis ventas' }); continue; }
+    out.push(p);
+    if (p.id === 'contactos') out.push(PASOS_SOLO_TIENDA.tienda);
+    if (p.id === 'rescate') { out.push(PASOS_SOLO_TIENDA.carrito); out.push(PASOS_SOLO_TIENDA.postcompra); }
+  }
+  return out;
+}
+
 export const DIAS = {
   1: { titulo: 'Tu base', meta: 'Que el CRM se parezca a tu negocio' },
   2: { titulo: 'Que entren solos', meta: 'Ningún prospecto se escribe a mano' },
@@ -110,6 +143,9 @@ export function opcionales(sector = '', empleados = '') {
   const s = String(sector || ''), fuera = new Set(['pauta', 'informe']);
   if (empleados === 'Solo yo') { fuera.add('equipo'); fuera.add('reparto'); }
   if (/E-commerce|Restaurantes/.test(s)) fuera.add('propuesta');
+  // En una tienda, el rescate de leads inactivos lo hacen el carrito y la
+  // recompra; queda como extra para quien también vende por chat.
+  if (esTienda(s)) fuera.add('rescate');
   if (/Industria|Tecnología/.test(s)) fuera.add('redes');
   // Cada negocio entra por donde entra: basta con UNA entrada (ver esenciales).
   ['whatsapp', 'redes', 'web'].forEach(p => fuera.add(p));
@@ -117,9 +153,9 @@ export function opcionales(sector = '', empleados = '') {
 }
 
 /** ¿Cumplió los esenciales? Los marcados `esencial` y al menos UNA entrada. */
-export function esencialesCumplidos(hechos) {
-  const base = PASOS.filter(p => p.esencial).every(p => hechos[p.id]);
-  const entrada = PASOS.filter(p => p.entrada).some(p => hechos[p.id]);
+export function esencialesCumplidos(hechos, pasos = PASOS) {
+  const base = pasos.filter(p => p.esencial).every(p => hechos[p.id]);
+  const entrada = pasos.filter(p => p.entrada).some(p => hechos[p.id]);
   return base && entrada;
 }
 
@@ -155,6 +191,10 @@ export function detectar(d) {
     analisis: (d.vistasAnalisis || 0) > 0,
     informe: (d.informes || 0) > 0,
     pauta: !!d.pauta,
+    tienda: (d.tiendas || []).some(t => t.activo),
+    carrito: autos.some(a => tipoDe(a) === 'carrito_abandonado'),
+    postcompra: autos.some(a => ['pedido_pagado', 'primera_compra'].includes(tipoDe(a))),
+    recompra: autos.some(a => tipoDe(a) === 'sin_comprar'),
   };
 }
 
@@ -186,7 +226,7 @@ export async function datosDeLaCuenta(userId, { url = process.env.SUPABASE_URL, 
   };
   const [pipelines, etapas, leads, leadsDeWeb, canales, formularios, equipo, reparto, celulares, agentes,
          fuentesSaber, propiedades, productos, automatizaciones, calendario, reservas, propuestas, plantillas,
-         ganados, vistasAnalisis, informes, reportes, pauta] = await Promise.all([
+         ganados, vistasAnalisis, informes, reportes, pauta, tiendas] = await Promise.all([
     q(`pipelines?user_id=eq.${U}&select=id,name`),
     q(`pipeline_stages?user_id=eq.${U}&select=label&limit=200`),
     cuenta('leads', `user_id=eq.${U}&deleted_at=is.null`),
@@ -210,6 +250,7 @@ export async function datosDeLaCuenta(userId, { url = process.env.SUPABASE_URL, 
     cuenta('informes_compartidos', `user_id=eq.${U}`),
     cuenta('reportes_programados', `user_id=eq.${U}`),
     cuenta('platform_connections', `user_id=eq.${U}&platform=in.(google_ads,meta_ads)`),
+    q(`tiendas?user_id=eq.${U}&activo=is.true&select=activo`),
   ]);
   const reglas = reparto?.[0]?.profile_data;
   return {
@@ -217,7 +258,7 @@ export async function datosDeLaCuenta(userId, { url = process.env.SUPABASE_URL, 
     reparto: !!(reglas && (Array.isArray(reglas) ? reglas.length : Object.keys(reglas).length)),
     celulares, agentes, catalogo: fuentesSaber + propiedades + productos, automatizaciones,
     calendario: calendario > 0, reservas: reservas > 0, propuestas, plantillas, ganados,
-    vistasAnalisis, informes: informes + reportes, pauta: pauta > 0,
+    vistasAnalisis, informes: informes + reportes, pauta: pauta > 0, tiendas,
   };
 }
 

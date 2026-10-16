@@ -179,6 +179,11 @@ function renderVars(text, lead) {
     // hueco que no se nota; esta se usa en frases como «te atiende {{asesor}}»,
     // donde el hueco deja «te atiende .» — peor que no personalizar.
     asesor: String(lead.assigned_name || '').replace(/\s+/g, ' ').trim() || SIN_ASESOR,
+    // Las de la tienda en línea vienen del pedido o carrito que disparó el
+    // flujo (automation_jobs.context, ver _tienda-motor.js). Fuera de un flujo
+    // de tienda quedan vacías, no como «{{pedido}}» literal.
+    pedido: '', total: '', productos: '', enlace_carrito: '', enlace_pedido: '', tienda: '',
+    ...Object.fromEntries(Object.entries(lead._ctx || {}).map(([k, v]) => [k, String(v == null ? '' : v)])),
   };
   return String(text || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => vars[k.toLowerCase()] !== undefined ? vars[k.toLowerCase()] : m);
 }
@@ -200,6 +205,13 @@ export function enlaceBaja(leadId) {
   return `https://app.acuarius.app/api/unsubscribe?l=${leadId}&s=${sig}`;
 }
 
+// Una dirección suelta en el texto («termina tu compra aquí: https://…») se
+// vuelve un enlace: el del carrito tiene que poder tocarse. Las que ya vienen
+// dentro de un <a href="…"> no se tocan.
+export function enlazar(texto) {
+  return String(texto || '').replace(/(^|[\s(])(https?:\/\/[^\s<"')]+)/g, (m, antes, url) => antes + '<a href="' + url + '" style="color:#1E2BCC">' + url + '</a>');
+}
+
 async function actionSendEmail(step, lead, auto, job) {
   if (!lead.email) return { result: 'skipped', detail: 'El lead no tiene email' };
   if (dadoDeBajaCorreo(lead)) return { result: 'skipped', detail: 'Se dio de baja del correo' };
@@ -210,7 +222,7 @@ async function actionSendEmail(step, lead, auto, job) {
   // no tenía forma de pedir que pararan.
   const baja = enlaceBaja(lead.id);
   const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1a1a2e;max-width:560px">' +
-    bodyTxt.split('\n').map(p => '<p style="margin:0 0 14px">' + p + '</p>').join('') +
+    enlazar(bodyTxt).split('\n').map(p => '<p style="margin:0 0 14px">' + p + '</p>').join('') +
     '<p style="margin:22px 0 0;font-size:11.5px;color:#9ca3af">¿No quieres recibir más correos? ' +
     '<a href="' + baja + '" style="color:#9ca3af">Darte de baja</a></p>' +
     '</div>';
@@ -766,6 +778,8 @@ async function ejecutarTrabajo(job, auto, lead) {
         await log(auto.id, job.user_id, job.lead_id, job.step_index, 'run', 'cancelled', 'Lead eliminado');
         return false;
       }
+      // El pedido o carrito que disparó un flujo de tienda, para sus {{variables}}.
+      if (job.context && typeof job.context === 'object') lead = { ...lead, _ctx: job.context };
 
       const steps = compileSteps(auto.steps || []);
       let i = job.step_index || 0;

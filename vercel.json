@@ -160,6 +160,10 @@
       "schedule": "0 13 * * *"
     },
     {
+      "path": "/api/cron-tiendas",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron-ruta",
       "schedule": "0 13 * * *"
     },

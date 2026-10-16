@@ -71,7 +71,9 @@ function jsonResp(data, status = 200) {
   });
 }
 
-const VALID_TRIGGERS = ['lead_created', 'stage_changed', 'lead_inactive', 'webhook', 'tag_added'];
+// Los de la tienda en línea los dispara api/cron-tiendas.js (_tienda-motor.js).
+const VALID_TRIGGERS = ['lead_created', 'stage_changed', 'lead_inactive', 'webhook', 'tag_added',
+  'pedido_pagado', 'primera_compra', 'pedido_enviado', 'carrito_abandonado', 'sin_comprar'];
 // Esta lista tiene que cubrir lo que ofrece el constructor y lo que sabe
 // ejecutar el motor. `pedir_resena` faltaba: se podía armar en la pantalla,
 // el motor sabía ejecutarlo, y al guardar respondía «Paso inválido».
@@ -130,6 +132,7 @@ function validateAutomation(body) {
   if (!body.name || !String(body.name).trim()) return 'El nombre es requerido';
   if (!body.trigger || !VALID_TRIGGERS.includes(body.trigger.type)) return 'Trigger inválido';
   if (body.trigger.type === 'lead_inactive' && !(parseInt(body.trigger.days) > 0)) return 'El trigger de inactividad requiere días > 0';
+  if (body.trigger.type === 'sin_comprar' && !(parseInt(body.trigger.days) >= 7)) return '«Sin comprar» necesita al menos 7 días';
   if (body.trigger.window) {
     const w = body.trigger.window;
     const s = parseInt(w.start), e = parseInt(w.end);
