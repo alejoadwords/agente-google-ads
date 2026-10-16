@@ -357,6 +357,47 @@ console.log('\nLas automatizaciones\n');
   ok(/sinPrimerContacto: true/.test(leer('api/_tienda-motor.js')), 'quien compra no genera tarea de «primer contacto»');
 }
 
+console.log('\nEl informe de Análisis\n');
+{
+  const I = await import('../public/informes.js');
+  const DIA = 86400000, hace = n => new Date(Date.now() - n * DIA).toISOString();
+  const tienda = {
+    tiendas: [{ nombre: 'Moda Ana', plataforma: 'shopify', moneda: 'COP' }],
+    pedidos: [
+      { total: 100000, moneda: 'COP', estado: 'pagado', pagado_at: hace(200), persona: 'eA', fuente: 'tienda', lead_desde: hace(200), productos: [{ nombre: 'Taza', cantidad: 1, precio: 100000 }] },
+      { total: 60000, moneda: 'COP', estado: 'pagado', pagado_at: hace(5), persona: 'eA', fuente: 'tienda', lead_desde: hace(200), productos: [{ nombre: 'Taza', cantidad: 2, precio: 30000 }] },
+      { total: 40000, moneda: 'COP', estado: 'enviado', pagado_at: hace(3), persona: 'eB', fuente: 'whatsapp', lead_desde: hace(10), productos: [{ nombre: 'Gorra', cantidad: 1, precio: 40000 }] },
+      { total: 999999, moneda: 'COP', estado: 'reembolsado', pagado_at: hace(2), persona: 'eC', fuente: 'tienda', lead_desde: hace(2), productos: [] },
+      { total: 50000, moneda: 'COP', estado: 'pagado', pagado_at: hace(40), persona: 'eD', fuente: 'tienda', lead_desde: hace(40), productos: [] },
+    ],
+    carritos: [
+      { total: 30000, estado: 'abandonado', creado_at: hace(4) },
+      { total: 45000, estado: 'recuperado', creado_at: hace(6) },
+      { total: 10000, estado: 'sin_contacto', creado_at: hace(6) },
+    ],
+  };
+  const d = I.datosTienda({ tienda, rango: 30 });
+  ok(d.ventas === 100000 && d.ped.length === 2, 'ventas del periodo por fecha de pago; el reembolsado no suma', { ventas: d.ventas, n: d.ped.length });
+  ok(d.ticket === 50000, 'ticket promedio');
+  ok(d.clientes === 2 && d.repiten === 1 && d.nuevos === 1, 'quien ya había comprado antes del periodo cuenta como que repite', d);
+  ok(d.ventasPrev === 50000, 'el periodo anterior, del mismo largo, para la flecha');
+  ok(d.conversadas.length === 1 && d.ventasConversadas === 40000 && d.porFuente[0].fuente === 'whatsapp', 'lo vendido a quien escribió antes por WhatsApp');
+  ok(d.avisados === 2 && d.recuperados === 1 && d.ventasRecuperadas === 45000, 'carritos: avisados, recuperados y lo que valían (sin contacto no cuenta)');
+  ok(d.productos[0].nombre === 'Taza' && d.productos[0].unidades === 2, 'productos más vendidos del periodo');
+  const html = I.htmlTienda({ tienda, rango: 30, fuentes: [{ key: 'whatsapp', label: 'WhatsApp' }] });
+  ok(/Ventas por día/.test(html) && /WhatsApp/.test(html) && /1 de 2/.test(html), 'se dibuja con su gráfica, el canal y los carritos');
+  ok(/¿Vendes en línea\?/.test(I.htmlTienda({ tienda: { tiendas: [], pedidos: [], carritos: [] }, rango: 30 })), 'sin tienda, explica cómo conectarla');
+  ok(!/onclick/.test(I.htmlTienda({ tienda: { tiendas: [], pedidos: [], carritos: [] }, rango: 30, interactivo: false })), 'fuera de la app no lleva botones');
+  ok(I.INFORMES.some(i => i.id === 'tienda'), 'está en el catálogo de informes (app, PDF y enlace)');
+  const ventas = leer('api/_tienda-ventas.js');
+  ok(/persona: p\.email \? await clave/.test(ventas) && !/email: p\.email/.test(ventas), 'al informe no le llega el correo de nadie: solo una clave opaca');
+  const comp = leer('api/informes-compartidos.js');
+  ok(/'mk', 'tienda'\]/.test(comp) && /out\.tienda = await ventasDeTienda/.test(comp), 'el enlace compartido lo acepta y le trae los datos');
+  ok(/tienda: datos\.tienda \|\| null/.test(leer('public/informe.html')), 'y la página del enlace se los pasa');
+  ok(/soloLoSuyo\(quien\.perfil\)/.test(leer('api/tiendas.js')), 'un perfil que solo ve lo suyo no ve el total de la tienda');
+  ok(/id="crm-tienda-view"/.test(leer('public/index.html')) && /NAV_TAB_LABELS\.tienda = 'Tienda'/.test(leer('public/app.js')), 'tiene su pestaña en Análisis');
+}
+
 console.log('\nLa ruta de una tienda\n');
 {
   const R = await import('../api/_ruta.js');

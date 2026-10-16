@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-16-tienda-en-analisis",
+      "fecha": "2026-10-16",
+      "tipo": "nuevo",
+      "titulo": "Las ventas de tu tienda, en Análisis",
+      "texto": "Si tienes Shopify o WooCommerce conectado, en Análisis → Tienda ves lo que vendes con su comparación contra el periodo anterior: pedidos, ticket promedio, clientes nuevos y los que repiten, carritos recuperados y cuánto valían, tus productos más vendidos y la gráfica de ventas por día o por semana. También ves cuánto le vendiste a quien antes te escribió por WhatsApp o Instagram, por canal. Como los demás informes, se descarga en PDF y se comparte con un enlace vivo, sin datos de tus clientes.",
+      "accion": {
+        "texto": "Ver la tienda en Análisis",
+        "ir": "analisis-tienda"
+      }
+    },
+    {
       "id": "2026-10-16-historial-de-la-tienda",
       "fecha": "2026-10-16",
       "tipo": "mejora",

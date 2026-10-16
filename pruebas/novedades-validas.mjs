@@ -66,7 +66,10 @@ ok(fechas[0] === [...fechas].sort().reverse()[0],
 console.log('\nLos botones llevan a alguna parte');
 const i = app.indexOf('function novIr(destino)');
 ok(i > 0, 'novIr existe en app.js');
-const destinos = new Set([...app.slice(i, i + 3000).matchAll(/case '([a-z-]+)'/g)].map(m => m[1]));
+// Hasta el `default:` del switch de irA(), no un número fijo de caracteres:
+// con cada destino nuevo, los del final se quedaban fuera de la ventana.
+const finSwitch = app.indexOf('default:', i);
+const destinos = new Set([...app.slice(i, finSwitch > i ? finSwitch : i + 3000).matchAll(/case '([a-z-]+)'/g)].map(m => m[1]));
 ok(destinos.size > 5, 'y declara sus destinos: ' + destinos.size);
 
 for (const n of lista) {

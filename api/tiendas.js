@@ -1,6 +1,7 @@
 // api/tiendas.js — conectar y ver las tiendas en línea (Shopify, WooCommerce).
 //
 //   GET                                   las tiendas del alcance y sus cifras de 30 días
+//   GET ?ventas=1                         los datos del informe «Tienda» de Análisis (_tienda-ventas.js)
 //   POST {accion:'conectar', plataforma, dominio, client_id, client_secret | token | ck, cs}
 //   POST {accion:'sincronizar', id}       vuelve a leer todo el catálogo
 //   POST {accion:'desconectar', id}       quita webhooks, productos y credenciales
@@ -15,10 +16,11 @@
 export const config = { runtime: 'edge' };
 
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
-import { quienPregunta, alcanceDeCliente } from './_perfiles.js';
+import { quienPregunta, alcanceDeCliente, puedeVer, soloLoSuyo } from './_perfiles.js';
 import { cifrar } from './_cifrado.js';
 import { dominioShopify, dominioWoo, tokenShopify, gqlShopify, Q_TIENDA_SHOPIFY, webhooksShopify, borrarWebhooksShopify,
          wooFetch, webhooksWoo, borrarWebhooksWoo, APP } from './_tienda.js';
+import { ventasDeTienda } from './_tienda-ventas.js';
 import { sbTienda, credencialesDe, accesoShopify, sincronizarProductos, avanzarHistorial } from './_tienda-catalogo.js';
 
 const CORS = {
@@ -48,6 +50,14 @@ async function manejar(req) {
   const clientId = alcanceDeCliente(quien, new URL(req.url).searchParams.get('client_id') || null) || null;
   const alcance = `user_id=eq.${enc(userId)}` + (clientId ? `&client_id=eq.${enc(clientId)}` : '&client_id=is.null');
 
+  if (req.method === 'GET' && new URL(req.url).searchParams.get('ventas')) {
+    // Lo que vende la tienda es cifra de quien dirige: un perfil que en
+    // Análisis solo ve su propia gestión no ve el total del negocio.
+    if (quien.esMiembro && (!puedeVer(quien.perfil, 'analisis') || soloLoSuyo(quien.perfil))) {
+      return jsonResp({ error: 'El informe de la tienda lo ven el dueño y los administradores.', sin_permiso: true }, 403);
+    }
+    return jsonResp(await ventasDeTienda(userId, clientId));
+  }
   if (req.method === 'GET') {
     const tiendas = (await sbTienda(`/tiendas?${alcance}&activo=is.true&select=${CAMPOS}&order=created_at.asc`)) || [];
     const desde = new Date(Date.now() - 30 * 86400000).toISOString();

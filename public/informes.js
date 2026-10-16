@@ -92,18 +92,22 @@ export function rangoTexto(r) {
 //   acts, inter, falla        Productividad y Por comercial
 //   equipo                    Por comercial [{id,nombre}]
 //   camps, autos, logs        Marketing
+//   tienda                    Tienda: {tiendas, pedidos, carritos} de api/_tienda-ventas.js
 function base(c) {
   return Object.assign({
     leads: [], etapas: [], todos: false, rango: 0, botones: '', etiquetas: [], fuentes: [],
     tareasPorLead: {}, moneda: '', interactivo: false, privado: false,
-    acts: [], inter: [], falla: false, equipo: [], camps: [], autos: [], logs: [],
+    acts: [], inter: [], falla: false, equipo: [], camps: [], autos: [], logs: [], tienda: null,
   }, c || {});
 }
 
 function fuenteLabel(c, key) {
   if (!key) return 'Manual';
   const f = (c.fuentes || []).find(x => x.key === key);
-  return f ? f.label : String(key).replace(/_/g, ' ');
+  // Las que pone el sistema y no están en la lista editable (igual que app.js).
+  const delSistema = { whatsapp: 'WhatsApp', instagram: 'Instagram', messenger: 'Messenger', tiktok: 'TikTok',
+    tienda: 'Tienda en línea', webhook: 'Webhook', formulario: 'Formulario', importacion: 'Importación', hotmart: 'Hotmart' };
+  return f ? f.label : (delSistema[key] || String(key).replace(/_/g, ' '));
 }
 function tagColor(c, name) {
   const cat = (c.etiquetas || []).find(t => t.name === name);
@@ -895,6 +899,162 @@ export function htmlEquipo(ctx) {
   return html;
 }
 
+// ── Tienda en línea ─────────────────────────────────────────────────────────
+// Lo que vende la tienda conectada (Shopify, WooCommerce), y lo que Acuarius le
+// suma: carritos recuperados, clientes que repiten y ventas de gente que antes
+// escribió por un canal. No depende del proceso de venta: un pedido es de la
+// tienda, no de un tablero.
+//
+// Los pedidos traen a la persona como una clave opaca (nunca su correo), así
+// que este informe sale entero también en el enlace compartido.
+export function datosTienda(ctx) {
+  const c = base(ctx);
+  const t = c.tienda || { tiendas: [], pedidos: [], carritos: [] };
+  const ini = rangoIni(c.rango), fin = rangoFin(c.rango);
+  const enR = (d, a = ini, b = fin) => { if (!d) return false; const x = new Date(d).getTime(); return x >= a && x <= b; };
+  const validos = (t.pedidos || []).filter(p => !['cancelado', 'reembolsado'].includes(p.estado));
+  const delPeriodo = (a, b) => validos.filter(p => enR(p.pagado_at, a, b));
+  const ped = delPeriodo(ini, fin);
+
+  // El periodo anterior, del mismo largo, para las flechas. Con «Todo» no hay.
+  const largo = fin - ini;
+  const prev = c.rango && largo > 0 ? delPeriodo(ini - largo, ini - 1) : null;
+
+  // ¿Quién repite? Su primera compra (de toda la historia) es anterior al periodo.
+  const primera = {};
+  validos.forEach(p => { if (p.persona && (!primera[p.persona] || p.pagado_at < primera[p.persona])) primera[p.persona] = p.pagado_at; });
+  const personas = new Set(ped.map(p => p.persona).filter(Boolean));
+  const repiten = [...personas].filter(k => new Date(primera[k]).getTime() < ini).length;
+
+  const ventas = ped.reduce((a, p) => a + p.total, 0);
+  const ventasPrev = prev ? prev.reduce((a, p) => a + p.total, 0) : null;
+
+  // Ventas que pasaron antes por el CRM: el cliente ya estaba (le escribió al
+  // agente, llenó un formulario…) al menos una hora antes de pagar.
+  const conversadas = ped.filter(p => p.fuente && p.fuente !== 'tienda' && p.lead_desde &&
+    new Date(p.lead_desde).getTime() < new Date(p.pagado_at).getTime() - 3600000);
+
+  const carr = (t.carritos || []).filter(k => enR(k.creado_at));
+  const abandonados = carr.filter(k => ['abandonado', 'recuperado'].includes(k.estado) || k.estado === 'pendiente');
+  const avisados = carr.filter(k => k.estado === 'abandonado' || k.estado === 'recuperado');
+  const recuperados = carr.filter(k => k.estado === 'recuperado');
+
+  const productos = {};
+  ped.forEach(p => (p.productos || []).forEach(x => {
+    const k = x.nombre || 'Sin nombre';
+    const f = productos[k] || (productos[k] = { nombre: k, unidades: 0, importe: 0 });
+    f.unidades += x.cantidad || 1;
+    f.importe += (Number(x.precio) || 0) * (x.cantidad || 1);
+  }));
+
+  const porFuente = {};
+  conversadas.forEach(p => { const f = porFuente[p.fuente] || (porFuente[p.fuente] = { fuente: p.fuente, pedidos: 0, importe: 0 }); f.pedidos++; f.importe += p.total; });
+
+  const monedas = [...new Set(ped.map(p => p.moneda).filter(Boolean))];
+  return {
+    tiendas: t.tiendas || [], hay: (t.tiendas || []).length > 0, falla: !!t.falla, truncado: !!t.truncado,
+    ped, prev, ventas, ventasPrev, ticket: ped.length ? ventas / ped.length : 0,
+    clientes: personas.size, repiten, nuevos: personas.size - repiten,
+    conversadas, ventasConversadas: conversadas.reduce((a, p) => a + p.total, 0),
+    carritos: abandonados.length, avisados: avisados.length, recuperados: recuperados.length,
+    ventasRecuperadas: recuperados.reduce((a, k) => a + k.total, 0),
+    productos: Object.values(productos).sort((a, b) => b.unidades - a.unidades || b.importe - a.importe),
+    porFuente: Object.values(porFuente).sort((a, b) => b.importe - a.importe),
+    moneda: monedas.length === 1 ? monedas[0] : ((t.tiendas || [])[0] || {}).moneda || c.moneda || '',
+    variasMonedas: monedas.length > 1,
+    ini, fin,
+  };
+}
+
+const pct = (a, b) => (b ? (a - b) / b * 100 : null);
+
+export function htmlTienda(ctx) {
+  const c = base(ctx);
+  const d = datosTienda(c);
+  const plata = n => salesFmtMoney(n, d.moneda);
+  const nombres = d.tiendas.map(t => t.nombre).filter(Boolean).join(', ');
+  let html = cabecera('Tienda en línea', (nombres ? esc(nombres) + ' · ' : '') + esc(rangoTexto(c.rango)), c.botones);
+
+  if (d.falla) return html + '<div style="color:var(--danger);font-size:12.5px">No se pudieron leer los pedidos de la tienda.</div>';
+  if (!d.hay) {
+    return html + '<div style="border:1px dashed var(--border);border-radius:14px;padding:22px;text-align:center">' +
+      '<div style="font-size:13.5px;font-weight:800;margin-bottom:4px">¿Vendes en línea?</div>' +
+      '<div style="font-size:12px;color:var(--muted);line-height:1.55;max-width:460px;margin:0 auto">Conecta tu tienda de Shopify o WooCommerce y aquí verás lo que vendes, qué clientes repiten y cuánto recuperan tus recordatorios de carrito.</div>' +
+      (c.interactivo ? '<button class="btn-pri sm" style="margin-top:12px" onclick="irA(\'fuentes\')">Conectar mi tienda</button>' : '') +
+    '</div>';
+  }
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px">' +
+    salesCard('Ventas', plata(d.ventas), d.ped.length + ' pedidos pagados', d.prev ? pct(d.ventas, d.ventasPrev) : null) +
+    salesCard('Pedidos', String(d.ped.length), d.prev ? d.prev.length + ' en el periodo anterior' : '', d.prev ? pct(d.ped.length, d.prev.length) : null) +
+    salesCard('Ticket promedio', plata(d.ticket), 'por pedido') +
+    salesCard('Clientes', String(d.clientes), d.nuevos + ' nuevos · ' + d.repiten + ' que repiten') +
+  '</div>';
+
+  const tasa = d.avisados ? Math.round(d.recuperados / d.avisados * 100) : 0;
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:18px">' +
+    salesCard('Carritos recuperados', d.recuperados + ' de ' + d.avisados, d.avisados ? tasa + ' % de los avisados · ' + plata(d.ventasRecuperadas) : 'Ningún carrito abandonado en el periodo') +
+    salesCard('Clientes que repiten', d.clientes ? Math.round(d.repiten / d.clientes * 100) + ' %' : '—', d.clientes ? 'ya te habían comprado antes de este periodo' : 'Sin compras en el periodo') +
+    salesCard('Vendido a quien te escribió antes', plata(d.ventasConversadas), d.conversadas.length + ' pedidos de clientes que ya estaban en tu CRM') +
+  '</div>';
+
+  // Ventas en el tiempo: por día hasta un mes, por semana más allá.
+  if (d.ped.length) {
+    const porSemana = (d.fin - d.ini) > 35 * 86400000 || !c.rango;
+    const cubos = {};
+    d.ped.forEach(p => {
+      const f = new Date(p.pagado_at);
+      if (porSemana) { const l = new Date(f); l.setHours(0, 0, 0, 0); l.setDate(l.getDate() - ((l.getDay() + 6) % 7)); f.setTime(l.getTime()); }
+      const k = crmFechaLocal(f);
+      cubos[k] = (cubos[k] || 0) + p.total;
+    });
+    // Todos los días (o semanas) del periodo, también los que no vendieron:
+    // sin los ceros, la gráfica junta días lejanos y parece que se vende parejo.
+    const paso = porSemana ? 7 : 1;
+    const desde = new Date(c.rango ? d.ini : Math.min(...d.ped.map(p => new Date(p.pagado_at).getTime())));
+    desde.setHours(0, 0, 0, 0);
+    if (porSemana) desde.setDate(desde.getDate() - ((desde.getDay() + 6) % 7));
+    const todas = [];
+    for (const f = new Date(desde); f.getTime() <= d.fin; f.setDate(f.getDate() + paso)) todas.push([crmFechaLocal(f), cubos[crmFechaLocal(f)] || 0]);
+    const filas = todas.slice(-53);
+    const max = Math.max(...filas.map(f => f[1]), 1);
+    html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:12px">' +
+      '<div style="font-size:13px;font-weight:800;margin-bottom:12px">Ventas ' + (porSemana ? 'por semana' : 'por día') + '</div>' +
+      '<div style="display:flex;align-items:flex-end;gap:4px;height:130px">' +
+      filas.map(([k, v]) => {
+        const etiqueta = new Date(k + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+        return '<div title="' + esc((porSemana ? 'Semana del ' : '') + etiqueta + ': ' + plata(v)) + '" style="flex:1;min-width:6px;display:flex;flex-direction:column;justify-content:flex-end;height:100%">' +
+          '<div style="background:var(--blue);border-radius:4px 4px 0 0;height:' + Math.max(2, Math.round(v / max * 100)) + '%"></div></div>';
+      }).join('') +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted2);margin-top:6px">' +
+        '<span>' + esc(new Date(filas[0][0] + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })) + '</span>' +
+        '<span>' + esc(new Date(filas[filas.length - 1][0] + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })) + '</span></div>' +
+    '</div>';
+  }
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">';
+  const caja = (titulo, cuerpo) => '<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:16px 18px">' +
+    '<div style="font-size:13px;font-weight:800;margin-bottom:12px">' + titulo + '</div>' + cuerpo + '</div>';
+  const top = d.productos.slice(0, 8);
+  const maxU = Math.max(...top.map(p => p.unidades), 1);
+  html += caja('Productos más vendidos', top.length
+    ? top.map(p => salesBar(p.nombre, p.unidades, maxU, 'var(--success)', plata(p.importe))).join('') +
+      '<div style="font-size:11px;color:var(--muted2);margin-top:6px">Unidades vendidas y su importe en el periodo.</div>'
+    : '<div style="font-size:12px;color:var(--muted)">Sin ventas en el periodo.</div>');
+  const maxF = Math.max(...d.porFuente.map(f => f.pedidos), 1);
+  html += caja('Pedidos de quien te escribió antes, por canal', d.porFuente.length
+    ? d.porFuente.map(f => salesBar(fuenteLabel(c, f.fuente), f.pedidos, maxF, 'var(--blue)', plata(f.importe))).join('') +
+      '<div style="font-size:11px;color:var(--muted2);margin-top:6px">Clientes que entraron a tu CRM por ese canal al menos una hora antes de pagar.</div>'
+    : '<div style="font-size:12px;color:var(--muted);line-height:1.5">Todavía ningún pedido de alguien que te escribiera antes. Con tu agente atendiendo WhatsApp e Instagram, aquí verás cuánto vende.</div>');
+  html += '</div>';
+
+  if (d.variasMonedas) html += '<div style="font-size:11.5px;color:var(--warning);margin-top:10px">Hay pedidos en varias monedas: las sumas las mezclan tal cual.</div>';
+  if (d.truncado) html += '<div style="font-size:11.5px;color:var(--warning);margin-top:10px">La tienda tiene más pedidos de los que el informe puede leer de una vez: las cifras están incompletas.</div>';
+  html += '<div style="font-size:11px;color:var(--muted2);margin-top:12px">Cuenta los pedidos pagados por su fecha de pago; los cancelados y reembolsados no suman. Los recordatorios de carrito salen a la hora sin pagar.</div>';
+  return html;
+}
+
 // ── Catálogo ────────────────────────────────────────────────────────────────
 // Los informes que se pueden compartir y descargar, en el orden del menú.
 // `rango` es el de por defecto; `necesita` lo que hay que cargar para él.
@@ -904,6 +1064,8 @@ export const INFORMES = [
   { id: 'equipo',    titulo: 'Por comercial',  html: htmlEquipo,        rango: 30, necesita: ['inter', 'equipo'] },
   { id: 'mk',        titulo: 'Marketing',      html: htmlMarketing,     rango: 90, necesita: ['camps', 'autos', 'logs'] },
   { id: 'analytics', titulo: 'Resumen',        html: htmlResumen,       rango: 0,  necesita: [] },
+  // Solo se ofrece a quien tiene una tienda conectada (ver infCasillas en app.js).
+  { id: 'tienda',    titulo: 'Tienda',         html: htmlTienda,        rango: 30, necesita: ['tienda'] },
 ];
 export function informe(id) { return INFORMES.find(i => i.id === id) || null; }
 

@@ -19,6 +19,7 @@
 // informe por comercial no se entiende sin ellos.
 export const config = { runtime: 'edge' };
 
+import { ventasDeTienda } from './_tienda-ventas.js';
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 import { quienPregunta, alcanceDeCliente, soloLoSuyo, puedeVer } from './_perfiles.js';
 import { traerTodo } from './_paginado.js';
@@ -43,7 +44,7 @@ export const FUENTES_BASE = [
 ];
 
 // Los que se pueden compartir: los mismos ids que usa la app (crmView).
-export const INFORMES_VALIDOS = ['analytics', 'sales', 'prod', 'equipo', 'mk'];
+export const INFORMES_VALIDOS = ['analytics', 'sales', 'prod', 'equipo', 'mk', 'tienda'];
 const MAX_ENLACES = 30;
 const DIEZ_ANOS = 3650 * 86400000;
 
@@ -157,6 +158,11 @@ export async function datosDelEnlace(e, { desde = null, ahora = Date.now(), leer
     out.camps = await conAperturas(camps || []);
     out.autos = autos || [];
     out.logs = (logs || []).map(l => ({ automation_id: l.automation_id, lead_id: l.lead_id, created_at: l.created_at, result: l.result }));
+  }
+  // Tienda: pedidos y carritos, sin datos de contacto (ver _tienda-ventas.js).
+  if (quiere.has('tienda')) {
+    try { out.tienda = await ventasDeTienda(e.user_id, cli || null); }
+    catch { out.tienda = { tiendas: [], pedidos: [], carritos: [], falla: true }; }
   }
   return out;
 }

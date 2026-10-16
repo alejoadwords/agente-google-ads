@@ -10744,6 +10744,7 @@ function irA(destino) {
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
         case 'conversaciones':navGo('conversaciones'); break;
         case 'analisis':      navGo('analisis'); break;
+        case 'analisis-tienda': navGo('analisis'); setTimeout(() => crmSetView('tienda'), 150); break;
         case 'ruta':          rutaMostrar().then(() => rutaAbrir()); break;
         // Un destino mal escrito dejaba un botón que no hacía absolutamente
         // nada al pulsarlo. Nadie lo notaba al publicar la novedad.
@@ -18819,13 +18820,13 @@ let _fuentesDe = null;   // para qué cliente se cargaron
 
 // Un lead puede tener una fuente que ya no está en la lista (importada, de un
 // webhook, o borrada después). Se muestra su clave tal cual antes que un hueco.
-// Las que pone el sistema y no están en la lista editable de la cuenta.
-const FUENTES_DEL_SISTEMA = { tienda: 'Tienda en línea' };
-
 function fuenteLabel(key) {
   if (!key) return 'Manual';
   const f = crmSources.find(x => x.key === key);
-  return f ? f.label : (FUENTES_DEL_SISTEMA[key] || String(key).replace(/_/g, ' '));
+  // Las que pone el sistema y no están en la lista editable de la cuenta.
+  const delSistema = { whatsapp: 'WhatsApp', instagram: 'Instagram', messenger: 'Messenger', tiktok: 'TikTok',
+    tienda: 'Tienda en línea', webhook: 'Webhook', formulario: 'Formulario', importacion: 'Importación', hotmart: 'Hotmart' };
+  return f ? f.label : (delSistema[key] || String(key).replace(/_/g, ' '));
 }
 
 async function crmLoadSources() {
@@ -27256,7 +27257,7 @@ function infPintarAcciones() {
 
 // El periodo que tiene elegido cada informe en la app.
 function infRangoDe(id) {
-  return ({ analytics: _resumenRange, sales: _salesRange, prod: _prodRange, equipo: _eqRange, mk: _mkRange })[id];
+  return ({ analytics: _resumenRange, sales: _salesRange, prod: _prodRange, equipo: _eqRange, mk: _mkRange, tienda: _tiendaInfRange })[id];
 }
 
 let _infNegocioCuenta = '';   // el del alta guiada, lo trae la lista de enlaces
@@ -27296,7 +27297,9 @@ function infModal(id, titulo, cuerpo, pie) {
 
 function infCasillas(prefijo, marcados) {
   const M = _informesMod;
-  return (M ? M.INFORMES : []).map(i =>
+  // «Tienda» solo para quien tiene una conectada.
+  const hayTienda = !!(_tiendaVentas && (_tiendaVentas.tiendas || []).length);
+  return (M ? M.INFORMES : []).filter(i => i.id !== 'tienda' || hayTienda).map(i =>
     '<label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px">' +
       '<input type="checkbox" class="' + prefijo + '-casilla" value="' + i.id + '"' + (marcados.includes(i.id) ? ' checked' : '') + '>' +
       '<span style="flex:1;font-weight:600">' + esc(i.titulo) + '</span>' +
@@ -27346,6 +27349,7 @@ async function infDescargar() {
       ids.includes('prod') && !_prodData ? prodLoad() : null,
       ids.includes('equipo') && !_eqData ? eqLoad() : null,
       ids.includes('mk') && !_mkData ? mkLoad() : null,
+      ids.includes('tienda') && !_tiendaVentas ? tiendaInfLoad() : null,
       infCargarCss(),
       infTraerNegocio(),
     ]);
@@ -27359,6 +27363,7 @@ async function infDescargar() {
       }
       if (i.id === 'equipo') { ctx.inter = M.actsDelInforme(_eqData.inter, ctx.leads, true); ctx.equipo = _eqData.equipo; ctx.falla = !!_eqData.falla; }
       if (i.id === 'mk') Object.assign(ctx, _mkData);
+      if (i.id === 'tienda') ctx.tienda = _tiendaVentas;
       return { titulo: i.titulo, periodo: M.rangoTexto(infRangoDe(i.id)), html: i.html(ctx) };
     });
     document.getElementById('inf-imprimir')?.remove();
@@ -36991,6 +36996,63 @@ async function mkRender() {
     rango: _mkRange, botones: rangoBotones(_mkRange, 'mkSetRange'),
   }));
 }
+
+// ── INFORME DE LA TIENDA EN LÍNEA ─────────────────────────────────────────────
+// Lo dibuja public/informes.js (htmlTienda), el mismo que usan el PDF y el
+// enlace compartido. Los datos vienen de /api/tiendas?ventas=1, que no manda
+// ni nombres ni correos: la persona de cada pedido es una clave opaca.
+let _tiendaInfRange = 30;
+let _tiendaVentas = null;
+let _tiendaVentasDe = undefined;   // de qué cliente son los datos cargados
+
+function tiendaInfSetRange(d) { _tiendaInfRange = d; tiendaInfRender(); }
+
+async function tiendaInfLoad() {
+  const r = await fetchAuth('/api/tiendas?ventas=1' + (prodAlcance() ? '&' + prodAlcance().slice(1) : ''));
+  const d = await leerRespuesta(r);
+  _tiendaVentasDe = crmAmbitoCliente();
+  _tiendaVentas = r.ok ? d : { tiendas: [], pedidos: [], carritos: [], falla: true, error: d.error || 'HTTP ' + r.status, sin_permiso: !!d.sin_permiso };
+  return _tiendaVentas;
+}
+
+async function tiendaInfRender() {
+  const box = document.getElementById('crm-tienda-view');
+  if (!box) return;
+  if (!_tiendaVentas || _tiendaVentasDe !== crmAmbitoCliente()) {
+    box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Cargando la tienda…</div>';
+    await tiendaInfLoad().catch(e => { _tiendaVentas = { tiendas: [], pedidos: [], carritos: [], falla: true, error: e.message }; });
+  }
+  if (_tiendaVentas.sin_permiso) {
+    box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">' + esc(_tiendaVentas.error) + '</div>';
+    return;
+  }
+  const M = informesListo(tiendaInfRender);
+  if (!M) { box.innerHTML = INFORME_CARGANDO; return; }
+  box.innerHTML = M.htmlTienda(Object.assign(informeCtx(), {
+    tienda: _tiendaVentas, rango: _tiendaInfRange, botones: rangoBotones(_tiendaInfRange, 'tiendaInfSetRange'),
+  }));
+}
+
+// La pestaña «Tienda» en Análisis, junto a Marketing.
+(function () {
+  const _prev = crmSetView;
+  crmSetView = function (v) {
+    _prev(v);
+    const tv = document.getElementById('crm-tienda-view');
+    if (tv) tv.style.display = v === 'tienda' ? 'flex' : 'none';
+    if (v === 'tienda') tiendaInfRender();
+    // Al entrar a cualquier informe se averigua si hay tienda, para ofrecerla
+    // en el PDF y en el enlace compartido solo a quien la tiene.
+    else if (VISTAS_INFORME.includes(v) && _tiendaVentasDe !== crmAmbitoCliente()) tiendaInfLoad().catch(() => {});
+  };
+  if (!VISTAS_INFORME.includes('tienda')) VISTAS_INFORME.push('tienda');
+  if (typeof NAV_TABS !== 'undefined' && NAV_TABS.analisis && !NAV_TABS.analisis.includes('tienda')) {
+    NAV_TABS.analisis.splice(NAV_TABS.analisis.indexOf('mk') + 1, 0, 'tienda');
+    NAV_TAB2MOD.tienda = 'analisis';
+    NAV_TAB_LABELS.tienda = 'Tienda';
+    if (!NAV_ALL_TABS.includes('tienda')) NAV_ALL_TABS.push('tienda');
+  }
+})();
 
 // ── INFORME DE PRODUCTIVIDAD ──────────────────────────────────────────────────
 // Mide la disciplina comercial: qué se agenda, qué se cumple, qué se vence y

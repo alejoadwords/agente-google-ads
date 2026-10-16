@@ -108,6 +108,7 @@ function ctxDe(id) {
     inter: M.actsDelInforme(datos.inter || [], leads, id === 'equipo' ? true : conProceso),
     falla: !!datos.falla, equipo: datos.equipo || [],
     camps: datos.camps || [], autos: datos.autos || [], logs: datos.logs || [],
+    tienda: datos.tienda || null,
     rango: rangos[id],
   };
 }
