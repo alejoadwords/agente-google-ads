@@ -88,5 +88,7 @@ ok(/!estadoCalificado\(enlace\.etapa_palomma\)/.test(p), 'una sola vez: al pasar
 
 ok(/telefonoEnOtrosEventos\(conexion, ev\.palomma_lead_id\)/.test(p), 'si el evento que lo califica no trae la conversación (lead.updated), el teléfono se busca en los demás eventos de esa persona (caso real: Jireh Cervantes)');
 
+ok(/if \(!actual \|\| actual\.deleted_at\) \{\s*if \(!estaCalificado\(L, data\)\)/.test(p) && /etapa_palomma: null, nota_conversacion_id: null/.test(p), 'un enlace a un lead en la papelera no bloquea: si se califica, vuelve a entrar (y se avisa)');
+
 console.log(mal ? `\n${mal} fallo(s)` : '\nTodo en verde');
 process.exit(mal ? 1 : 0);

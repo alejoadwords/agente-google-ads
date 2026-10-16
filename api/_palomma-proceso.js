@@ -200,6 +200,22 @@ async function aplicar(conexion, ctx, ev) {
   }
   // Mientras Palomma no lo califique, no existe para Acuarius. El evento que lo
   // califica trae el lead entero con la conversación, así que no se pierde nada.
+  // Un enlace a un lead que está en la papelera vale como si no existiera: si
+  // Palomma lo califica, vuelve a entrar (se busca otra vez si ya existe en
+  // Acuarius, o se crea). Así la limpieza de los no calificados (16-10) no deja
+  // fuera a nadie que se califique después.
+  if (enlace) {
+    const actual = await leerLead(enlace.lead_id);
+    if (!actual || actual.deleted_at) {
+      if (!estaCalificado(L, data)) return 'esperando calificación (su lead está en la papelera)';
+      const { leadId, creado } = await asegurarLead(conexion, ctx, L);
+      [enlace] = await sb(`/palomma_leads?conexion_id=eq.${conexion.id}&palomma_lead_id=eq.${encodeURIComponent(ev.palomma_lead_id)}`, {
+        method: 'PATCH', prefer: 'return=representation',
+        body: JSON.stringify({ lead_id: leadId, creado_por_palomma: creado, etapa_palomma: null, nota_conversacion_id: null, citas: [], actualizado_at: new Date().toISOString() }),
+      });
+      if (!creado) await nota(conexion, leadId, 'Este contacto también está escribiendo por Palomma.' + (L.dashboardUrl ? ' Conversación: ' + L.dashboardUrl : ''), ev.tipo);
+    }
+  }
   if (!enlace && !estaCalificado(L, data)) return 'esperando calificación';
   // El momento en que Palomma lo califica: el enlace es nuevo, o el estado
   // anterior no era de calificado. Es cuando se avisa a quien lo atiende.
