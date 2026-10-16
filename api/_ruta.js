@@ -88,10 +88,16 @@ export const PASOS = [
 // automatizaciones son las de comercio: carrito, gracias y recompra.
 export function esTienda(sector) { return /E-commerce/i.test(String(sector || '')); }
 
+/** ¿Todas sus tiendas son de una plataforma sin carritos (VTEX)? */
+export function sinCarritos(datos) {
+  const t = (datos && datos.tiendas) || [];
+  return t.length > 0 && t.every(x => x.plataforma === 'vtex');
+}
+
 const PASOS_SOLO_TIENDA = {
   tienda: { id: 'tienda', dia: 1, titulo: 'Conecta tu tienda en línea',
     porque: 'Cada pedido entra solo con su cliente, y tu agente conoce tus productos, precios y stock.',
-    ir: 'fuentes', boton: 'Conectar Shopify o WooCommerce', esencial: true, entrada: true, academia: 'marketing' },
+    ir: 'fuentes', boton: 'Conectar mi tienda', esencial: true, entrada: true, academia: 'marketing' },
   carrito: { id: 'carrito', dia: 5, titulo: 'Recupera los carritos abandonados',
     porque: 'Quien dejó productos sin pagar recibe un recordatorio con el enlace para terminar la compra.',
     ir: 'automatizaciones', boton: 'Activar recuperación', hazlo: 'auto_carrito', esencial: true, academia: 'marketing' },
@@ -103,15 +109,18 @@ const PASOS_SOLO_TIENDA = {
     ir: 'automatizaciones', boton: 'Activar recompra', hazlo: 'auto_recompra', academia: 'marketing' },
 };
 
-/** Los pasos de la ruta para este negocio. */
-export function pasosPara(sector) {
+/**
+ * Los pasos de la ruta para este negocio. `sinCarritos`: su tienda no da los
+ * carritos abandonados (VTEX), así que recuperarlos no puede ser esencial.
+ */
+export function pasosPara(sector, { sinCarritos = false } = {}) {
   if (!esTienda(sector)) return PASOS;
   const out = [];
   for (const p of PASOS) {
     if (p.id === 'cierre') { out.push(PASOS_SOLO_TIENDA.recompra); out.push({ ...p, titulo: 'Tu primera venta registrada', porque: 'Cada pedido pagado de la tienda queda como venta ganada, con su valor.', boton: 'Ver mis ventas' }); continue; }
     out.push(p);
     if (p.id === 'contactos') out.push(PASOS_SOLO_TIENDA.tienda);
-    if (p.id === 'rescate') { out.push(PASOS_SOLO_TIENDA.carrito); out.push(PASOS_SOLO_TIENDA.postcompra); }
+    if (p.id === 'rescate') { out.push(sinCarritos ? { ...PASOS_SOLO_TIENDA.carrito, esencial: false } : PASOS_SOLO_TIENDA.carrito); out.push(PASOS_SOLO_TIENDA.postcompra); }
   }
   return out;
 }
@@ -250,7 +259,7 @@ export async function datosDeLaCuenta(userId, { url = process.env.SUPABASE_URL, 
     cuenta('informes_compartidos', `user_id=eq.${U}`),
     cuenta('reportes_programados', `user_id=eq.${U}`),
     cuenta('platform_connections', `user_id=eq.${U}&platform=in.(google_ads,meta_ads)`),
-    q(`tiendas?user_id=eq.${U}&activo=is.true&select=activo`),
+    q(`tiendas?user_id=eq.${U}&activo=is.true&select=activo,plataforma`),
   ]);
   const reglas = reparto?.[0]?.profile_data;
   return {

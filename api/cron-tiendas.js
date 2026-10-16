@@ -16,7 +16,8 @@ import { registrarError } from './_registro-errores.js';
 import { intakeLead } from './_lead-intake.js';
 import { claseDeTema, normalizarPedidoShopify, normalizarCarritoShopify, normalizarPedidoWoo } from './_tienda.js';
 import { procesarPedido, procesarCarrito, barrerCarritos, barrerRecompra } from './_tienda-motor.js';
-import { sbTienda, guardarProducto, borrarProducto, sincronizarProductos, avanzarHistorial } from './_tienda-catalogo.js';
+import { sbTienda, guardarProducto, borrarProducto, sincronizarProductos, avanzarHistorial,
+         pedidoCompleto, productoCompleto, carritosNube } from './_tienda-catalogo.js';
 
 const TOPE_MS = 22000;
 const MAX_INTENTOS = 5;
@@ -26,8 +27,11 @@ const io = { sb: sbTienda, intake: intakeLead, ahora: () => Date.now() };
 export async function procesarEvento(tienda, ev) {
   const clase = claseDeTema(tienda.plataforma, ev.tema);
   const p = ev.payload || {};
+  // Tiendanube y VTEX avisan solo con el id: se pide lo demás a la API.
+  const soloId = tienda.plataforma === 'tiendanube' || tienda.plataforma === 'vtex';
   if (clase === 'pedido') {
-    const pedido = tienda.plataforma === 'shopify' ? normalizarPedidoShopify(p) : normalizarPedidoWoo(p);
+    const pedido = soloId ? await pedidoCompleto(tienda, p)
+      : tienda.plataforma === 'shopify' ? normalizarPedidoShopify(p) : normalizarPedidoWoo(p);
     const r = await procesarPedido(io, tienda, pedido);
     return `pedido ${pedido.numero} ${pedido.estado}` + (r.disparados.length ? ' → ' + r.disparados.join(', ') : '');
   }
@@ -36,7 +40,7 @@ export async function procesarEvento(tienda, ev) {
     const r = await procesarCarrito(io, tienda, c);
     return 'carrito ' + r.estado;
   }
-  if (clase === 'producto') { await guardarProducto(tienda, p); return 'producto ' + p.id; }
+  if (clase === 'producto') { await guardarProducto(tienda, soloId ? await productoCompleto(tienda, p) : p); return 'producto ' + p.id; }
   if (clase === 'producto_borrado') { await borrarProducto(tienda, p); return 'producto borrado ' + p.id; }
   return 'ignorado';
 }
@@ -82,6 +86,25 @@ export default async function handler() {
         const n = parseInt((r?.headers.get('content-range') || '').split('/')[1] || '', 10);
         if (Number.isFinite(n)) await sbTienda(`/tiendas?id=eq.${t.id}`, 'PATCH', { pedidos: n }, 'return=minimal').catch(() => {});
       }
+    }
+
+    // ── 2a. Tiendanube no avisa los carritos: se consultan cada 30 minutos ──
+    for (const t of tiendas.filter(x => x.plataforma === 'tiendanube')) {
+      if (Date.now() - t0 > TOPE_MS * 0.6) break;
+      if (t.sondeo_at && Date.now() - Date.parse(t.sondeo_at) < 30 * 60000) continue;
+      try {
+        for (const c of await carritosNube(t)) await procesarCarrito(io, t, c);
+        await sbTienda(`/tiendas?id=eq.${t.id}`, 'PATCH', { sondeo_at: new Date().toISOString() }, 'return=minimal');
+      } catch (e) {
+        await sbTienda(`/tiendas?id=eq.${t.id}`, 'PATCH', { sondeo_at: new Date().toISOString(), ultimo_error: 'No se pudieron leer los carritos: ' + String(e.message || e).slice(0, 200) }, 'return=minimal').catch(() => {});
+      }
+    }
+    // VTEX no avisa cambios de catálogo: se relee entero una vez al día.
+    for (const t of tiendas.filter(x => x.plataforma === 'vtex' && x.cursor_productos == null)) {
+      if (t.ultimo_sync_at && Date.now() - Date.parse(t.ultimo_sync_at) < 24 * 3600000) continue;
+      const cursor = JSON.stringify({ desde: new Date().toISOString() });
+      await sbTienda(`/tiendas?id=eq.${t.id}`, 'PATCH', { cursor_productos: cursor }, 'return=minimal').catch(() => {});
+      t.cursor_productos = cursor;
     }
 
     // ── 2 y 3. Carritos y recompra ─────────────────────────────────────────

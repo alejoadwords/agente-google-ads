@@ -85,6 +85,15 @@ export function claseDeTema(plataforma, tema) {
     if (t.startsWith('products/')) return 'producto';
     return null;
   }
+  // Tiendanube: order/paid, product/updated… (el aviso solo trae el id).
+  if (plataforma === 'tiendanube') {
+    if (t.startsWith('order/')) return 'pedido';
+    if (t === 'product/deleted') return 'producto_borrado';
+    if (t.startsWith('product/')) return 'producto';
+    return null;
+  }
+  // VTEX solo avisa pedidos; el receptor lo guarda con el tema 'orden'.
+  if (plataforma === 'vtex') return t === 'orden' ? 'pedido' : null;
   if (t.startsWith('order.')) return t === 'order.deleted' ? null : 'pedido';
   if (t === 'product.deleted') return 'producto_borrado';
   if (t.startsWith('product.')) return 'producto';

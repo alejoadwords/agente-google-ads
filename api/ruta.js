@@ -15,7 +15,7 @@ export const config = { runtime: 'edge' };
 import { verificarSesion, cuerpoSinSesion } from './_sesion.js';
 import { quienPregunta } from './_perfiles.js';
 import { soporteDe } from './_soporte-sesion.js';
-import { PASOS_EQUIPO, DIAS, opcionales, pasosPara, esencialesCumplidos, detectar, detectarEquipo,
+import { PASOS_EQUIPO, DIAS, opcionales, pasosPara, sinCarritos, esencialesCumplidos, detectar, detectarEquipo,
          datosDeLaCuenta, datosDelAsesor, armarRuta, RUTA_DESDE, DIA } from './_ruta.js';
 
 const PREMIO_DIAS = 7;
@@ -120,8 +120,10 @@ export default async function handler(req) {
     const empleados = alta?.empresa?.empleados || '';
     const hechos = detectar(datos);
     const { nuevos, hubo } = anotar(estado?.hitos, hechos, ahoraIso);
-    const PASOS = pasosPara(sector);
-    const r = armarRuta({ pasos: PASOS, hechos, hitos: nuevos, opc: opcionales(sector, empleados), inicio, ahora });
+    const PASOS = pasosPara(sector, { sinCarritos: sinCarritos(datos) });
+    const opc = opcionales(sector, empleados);
+    if (sinCarritos(datos)) opc.add('carrito');
+    const r = armarRuta({ pasos: PASOS, hechos, hitos: nuevos, opc, inicio, ahora });
 
     // ── El premio ──────────────────────────────────────────────────────────
     const meta = u?.public_metadata || {};

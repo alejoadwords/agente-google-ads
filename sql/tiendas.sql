@@ -107,3 +107,9 @@ alter table public.tiendas add column if not exists dominio_publico text;
 
 -- La importación de pedidos anteriores: {estado, desde, c|p, pedidos, clientes, terminado_at, error}.
 alter table public.tiendas add column if not exists historial jsonb;
+
+-- Tiendanube y VTEX (16-10-2026).
+alter table public.tiendas drop constraint if exists tiendas_plataforma_check;
+alter table public.tiendas add constraint tiendas_plataforma_check check (plataforma in ('shopify', 'woocommerce', 'tiendanube', 'vtex'));
+-- Tiendanube no avisa los carritos abandonados: se consultan cada 30 minutos.
+alter table public.tiendas add column if not exists sondeo_at timestamptz;

@@ -11,6 +11,8 @@ import { tokenShopify, gqlShopify, wooFetch, Q_PRODUCTOS_SHOPIFY, shopifyGqlAPro
          normalizarProductoShopify, normalizarProductoWoo,
          pedidosShopifyPagina, pedidosWooPagina, normalizarPedidoShopify, normalizarPedidoWoo } from './_tienda.js';
 import { importarPagina } from './_tienda-motor.js';
+import { nubeFetch, normalizarPedidoNube, normalizarCarritoNube, normalizarProductoNube } from './_tienda-nube.js';
+import { vtexFetch, normalizarPedidoVtex, normalizarProductoVtex } from './_tienda-vtex.js';
 import { intakeLead } from './_lead-intake.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -48,18 +50,47 @@ function filaProducto(tienda, prod, ahoraIso) {
   return { ...prod, user_id: tienda.user_id, client_id: tienda.client_id || null, tienda_id: tienda.id, visto_en: ahoraIso };
 }
 
+// Cada plataforma, su lector de producto.
+function normalizarProducto(tienda, payload) {
+  if (tienda.plataforma === 'shopify') return normalizarProductoShopify(payload, tienda.dominio_publico || null);
+  if (tienda.plataforma === 'tiendanube') return normalizarProductoNube(payload);
+  if (tienda.plataforma === 'vtex') return normalizarProductoVtex(payload);
+  return normalizarProductoWoo(payload);
+}
+const PREFIJO = { shopify: 'SHP-', woocommerce: 'WOO-', tiendanube: 'TN-', vtex: 'VTEX-' };
+
 /** Un producto que avisó la tienda (alta o cambio). */
 export async function guardarProducto(tienda, payload) {
-  const prod = tienda.plataforma === 'shopify'
-    ? normalizarProductoShopify(payload, tienda.dominio_publico || null)
-    : normalizarProductoWoo(payload);
   await sbTienda('/client_products?on_conflict=user_id,client_id,referencia', 'POST',
-    filaProducto(tienda, prod, new Date().toISOString()), 'resolution=merge-duplicates,return=minimal');
+    filaProducto(tienda, normalizarProducto(tienda, payload), new Date().toISOString()), 'resolution=merge-duplicates,return=minimal');
 }
 
 export async function borrarProducto(tienda, payload) {
-  const ref = (tienda.plataforma === 'shopify' ? 'SHP-' : 'WOO-') + payload.id;
+  const ref = (PREFIJO[tienda.plataforma] || '') + payload.id;
   await sbTienda(`/client_products?tienda_id=eq.${tienda.id}&referencia=eq.${encodeURIComponent(ref)}`, 'DELETE', null, 'return=minimal');
+}
+
+// ── Lo que el aviso no trae ─────────────────────────────────────────────────
+// Tiendanube y VTEX avisan solo con el id: el pedido o producto completo se
+// pide aquí, ya con la forma de siempre.
+export async function pedidoCompleto(tienda, payload) {
+  const creds = await credencialesDe(tienda);
+  if (tienda.plataforma === 'tiendanube') return normalizarPedidoNube(await nubeFetch(creds.store_id, creds.token, '/orders/' + encodeURIComponent(payload.id)));
+  if (tienda.plataforma === 'vtex') return normalizarPedidoVtex(await vtexFetch(tienda.dominio, creds, '/api/oms/pvt/orders/' + encodeURIComponent(payload.OrderId)));
+  throw new Error('pedidoCompleto: plataforma ' + tienda.plataforma);
+}
+
+export async function productoCompleto(tienda, payload) {
+  const creds = await credencialesDe(tienda);
+  return nubeFetch(creds.store_id, creds.token, '/products/' + encodeURIComponent(payload.id));
+}
+
+/** Tiendanube: los carritos abandonados de los últimos 3 días, a la forma de siempre. */
+export async function carritosNube(tienda) {
+  const creds = await credencialesDe(tienda);
+  const desde = new Date(Date.now() - 3 * 86400000).toISOString();
+  const lista = await nubeFetch(creds.store_id, creds.token, `/checkouts?per_page=100&created_at_min=${encodeURIComponent(desde)}`, { vacioSi404: true });
+  return (lista || []).map(normalizarCarritoNube);
 }
 
 /**
@@ -83,6 +114,18 @@ export async function sincronizarProductos(tienda, { topeMs = 9000 } = {}) {
       productos = d.products.nodes.map(n => normalizarProductoShopify(shopifyGqlAProducto(n), tienda.dominio_publico || null));
       sigue = d.products.pageInfo.hasNextPage;
       cursor = d.products.pageInfo.endCursor;
+    } else if (tienda.plataforma === 'tiendanube') {
+      const lista = await nubeFetch(creds.store_id, creds.token, `/products?per_page=100&page=${pagina}`, { vacioSi404: true });
+      productos = (lista || []).map(normalizarProductoNube);
+      sigue = (lista || []).length === 100;
+      pagina++;
+    } else if (tienda.plataforma === 'vtex') {
+      // La búsqueda del catálogo de VTEX no pasa de 2.500 productos.
+      const de = (pagina - 1) * 50;
+      const lista = await vtexFetch(tienda.dominio, creds, `/api/catalog_system/pub/products/search?_from=${de}&_to=${de + 49}`);
+      productos = (lista || []).map(normalizarProductoVtex);
+      sigue = (lista || []).length === 50 && de + 50 < 2500;
+      pagina++;
     } else {
       const lista = await wooFetch(tienda.dominio, creds, `/products?per_page=50&page=${pagina}&status=publish`);
       productos = (lista || []).map(normalizarProductoWoo);
@@ -91,8 +134,10 @@ export async function sincronizarProductos(tienda, { topeMs = 9000 } = {}) {
     }
     const ahoraIso = new Date().toISOString();
     if (productos.length) {
+      // Dos productos con la misma referencia en una tanda harían fallar el upsert.
+      const unicos = [...new Map(productos.map(p => [p.referencia, p])).values()];
       await sbTienda('/client_products?on_conflict=user_id,client_id,referencia', 'POST',
-        productos.map(p => filaProducto(tienda, p, ahoraIso)), 'resolution=merge-duplicates,return=minimal');
+        unicos.map(p => filaProducto(tienda, p, ahoraIso)), 'resolution=merge-duplicates,return=minimal');
     }
     vistos += productos.length;
     if (!sigue) { terminada = true; break; }
@@ -110,8 +155,44 @@ export async function sincronizarProductos(tienda, { topeMs = 9000 } = {}) {
   return { terminada, vistos };
 }
 
+// Una página de historial de cada plataforma: { pedidos (ya normalizados), siguiente }.
+async function paginaDeHistorial(tienda, creds, token, h) {
+  if (tienda.plataforma === 'shopify') {
+    const pag = await pedidosShopifyPagina(tienda.dominio, token, { desde: h.desde, pagina: h.pagina });
+    return { pedidos: pag.pedidos.map(normalizarPedidoShopify), leidos: pag.pedidos.length, siguiente: pag.siguiente };
+  }
+  if (tienda.plataforma === 'woocommerce') {
+    const pag = await pedidosWooPagina(tienda.dominio, creds, { desde: h.desde, pagina: h.pagina || 1 });
+    return { pedidos: pag.pedidos.map(normalizarPedidoWoo), leidos: pag.pedidos.length, siguiente: pag.siguiente };
+  }
+  if (tienda.plataforma === 'tiendanube') {
+    const pagina = h.pagina || 1;
+    const lista = await nubeFetch(creds.store_id, creds.token, `/orders?per_page=50&page=${pagina}&payment_status=paid` +
+      (h.desde ? '&created_at_min=' + encodeURIComponent(h.desde) : ''), { vacioSi404: true });
+    return { pedidos: (lista || []).map(normalizarPedidoNube), leidos: (lista || []).length, siguiente: (lista || []).length === 50 ? pagina + 1 : null };
+  }
+  // VTEX: la lista no trae al cliente, así que se pide cada pedido. Y no pasa
+  // de 30 páginas por consulta: al llegar ahí, la ventana se corre a la fecha
+  // del último pedido leído y se sigue desde la página 1.
+  const c = h.pagina || { d: h.desde || '2000-01-01T00:00:00.000Z', p: 1 };
+  const filtro = `creationDate:[${c.d} TO ${new Date().toISOString()}]`;
+  const lista = await vtexFetch(tienda.dominio, creds, `/api/oms/pvt/orders?per_page=40&page=${c.p}&orderBy=creationDate,asc` +
+    `&f_creationDate=${encodeURIComponent(filtro)}&f_status=${encodeURIComponent(['payment-approved', 'ready-for-handling', 'handling', 'invoiced'].join(','))}`);
+  const resumen = lista?.list || [];
+  const pedidos = [];
+  for (let i = 0; i < resumen.length; i += 5) {
+    const tanda = await Promise.all(resumen.slice(i, i + 5).map(o =>
+      vtexFetch(tienda.dominio, creds, '/api/oms/pvt/orders/' + encodeURIComponent(o.orderId)).then(normalizarPedidoVtex).catch(() => null)));
+    pedidos.push(...tanda.filter(Boolean));
+  }
+  const paginas = lista?.paging?.pages || 1;
+  let siguiente = null;
+  if (resumen.length && c.p < paginas) siguiente = c.p >= 30 ? { d: resumen[resumen.length - 1].creationDate, p: 1 } : { d: c.d, p: c.p + 1 };
+  return { pedidos, leidos: resumen.length, siguiente };
+}
+
 /**
- * La importación del historial, por páginas de 50 pedidos. El estado vive en
+ * La importación del historial, por páginas. El estado vive en
  * tiendas.historial ({estado, desde, pagina, pedidos, clientes}) y avanza en
  * cada vuelta del cron hasta acabar. Repetir una página no duplica nada: el
  * pedido que ya está se salta.
@@ -125,16 +206,13 @@ export async function avanzarHistorial(tienda, { topeMs = 12000 } = {}) {
   try {
     const creds = await credencialesDe(tienda);
     const token = tienda.plataforma === 'shopify' ? await accesoShopify(tienda, creds) : null;
-    // Una página de 50 tarda unos 6 s; no se empieza una que no da tiempo a acabar.
+    // Una página tarda unos 6 s; no se empieza una que no da tiempo a acabar.
     while (Date.now() - t0 < topeMs - 7000) {
-      const pag = tienda.plataforma === 'shopify'
-        ? await pedidosShopifyPagina(tienda.dominio, token, { desde: h.desde, pagina: h.pagina })
-        : await pedidosWooPagina(tienda.dominio, creds, { desde: h.desde, pagina: h.pagina || 1 });
-      const pedidos = pag.pedidos.map(tienda.plataforma === 'shopify' ? normalizarPedidoShopify : normalizarPedidoWoo);
-      const r = await importarPagina(io, { ...tienda, historial: undefined }, pedidos);
+      const pag = await paginaDeHistorial(tienda, creds, token, h);
+      const r = await importarPagina(io, { ...tienda, historial: undefined }, pag.pedidos);
       h.pedidos = (h.pedidos || 0) + r.importados;
       h.clientes = (h.clientes || 0) + r.clientes;
-      h.leidos = (h.leidos || 0) + pag.pedidos.length;
+      h.leidos = (h.leidos || 0) + pag.leidos;
       if (!pag.siguiente) { h.estado = 'terminado'; h.terminado_at = new Date().toISOString(); h.pagina = null; break; }
       h.pagina = pag.siguiente;
       await guardarEstado();

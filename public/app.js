@@ -18346,6 +18346,12 @@ function irDeLaUrl() {
   // Lo que trae la vuelta de Google al dar el permiso de audiencias se guarda
   // ANTES de limpiar la URL: si no, la pestaña nunca se entera (audCargar).
   try { window._audGooglePorUrl = new URLSearchParams(location.search).get('audiencias_google'); } catch {}
+  // La vuelta de Tiendanube (api/tienda-oauth.js): cómo salió la conexión.
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get('tienda') === 'ok') setTimeout(() => showToast((q.get('nombre') || 'Tu tienda') + ' quedó conectada', 'success'), 900);
+    if (q.get('tienda_error')) setTimeout(() => showToast('No se pudo conectar la tienda: ' + q.get('tienda_error').slice(0, 300), 'error'), 900);
+  } catch {}
   try { window.history.replaceState({}, '', location.pathname + location.hash); } catch {}
   // Solo nombres cortos: un «/ruta» en la URL no se sigue desde un enlace.
   if (/^[a-z-]{2,40}$/.test(_irPorUrl)) irA(_irPorUrl);
@@ -25045,8 +25051,10 @@ async function tiendaEstado() {
         '<div style="color:var(--text);font-weight:700">¿Vendes en línea?</div>' +
         '<div style="margin-top:3px;line-height:1.55">Conecta tu tienda y cada pedido entra solo con su cliente, como venta ganada. Puedes recuperar los carritos abandonados, agradecer cada compra y traer de vuelta a quien dejó de comprar. Tu agente conoce tus productos con su precio y stock.</div>' +
         '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
-          '<button class="btn-pri sm" onclick="tiendaConectar(\'shopify\')">Conectar Shopify</button>' +
-          '<button class="btn-sec sm" onclick="tiendaConectar(\'woocommerce\')">Conectar WooCommerce</button>' +
+          '<button class="btn-pri sm" onclick="tiendaConectar(\'shopify\')">Shopify</button>' +
+          '<button class="btn-sec sm" onclick="tiendaConectar(\'woocommerce\')">WooCommerce</button>' +
+          '<button class="btn-sec sm" onclick="tiendaConectar(\'tiendanube\')">Tiendanube</button>' +
+          '<button class="btn-sec sm" onclick="tiendaConectar(\'vtex\')">VTEX</button>' +
         '</div>';
       return;
     }
@@ -25057,14 +25065,14 @@ async function tiendaEstado() {
       const prod = t.sincronizando ? 'leyendo el catálogo… (' + t.productos + ' hasta ahora)' : t.productos + ' productos';
       return '<div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:220px">' +
-          '<div style="color:var(--text);font-weight:700">' + esc(t.nombre || t.dominio) + ' · ' + (t.plataforma === 'shopify' ? 'Shopify' : 'WooCommerce') + '</div>' +
+          '<div style="color:var(--text);font-weight:700">' + esc(t.nombre || t.dominio) + ' · ' + (TIENDA_PLATAFORMAS[t.plataforma] || t.plataforma) + '</div>' +
           '<div style="margin-top:3px">' + esc(prod) + ' · último aviso: ' + esc(ultimo) + '</div>' +
           '<div style="margin-top:3px">Últimos 30 días: <b style="color:var(--text)">' + (res.pedidos || 0) + ' pedidos</b> por ' + tiendaPlata(res.ventas, t.moneda) +
             ' · ' + (res.carritos || 0) + ' carritos abandonados · ' + (res.recuperados || 0) + ' recuperados</div>' +
           (t.ultimo_error ? '<div style="margin-top:6px;color:var(--danger)">' + esc(t.ultimo_error) + '</div>' : '') +
           ((t.webhooks_fallidos || []).length ? '<div style="margin-top:6px;color:var(--warning)">No se pudieron crear algunos avisos (' + esc(t.webhooks_fallidos.join(', ')) + '). Desconecta y vuelve a conectar después de revisar los permisos de la app.</div>' : '') +
           tiendaHistorialHtml(t) +
-          (!tieneCarrito && t.plataforma ? '<div style="margin-top:8px"><button class="btn-sec sm" onclick="rutaHazlo(\'auto_carrito\')">Activar recuperación de carritos</button></div>' : '') +
+          (!tieneCarrito && t.plataforma !== 'vtex' ? '<div style="margin-top:8px"><button class="btn-sec sm" onclick="rutaHazlo(\'auto_carrito\')">Activar recuperación de carritos</button></div>' : '') +
         '</div>' +
         '<div style="display:flex;gap:6px">' +
           '<button class="btn-sec sm" id="tienda-sync-' + esc(t.id) + '" onclick="tiendaSincronizar(\'' + esc(t.id) + '\')">Sincronizar productos</button>' +
@@ -25076,7 +25084,41 @@ async function tiendaEstado() {
   }
 }
 
+const TIENDA_PLATAFORMAS = { shopify: 'Shopify', woocommerce: 'WooCommerce', tiendanube: 'Tiendanube', vtex: 'VTEX' };
+
+// Tiendanube se conecta autorizando la app de Acuarius en su página; vuelve
+// sola a Fuentes (api/tienda-oauth.js).
+async function tiendaConectarNube() {
+  showToast('Abriendo Tiendanube…', 'info');
+  try {
+    const r = await fetchAuth('/api/tiendas?conectar=tiendanube' + (prodAlcance() ? '&' + prodAlcance().slice(1) : ''));
+    const d = await leerRespuesta(r);
+    if (!r.ok || !d.url) throw new Error(d.error || 'HTTP ' + r.status);
+    location.href = d.url;
+  } catch (e) {
+    showToast(e.message || 'No se pudo abrir Tiendanube', 'error');
+  }
+}
+
+function tiendaConectarVtex() {
+  rutaModal('tienda-con', 'Conectar VTEX',
+    '<ol style="font-size:12px;color:var(--muted);margin:0 0 12px 18px;line-height:1.7">' +
+      '<li>En tu admin de VTEX ve a <b>Configuración de la cuenta → Cuenta → Seguridad → Claves de aplicación</b> y genera una llave nueva <b>solo para Acuarius</b> (VTEX admite un aviso de pedidos por llave).</li>' +
+      '<li>Dale un rol con acceso completo a <b>Pedidos (OMS)</b> y de lectura al <b>Catálogo</b>.</li>' +
+      '<li>Copia la <b>App Key</b> y el <b>App Token</b> (el token solo se muestra una vez) y pégalos aquí.</li>' +
+    '</ol>' +
+    '<div class="auto-field"><label class="auto-label">Nombre de la cuenta VTEX</label><input class="auto-input" id="tienda-dom" placeholder="micuenta (de micuenta.myvtex.com)" autocomplete="off"></div>' +
+    '<div class="auto-field"><label class="auto-label">App Key</label><input class="auto-input" id="tienda-a" placeholder="vtexappkey-…" autocomplete="off"></div>' +
+    '<div class="auto-field" style="margin-bottom:0"><label class="auto-label">App Token</label><input class="auto-input" id="tienda-b" type="password" autocomplete="new-password"></div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-top:8px">Las llaves se guardan cifradas. VTEX no tiene carritos abandonados por API, así que en VTEX no hay recordatorio de carrito; pedidos, clientes y catálogo sí.</div>',
+    '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+    '<button class="btn-pri sm" id="tienda-con-btn" onclick="tiendaGuardar(\'vtex\')">Conectar</button>');
+  setTimeout(() => document.getElementById('tienda-dom')?.focus(), 60);
+}
+
 function tiendaConectar(plataforma) {
+  if (plataforma === 'tiendanube') return tiendaConectarNube();
+  if (plataforma === 'vtex') return tiendaConectarVtex();
   const shop = plataforma === 'shopify';
   const pasos = shop
     ? '<ol style="font-size:12px;color:var(--muted);margin:0 0 12px 18px;line-height:1.7">' +
@@ -25113,8 +25155,8 @@ async function tiendaGuardar(plataforma) {
   btn.disabled = true; btn.textContent = 'Conectando… (puede tardar 20 s)';
   msg.textContent = '';
   try {
-    const cuerpo = plataforma === 'shopify'
-      ? { accion: 'conectar', plataforma, dominio, client_id: a, client_secret: b }
+    const cuerpo = plataforma === 'shopify' ? { accion: 'conectar', plataforma, dominio, client_id: a, client_secret: b }
+      : plataforma === 'vtex' ? { accion: 'conectar', plataforma, dominio, app_key: a, app_token: b }
       : { accion: 'conectar', plataforma, dominio, ck: a, cs: b };
     const r = await fetchAuth('/api/tiendas' + prodAlcance(), { method: 'POST', body: JSON.stringify(cuerpo) });
     const d = await leerRespuesta(r);
@@ -25150,7 +25192,7 @@ function tiendaHistorial(id) {
     opcion('90', 'Últimos 90 días', 'Lo más reciente: sirve para empezar a hacer recompra ya.') +
     opcion('365', 'Último año', 'Tu base de clientes del año, con lo que compró cada uno.') +
     opcion('todo', 'Todo el historial', 'Desde el primer pedido. Puede tardar varias horas si son miles.') +
-    '<div style="font-size:11.5px;color:var(--muted);margin-top:4px">En Shopify, para traer más de 60 días la app necesita también el permiso <b>read_all_orders</b>.</div>',
+    '<div style="font-size:11.5px;color:var(--muted);margin-top:4px">En Shopify, para traer más de 60 días la app necesita también el permiso <b>read_all_orders</b>. En VTEX el historial es más lento: se pide pedido por pedido.</div>',
     '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>');
 }
 
@@ -30664,7 +30706,7 @@ function autoBuilderRender() {
         '</select></div>' +
       (AUTO_TRIGGERS_TIENDA.some(([v]) => v === t.type) ?
         (t.type === 'sin_comprar' ? '<div class="auto-field"><label class="auto-label">Días desde su última compra</label><select class="auto-input" onchange="_autoDraft.trigger.days=parseInt(this.value);autoRefreshNodes()">' + [15, 30, 45, 60, 90, 180].map(n => '<option value="' + n + '"' + (parseInt(t.days) === n ? ' selected' : '') + '>' + n + ' días</option>').join('') + '</select></div>' : '') +
-        '<div class="auto-vars-hint">' + esc(AUTO_TIENDA_AYUDA[t.type] || '') + ' Necesita una tienda conectada en Marketing → Fuentes. Variables del pedido: {{pedido}}, {{total}}, {{productos}}, {{tienda}}' +
+        '<div class="auto-vars-hint">' + esc(AUTO_TIENDA_AYUDA[t.type] || '') + ' Necesita una tienda conectada en Marketing → Fuentes.' + (_autoDraft.trigger.type === 'carrito_abandonado' ? ' Funciona con Shopify, WooCommerce y Tiendanube; VTEX no da los carritos.' : '') + ' Variables del pedido: {{pedido}}, {{total}}, {{productos}}, {{tienda}}' +
           (t.type === 'carrito_abandonado' ? ', {{enlace_carrito}} (el enlace para terminar la compra)' : ', {{enlace_pedido}}') + '.</div>'
       : '') +
       (t.type === 'stage_changed' ? '<div class="auto-field"><label class="auto-label">Etapa destino</label><select class="auto-input" onchange="_autoDraft.trigger.stage=this.value;autoRefreshNodes()"><option value="">Cualquier etapa</option>' + autoStageOptions(t.stage) + '</select></div>' : '') +
@@ -34210,7 +34252,7 @@ async function srcRender() {
   // La tienda va primero: para quien vende en línea es LA fuente.
   const tiendaSection =
     '<div style="max-width:860px;margin-bottom:26px">' +
-      '<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:10px">Tienda en línea (Shopify, WooCommerce)</div>' +
+      '<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:10px">Tienda en línea (Shopify, WooCommerce, Tiendanube, VTEX)</div>' +
       '<div id="src-tienda" style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel);font-size:12.5px;color:var(--muted)">Cargando…</div>' +
     '</div>';
 

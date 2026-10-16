@@ -1,6 +1,7 @@
 // api/tiendas.js — conectar y ver las tiendas en línea (Shopify, WooCommerce).
 //
 //   GET                                   las tiendas del alcance y sus cifras de 30 días
+//   GET ?conectar=tiendanube              el enlace para autorizar la app de Acuarius en Tiendanube
 //   GET ?ventas=1                         los datos del informe «Tienda» de Análisis (_tienda-ventas.js)
 //   POST {accion:'conectar', plataforma, dominio, client_id, client_secret | token | ck, cs}
 //   POST {accion:'sincronizar', id}       vuelve a leer todo el catálogo
@@ -21,6 +22,8 @@ import { cifrar } from './_cifrado.js';
 import { dominioShopify, dominioWoo, tokenShopify, gqlShopify, Q_TIENDA_SHOPIFY, webhooksShopify, borrarWebhooksShopify,
          wooFetch, webhooksWoo, borrarWebhooksWoo, APP } from './_tienda.js';
 import { ventasDeTienda } from './_tienda-ventas.js';
+import { nubeConfigurada, firmarEstado, urlAutorizar, borrarWebhooksNube } from './_tienda-nube.js';
+import { cuentaVtex, vtexFetch, hookVtex, borrarHookVtex } from './_tienda-vtex.js';
 import { sbTienda, credencialesDe, accesoShopify, sincronizarProductos, avanzarHistorial } from './_tienda-catalogo.js';
 
 const CORS = {
@@ -50,6 +53,14 @@ async function manejar(req) {
   const clientId = alcanceDeCliente(quien, new URL(req.url).searchParams.get('client_id') || null) || null;
   const alcance = `user_id=eq.${enc(userId)}` + (clientId ? `&client_id=eq.${enc(clientId)}` : '&client_id=is.null');
 
+  if (req.method === 'GET' && new URL(req.url).searchParams.get('conectar') === 'tiendanube') {
+    if (quien.esMiembro && quien.perfil !== 'admin') return jsonResp({ error: 'Solo el dueño o un administrador puede conectar la tienda.' }, 403);
+    // Sin la app de Acuarius registrada en Tiendanube no hay a dónde mandar:
+    // se dice, en vez de un enlace roto.
+    if (!nubeConfigurada()) return jsonResp({ error: 'La conexión con Tiendanube se está terminando de habilitar. Escríbenos a soporte@acuarius.app y te avisamos apenas esté.' }, 503);
+    const estado = await firmarEstado({ u: userId, c: clientId || null });
+    return jsonResp({ url: urlAutorizar(estado) });
+  }
   if (req.method === 'GET' && new URL(req.url).searchParams.get('ventas')) {
     // Lo que vende la tienda es cifra de quien dirige: un perfil que en
     // Análisis solo ve su propia gestión no ve el total del negocio.
@@ -121,6 +132,8 @@ async function manejar(req) {
       const creds = await credencialesDe(tienda);
       const ids = (tienda.webhooks && tienda.webhooks.ids) || {};
       if (tienda.plataforma === 'shopify') await borrarWebhooksShopify(tienda.dominio, await accesoShopify(tienda, creds), ids);
+      else if (tienda.plataforma === 'tiendanube') await borrarWebhooksNube(creds.store_id, creds.token, ids);
+      else if (tienda.plataforma === 'vtex') await borrarHookVtex(tienda.dominio, creds);
       else await borrarWebhooksWoo(tienda.dominio, creds, ids);
     } catch {}
     await sbTienda(`/client_products?tienda_id=eq.${tienda.id}`, 'DELETE', null, 'return=minimal');
@@ -135,8 +148,9 @@ async function manejar(req) {
 
 async function conectar(body, userId, clientId) {
   const plataforma = body.plataforma;
-  if (!['shopify', 'woocommerce'].includes(plataforma)) return jsonResp({ error: 'Elige Shopify o WooCommerce.' }, 400);
-  const d = plataforma === 'shopify' ? dominioShopify(body.dominio) : dominioWoo(body.dominio);
+  // Tiendanube no pasa por aquí: se autoriza la app (GET ?conectar=tiendanube).
+  if (!['shopify', 'woocommerce', 'vtex'].includes(plataforma)) return jsonResp({ error: 'Elige Shopify, WooCommerce o VTEX.' }, 400);
+  const d = plataforma === 'shopify' ? dominioShopify(body.dominio) : plataforma === 'vtex' ? cuentaVtex(body.dominio) : dominioWoo(body.dominio);
   if (d.error) return jsonResp({ error: d.error }, 400);
   const dominio = d.dominio;
 
@@ -161,6 +175,15 @@ async function conectar(body, userId, clientId) {
       dominioPublico = info.shop?.primaryDomain?.url || ('https://' + dominio);
       if (t.vence) { acceso = await cifrar(t.token); accesoVence = t.vence; }
       webhooks = await webhooksShopify(dominio, t.token, destino);
+    } else if (plataforma === 'vtex') {
+      creds = { app_key: String(body.app_key || '').trim(), app_token: String(body.app_token || '').trim() };
+      if (!creds.app_key || !creds.app_token) return jsonResp({ error: 'Faltan la App Key y el App Token.' }, 400);
+      // Primero se prueba que la llave lee pedidos; el aviso se configura
+      // después de guardar la tienda (VTEX lo prueba con un «ping» a nuestra URL).
+      await vtexFetch(dominio, creds, '/api/oms/pvt/orders?per_page=1');
+      nombre = d.cuenta;
+      secreto = hex(24);
+      webhooks = { ids: {}, fallidos: [], pendiente: true };
     } else {
       creds = { ck: String(body.ck || '').trim(), cs: String(body.cs || '').trim() };
       if (!/^ck_/.test(creds.ck) || !/^cs_/.test(creds.cs)) return jsonResp({ error: 'La clave empieza por ck_ y el secreto por cs_. Cópialos completos desde WooCommerce → Ajustes → Avanzado → API REST.' }, 400);
@@ -176,7 +199,7 @@ async function conectar(body, userId, clientId) {
   }
 
   // Sin los avisos de pedidos la conexión no sirve para lo que se conecta.
-  const pedidosOk = plataforma === 'shopify'
+  const pedidosOk = plataforma === 'vtex' ? true : plataforma === 'shopify'
     ? ['ORDERS_CREATE', 'ORDERS_UPDATED'].some(t => webhooks.ids[t])
     : ['order.created', 'order.updated'].some(t => webhooks.ids[t]);
   if (!pedidosOk) {
@@ -199,6 +222,17 @@ async function conectar(body, userId, clientId) {
   };
   const guardada = ((await sbTienda('/tiendas?on_conflict=user_id,client_id,plataforma,dominio', 'POST', fila, 'resolution=merge-duplicates,return=representation')) || [])[0];
   if (!guardada) return jsonResp({ error: 'No se pudo guardar la tienda.' }, 502);
+
+  if (plataforma === 'vtex') {
+    try {
+      webhooks = await hookVtex(dominio, creds, destino, secreto);
+      await sbTienda(`/tiendas?id=eq.${guardada.id}`, 'PATCH', { webhooks }, 'return=minimal');
+    } catch (e) {
+      // Sin el aviso de pedidos no sirve: se deshace y se dice por qué.
+      await sbTienda(`/tiendas?id=eq.${guardada.id}`, 'PATCH', { activo: false, credenciales: '', secreto: null, estado: 'desconectada' }, 'return=minimal').catch(() => {});
+      return jsonResp({ error: 'La llave lee pedidos, pero no pudimos configurar el aviso de pedidos en VTEX: ' + e.message + ' La llave necesita un rol con acceso completo a Pedidos (OMS).' }, 400);
+    }
+  }
 
   // La primera parte del catálogo ya mismo: ver «32 productos» al conectar es
   // la prueba de que funcionó. El resto lo termina el cron.

@@ -398,6 +398,87 @@ console.log('\nEl informe de Análisis\n');
   ok(/id="crm-tienda-view"/.test(leer('public/index.html')) && /NAV_TAB_LABELS\.tienda = 'Tienda'/.test(leer('public/app.js')), 'tiene su pestaña en Análisis');
 }
 
+console.log('\nTiendanube y VTEX\n');
+{
+  const N = await import('../api/_tienda-nube.js');
+  const V = await import('../api/_tienda-vtex.js');
+  // El estado del OAuth: firmado, con vencimiento, y nadie lo puede cambiar.
+  const est = await N.firmarEstado({ u: 'user_1', c: null }, 'sec', 1000);
+  ok((await N.leerEstado(est, 'sec', 2000))?.u === 'user_1', 'el estado firmado vuelve con la cuenta');
+  ok(await N.leerEstado(est, 'sec', 1000 + 3600001) === null, 'a la hora vence');
+  ok(await N.leerEstado(est, 'otro', 2000) === null, 'con otro secreto no vale');
+  const [cuerpo, firma] = est.split('.');
+  const falso = Buffer.from(JSON.stringify({ u: 'user_ATACANTE', exp: 9e15 })).toString('base64url');
+  ok(await N.leerEstado(falso + '.' + firma, 'sec', 2000) === null, 'cambiar la cuenta dentro del estado rompe la firma');
+  ok(N.tx({ es: 'Camiseta', pt: 'Camisa' }) === 'Camiseta' && N.tx({ pt: 'Camisa' }) === 'Camisa' && N.tx('Hola') === 'Hola', 'los textos por idioma: español primero');
+
+  const pn = N.normalizarPedidoNube({ id: 9, number: 120, contact_email: 'Ana@X.co', contact_name: 'Ana', contact_phone: '+5491112345678', total: '15000.50', currency: 'ARS',
+    payment_status: 'paid', shipping_status: 'unpacked', status: 'open', products: [{ name: 'Mate', quantity: '2', price: '7500.25' }], created_at: '2026-10-15T10:00:00+0000', paid_at: '2026-10-15T10:05:00+0000' });
+  ok(pn.estado === 'pagado' && pn.total === 15000.5 && pn.email === 'ana@x.co' && pn.numero === '#120', 'pedido de Tiendanube pagado', pn);
+  ok(pn.pagado_at === '2026-10-15T10:05:00.000Z' && pn.productos[0].cantidad === 2, 'su fecha con zona «+0000» y las cantidades que llegan como texto');
+  ok(N.normalizarPedidoNube({ id: 1, payment_status: 'paid', shipping_status: 'fulfilled' }).estado === 'enviado', 'Tiendanube enviado');
+  ok(N.normalizarPedidoNube({ id: 1, payment_status: 'paid', status: 'cancelled' }).estado === 'cancelado', 'Tiendanube cancelado');
+  const kn = N.normalizarCarritoNube({ id: 77, contact_email: 'b@x.co', total: '100', abandoned_checkout_url: 'https://rec', updated_at: '2026-10-15T10:00:00+0000', products: [{ name: 'Taza', quantity: 1, price: '100' }] });
+  ok(kn.enlace === 'https://rec' && kn.externo_id === '77' && !kn.completado, 'carrito abandonado de Tiendanube, con su enlace');
+  const prn = N.normalizarProductoNube({ id: 5, name: { es: 'Remera' }, published: true, canonical_url: 'https://t/remera', attributes: [{ es: 'Talle' }],
+    variants: [{ price: '9000', promotional_price: '8000', stock: 2, values: [{ es: 'S' }] }, { price: '9000', stock: 0, values: [{ es: 'M' }] }], images: [{ src: 'https://img' }], categories: [{ name: { es: 'Ropa' } }] });
+  ok(prn.referencia === 'TN-5' && prn.precio === 8000 && prn.unidades === 2 && prn.disponible && /Talle: S, M/.test(prn.descripcion) && prn.tipo === 'Ropa', 'producto de Tiendanube: precio de promoción, stock, talles y categoría', prn);
+  ok(N.normalizarProductoNube({ id: 6, name: 'x', published: true, variants: [{ price: '1', stock: null }] }).disponible, 'stock vacío en Tiendanube es ilimitado');
+
+  ok(V.cuentaVtex('https://MiTienda.myvtex.com/admin').cuenta === 'mitienda' && V.cuentaVtex('mitienda').dominio === 'https://mitienda.vtexcommercestable.com.br', 'la cuenta de VTEX desde lo que pegue la gente');
+  ok(!!V.cuentaVtex('www.mitienda.com.co').error, 'un dominio propio no es una cuenta VTEX: se dice');
+  ok(V.correoVtex('ana@x.co-1a2b3c4d.ct.vtex.com.br') === 'ana@x.co' && V.correoVtex('a****@x.co') === null && V.correoVtex('luis@y.co') === 'luis@y.co', 'el correo enmascarado de VTEX se desenmascara; el tapado con asteriscos no se usa');
+  const pv = V.normalizarPedidoVtex({ orderId: '1234-01', status: 'invoiced', value: 1999000, creationDate: '2026-10-15T10:00:00Z', authorizedDate: '2026-10-15T10:01:00Z',
+    clientProfileData: { email: 'ana@x.co-99.ct.vtex.com.br', firstName: 'Ana', lastName: 'R', phone: '+573001112233' }, storePreferencesData: { currencyCode: 'COP' },
+    items: [{ name: 'Tenis', quantity: 1, sellingPrice: 1999000 }] });
+  ok(pv.estado === 'enviado' && pv.total === 19990 && pv.email === 'ana@x.co' && pv.productos[0].precio === 19990 && pv.moneda === 'COP', 'pedido de VTEX: los centavos pasan a pesos', pv);
+  ok(V.normalizarPedidoVtex({ orderId: 'x', status: 'payment-approved' }).estado === 'pagado' && V.normalizarPedidoVtex({ orderId: 'x', status: 'payment-pending' }).estado === 'pendiente' && V.normalizarPedidoVtex({ orderId: 'x', status: 'canceled' }).estado === 'cancelado', 'estados de VTEX');
+  const prv = V.normalizarProductoVtex({ productId: '44', productName: 'Tenis', brand: 'Marca', link: 'https://t/tenis/p', categories: ['/Calzado/Tenis/'],
+    items: [{ name: '38', images: [{ imageUrl: 'https://img' }], sellers: [{ commertialOffer: { Price: 199900, AvailableQuantity: 3 } }] }, { name: '39', sellers: [{ commertialOffer: { Price: 199900, AvailableQuantity: 0 } }] }] });
+  ok(prv.referencia === 'VTEX-44' && prv.precio === 199900 && prv.unidades === 3 && prv.disponible && prv.tipo === 'Tenis' && /38, 39/.test(prv.descripcion), 'producto de VTEX: precio, stock, categoría y tallas', prv);
+
+  ok(T.claseDeTema('tiendanube', 'order/paid') === 'pedido' && T.claseDeTema('tiendanube', 'product/deleted') === 'producto_borrado' && T.claseDeTema('tiendanube', 'app/uninstalled') === null, 'temas de Tiendanube');
+  ok(T.claseDeTema('vtex', 'orden') === 'pedido' && T.claseDeTema('vtex', 'otra') === null, 'VTEX solo avisa pedidos');
+
+  // El receptor.
+  const { default: handler } = await import('../api/tienda-webhook.js');
+  const guardados = [];
+  const fila = { id: 'T9', user_id: 'u1', plataforma: 'tiendanube', credenciales: '{}', secreto: null, activo: true };
+  globalThis.fetch = async (url, op = {}) => {
+    const u = String(url);
+    if (u.includes('/tiendas?token=')) return new Response(JSON.stringify([fila]), { status: 200 });
+    if (u.includes('/tienda_eventos')) { guardados.push(JSON.parse(op.body)); return new Response(null, { status: 201 }); }
+    return new Response('[]', { status: 200 });
+  };
+  process.env.TIENDANUBE_CLIENT_SECRET = 'appsec';
+  const tk = 'b'.repeat(40);
+  const cuerpoN = JSON.stringify({ store_id: 1, event: 'order/paid', id: 555 });
+  const b64 = await T.hmacBase64('appsec', cuerpoN);
+  const hex = [...Buffer.from(b64, 'base64')].map(x => x.toString(16).padStart(2, '0')).join('');
+  let r = await handler(new Request('https://a/api/tienda-webhook?t=' + tk, { method: 'POST', body: cuerpoN, headers: { 'x-linkedstore-hmac-sha256': hex } }));
+  ok(r.status === 200 && guardados.at(-1)?.tema === 'order/paid' && guardados.at(-1)?.entrega === 'order/paid:555', 'Tiendanube firmado con el secreto de la app (hex): entra, una vez por evento y pedido');
+  r = await handler(new Request('https://a/api/tienda-webhook?t=' + tk, { method: 'POST', body: cuerpoN, headers: { 'x-linkedstore-hmac-sha256': b64 } }));
+  ok(r.status === 200, 'y también si la firma viene en base64');
+  r = await handler(new Request('https://a/api/tienda-webhook?t=' + tk, { method: 'POST', body: cuerpoN, headers: { 'x-linkedstore-hmac-sha256': 'abc' } }));
+  ok(r.status === 401, 'sin la firma de la app no entra');
+  Object.assign(fila, { plataforma: 'vtex', secreto: 'vsec' });
+  const n0 = guardados.length;
+  r = await handler(new Request('https://a/api/tienda-webhook?t=' + tk, { method: 'POST', body: '{"hookConfig":"ping"}' }));
+  ok(r.status === 200 && guardados.length === n0, 'el «ping» de VTEX al configurar el aviso recibe 200 y no se guarda');
+  const cuerpoV = JSON.stringify({ Domain: 'Fulfillment', OrderId: '1234-01', State: 'invoiced', LastChange: '2026-10-15T10:00:00Z' });
+  r = await handler(new Request('https://a/api/tienda-webhook?t=' + tk, { method: 'POST', body: cuerpoV, headers: { 'x-acuarius-secreto': 'mal' } }));
+  ok(r.status === 401, 'VTEX sin nuestra cabecera secreta no entra');
+  r = await handler(new Request('https://a/api/tienda-webhook?t=' + tk, { method: 'POST', body: cuerpoV, headers: { 'x-acuarius-secreto': 'vsec' } }));
+  ok(r.status === 200 && guardados.at(-1)?.tema === 'orden' && /^orden:1234-01:invoiced/.test(guardados.at(-1)?.entrega), 'con ella, entra un aviso por pedido y estado');
+
+  const R = await import('../api/_ruta.js');
+  ok(R.sinCarritos({ tiendas: [{ plataforma: 'vtex' }] }) && !R.sinCarritos({ tiendas: [{ plataforma: 'vtex' }, { plataforma: 'shopify' }] }), 'solo VTEX = sin carritos');
+  ok(!R.pasosPara('E-commerce / Retail', { sinCarritos: true }).find(p => p.id === 'carrito').esencial, 'y entonces recuperar carritos no es esencial para el premio');
+  const app = leer('public/app.js');
+  ok(/tiendaConectar\(\\'tiendanube\\'\)/.test(app) && /tiendaConectar\(\\'vtex\\'\)/.test(app), 'la pantalla ofrece Tiendanube y VTEX');
+  ok(/nubeConfigurada\(\)\) return jsonResp/.test(leer('api/tiendas.js')), 'sin la app de Tiendanube configurada se dice, no se manda a un enlace roto');
+}
+
 console.log('\nLa ruta de una tienda\n');
 {
   const R = await import('../api/_ruta.js');
