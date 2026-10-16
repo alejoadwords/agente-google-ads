@@ -3,7 +3,7 @@
 // Las decisiones de Alejandro (13 y 15-10-2026) y los datos reales de Certain.
 
 import { readFileSync } from 'fs';
-import { embudoIgnorado, tableroDe, etapaDe, notaDeEstado, resumenDePerfil, telefonoDe, telefonoDeConversacion, estaCalificado } from '../api/_palomma.js';
+import { embudoIgnorado, tableroDe, etapaDe, notaDeEstado, resumenDePerfil, telefonoDe, telefonoDeConversacion, estaCalificado, camposParaActualizar } from '../api/_palomma.js';
 
 let mal = 0;
 const ok = (c, m, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c && extra !== undefined ? ' → ' + JSON.stringify(extra) : '')); if (!c) mal++; };
@@ -53,6 +53,12 @@ ok(telefonoDe({ phone: '573225984142', conversation: { content: 'Usuario: mi nú
 ok(telefonoDeConversacion('Usuario: +57 300-834-2960\n\nAgente: ok\n\nUsuario: perdón, es 3008342961') === '+573008342961', 'con separadores o +57; si se corrige, el último');
 ok(telefonoDeConversacion('Usuario: el inmueble 121512563 me interesa\n\nAgente: el 3001234567') === null, 'un código de inmueble no es un teléfono, y lo del agente no cuenta');
 
+console.log('\nContacto que ya existía: se completa, no se pisa');
+let cc = camposParaActualizar({ name: 'Alejandro Pedro', email: null, phone: null }, { name: 'Alejo ❤️‍🔥', email: 'ALE@x.com' }, '+573188860306');
+ok(cc.phone === '+573188860306' && cc.email === 'ale@x.com' && !cc.name, 'llena teléfono y correo vacíos; el nombre real no se cambia por el apodo de WhatsApp');
+cc = camposParaActualizar({ name: 'Contacto de WhatsApp', email: 'ya@x.com', phone: '+573000000000' }, { name: 'Melissa Torres', email: 'otro@x.com' }, '+573017031201');
+ok(cc.name === 'Melissa Torres' && !cc.email && !cc.phone, 'un nombre genérico sí se reemplaza; correo y teléfono que ya hay, no');
+
 console.log('\nReglas del procesador');
 const p = readFileSync(new URL('../api/_palomma-proceso.js', import.meta.url), 'utf8');
 ok(/if \(cx && !cx\.conexion\.procesar\) continue;/.test(p), 'con el interruptor apagado, los eventos se quedan pendientes');
@@ -69,7 +75,18 @@ ok(/palomma\.cita a Google Calendar/.test(p), 'un fallo de Google queda registra
 
 ok(/if \(!enlace && !estaCalificado\(L, data\)\) return 'esperando calificación'/.test(p), 'un contacto que Palomma no ha calificado no entra a Acuarius');
 ok(/telefonoDe\(L\) \|\| ''\)\.replace/.test(p), 'el cruce con leads existentes usa también el teléfono del chat');
-ok(/telNuevo && !lead\.phone/.test(p), 'a un lead sin teléfono se le completa; uno que ya lo tiene no se toca');
+ok(/camposParaActualizar\(lead, L, telefonoDe\(L\)\)/.test(p), 'a un lead sin teléfono se le completa; uno que ya lo tiene no se toca');
+
+
+console.log('\nAvisos (Alejandro, 16-10): campana, correo y celular');
+ok(/metadata: \{ origen: 'palomma', evento: 'aviso', para, actor: 'Palomma' \}/.test(p), 'la campana: nota con «para» (la que lee /api/lead-activities?avisos=1)');
+ok(/enviarPushA\(para,/.test(p), 'el celular: push a esa persona');
+ok(/avisarComercial\(com, lead, 'Palomma'\)/.test(p), 'el correo: el mismo de cualquier asignación');
+ok(/correo: !!com\.esDueno/.test(p), 'al asignar, el correo no sale doble (asignarLead ya lo manda, salvo al dueño)');
+ok(/calificadoAhora && !avisado && lead\.assigned_to/.test(p), 'si ya tenía dueño, a esa persona le llega el aviso cuando Palomma lo califica');
+ok(/!estadoCalificado\(enlace\.etapa_palomma\)/.test(p), 'una sola vez: al pasar a calificado, no en cada evento después');
+
+ok(/telefonoEnOtrosEventos\(conexion, ev\.palomma_lead_id\)/.test(p), 'si el evento que lo califica no trae la conversación (lead.updated), el teléfono se busca en los demás eventos de esa persona (caso real: Jireh Cervantes)');
 
 console.log(mal ? `\n${mal} fallo(s)` : '\nTodo en verde');
 process.exit(mal ? 1 : 0);

@@ -7,7 +7,8 @@
 // Palomma → Acuarius vive en palomma_leads. Las decisiones están arriba de
 // _palomma.js. Solo se importa desde funciones edge.
 
-import { embudoIgnorado, tableroDe, etapaDe, notaDeEstado, resumenDePerfil, telefonoDe, estaCalificado } from './_palomma.js';
+import { embudoIgnorado, tableroDe, etapaDe, notaDeEstado, resumenDePerfil, telefonoDe, estaCalificado, estadoCalificado, camposParaActualizar } from './_palomma.js';
+import { enviarPushA } from './_push.js';
 import { intakeLead } from './_lead-intake.js';
 import { registrarError } from './_registro-errores.js';
 import { getGcalToken, gcalEventBody, gcalRequest } from './_gcal.js';
@@ -57,9 +58,40 @@ async function nota(conexion, leadId, contenido, evento) {
   return f?.id || null;
 }
 
+// ── Avisos a la asesora ────────────────────────────────────────────────────
+// «Cada vez que se asigne un contacto que venga de Palomma también debe llegarle
+// una notificación al usuario: a la campana, al correo y al celular»
+// (Alejandro, 16-10-2026). La campana es una nota con `para` (la lee
+// /api/lead-activities?avisos=1); el celular, el push; el correo, el mismo de
+// cualquier asignación. Ninguno tumba el evento si falla, pero queda en
+// error_log: un aviso que no sale es una asesora que no se entera.
+async function avisarAsesora(conexion, lead, para, { titulo, texto, correo = true }) {
+  if (!para) return [];
+  const hechos = [];
+  try {
+    await sb('/lead_activities', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify({
+      lead_id: lead.id, user_id: conexion.user_id, type: 'nota', content: texto,
+      metadata: { origen: 'palomma', evento: 'aviso', para, actor: 'Palomma' } }) });
+    hechos.push('campana');
+  } catch (e) { await registrarError({ origen: 'servidor', donde: 'palomma.aviso campana', error: e, usuario: conexion.user_id }); }
+  try {
+    const r = await enviarPushA(para, { titulo, texto: texto.slice(0, 120), url: '/crm?lead=' + lead.id, etiqueta: 'palomma-' + lead.id });
+    if (r?.enviados) hechos.push('celular');
+  } catch (e) { await registrarError({ origen: 'servidor', donde: 'palomma.aviso push', error: e, usuario: conexion.user_id }); }
+  if (correo) {
+    try {
+      const { comercialesActivos, duenoComoComercial, avisarComercial } = await import('./_assign.js');
+      const com = (await comercialesActivos(conexion.user_id)).find(m => m.id === para)
+        || (para === conexion.user_id ? await duenoComoComercial(conexion.user_id) : null);
+      if (com?.email) { await avisarComercial(com, lead, 'Palomma'); hechos.push('correo'); }
+    } catch (e) { await registrarError({ origen: 'servidor', donde: 'palomma.aviso correo', error: e, usuario: conexion.user_id }); }
+  }
+  return hechos;
+}
+
 // Lee el lead y mezcla campos propios sin pisar los demás.
 async function leerLead(id) {
-  return (await sb(`/leads?id=eq.${id}&select=id,phone,stage,pipeline_id,assigned_to,closed_at,custom_fields,deleted_at&limit=1`))?.[0] || null;
+  return (await sb(`/leads?id=eq.${id}&select=id,name,email,phone,stage,pipeline_id,assigned_to,assigned_name,closed_at,custom_fields,deleted_at&limit=1`))?.[0] || null;
 }
 async function mezclarCampos(lead, campos) {
   const cf = { ...(lead.custom_fields || {}) };
@@ -98,6 +130,16 @@ export async function subirCitasPendientes(conexion, tope = 10) {
   let subidas = 0;
   for (const c of citas) if (await citaAGoogle(conexion, c)) subidas++;
   return subidas;
+}
+
+async function telefonoEnOtrosEventos(conexion, palommaLeadId) {
+  const filas = await sb(`/palomma_eventos?conexion_id=eq.${conexion.id}&palomma_lead_id=eq.${encodeURIComponent(palommaLeadId)}` +
+    `&select=phone:payload->data->lead->>phone,conv:payload->data->lead->conversation->>content&order=ts.desc&limit=30`).catch(() => []) || [];
+  for (const f of filas) {
+    const t = telefonoDe({ phone: f.phone, conversation: { content: f.conv } });
+    if (t) return t;
+  }
+  return null;
 }
 
 // ── Encontrar o crear el lead de Acuarius ───────────────────────────────────
@@ -148,9 +190,20 @@ async function aplicar(conexion, ctx, ev) {
   if (embudoIgnorado(L.pipelineName)) return 'ignorado: embudo ' + L.pipelineName;
 
   let enlace = (await sb(`/palomma_leads?conexion_id=eq.${conexion.id}&palomma_lead_id=eq.${encodeURIComponent(ev.palomma_lead_id)}&select=*&limit=1`))?.[0];
+  // No todos los eventos traen la conversación (lead.updated no la trae), y es
+  // ahí donde está el teléfono cuando WhatsApp atiende por usuario. Si este no
+  // lo tiene, se busca en los demás eventos guardados de la misma persona: sin
+  // teléfono no hay cruce con el lead que ya existe y se duplica.
+  if (!telefonoDe(L)) {
+    const tel = await telefonoEnOtrosEventos(conexion, ev.palomma_lead_id);
+    if (tel) L.phone = tel.replace(/\D/g, '');
+  }
   // Mientras Palomma no lo califique, no existe para Acuarius. El evento que lo
   // califica trae el lead entero con la conversación, así que no se pierde nada.
   if (!enlace && !estaCalificado(L, data)) return 'esperando calificación';
+  // El momento en que Palomma lo califica: el enlace es nuevo, o el estado
+  // anterior no era de calificado. Es cuando se avisa a quien lo atiende.
+  const calificadoAhora = estaCalificado(L, data) && (!enlace || !estadoCalificado(enlace.etapa_palomma));
   if (!enlace) {
     const { leadId, creado } = await asegurarLead(conexion, ctx, L);
     [enlace] = await sb('/palomma_leads?on_conflict=conexion_id,palomma_lead_id', {
@@ -166,13 +219,16 @@ async function aplicar(conexion, ctx, ev) {
   const viejo = enlace.ultimo_ts && ev.ts && ev.ts < enlace.ultimo_ts;
   const hechos = [];
 
-  // Si el lead no tiene teléfono y ahora se sabe (la persona lo dio en el chat),
-  // se completa. Nunca se cambia uno que ya tenga.
-  const telNuevo = telefonoDe(L);
-  if (telNuevo && !lead.phone) {
-    await sb(`/leads?id=eq.${lead.id}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ phone: telNuevo, updated_at: new Date().toISOString() }) });
-    lead.phone = telNuevo;
-    hechos.push('teléfono');
+  // Lo que falte en la ficha (teléfono que dio en el chat, correo, un nombre
+  // genérico) se completa con lo de Palomma. Nunca se pisa lo que ya hay.
+  const cambios = camposParaActualizar(lead, L, telefonoDe(L));
+  if (Object.keys(cambios).length) {
+    await sb(`/leads?id=eq.${lead.id}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ ...cambios, updated_at: new Date().toISOString() }) });
+    Object.assign(lead, cambios);
+    hechos.push('actualizado: ' + Object.keys(cambios).join(', '));
+  }
+  if (calificadoAhora && !enlace.creado_por_palomma) {
+    await mezclarCampos(lead, { 'Origen en Palomma': L.source || null });
   }
 
   // Perfil y enlace a la conversación: siempre se pueden refrescar.
@@ -199,6 +255,7 @@ async function aplicar(conexion, ctx, ev) {
   const esHito = ev.tipo === 'lead.status-updated' ||
     (ev.tipo === 'lead.updated' && cambioEstado && ['appointmentConfirmed', 'appointmentCancelled', 'propertyInfoCollected'].includes(estado));
 
+  let avisado = false;
   if (!viejo && esHito) {
     const texto = notaDeEstado(estado, data);
     if (texto) { await nota(conexion, lead.id, texto, ev.tipo); hechos.push('nota ' + estado); }
@@ -209,8 +266,19 @@ async function aplicar(conexion, ctx, ev) {
     if (emp && !lead.assigned_to) {
       const m = ctx.asesorPorCorreo(emp.email);
       const { asignarLead } = await import('./_assign.js');
-      await asignarLead(conexion.user_id, { ...lead, source: 'palomma' }, 'palomma', m ? m.member_user_id : null);
+      const com = await asignarLead(conexion.user_id, { ...lead, source: 'palomma' }, 'palomma', m ? m.member_user_id : null);
       hechos.push(m ? 'asignado a ' + (m.member_name || emp.name) : 'reparto (asesor no está en Acuarius)');
+      if (com) {
+        lead.assigned_to = com.id;
+        // asignarLead ya manda el correo, salvo al dueño de la cuenta: aquí se
+        // pide que le llegue a quien sea.
+        hechos.push(...await avisarAsesora(conexion, lead, com.id, {
+          titulo: 'Palomma te asignó a ' + (lead.name || 'un contacto'),
+          texto: 'Palomma te asignó este contacto' + (lead.phone ? ' (' + lead.phone + ')' : '') + '. ' + (notaDeEstado(estado, data) || ''),
+          correo: !!com.esDueno,
+        }));
+        avisado = true;
+      }
     }
 
     // Etapa: solo hacia delante y solo si el lead sigue abierto.
@@ -237,6 +305,15 @@ async function aplicar(conexion, ctx, ev) {
       hechos.push('cita agendada');
       if (act && await citaAGoogle(conexion, act)) hechos.push('en Google Calendar');
     }
+  }
+
+  // Ya tenía dueño en Acuarius (no se cambia) y Palomma lo acaba de calificar:
+  // a esa persona también le llega el aviso, por los tres canales.
+  if (!viejo && calificadoAhora && !avisado && lead.assigned_to) {
+    hechos.push(...await avisarAsesora(conexion, lead, lead.assigned_to, {
+      titulo: 'Palomma calificó a ' + (lead.name || 'tu contacto'),
+      texto: (enlace.creado_por_palomma ? 'Palomma calificó a este contacto. ' : 'Este contacto ya estaba en tu cartera y Palomma lo acaba de calificar. ') + (notaDeEstado(estado, data) || ''),
+    }));
   }
 
   // La conversación, en UNA nota que se actualiza (decisión de Alejandro).

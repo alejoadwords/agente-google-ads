@@ -179,3 +179,20 @@ const CALIFICADO = ['redirected', 'appointmentIntent', 'appointmentPending', 'ap
 export function estaCalificado(L, data = {}) {
   return CALIFICADO.includes(L?.pipelinePositionId) || !!data?.employeeAssigned;
 }
+export function estadoCalificado(estado) {
+  return CALIFICADO.includes(estado);
+}
+
+// Qué completar en un contacto que YA existía en Acuarius con lo que trae
+// Palomma (Alejandro, 16-10: «actualizar la info del contacto con lo que venga
+// de Palomma»). Se llena lo vacío; lo que la asesora ya escribió no se pisa. El
+// nombre solo si el que hay es genérico: el de WhatsApp suele ser un apodo
+// («Alejo ❤️‍🔥») y el de la ficha, el real.
+const NOMBRE_GENERICO = /^(contacto de whatsapp|sin nombre|cliente|lead)?$/i;
+export function camposParaActualizar(lead, L, telefono) {
+  const cambios = {};
+  if (telefono && !lead.phone) cambios.phone = telefono;
+  if (L?.email && !lead.email) cambios.email = String(L.email).toLowerCase();
+  if (L?.name && NOMBRE_GENERICO.test(String(lead.name || '').trim())) cambios.name = L.name;
+  return cambios;
+}
