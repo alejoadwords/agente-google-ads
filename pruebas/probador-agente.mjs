@@ -190,8 +190,8 @@ ok(/negritaWa\(m\.content\)/.test(app), 'y se usa al pintar las burbujas');
 // ── 6. La pantalla existe y usa piezas que existen ──────────────────────────
 console.log('\nLa interfaz');
 
-ok(/const AG_PASOS = \[[^\]]*'Probar'\]/.test(app), 'el paso «Probar» está en el editor');
-ok(/if \(n === 6\) return !!agEditingId;/.test(app),
+ok(/const AG_PASOS = \[[^\]]*'Probar', 'Mejoras'\]/.test(app), 'los pasos «Probar» y «Mejoras» están en el editor');
+ok(/if \(n === 6 \|\| n === 7\) return !!agEditingId;/.test(app),
    'y solo aparece con el agente ya guardado: el ensayo lee la config de la base');
 ok(/agPrbReiniciar\(\);/.test(app.slice(app.indexOf('function crmOpenAgentModal'))),
    'al abrir el modal el ensayo anterior se borra: era otra configuración');

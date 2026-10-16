@@ -1619,7 +1619,10 @@ export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null,
 ${agent.business_ctx || ''}
 
 ${faqs ? `PREGUNTAS FRECUENTES:\n${faqs}` : ''}
-
+${(agent.reglas || []).length ? `
+REGLAS QUE TE ENSEÑÓ EL NEGOCIO (las fue corrigiendo al probarte; cúmplelas siempre, salvo que choquen con algo innegociable de lo que viene abajo, que manda):
+${agent.reglas.map(r => '- ' + String(r.texto || '').trim()).filter(x => x.length > 2).join('\n')}
+` : ''}
 CÓMO DEBES COMPORTARTE:
 ${tratamiento(agent.tone)}
 - Habla como una persona real, cálida y natural
@@ -1888,7 +1891,10 @@ export async function sugerirRespuesta(userId, conversationId) {
 // Devuelve además lo que en producción va oculto: qué capturó, qué pistas
 // llegaron al filtro del catálogo, a qué ruta te manda y si te califica. Sin
 // eso sería una demo; con eso es la herramienta para ajustar el entrenamiento.
-export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensajes = [], origen = 'ensayo' }) {
+// `agenteCambiado` / `reglaCambiada`: «Mejorar el agente» ensaya un cambio
+// ANTES de guardarlo (api/agente-mejorar.js). Se mezclan sobre lo guardado y no
+// se escribe nada.
+export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensajes = [], origen = 'ensayo', agenteCambiado = null, reglaCambiada = undefined }) {
   if (!userId || !agentId) return { ok: false, error: 'Falta el agente.' };
   const todos = (Array.isArray(mensajes) ? mensajes : [])
     .filter(m => m && (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim())
@@ -1911,6 +1917,7 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
     { headers: sb() }
   ).then(r => (r.ok ? r.json() : [])).then(r => r?.[0]).catch(() => null);
   if (!agent) return { ok: false, error: 'Ese agente no existe en tu cuenta.' };
+  if (agenteCambiado) Object.assign(agent, agenteCambiado);
 
   // Lo capturado y lo calificado se acumulan del historial del propio ensayo,
   // igual que en producción se acumulan del historial guardado. Aquí el
@@ -1922,7 +1929,7 @@ export async function ensayarAgente({ userId, agentId, canal = 'whatsapp', mensa
   const capturado = { ...conocido, ...extractCapturedData(deAsistente) };
   const previas = extraerCalificacion(deAsistente);
 
-  const regla = await getRegla(userId, agentId).catch(() => null);
+  const regla = reglaCambiada !== undefined ? reglaCambiada : await getRegla(userId, agentId).catch(() => null);
 
   // Las pistas, calculadas aparte y devueltas: son la explicación de por qué el
   // agente ofreció lo que ofreció. Un catálogo que no filtra no se nota en la

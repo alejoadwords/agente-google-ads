@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco de pruebas · Mejorar el agente</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  Banco de «Mejorar el agente»: el probador con «Corregir esta respuesta», el
+  panel del entrenador y el paso «Mejoras».
+
+  Carga el CSS de public/index.html y las funciones de public/app.js tal cual;
+  solo se sustituye la respuesta de /api/agente-mejorar (respuestas reales del
+  entrenador con el agente de Certain, 15-10-2026).
+
+  Arrancar con:  node pruebas/servidor-boceto.mjs
+-->
+<style id="estilos-reales"></style>
+<style>
+  html,body{overflow:auto!important;height:auto!important}
+  body{margin:0;font-family:'Outfit',sans-serif;background:var(--bg-subtle,#F7F8FC);color:var(--text,#0D0F1C);padding:22px 20px 80px}
+  .zona{max-width:580px;margin:0 auto 30px;background:var(--panel,#fff);padding:16px 20px;border-radius:14px}
+  .zona h2{margin:0 0 10px;font-size:13px;color:var(--muted,#5A607A);font-weight:600}
+  .banco{position:fixed;bottom:0;left:0;right:0;background:var(--text,#111);color:#fff;padding:9px 14px;
+    display:flex;gap:10px;align-items:center;justify-content:center;font-size:12px;z-index:9000;flex-wrap:wrap}
+  .banco button{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:7px;padding:5px 10px;font-family:inherit;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+
+<div class="zona">
+  <h2>Probar · con el panel del entrenador abierto (usa los botones de abajo para cambiar de estado)</h2>
+  <div class="ag-probar">
+    <div>
+      <div class="ag-prb-chat" id="ag-prb-chat"></div>
+      <div class="ag-mej" id="ag-mej" style="display:none"></div>
+    </div>
+    <div class="ag-prb-rx" id="ag-prb-rx"></div>
+  </div>
+</div>
+
+<div class="zona">
+  <h2>Paso «Mejoras»</h2>
+  <div id="ag-mej-lista"></div>
+</div>
+
+<div class="banco">
+  <button onclick="estado('escribir')">1 · Escribir</button>
+  <button onclick="estado('pregunta')">2 · Pregunta</button>
+  <button onclick="estado('propuesta')">3 · Propuesta</button>
+  <button onclick="estado('probado')">4 · Probado</button>
+  <button onclick="estado('reporte')">5 · Fallo de Acuarius</button>
+  <button onclick="document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')">Claro / oscuro</button>
+  <button onclick="document.querySelectorAll('.zona').forEach(z=>z.style.maxWidth = z.style.maxWidth ? '' : '350px')">Móvil</button>
+</div>
+
+<script>
+const BIENVENIDA = '¡Hola! 👋 Bienvenido a Certain & Pezzano.\nEstamos aquí para ayudarte. ¿Qué te gustaría hacer? 🏡\n\n🛒 Comprar un inmueble\n🔑 Tomar un inmueble en arriendo\n💰 Vender mi inmueble\n🏠 Dar mi inmueble en arriendo';
+const OPCIONES = 'Perfecto, apartamento en arriendo en Alto Prado. Tengo dos opciones disponibles que podrían interesarte:\n\nAlto Prado · 3 hab · 2 baños · $2.400.000 (código 121514401)\n\nAlto Prado · 3 hab · 3 baños · $2.800.000 (código 121513334)\n\n¿Cuál de estas te llama más la atención?';
+const PROP = { tipo: 'regla', explicacion: 'El agente usó «Perfecto», que al cliente le suena robótico. Voy a agregar una regla para que use «Listo» o «Con gusto».', cambio: { texto: "Nunca uses la palabra 'Perfecto' para iniciar o responder. Usa en su lugar 'Listo', 'Con gusto' u otra expresión similar, variando." } };
+const RES = { titulo: 'Nueva regla', antes: '', despues: PROP.cambio.texto };
+const DESPUES = 'Listo, tengo claro que buscas un apartamento en arriendo en Alto Prado con presupuesto hasta 4 millones.\n\nMira, tengo dos opciones disponibles allá:\n\nAlto Prado · 3 hab · 2 baños · $2.400.000 (121514401)\n\nAlto Prado · 3 hab · 3 baños · $2.800.000 (121513334)\n\n¿Cuál de estos te interesa ver?';
+const LISTA = {
+  cupo: { cupo: 60, usadas: 7 },
+  reglas: [{ texto: 'No digas «de nada»: responde «con gusto» y despídete con «¡Gracias por contactarnos!».' }, { texto: PROP.cambio.texto }],
+  historial: [
+    { id: 'm3', tipo: 'regla', correccion: 'Nunca le digas "Perfecto" al cliente, suena robótico.', explicacion: PROP.explicacion, creado_at: '2026-10-15T16:20:00Z' },
+    { id: 'm2', tipo: 'reporte', correccion: 'Aceptó llamarme a las 9 de la noche, fuera del horario.', explicacion: 'El horario ya está escrito; el agente no lo respetó. Se reporta al equipo.', creado_at: '2026-10-15T15:02:00Z' },
+    { id: 'm1', tipo: 'calificacion', correccion: 'Siempre pregunta para cuántas personas es.', explicacion: 'Lo agrego a lo que el agente averigua.', creado_at: '2026-10-14T21:40:00Z', deshecho_at: '2026-10-14T22:00:00Z' },
+  ],
+};
+
+(async function montar() {
+  const html = await (await fetch('/public/index.html')).text();
+  const js = await (await fetch('/public/app.js')).text();
+  document.getElementById('estilos-reales').textContent = (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+  const trozo = (desde, hasta) => {
+    const i = js.indexOf(desde);
+    if (i < 0) throw new Error('No encontré en app.js: ' + desde);
+    const j = js.indexOf(hasta, i);
+    return js.slice(i, j > i ? j : js.length);
+  };
+  const codigo = trozo('function esc(t)', '\n') + '\n' +
+    trozo('let agPrbHist = []', 'function agPrbRadiografia(') +
+    trozo('// ── Mejorar el agente', 'function agRenderChannels(');
+  const stubs = `
+    let agEditingId = 'a1', crmAgents = [{ id: 'a1' }], agFaqs = [];
+    function showToast(t){ console.log('toast', t); }
+    function fotoGrande(){} function calLoad(){} function agRenderFaqs(){}
+    async function crmLoadAgents(){ return true; }
+    async function confirmarAguaP(){ return true; }
+    async function fetchAuth(){ return { ok: true, json: async () => LISTA }; }
+  `;
+  new Function(stubs + codigo + `
+    agPrbVista = [{ role: 'user', content: 'Hola' }, { role: 'assistant', content: BIENVENIDA },
+      { role: 'user', content: 'busco apartamento en arriendo en Alto Prado, hasta 4 millones' }, { role: 'assistant', content: OPCIONES }];
+    agPrbHist = agPrbVista.slice();
+    window.estado = function (e) {
+      agMejAbrir(3);
+      if (e === 'pregunta') _agMej.pregunta = 'Revisé la respuesta y no veo ningún apartamento de 6 millones: ofreció $2.400.000 y $2.800.000. ¿En qué parte lo viste?';
+      if (e === 'propuesta' || e === 'probado') { _agMej.correccion = 'Nunca le digas Perfecto'; _agMej.propuesta = PROP; _agMej.resumen = RES; }
+      if (e === 'probado') _agMej.despues = DESPUES;
+      if (e === 'reporte') { _agMej.propuesta = { tipo: 'fallo_plataforma', explicacion: 'Tu horario ya dice hasta las 5 p. m.; el agente no lo respetó. Eso lo arreglamos nosotros.', cambio: {} };
+        _agMej.resumen = { titulo: 'Reporte al equipo de Acuarius', antes: '', despues: 'Aceptó llamar a las 9 p. m. aunque el horario de llamadas termina a las 5 p. m.' }; }
+      agMejPintar();
+    };
+    agMejCargar();
+  `)();
+  estado('probado');
+})().catch(e => document.body.insertAdjacentHTML('afterbegin', '<pre style="color:#DC2626;white-space:pre-wrap">' + e.message + '</pre>'));
+</script>
+</body>
+</html>

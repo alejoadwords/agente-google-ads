@@ -3574,6 +3574,38 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .ag-prb-rx .ag-prb-mal{color:var(--danger);font-weight:700}
 .ag-prb-rx .ag-prb-bien{color:var(--success);font-weight:700}
 @media(max-width:768px){.ag-probar{grid-template-columns:1fr}}
+/* Mejorar el agente: corregir una respuesta del probador y ver lo aprendido. */
+.ag-prb-corregir{align-self:flex-start;background:none;border:none;padding:3px 2px 0;font-family:inherit;font-size:10.5px;font-weight:700;color:var(--muted2);cursor:pointer}
+.ag-prb-corregir:hover{color:var(--blue)}
+.ag-prb-fila.assistant .ag-prb-corregir{align-self:flex-end}
+.ag-prb-marcada .crm-inbox-bubble{outline:2px solid var(--blue-md);outline-offset:2px}
+.ag-mej{margin-top:12px;padding:12px;border:1.5px solid var(--blue-md);border-radius:var(--r);background:var(--panel)}
+.ag-mej-cab{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;font-size:12.5px;color:var(--text)}
+.ag-mej-ayuda{margin:0 0 8px;font-size:11.5px;line-height:1.55;color:var(--muted)}
+.ag-mej-error{color:var(--danger)}
+.ag-mej-vacio{color:var(--muted2)}
+.ag-mej-cita{margin:0 0 8px;padding:7px 10px;border-left:3px solid var(--border);background:var(--bg);font-size:11.5px;line-height:1.5;color:var(--muted);border-radius:0 8px 8px 0}
+.ag-mej textarea{width:100%;resize:vertical;font-family:inherit}
+.ag-mej-pregunta{margin:0 0 7px;padding:8px 10px;background:var(--blue-lt);border-radius:8px;font-size:11.5px;line-height:1.5;color:var(--text)}
+.ag-mej-botones{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.ag-mej-tipo{display:inline-block;margin-bottom:7px;padding:2px 8px;border-radius:999px;background:var(--blue-lt);color:var(--blue);font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase}
+.ag-mej-antes-despues{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-bottom:8px}
+.ag-mej-caja{padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg)}
+.ag-mej-caja h6{margin:0 0 3px;font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.ag-mej-caja p{margin:0;font-size:11.5px;line-height:1.5;color:var(--text);word-break:break-word}
+.ag-mej-caja.antes p{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--danger)}
+.ag-mej-caja.despues{border-color:var(--success);background:var(--success-bg)}
+/* La respuesta vieja frente a la nueva: tachar un mensaje entero no se lee. */
+.ag-mej-caja.antes.resp p{text-decoration:none}
+.ag-mej-regla{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;line-height:1.5;color:var(--text)}
+.ag-mej-hist{padding:9px 0;border-bottom:1px solid var(--border)}
+.ag-mej-hist.deshecho{opacity:.55}
+.ag-mej-hist-cab{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.ag-mej-hist-cab .ag-mej-tipo{margin:0}
+.ag-mej-hist-cab .btn-ghost{margin-left:auto}
+.ag-mej-fecha{font-size:10.5px;color:var(--muted2)}
+.ag-mej-correccion{margin:0 0 3px;font-size:12px;line-height:1.5;color:var(--text)}
+
 .crm-agent-modal-box{max-width:580px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
 .crm-agent-modal-box > .crm-modal-body{max-height:none;flex:1;min-height:0;overflow-y:auto}
 .crm-agent-modal-box > .crm-modal-head,
@@ -4440,6 +4472,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <p class="home-sub">Esto es lo que está pasando en tu cuenta hoy</p>
 
       <!-- Pulso — brief diario proactivo -->
+      <!-- La ruta de arranque de una cuenta nueva (rutaPintar en app.js) -->
+      <div id="ruta-section" style="display:none"></div>
       <div class="pulso" id="pulso-section" style="display:none">
         <div class="pulso-head">
           <div class="pulso-title"><span class="pulso-dot"></span><span id="pulso-title-text">Pulso de hoy</span></div>
@@ -6650,9 +6684,19 @@ if (window.AGENTES_ACTIVOS) {
                 <button class="btn-pri sm" onclick="agPrbCopiar(this)">Copiar</button>
               </div>
             </div>
+            <div class="ag-mej" id="ag-mej" style="display:none"></div>
           </div>
           <div class="ag-prb-rx" id="ag-prb-rx"></div>
         </div>
+      </div>
+      <div class="ag-paso" data-paso="7" style="display:none">
+        <div class="crm-section-divider">Mejoras del agente</div>
+        <div style="font-size:11.5px;color:var(--muted2);margin-bottom:12px;line-height:1.55">
+          Cada vez que corriges una respuesta en «Probar», el agente aprende. Aquí ves lo que aprendió
+          y puedes deshacer cualquier cambio. Si lo que falló es de Acuarius y no de tu configuración,
+          nos llega a nosotros como un caso de soporte.
+        </div>
+        <div id="ag-mej-lista"></div>
       </div>
     </div>
     <div class="crm-modal-foot">

@@ -23422,14 +23422,14 @@ function agVerEnCliente(id) {
 // scroll: el contenido se cortaba y la sección de Calificación era inalcanzable.
 // Cinco pasos cortos evitan el scroll en vez de pelearse con él. Los campos
 // conservan sus identificadores, así que guardar no cambia.
-const AG_PASOS = ['Identidad', 'Respuestas', 'Canales', 'Calificación', 'Proceso', 'Probar'];
+const AG_PASOS = ['Identidad', 'Respuestas', 'Canales', 'Calificación', 'Proceso', 'Probar', 'Mejoras'];
 let _agPaso = 1;
 
 // El paso de canales solo existe al editar: un agente recién creado no tiene
 function agPasoExiste(n) {
   // Probar exige un agente guardado: el ensayo lo responde el servidor leyendo
   // su configuración de la base, no lo que hay escrito en el formulario.
-  if (n === 6) return !!agEditingId;
+  if (n === 6 || n === 7) return !!agEditingId;
   if (n !== 3) return true;
   const sec = document.getElementById('ag-channels-section');
   return !!sec && sec.style.display !== 'none';
@@ -23460,6 +23460,7 @@ function agIrAPaso(n) {
   // todos los pasos para cambiar el nombre sería peor que el scroll de antes.
   if (guardar) guardar.style.display = '';
   agRenderPasos();
+  if (n === 7) agMejCargar();
 }
 
 function agPaso(delta) {
@@ -23568,6 +23569,7 @@ let agPrbOcupado = false;
 function agPrbReiniciar() {
   agPrbHist = [];
   agPrbVista = [];
+  agMejCerrar(true);
   // El enlace es de un agente concreto: al cambiar de agente no puede quedarse
   // el de antes a la vista, que se copiaría creyendo que es el nuevo.
   const en = document.getElementById('ag-prb-enlace');
@@ -23595,8 +23597,8 @@ function agPrbPintar() {
       'Escríbele como si fueras un cliente.<br>Nada de lo que pase aquí queda en tu CRM.</div>';
     return;
   }
-  c.innerHTML = agPrbVista.map(m =>
-    '<div class="ag-prb-fila crm-inbox-bubble-wrap ' + m.role + '">' +
+  c.innerHTML = agPrbVista.map((m, i) =>
+    '<div class="ag-prb-fila crm-inbox-bubble-wrap ' + m.role + (_agMej && _agMej.indice === i ? ' ag-prb-marcada' : '') + '">' +
       '<div class="crm-inbox-bubble ' + m.role + '">' + negritaWa(m.content) + '</div>' +
       // Las fotos que el agente habría mandado por WhatsApp. Sin pintarlas, el
       // ensayo decía «le mando unas fotos» y no aparecía ninguna.
@@ -23604,6 +23606,11 @@ function agPrbPintar() {
         ? '<div class="ag-prb-fotos">' + m.fotos.map(u =>
             '<img src="' + esc(u) + '" alt="Foto del inmueble" loading="lazy" ' +
             'onclick="fotoGrande(this.src)" title="Ver más grande">').join('') + '</div>'
+        : '') +
+      // Corregir es la forma de enseñarle: se marca la respuesta mala y se
+      // cuenta qué debió decir (agMejAbrir).
+      (m.role === 'assistant' && !agPrbOcupado
+        ? '<button class="ag-prb-corregir" onclick="agMejAbrir(' + i + ')">Corregir esta respuesta</button>'
         : '') +
     '</div>'
   ).join('') + (agPrbOcupado
@@ -23770,6 +23777,295 @@ async function agPrbEnviar() {
     agPrbVista.pop();
     agPrbPintar();
     showToast('No se pudo probar el agente', 'error');
+  }
+}
+
+// ── Mejorar el agente ───────────────────────────────────────────────────────
+// El cliente marca una respuesta del probador, cuenta qué estuvo mal y el
+// entrenador (api/agente-mejorar.js) propone UN cambio: una regla, la
+// bienvenida, una pregunta frecuente, el contexto… Se puede probar antes de
+// aplicarlo y todo queda en el historial con «Deshacer». Si lo que falló es
+// nuestro (el agente desobedeció algo que ya tenía escrito), no se toca su
+// configuración: se nos abre un ticket. Así cada cuenta entrena su agente como
+// lo hicimos con el de Certain, sin pasar por nosotros.
+let _agMej = null;   // { indice, correccion, propuesta, resumen, pregunta, despues, ocupado }
+
+function agMejAbrir(indice) {
+  if (!agEditingId || agPrbVista[indice]?.role !== 'assistant') return;
+  _agMej = { indice, correccion: '', propuesta: null, resumen: null, pregunta: null, despues: null, ocupado: false };
+  agPrbPintar();
+  agMejPintar();
+  setTimeout(() => {
+    const t = document.getElementById('ag-mej-texto');
+    if (t) { t.focus(); t.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  }, 50);
+}
+
+function agMejCerrar(sinPintar) {
+  _agMej = null;
+  const el = document.getElementById('ag-mej');
+  if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+  if (!sinPintar) agPrbPintar();
+}
+
+function agMejPintar() {
+  const el = document.getElementById('ag-mej');
+  if (!el) return;
+  const m = _agMej;
+  if (!m) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  const original = agPrbVista[m.indice]?.content || '';
+  const caja = (titulo, texto, clase) =>
+    '<div class="ag-mej-caja ' + (clase || '') + '"><h6>' + titulo + '</h6><p>' +
+    (texto ? esc(texto).replace(/\n/g, '<br>') : '<span class="ag-mej-vacio">(nada)</span>') + '</p></div>';
+  let h = '<div class="ag-mej-cab"><strong>Corregir la respuesta del agente</strong>' +
+    '<button class="btn-ghost sm" onclick="agMejCerrar()">Cerrar</button></div>';
+
+  if (!m.propuesta) {
+    h += '<p class="ag-mej-ayuda">Cuéntalo como se lo dirías a un asesor nuevo: qué estuvo mal, ' +
+      'qué debió decir o qué no debe volver a hacer. El entrenador decide dónde va el cambio.</p>' +
+      '<blockquote class="ag-mej-cita">' + negritaWa(original.length > 280 ? original.slice(0, 280) + '…' : original) + '</blockquote>';
+    if (m.pregunta) {
+      h += '<div class="ag-mej-pregunta"><strong>El entrenador necesita un dato:</strong> ' + esc(m.pregunta) + '</div>' +
+        '<textarea class="auto-input" id="ag-mej-dato" rows="2" placeholder="Tu respuesta"></textarea>';
+    } else {
+      h += '<textarea class="auto-input" id="ag-mej-texto" rows="3" ' +
+        'placeholder="Ej: no le digas «de nada», responde «con gusto» y despídete con «¡Gracias por contactarnos!»">' +
+        esc(m.correccion) + '</textarea>';
+    }
+    h += '<div class="ag-mej-botones"><button class="btn-pri sm" onclick="agMejProponer(this)"' + (m.ocupado ? ' disabled' : '') + '>' +
+      (m.ocupado ? 'Analizando…' : 'Analizar') + '</button></div>';
+  } else {
+    const p = m.propuesta, r = m.resumen || {};
+    const esReporte = p.tipo === 'fallo_plataforma';
+    h += '<p class="ag-mej-ayuda">' + esc(p.explicacion || '') + '</p>' +
+      '<div class="ag-mej-tipo">' + esc(r.titulo || '') + '</div>';
+    if (esReporte) {
+      h += caja('Lo que le vamos a reportar al equipo de Acuarius', r.despues, 'despues') +
+        '<p class="ag-mej-ayuda">Esto no depende de cómo configuraste tu agente: lo arreglamos nosotros. ' +
+        'Te respondemos en «Ayuda», en el mismo caso.</p>';
+    } else {
+      h += '<div class="ag-mej-antes-despues">' +
+        (r.antes ? caja('Antes', r.antes, 'antes') : '') +
+        caja(r.antes ? 'Después' : 'Se agrega', r.despues, 'despues') + '</div>';
+    }
+    if (m.despues != null) {
+      h += '<div class="ag-mej-antes-despues">' +
+        caja('Respondía', original, 'antes resp') + caja('Con el cambio responde', m.despues, 'despues') + '</div>';
+    }
+    h += '<div class="ag-mej-botones">' +
+      (esReporte
+        ? '<button class="btn-pri sm" onclick="agMejAplicar(this)"' + (m.ocupado ? ' disabled' : '') + '>Reportar al equipo</button>'
+        : (m.despues == null
+            ? '<button class="btn-ghost sm" onclick="agMejProbar(this)"' + (m.ocupado ? ' disabled' : '') + '>' + (m.ocupado === 'probar' ? 'Probando…' : 'Probar el cambio') + '</button>'
+            : '') +
+          '<button class="btn-pri sm" onclick="agMejAplicar(this)"' + (m.ocupado ? ' disabled' : '') + '>' + (m.ocupado === 'aplicar' ? 'Aplicando…' : 'Aplicar al agente') + '</button>') +
+      '<button class="btn-ghost sm" onclick="agMejOtraVez()"' + (m.ocupado ? ' disabled' : '') + '>No es eso</button>' +
+      '</div>';
+  }
+  el.innerHTML = h;
+}
+
+// Lo que se manda: el historial EN BRUTO, igual que en cada envío del probador.
+function agMejCuerpo(accion, extra) {
+  return JSON.stringify({ accion, agent_id: agEditingId, mensajes: agPrbHist, indice: _agMej.indice, ...extra });
+}
+
+async function agMejPost(cuerpo) {
+  const r = await fetchAuth('/api/agente-mejorar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: cuerpo });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d.error) throw new Error(d.error || 'No se pudo completar. Reintenta en un momento.');
+  return d;
+}
+
+async function agMejProponer() {
+  const m = _agMej;
+  if (!m || m.ocupado) return;
+  if (m.pregunta) {
+    const dato = (document.getElementById('ag-mej-dato')?.value || '').trim();
+    if (!dato) { showToast('Respóndele al entrenador', 'error'); return; }
+    m.correccion += '\n\nEl entrenador preguntó: ' + m.pregunta + '\nRespuesta: ' + dato;
+    m.pregunta = null;
+  } else {
+    m.correccion = (document.getElementById('ag-mej-texto')?.value || '').trim();
+    if (!m.correccion) { showToast('Cuéntale qué estuvo mal', 'error'); return; }
+  }
+  m.ocupado = true; agMejPintar();
+  try {
+    const d = await agMejPost(agMejCuerpo('proponer', { correccion: m.correccion }));
+    if (_agMej !== m) return;
+    if (d.pregunta) { m.pregunta = d.pregunta; }
+    else { m.propuesta = d.propuesta; m.resumen = d.resumen; m.despues = null; }
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+  if (_agMej === m) { m.ocupado = false; agMejPintar(); }
+}
+
+async function agMejProbar() {
+  const m = _agMej;
+  if (!m || m.ocupado || !m.propuesta) return;
+  m.ocupado = 'probar'; agMejPintar();
+  try {
+    const d = await agMejPost(agMejCuerpo('probar', { propuesta: m.propuesta }));
+    if (_agMej !== m) return;
+    m.despues = d.texto; m.despuesBruto = d.bruto;
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+  if (_agMej === m) { m.ocupado = false; agMejPintar(); }
+}
+
+function agMejOtraVez() {
+  if (!_agMej) return;
+  Object.assign(_agMej, { propuesta: null, resumen: null, despues: null, pregunta: null });
+  agMejPintar();
+}
+
+async function agMejAplicar() {
+  const m = _agMej;
+  if (!m || m.ocupado || !m.propuesta) return;
+  m.ocupado = 'aplicar'; agMejPintar();
+  try {
+    const d = await agMejPost(agMejCuerpo('aplicar', { propuesta: m.propuesta, correccion: m.correccion, respuesta_despues: m.despues || '' }));
+    if (m.propuesta.tipo === 'fallo_plataforma') {
+      showToast('Reportado al equipo de Acuarius. Te respondemos en Ayuda.');
+      agMejCerrar();
+      return;
+    }
+    showToast('Listo: el agente ya lo aprendió');
+    // La conversación sigue desde la respuesta corregida: lo que vino después
+    // salió de la configuración vieja y ya no prueba nada.
+    agPrbHist = agPrbHist.slice(0, m.indice);
+    agPrbVista = agPrbVista.slice(0, m.indice);
+    if (m.despues != null) {
+      agPrbHist.push({ role: 'assistant', content: m.despuesBruto || m.despues });
+      agPrbVista.push({ role: 'assistant', content: m.despues, fotos: [] });
+    }
+    agMejCerrar();
+    await agMejRefrescarForm(m.propuesta.tipo);
+  } catch (e) {
+    if (_agMej === m) { m.ocupado = false; agMejPintar(); }
+    showToast(e.message, 'error');
+  }
+}
+
+// El formulario del modal tiene copias de los campos: sin refrescarlas, el
+// siguiente «Guardar cambios» pisaría la mejora con el valor viejo.
+async function agMejRefrescarForm(tipo) {
+  const id = agEditingId;
+  const ok = await crmLoadAgents();
+  const ag = crmAgents.find(a => a.id === id);
+  if (!ok || !ag || agEditingId !== id) {
+    showToast('El cambio quedó guardado. Cierra y vuelve a abrir el agente antes de guardar otra cosa.', 'error');
+    return;
+  }
+  const todo = !tipo;
+  if (todo || tipo === 'bienvenida') document.getElementById('cag-f-bienvenida').value = ag.bienvenida || '';
+  if (todo || tipo === 'contexto') document.getElementById('cag-f-business').value = ag.business_ctx || '';
+  if (todo || tipo === 'frase_escalar') document.getElementById('cag-f-escalate').value = ag.escalate_phrase || '';
+  if (todo || tipo === 'tono') document.getElementById('cag-f-tone').value = ag.tone || 'informal';
+  if (todo || tipo === 'faq') { agFaqs = (ag.faqs || []).map(f => ({ ...f })); agRenderFaqs(); }
+  if (todo || tipo === 'calificacion' || tipo === 'enrutado') calLoad(id);
+}
+
+// ── Paso «Mejoras»: lo aprendido y el historial ─────────────────────────────
+const AG_MEJ_TIPOS = {
+  regla: 'Regla', bienvenida: 'Bienvenida', faq: 'Pregunta frecuente', contexto: 'Contexto del negocio',
+  calificacion: 'Calificación', enrutado: 'Elegir proceso', frase_escalar: 'Pasar a un asesor', tono: 'Trato', reporte: 'Reporte a Acuarius',
+};
+let _agMejDatos = null;
+
+async function agMejCargar() {
+  const el = document.getElementById('ag-mej-lista');
+  if (!el || !agEditingId) return;
+  const id = agEditingId;
+  el.innerHTML = '<p class="ag-mej-ayuda">Cargando…</p>';
+  try {
+    const r = await fetchAuth('/api/agente-mejorar?agent_id=' + encodeURIComponent(id));
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.error) throw new Error(d.error || 'No se pudo cargar');
+    if (agEditingId !== id) return;
+    _agMejDatos = d;
+    agMejPintarLista();
+  } catch (e) {
+    el.innerHTML = '<p class="ag-mej-ayuda ag-mej-error">No se pudieron cargar las mejoras: ' + esc(e.message) +
+      ' <button class="btn-ghost sm" onclick="agMejCargar()">Reintentar</button></p>';
+  }
+}
+
+function agMejPintarLista() {
+  const el = document.getElementById('ag-mej-lista');
+  const d = _agMejDatos;
+  if (!el || !d) return;
+  const fecha = t => new Date(t).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  const cupo = d.cupo || {};
+  let h = '';
+  if (cupo.cupo) {
+    h += '<p class="ag-mej-ayuda">' + (cupo.usadas == null
+      ? 'No se pudo contar cuántas mejoras con IA llevas este mes.'
+      : 'Llevas <strong>' + cupo.usadas + ' de ' + cupo.cupo + '</strong> mejoras con IA este mes.') + '</p>';
+  }
+
+  h += '<div class="crm-section-divider">Lo que el agente aprendió</div>';
+  const reglas = d.reglas || [];
+  h += reglas.length
+    ? reglas.map((r, i) => '<div class="ag-mej-regla"><span>' + esc(r.texto) + '</span>' +
+        '<button class="btn-ghost sm" onclick="agMejQuitarRegla(' + i + ', this)">Quitar</button></div>').join('')
+    : '<p class="ag-mej-ayuda">Todavía nada. En «Probar», debajo de cada respuesta del agente, toca ' +
+      '<strong>Corregir esta respuesta</strong> y cuéntale qué debió decir.</p>';
+
+  h += '<div class="crm-section-divider">Historial de cambios</div>';
+  const hist = d.historial || [];
+  // Solo se deshace el último cambio vigente: deshacer uno del medio pisaría
+  // los que vinieron después.
+  const deshacible = hist.find(x => !x.deshecho_at && x.tipo !== 'reporte');
+  h += hist.length
+    ? hist.map(x => '<div class="ag-mej-hist' + (x.deshecho_at ? ' deshecho' : '') + '">' +
+        '<div class="ag-mej-hist-cab"><span class="ag-mej-tipo">' + esc(AG_MEJ_TIPOS[x.tipo] || x.tipo) + '</span>' +
+        '<span class="ag-mej-fecha">' + fecha(x.creado_at) + (x.deshecho_at ? ' · deshecho' : '') + '</span>' +
+        (deshacible && deshacible.id === x.id ? '<button class="btn-ghost sm" onclick="agMejDeshacer(\'' + x.id + '\', this)">Deshacer</button>' : '') +
+        '</div>' +
+        (x.correccion ? '<p class="ag-mej-correccion">«' + esc(x.correccion.split('\n\nEl entrenador preguntó:')[0]) + '»</p>' : '') +
+        (x.explicacion ? '<p class="ag-mej-ayuda">' + esc(x.explicacion) + '</p>' : '') +
+        '</div>').join('')
+    : '<p class="ag-mej-ayuda">Aquí quedará cada cambio que le hagas desde el probador, con la opción de deshacerlo.</p>';
+  el.innerHTML = h;
+}
+
+async function agMejQuitarRegla(i, btn) {
+  const regla = _agMejDatos?.reglas?.[i];
+  if (!regla) return;
+  const si = await confirmarAguaP({ titulo: 'Quitar esta regla', texto: '«' + regla.texto + '»\n\nEl agente dejará de cumplirla desde el próximo mensaje.', confirmar: 'Quitar', peligro: true });
+  if (!si) return;
+  btn.disabled = true;
+  try {
+    const r = await fetchAuth('/api/agente-mejorar', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'aplicar', agent_id: agEditingId, propuesta: { tipo: 'regla', explicacion: 'Quitada a mano.', cambio: { indice: i, quitar: true } }, correccion: 'Quitar la regla: ' + regla.texto }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.error) throw new Error(d.error || 'No se pudo quitar');
+    showToast('Regla quitada');
+    agMejCargar();
+  } catch (e) {
+    btn.disabled = false;
+    showToast(e.message, 'error');
+  }
+}
+
+async function agMejDeshacer(id, btn) {
+  const si = await confirmarAguaP({ titulo: 'Deshacer este cambio', texto: 'El agente vuelve a quedar exactamente como estaba antes de este cambio.', confirmar: 'Deshacer' });
+  if (!si) return;
+  btn.disabled = true;
+  try {
+    const r = await fetchAuth('/api/agente-mejorar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'deshacer', id }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.error) throw new Error(d.error || 'No se pudo deshacer');
+    showToast('Cambio deshecho');
+    await agMejRefrescarForm(null);
+    agMejCargar();
+  } catch (e) {
+    btn.disabled = false;
+    showToast(e.message, 'error');
   }
 }
 

@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-15-mejorar-el-agente",
+      "fecha": "2026-10-15",
+      "tipo": "nuevo",
+      "titulo": "Enséñale a tu agente corrigiendo sus respuestas",
+      "texto": "En «Probar», debajo de cada respuesta del agente, toca «Corregir esta respuesta» y cuéntale qué debió decir, como se lo dirías a un asesor nuevo. Un entrenador con IA decide dónde va el cambio —una regla de cómo hablar, el saludo, una pregunta frecuente, el contexto de tu negocio o lo que debe averiguar—, te lo muestra antes y después, y puedes probarlo antes de aplicarlo. En el nuevo paso «Mejoras» ves todo lo que aprendió y puedes deshacer cualquier cambio. Si lo que falló es de Acuarius y no de tu configuración, nos llega como un caso de soporte.",
+      "accion": {
+        "texto": "Ir a Conversaciones",
+        "ir": "conversaciones"
+      }
+    },
+    {
       "id": "2026-10-15-oportunidades-en-todo",
       "fecha": "2026-10-15",
       "tipo": "mejora",
