@@ -145,8 +145,37 @@ export function resumenDePerfil(p) {
   ].filter(Boolean).join(' · ');
 }
 
-// El teléfono de Palomma (57300…, sin +) en el formato de Acuarius.
+// El teléfono en el formato de Acuarius. Primero el campo de Palomma (57300…,
+// sin +). Si viene vacío —pasa cuando WhatsApp atiende por nombre de usuario
+// (whatsappUserId «CO.139…») y no por número—, el que la persona escribió en la
+// conversación: Palomma siempre lo pide antes de pasarla a un asesor, pero no
+// lo copia al campo. Sin esto el lead llegaba sin teléfono, no se cruzaba con
+// el que ya existía y se duplicaba (Certain, 16-10-2026).
 export function telefonoDe(lead) {
   const d = String(lead?.phone || '').replace(/\D/g, '');
-  return d.length >= 7 ? '+' + d : null;
+  if (d.length >= 7) return '+' + d;
+  return telefonoDeConversacion(lead?.conversation?.content);
+}
+
+// Solo lo que escribió la persona («Usuario: …»): el agente de Palomma pone un
+// número de ejemplo (3001234567) al pedirlo. Celular colombiano, el último que
+// dio (si se corrige, vale el corregido).
+export function telefonoDeConversacion(contenido) {
+  const partes = String(contenido || '').split(/\n(?=(?:Usuario|Agente|Asesor)[^:\n]{0,20}:)/);
+  let ultimo = null;
+  for (const t of partes) {
+    if (!/^Usuario/.test(t)) continue;
+    for (const m of t.matchAll(/(?<!\d)(?:\+?57[\s-]?)?(3\d{2}[\s.-]?\d{3}[\s.-]?\d{4})(?!\d)/g)) ultimo = m[1].replace(/\D/g, '');
+  }
+  return ultimo ? '+57' + ultimo : null;
+}
+
+// «SOLO se deben pasar a Acuarius usuarios de Palomma que en realidad se hayan
+// calificado» (Alejandro, 16-10-2026). Calificado = Palomma lo pasó a un
+// asesor, le agendó o va a agendar una cita, o recogió los datos del inmueble
+// (captación). Antes se creaba el lead con el primer mensaje, y quien escribía
+// «hola» y se iba quedaba como lead sin teléfono.
+const CALIFICADO = ['redirected', 'appointmentIntent', 'appointmentPending', 'appointmentConfirmed', 'propertyInfoCollected'];
+export function estaCalificado(L, data = {}) {
+  return CALIFICADO.includes(L?.pipelinePositionId) || !!data?.employeeAssigned;
 }

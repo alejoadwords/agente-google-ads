@@ -3,7 +3,7 @@
 // Las decisiones de Alejandro (13 y 15-10-2026) y los datos reales de Certain.
 
 import { readFileSync } from 'fs';
-import { embudoIgnorado, tableroDe, etapaDe, notaDeEstado, resumenDePerfil, telefonoDe } from '../api/_palomma.js';
+import { embudoIgnorado, tableroDe, etapaDe, notaDeEstado, resumenDePerfil, telefonoDe, telefonoDeConversacion, estaCalificado } from '../api/_palomma.js';
 
 let mal = 0;
 const ok = (c, m, extra) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c && extra !== undefined ? ' → ' + JSON.stringify(extra) : '')); if (!c) mal++; };
@@ -40,6 +40,19 @@ ok(resumenDePerfil(null) === '', 'sin perfil, vacío');
 ok(telefonoDe({ phone: '573001234567' }) === '+573001234567', 'teléfono de Palomma → con +');
 ok(telefonoDe({}) === null, 'sin teléfono (WhatsApp ya no siempre lo da) → null');
 
+console.log('\nSolo los calificados (Alejandro, 16-10)');
+ok(['redirected', 'appointmentIntent', 'appointmentPending', 'appointmentConfirmed', 'propertyInfoCollected'].every(e => estaCalificado({ pipelinePositionId: e })), 'pasado a asesor, cita o datos del inmueble → calificado');
+ok(['new', 'answered', 'inactive', 'discarded', 'closed'].every(e => !estaCalificado({ pipelinePositionId: e })), 'nuevo, contestó, inactivo, descartado o cerrado → NO');
+ok(estaCalificado({ pipelinePositionId: 'answered' }, { employeeAssigned: { name: 'Jose Hurtado' } }), 'si Palomma le asignó asesor, también');
+
+console.log('\nEl teléfono que la persona dio en el chat (WhatsApp por usuario, sin número)');
+const chat = 'Agente: ¿me compartes por favor tu nombre y tu número de teléfono (ej. 3001234567) para contactarte?\n\nUsuario: MELISSA 3017031201\n\nAgente: gracias';
+ok(telefonoDeConversacion(chat) === '+573017031201', 'Melissa Torres (dato real): sale su número, no el de ejemplo del agente');
+ok(telefonoDe({ whatsappUserId: 'CO.1394851425705520', conversation: { content: chat } }) === '+573017031201', 'sin campo phone, se toma del chat');
+ok(telefonoDe({ phone: '573225984142', conversation: { content: 'Usuario: mi número es 310 362 4956' } }) === '+573225984142', 'si Palomma trae el campo, manda el campo');
+ok(telefonoDeConversacion('Usuario: +57 300-834-2960\n\nAgente: ok\n\nUsuario: perdón, es 3008342961') === '+573008342961', 'con separadores o +57; si se corrige, el último');
+ok(telefonoDeConversacion('Usuario: el inmueble 121512563 me interesa\n\nAgente: el 3001234567') === null, 'un código de inmueble no es un teléfono, y lo del agente no cuenta');
+
 console.log('\nReglas del procesador');
 const p = readFileSync(new URL('../api/_palomma-proceso.js', import.meta.url), 'utf8');
 ok(/if \(cx && !cx\.conexion\.procesar\) continue;/.test(p), 'con el interruptor apagado, los eventos se quedan pendientes');
@@ -53,6 +66,10 @@ ok(/nota_conversacion_id/.test(p), 'la conversación es UNA nota que se actualiz
 ok(/citaAGoogle\(conexion, act\)/.test(p), 'la cita nueva se sube a Google Calendar si la cuenta lo tiene conectado');
 ok(/gcal_event_id=is\.null/.test(p) && /due_at=gt\./.test(p), 'las que quedaron sin subir (calendario conectado después) se suben solas, solo las futuras');
 ok(/palomma\.cita a Google Calendar/.test(p), 'un fallo de Google queda registrado y no tumba el evento');
+
+ok(/if \(!enlace && !estaCalificado\(L, data\)\) return 'esperando calificación'/.test(p), 'un contacto que Palomma no ha calificado no entra a Acuarius');
+ok(/telefonoDe\(L\) \|\| ''\)\.replace/.test(p), 'el cruce con leads existentes usa también el teléfono del chat');
+ok(/telNuevo && !lead\.phone/.test(p), 'a un lead sin teléfono se le completa; uno que ya lo tiene no se toca');
 
 console.log(mal ? `\n${mal} fallo(s)` : '\nTodo en verde');
 process.exit(mal ? 1 : 0);

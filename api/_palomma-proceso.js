@@ -7,7 +7,7 @@
 // Palomma → Acuarius vive en palomma_leads. Las decisiones están arriba de
 // _palomma.js. Solo se importa desde funciones edge.
 
-import { embudoIgnorado, tableroDe, etapaDe, notaDeEstado, resumenDePerfil, telefonoDe } from './_palomma.js';
+import { embudoIgnorado, tableroDe, etapaDe, notaDeEstado, resumenDePerfil, telefonoDe, estaCalificado } from './_palomma.js';
 import { intakeLead } from './_lead-intake.js';
 import { registrarError } from './_registro-errores.js';
 import { getGcalToken, gcalEventBody, gcalRequest } from './_gcal.js';
@@ -59,7 +59,7 @@ async function nota(conexion, leadId, contenido, evento) {
 
 // Lee el lead y mezcla campos propios sin pisar los demás.
 async function leerLead(id) {
-  return (await sb(`/leads?id=eq.${id}&select=id,stage,pipeline_id,assigned_to,closed_at,custom_fields,deleted_at&limit=1`))?.[0] || null;
+  return (await sb(`/leads?id=eq.${id}&select=id,phone,stage,pipeline_id,assigned_to,closed_at,custom_fields,deleted_at&limit=1`))?.[0] || null;
 }
 async function mezclarCampos(lead, campos) {
   const cf = { ...(lead.custom_fields || {}) };
@@ -106,7 +106,7 @@ export async function subirCitasPendientes(conexion, tope = 10) {
 // correo en TODA la cuenta del cliente; si existe, se enlaza a ese y no se crea
 // otro. Solo si no hay ninguno se crea, con intakeLead.
 async function asegurarLead(conexion, ctx, L) {
-  const tel = String(L.phone || '').replace(/\D/g, '').slice(-10);
+  const tel = String(telefonoDe(L) || '').replace(/\D/g, '').slice(-10);
   let existente = null;
   if (tel.length >= 7) {
     const cola = tel.slice(-2);
@@ -148,6 +148,9 @@ async function aplicar(conexion, ctx, ev) {
   if (embudoIgnorado(L.pipelineName)) return 'ignorado: embudo ' + L.pipelineName;
 
   let enlace = (await sb(`/palomma_leads?conexion_id=eq.${conexion.id}&palomma_lead_id=eq.${encodeURIComponent(ev.palomma_lead_id)}&select=*&limit=1`))?.[0];
+  // Mientras Palomma no lo califique, no existe para Acuarius. El evento que lo
+  // califica trae el lead entero con la conversación, así que no se pierde nada.
+  if (!enlace && !estaCalificado(L, data)) return 'esperando calificación';
   if (!enlace) {
     const { leadId, creado } = await asegurarLead(conexion, ctx, L);
     [enlace] = await sb('/palomma_leads?on_conflict=conexion_id,palomma_lead_id', {
@@ -162,6 +165,15 @@ async function aplicar(conexion, ctx, ev) {
   // Un evento más viejo que el último aplicado no mueve nada (llegan desordenados).
   const viejo = enlace.ultimo_ts && ev.ts && ev.ts < enlace.ultimo_ts;
   const hechos = [];
+
+  // Si el lead no tiene teléfono y ahora se sabe (la persona lo dio en el chat),
+  // se completa. Nunca se cambia uno que ya tenga.
+  const telNuevo = telefonoDe(L);
+  if (telNuevo && !lead.phone) {
+    await sb(`/leads?id=eq.${lead.id}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ phone: telNuevo, updated_at: new Date().toISOString() }) });
+    lead.phone = telNuevo;
+    hechos.push('teléfono');
+  }
 
   // Perfil y enlace a la conversación: siempre se pueden refrescar.
   await mezclarCampos(lead, {
