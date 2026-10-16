@@ -3580,6 +3580,9 @@ select.auto-input:disabled{opacity:.55;cursor:not-allowed}
 .ag-prb-fila.assistant .ag-prb-corregir{align-self:flex-end}
 .ag-prb-marcada .crm-inbox-bubble{outline:2px solid var(--blue-md);outline-offset:2px}
 .ag-mej{margin-top:12px;padding:12px;border:1.5px solid var(--blue-md);border-radius:var(--r);background:var(--panel)}
+.ag-mej-modal{margin-top:0;border:none;padding:0;background:none}
+.inbox-corregir{background:none;border:none;padding:0;font-family:inherit;font-size:10.5px;font-weight:700;color:var(--muted2);cursor:pointer}
+.inbox-corregir:hover{color:var(--blue)}
 .ag-mej-cab{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;font-size:12.5px;color:var(--text)}
 .ag-mej-ayuda{margin:0 0 8px;font-size:11.5px;line-height:1.55;color:var(--muted)}
 .ag-mej-error{color:var(--danger)}
@@ -6529,6 +6532,12 @@ if (window.AGENTES_ACTIVOS) {
 </div>
 
 <!-- MODAL AGENTE IA -->
+<!-- Mejorar el agente desde una conversación real del inbox (agMejAbrirInbox). -->
+<div class="crm-modal-overlay" id="mej-modal" onclick="if(event.target===this)agMejCerrar()">
+  <div class="crm-modal-box" style="max-width:560px">
+    <div class="crm-modal-body"><div class="ag-mej ag-mej-modal" id="mej-modal-panel" style="display:none"></div></div>
+  </div>
+</div>
 <div class="crm-modal-overlay" id="crm-agent-modal">
   <div class="crm-modal-box crm-agent-modal-box">
     <div class="crm-modal-head">

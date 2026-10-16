@@ -79,6 +79,29 @@ async function ensayosDeHoy(cuenta) {
   } catch { return 0; }
 }
 
+// La conversación real hasta el mensaje corregido (incluido), como la vio el
+// agente: en bruto y con los 40 anteriores como mucho. Solo se corrige lo que
+// escribió el agente: un mensaje del equipo o un texto fijo del sistema no se
+// arregla cambiando su configuración.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export async function conversacionReal(cuenta, convId, mensajeId) {
+  if (!UUID.test(String(convId || '')) || !UUID.test(String(mensajeId || ''))) return { error: 'Falta el mensaje a corregir.' };
+  const [conv] = await sb(`/chat_conversations?id=eq.${convId}&user_id=eq.${encodeURIComponent(cuenta)}&select=id,agent_id&limit=1`) || [];
+  if (!conv) return { error: 'Esa conversación no existe en tu cuenta.', status: 404 };
+  if (!conv.agent_id) return { error: 'Esta conversación no la atiende un agente de IA.' };
+  const [msg] = await sb(`/chat_messages?id=eq.${mensajeId}&conversation_id=eq.${convId}&select=id,role,autor,created_at&limit=1`) || [];
+  if (!msg) return { error: 'Ese mensaje no está en la conversación.', status: 404 };
+  if (msg.role !== 'assistant' || msg.autor !== 'agente') return { error: 'Solo se pueden corregir los mensajes que escribió el agente.' };
+  const filas = await sb(`/chat_messages?conversation_id=eq.${convId}&created_at=lte.${encodeURIComponent(msg.created_at)}` +
+    `&select=id,role,content&order=created_at.desc,id.desc&limit=60`) || [];
+  // Con la misma hora puede colarse uno posterior: se corta en el corregido.
+  const hasta = filas.findIndex(f => f.id === msg.id);
+  const mensajes = filas.slice(Math.max(hasta, 0)).slice(0, 40).reverse()
+    .filter(f => f.role === 'user' || f.role === 'assistant')
+    .map(f => ({ role: f.role, content: String(f.content || '').slice(0, 6000) }));
+  return { agentId: conv.agent_id, mensajes, indice: mensajes.length - 1 };
+}
+
 async function cargarAgente(cuenta, agentId) {
   if (!agentId) return null;
   return (await sb(`/chat_agents?id=eq.${encodeURIComponent(agentId)}&user_id=eq.${encodeURIComponent(cuenta)}&select=*&limit=1`))?.[0] || null;
@@ -128,7 +151,7 @@ export default async function handler(req) {
     const agent = await cargarAgente(cuenta, agentId);
     if (!agent) return json({ error: 'Ese agente no existe en tu cuenta.' }, 404);
     const historial = await sb(`/agente_mejoras?agent_id=eq.${agent.id}&user_id=eq.${encodeURIComponent(cuenta)}` +
-      `&select=id,tipo,correccion,explicacion,cambio,respuesta_antes,respuesta_despues,creado_at,deshecho_at,actor_id&order=creado_at.desc&limit=60`) || [];
+      `&select=id,tipo,origen,conversation_id,correccion,explicacion,cambio,respuesta_antes,respuesta_despues,creado_at,deshecho_at,actor_id&order=creado_at.desc&limit=60`) || [];
     const plan = await planDe(cuenta);
     const n = await usadas(cuenta);
     return json({ reglas: agent.reglas || [], historial, cupo: { cupo: cupoMejoras(plan), usadas: n } });
@@ -158,12 +181,19 @@ export default async function handler(req) {
     return json({ ok: true });
   }
 
-  const agent = await cargarAgente(cuenta, body.agent_id);
-  if (!agent) return json({ error: 'Ese agente no existe en tu cuenta.' }, 404);
+  // Desde el inbox (fase 2) llega una conversación de verdad: los mensajes los
+  // lee el servidor, y el agente es el que la atendió, no el que diga el body.
+  let real = null;
+  if (body.conversation_id) {
+    real = await conversacionReal(cuenta, body.conversation_id, body.mensaje_id);
+    if (real.error) return json({ error: real.error }, real.status || 400);
+  }
+  const agent = await cargarAgente(cuenta, real ? real.agentId : body.agent_id);
+  if (!agent) return json({ error: real ? 'El agente que atendió esta conversación ya no existe.' : 'Ese agente no existe en tu cuenta.' }, 404);
   const regla = await getRegla(cuenta, agent.id).catch(() => null);
-  const mensajes = Array.isArray(body.mensajes) ? body.mensajes.filter(m => m && (m.role === 'user' || m.role === 'assistant')).slice(-40)
+  const mensajes = real ? real.mensajes : Array.isArray(body.mensajes) ? body.mensajes.filter(m => m && (m.role === 'user' || m.role === 'assistant')).slice(-40)
     .map(m => ({ role: m.role, content: String(m.content || '').slice(0, 6000) })) : [];
-  const indice = Number.isInteger(body.indice) ? body.indice : -1;
+  const indice = real ? real.indice : Number.isInteger(body.indice) ? body.indice : -1;
   const valido = indice >= 0 && indice < mensajes.length && mensajes[indice].role === 'assistant';
 
   // ── Proponer ─────────────────────────────────────────────────────────────
@@ -222,6 +252,7 @@ export default async function handler(req) {
       conversacion: valido ? mensajes.slice(0, indice + 1).map(m => ({ role: m.role, content: limpio(m.content) })) : null,
       respuesta_antes: valido ? limpio(mensajes[indice].content).slice(0, 4000) : null,
       respuesta_despues: String(body.respuesta_despues || '').slice(0, 4000) || null,
+      ...(real ? { origen: 'inbox', conversation_id: body.conversation_id, mensaje_id: body.mensaje_id } : {}),
     };
 
     if (propuesta.tipo === 'fallo_plataforma') {
@@ -231,7 +262,9 @@ export default async function handler(req) {
         email: await correoDe(quien.actorId), plan: (await planDe(cuenta)) || null,
         asunto: 'Agente: ' + propuesta.cambio.asunto,
         detalle: propuesta.cambio.detalle + '\n\nLo que escribió el cliente: ' + correccion,
-        contexto: { origen: 'mejorar-agente', agente: agent.id, agente_nombre: agent.name, conversacion: fila.conversacion },
+        contexto: { origen: 'mejorar-agente', agente: agent.id, agente_nombre: agent.name, conversacion: fila.conversacion,
+          ...(real ? { conversation_id: body.conversation_id, mensaje_id: body.mensaje_id } : {}) },
+        ...(real ? { conversation_id: body.conversation_id } : {}),
       }) }) || [];
       fila.ticket_id = t?.id || null;
       await sb('/agente_mejoras', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify(fila) });

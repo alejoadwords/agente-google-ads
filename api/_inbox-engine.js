@@ -2820,7 +2820,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
       await send(connection, contactId, cortes).catch(() => {});
       await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
         method: 'POST', headers: sb(),
-        body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: cortes }),
+        body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: cortes, autor: 'sistema' }),
       }).catch(() => {});
     }
 
@@ -3160,14 +3160,15 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     // capturado y lo calificado entre mensajes. Limpiar aquí haría que la
     // conversación se quedara 'pendiente' para siempre. Se limpia al MOSTRAR,
     // en el inbox.
-    body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: guardado }),
+    // autor 'agente': es lo único que «Mejorar el agente» deja corregir.
+    body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: guardado, autor: 'agente' }),
   });
   // La confirmación va como mensaje aparte, también en el historial: así el
   // inbox la enseña y el agente sabe en el siguiente turno que ya quedó.
   if (confirmacionCita) {
     await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
       method: 'POST', headers: sb(),
-      body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: confirmacionCita }),
+      body: JSON.stringify({ conversation_id: conv.id, role: 'assistant', content: confirmacionCita, autor: 'sistema' }),
     });
   }
 

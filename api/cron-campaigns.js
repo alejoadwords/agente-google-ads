@@ -381,7 +381,7 @@ async function sendWhatsapp(campaign, lead, indice) {
       const d = await r.json().catch(() => ({}));
       if (d.error) return { status: 'failed', detail: (d.error.message || '').slice(0, 120) };
     }
-    await sb('/chat_messages', 'POST', { conversation_id: conv.id, role: 'assistant', content: text, sent_by: 'campaign' }, 'return=minimal').catch(() => {});
+    await sb('/chat_messages', 'POST', { conversation_id: conv.id, role: 'assistant', content: text, autor: 'campana' }, 'return=minimal').catch(() => {});
     return { status: 'sent' };
   } catch (e) {
     return { status: 'failed', detail: String(e.message || e).slice(0, 120) };

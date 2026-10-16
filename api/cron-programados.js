@@ -139,7 +139,7 @@ export default async function handler(req) {
       await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
         method: 'POST', headers: sb(),
         body: JSON.stringify({
-          conversation_id: conv.id, role: 'assistant', content: p.texto || '',
+          conversation_id: conv.id, role: 'assistant', content: p.texto || '', autor: 'equipo',
           ...(adjunto ? {
             adjunto_url: adjunto.url, adjunto_tipo: adjunto.tipo,
             adjunto_nombre: adjunto.nombre, adjunto_mime: adjunto.mime,

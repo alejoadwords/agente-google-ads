@@ -30,3 +30,13 @@ create table if not exists public.agente_mejoras (
 create index if not exists agente_mejoras_agente_idx on public.agente_mejoras (agent_id, creado_at desc);
 alter table public.agente_mejoras enable row level security;
 notify pgrst, 'reload schema';
+
+-- Fase 2 (15-10-2026): corregir desde conversaciones reales del inbox.
+-- Quién escribió cada mensaje de salida: 'agente' (el modelo), 'equipo' (una
+-- persona, a mano o programado) o 'sistema' (texto fijo del código: cupo
+-- agotado, confirmación de cita, seguimiento). Solo lo del agente se corrige.
+-- Los anteriores quedan en NULL: no se sabe y no se adivina.
+alter table chat_messages add column if not exists autor text;
+alter table agente_mejoras add column if not exists origen text not null default 'probador';
+alter table agente_mejoras add column if not exists conversation_id uuid;
+alter table agente_mejoras add column if not exists mensaje_id uuid;

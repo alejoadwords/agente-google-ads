@@ -485,9 +485,11 @@ async function actionSendWhatsapp(step, lead, textoListo) {
       const d = await r.json().catch(() => ({}));
       if (d.error || !r.ok) return { result: 'failed', detail: motivoMeta(d.error || { message: 'HTTP ' + r.status }) };
     }
-    // Registrar el mensaje saliente en la conversación
+    // Registrar el mensaje saliente en la conversación. Hasta el 15-10-2026
+    // iba con «sent_by», una columna que no existe: PostgREST rechazaba el
+    // insert y el mensaje no aparecía en el inbox ni lo veía el agente.
     await sb('/chat_messages', 'POST', {
-      conversation_id: conv.id, role: 'assistant', content: text, sent_by: 'automation',
+      conversation_id: conv.id, role: 'assistant', content: text, autor: 'automatizacion',
     }, 'return=minimal').catch(() => {});
     return { result: 'sent', detail: (conv.channel === 'whatsapp' ? 'WhatsApp' : 'Messenger') + ' a ' + lead.phone };
   } catch (e) {

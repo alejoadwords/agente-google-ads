@@ -44,7 +44,14 @@
   <div id="ag-mej-lista"></div>
 </div>
 
+<div class="crm-modal-overlay" id="mej-modal" onclick="if(event.target===this)agMejCerrar()">
+  <div class="crm-modal-box" style="max-width:560px">
+    <div class="crm-modal-body"><div class="ag-mej ag-mej-modal" id="mej-modal-panel" style="display:none"></div></div>
+  </div>
+</div>
+
 <div class="banco">
+  <button onclick="estadoInbox()">6 · Desde el inbox</button>
   <button onclick="estado('escribir')">1 · Escribir</button>
   <button onclick="estado('pregunta')">2 · Pregunta</button>
   <button onclick="estado('propuesta')">3 · Propuesta</button>
@@ -82,8 +89,10 @@ const LISTA = {
   };
   const codigo = trozo('function esc(t)', '\n') + '\n' +
     trozo('let agPrbHist = []', 'function agPrbRadiografia(') +
-    trozo('// ── Mejorar el agente', 'function agRenderChannels(');
+    trozo('// ── Mejorar el agente', 'function agRenderChannels(') +
+    'function inboxLimpiar(t){return String(t||"").replace(/\\[[A-Z_]+[^\\]]*\\]/g,"").trim()}';
   const stubs = `
+    let inboxMensajesPorId = {};
     let agEditingId = 'a1', crmAgents = [{ id: 'a1' }], agFaqs = [];
     function showToast(t){ console.log('toast', t); }
     function fotoGrande(){} function calLoad(){} function agRenderFaqs(){}
@@ -105,6 +114,12 @@ const LISTA = {
       agMejPintar();
     };
     agMejCargar();
+    window.estadoInbox = function () {
+      inboxMensajesPorId = { m1: { content: OPCIONES + ' [CAPTURA: zona=norte]' } };
+      agMejAbrirInbox('c1', 'm1');
+      Object.assign(_agMej, { correccion: 'No mandes tantas opciones', propuesta: PROP, resumen: RES, despues: DESPUES });
+      agMejPintar();
+    };
   `)();
   estado('probado');
 })().catch(e => document.body.insertAdjacentHTML('afterbegin', '<pre style="color:#DC2626;white-space:pre-wrap">' + e.message + '</pre>'));

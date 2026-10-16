@@ -92,5 +92,54 @@ ok(/ultima\?\.id !== m\.id/.test(ep), 'deshacer solo el último cambio vigente')
 ok(/origen=eq\.ensayo/.test(ep), 'probar el cambio comparte el tope diario del probador');
 ok(/plan === undefined/.test(ep), 'si no se puede saber el plan, no se trata como free ni como pro');
 
+
+console.log('\nFase 2: desde una conversación real del inbox');
+process.env.SUPABASE_URL = 'https://sb.test'; process.env.SUPABASE_SERVICE_KEY = 'k';
+const { conversacionReal } = await import('../api/agente-mejorar.js');
+const C = '11111111-1111-4111-8111-111111111111', MSG = '22222222-2222-4222-8222-222222222222', OTRO = '33333333-3333-4333-8333-333333333333';
+let datos = {};
+const pedidas = [];
+globalThis.fetch = async (url) => {
+  pedidas.push(String(url));
+  const u = String(url);
+  const cuerpo = u.includes('/chat_conversations') ? datos.conv : u.includes('id=eq.' + MSG) || u.includes('id=eq.' + OTRO) ? datos.msg : datos.filas;
+  return { ok: true, status: 200, text: async () => JSON.stringify(cuerpo || []) };
+};
+const T = '2026-10-15T15:00:00Z';
+datos = { conv: [{ id: C, agent_id: 'ag1' }], msg: [{ id: MSG, role: 'assistant', autor: 'agente', created_at: T }],
+  filas: [ // desc, como lo pide la consulta; el primero tiene la misma hora pero es POSTERIOR
+    { id: OTRO, role: 'user', content: 'llegó en el mismo segundo' },
+    { id: MSG, role: 'assistant', content: 'Perfecto, te tengo dos opciones [CAPTURA: zona=norte]' },
+    { id: 'u1', role: 'user', content: 'busco en el norte' },
+    { id: 'a0', role: 'assistant', content: '¡Hola!' },
+    { id: 'u0', role: 'user', content: 'Hola' },
+  ] };
+let cr = await conversacionReal('user_x', C, MSG);
+ok(cr.agentId === 'ag1' && cr.mensajes.length === 4, 'carga hasta el mensaje corregido, sin lo que vino después', cr);
+ok(cr.indice === 3 && cr.mensajes[3].content.includes('[CAPTURA'), 'el corregido es el último y va en bruto (el motor relee los bloques)');
+ok(cr.mensajes[0].content === 'Hola', 'en orden cronológico');
+ok(pedidas.some(u => u.includes('user_id=eq.user_x')), 'la conversación se busca dentro de la cuenta de quien pregunta');
+ok((await conversacionReal('user_x', 'no-es-uuid', MSG)).error, 'ids que no son uuid → error, sin consultar');
+datos.msg = [{ id: MSG, role: 'assistant', autor: 'equipo', created_at: T }];
+ok(/escribió el agente/.test((await conversacionReal('user_x', C, MSG)).error || ''), 'un mensaje del equipo no se corrige');
+datos.msg = [{ id: MSG, role: 'assistant', autor: null, created_at: T }];
+ok((await conversacionReal('user_x', C, MSG)).error, 'uno de antes, sin autor, tampoco (no se adivina)');
+datos.msg = [{ id: MSG, role: 'assistant', autor: 'agente', created_at: T }];
+datos.conv = [{ id: C, agent_id: null }];
+ok(/no la atiende un agente/.test((await conversacionReal('user_x', C, MSG)).error || ''), 'conversación sin agente → error');
+datos.conv = [];
+ok((await conversacionReal('user_x', C, MSG)).status === 404, 'conversación de otra cuenta → 404');
+
+console.log('\nQuién escribió cada mensaje');
+const lee = f => readFileSync(new URL('../api/' + f, import.meta.url), 'utf8');
+ok(/content: guardado, autor: 'agente'/.test(motor), 'la respuesta del modelo se guarda como del agente');
+ok(/content: confirmacionCita, autor: 'sistema'/.test(motor) && /content: cortes, autor: 'sistema'/.test(motor), 'confirmación de cita y aviso de cupo: sistema');
+ok(/autor: 'sistema'/.test(lee('cron-seguimiento.js')), 'el seguimiento a los 10 min es texto fijo: sistema');
+ok(/autor: 'equipo'/.test(lee('chat-conversations.js')) && /autor: 'equipo'/.test(lee('cron-programados.js')), 'lo que escribe el equipo (a mano o programado): equipo');
+ok(!/sent_by/.test(lee('cron-campaigns.js')) && !/sent_by: /.test(lee('cron-automations.js')), 'campañas y automatizaciones ya no mandan «sent_by», columna que no existe');
+const appjs = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+ok(/m\.role === 'assistant' && m\.autor === 'agente'/.test(appjs), 'en el inbox, «Corregir» solo en mensajes del agente');
+ok(/crmLoadAgents\(\)\.catch/.test(appjs), 'tras aplicar desde el inbox se recarga la lista de agentes (si no, guardar el agente pisaría la mejora)');
+
 console.log(mal ? `\n${mal} fallo(s)` : '\nTodo en verde');
 process.exit(mal ? 1 : 0);

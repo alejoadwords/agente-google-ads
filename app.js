@@ -23570,7 +23570,7 @@ let agPrbOcupado = false;
 function agPrbReiniciar() {
   agPrbHist = [];
   agPrbVista = [];
-  agMejCerrar(true);
+  if (!_agMej || _agMej.fuente !== 'inbox') agMejCerrar(true);
   // El enlace es de un agente concreto: al cambiar de agente no puede quedarse
   // el de antes a la vista, que se copiaría creyendo que es el nuevo.
   const en = document.getElementById('ag-prb-enlace');
@@ -23789,11 +23789,19 @@ async function agPrbEnviar() {
 // nuestro (el agente desobedeció algo que ya tenía escrito), no se toca su
 // configuración: se nos abre un ticket. Así cada cuenta entrena su agente como
 // lo hicimos con el de Certain, sin pasar por nosotros.
-let _agMej = null;   // { indice, correccion, propuesta, resumen, pregunta, despues, ocupado }
+//
+// Fase 2: lo mismo desde una conversación REAL del inbox (agMejAbrirInbox). El
+// servidor lee la conversación y el agente que la atendió; aquí solo viaja qué
+// mensaje se corrige.
+let _agMej = null;   // { fuente, indice | convId+mensajeId, original, correccion, propuesta, resumen, pregunta, despues, ocupado }
+
+function agMejNuevo(extra) {
+  return { correccion: '', propuesta: null, resumen: null, pregunta: null, despues: null, ocupado: false, ...extra };
+}
 
 function agMejAbrir(indice) {
   if (!agEditingId || agPrbVista[indice]?.role !== 'assistant') return;
-  _agMej = { indice, correccion: '', propuesta: null, resumen: null, pregunta: null, despues: null, ocupado: false };
+  _agMej = agMejNuevo({ fuente: 'probador', indice });
   agPrbPintar();
   agMejPintar();
   setTimeout(() => {
@@ -23802,20 +23810,35 @@ function agMejAbrir(indice) {
   }, 50);
 }
 
+function agMejAbrirInbox(convId, mensajeId) {
+  const msg = inboxMensajesPorId[mensajeId];
+  if (!msg) return;
+  _agMej = agMejNuevo({ fuente: 'inbox', convId, mensajeId, original: inboxLimpiar(msg.content) });
+  document.getElementById('mej-modal')?.classList.add('open');
+  agMejPintar();
+  setTimeout(() => document.getElementById('ag-mej-texto')?.focus(), 80);
+}
+
+function agMejPanel() {
+  return document.getElementById(_agMej?.fuente === 'inbox' ? 'mej-modal-panel' : 'ag-mej');
+}
+
 function agMejCerrar(sinPintar) {
+  const eraInbox = _agMej?.fuente === 'inbox';
   _agMej = null;
-  const el = document.getElementById('ag-mej');
+  const el = document.getElementById(eraInbox ? 'mej-modal-panel' : 'ag-mej');
   if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+  if (eraInbox) { document.getElementById('mej-modal')?.classList.remove('open'); return; }
   if (!sinPintar) agPrbPintar();
 }
 
 function agMejPintar() {
-  const el = document.getElementById('ag-mej');
+  const el = agMejPanel();
   if (!el) return;
   const m = _agMej;
   if (!m) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
-  const original = agPrbVista[m.indice]?.content || '';
+  const original = m.fuente === 'inbox' ? (m.original || '') : (agPrbVista[m.indice]?.content || '');
   const caja = (titulo, texto, clase) =>
     '<div class="ag-mej-caja ' + (clase || '') + '"><h6>' + titulo + '</h6><p>' +
     (texto ? esc(texto).replace(/\n/g, '<br>') : '<span class="ag-mej-vacio">(nada)</span>') + '</p></div>';
@@ -23823,7 +23846,10 @@ function agMejPintar() {
     '<button class="btn-ghost sm" onclick="agMejCerrar()">Cerrar</button></div>';
 
   if (!m.propuesta) {
-    h += '<p class="ag-mej-ayuda">Cuéntalo como se lo dirías a un asesor nuevo: qué estuvo mal, ' +
+    h += '<p class="ag-mej-ayuda">' + (m.fuente === 'inbox'
+        ? 'Esta conversación ya pasó y no se le reenvía nada al contacto: lo que corrijas cambia cómo responde el agente de aquí en adelante. '
+        : '') +
+      'Cuéntalo como se lo dirías a un asesor nuevo: qué estuvo mal, ' +
       'qué debió decir o qué no debe volver a hacer. El entrenador decide dónde va el cambio.</p>' +
       '<blockquote class="ag-mej-cita">' + negritaWa(original.length > 280 ? original.slice(0, 280) + '…' : original) + '</blockquote>';
     if (m.pregunta) {
@@ -23852,7 +23878,11 @@ function agMejPintar() {
     }
     if (m.despues != null) {
       h += '<div class="ag-mej-antes-despues">' +
-        caja('Respondía', original, 'antes resp') + caja('Con el cambio responde', m.despues, 'despues') + '</div>';
+        caja(m.fuente === 'inbox' ? 'Respondió' : 'Respondía', original, 'antes resp') +
+        caja(m.fuente === 'inbox' ? 'Con el cambio respondería' : 'Con el cambio responde', m.despues, 'despues') + '</div>' +
+        // Una conversación vieja se respondió con la configuración de entonces:
+        // la respuesta nueva también lleva lo que aprendió después.
+        (m.fuente === 'inbox' ? '<p class="ag-mej-ayuda">La respuesta nueva usa la configuración de hoy más este cambio.</p>' : '');
     }
     h += '<div class="ag-mej-botones">' +
       (esReporte
@@ -23869,6 +23899,9 @@ function agMejPintar() {
 
 // Lo que se manda: el historial EN BRUTO, igual que en cada envío del probador.
 function agMejCuerpo(accion, extra) {
+  if (_agMej.fuente === 'inbox') {
+    return JSON.stringify({ accion, conversation_id: _agMej.convId, mensaje_id: _agMej.mensajeId, ...extra });
+  }
   return JSON.stringify({ accion, agent_id: agEditingId, mensajes: agPrbHist, indice: _agMej.indice, ...extra });
 }
 
@@ -23935,6 +23968,13 @@ async function agMejAplicar() {
       return;
     }
     showToast('Listo: el agente ya lo aprendió');
+    if (m.fuente === 'inbox') {
+      agMejCerrar();
+      // La lista en memoria tiene la configuración vieja: si se abre el agente
+      // y se guarda, pisaría la mejora.
+      crmLoadAgents().catch(() => {});
+      return;
+    }
     // La conversación sigue desde la respuesta corregida: lo que vino después
     // salió de la configuración vieja y ya no prueba nada.
     agPrbHist = agPrbHist.slice(0, m.indice);
@@ -24024,7 +24064,7 @@ function agMejPintarLista() {
   h += hist.length
     ? hist.map(x => '<div class="ag-mej-hist' + (x.deshecho_at ? ' deshecho' : '') + '">' +
         '<div class="ag-mej-hist-cab"><span class="ag-mej-tipo">' + esc(AG_MEJ_TIPOS[x.tipo] || x.tipo) + '</span>' +
-        '<span class="ag-mej-fecha">' + fecha(x.creado_at) + (x.deshecho_at ? ' · deshecho' : '') + '</span>' +
+        '<span class="ag-mej-fecha">' + fecha(x.creado_at) + (x.origen === 'inbox' ? ' · desde una conversación real' : '') + (x.deshecho_at ? ' · deshecho' : '') + '</span>' +
         (deshacible && deshacible.id === x.id ? '<button class="btn-ghost sm" onclick="agMejDeshacer(\'' + x.id + '\', this)">Deshacer</button>' : '') +
         '</div>' +
         (x.correccion ? '<p class="ag-mej-correccion">«' + esc(x.correccion.split('\n\nEl entrenador preguntó:')[0]) + '»</p>' : '') +
@@ -25977,7 +26017,22 @@ let inboxNotaActiva = false;
 
 // Mensajes y notas ordenados juntos por fecha, para que la nota quede donde se
 // escribió y no toda la tanda al final.
+// Los mensajes pintados, por id: «Corregir» necesita el texto original.
+let inboxMensajesPorId = {};
+
+// Solo se ofrece a quien puede tocar agentes (el servidor lo vuelve a mirar) y
+// solo en lo que escribió el agente: lo del equipo o un texto fijo no se
+// arregla cambiando su configuración. Los mensajes de antes del 15-10-2026 no
+// dicen quién los escribió y no se ofrecen.
+function inboxPuedeCorregir() {
+  const yo = window._miPerfil;
+  return !yo || !Array.isArray(yo.modulos) || yo.modulos.includes('agentes');
+}
+
 function inboxHilo(messages, notas) {
+  inboxMensajesPorId = {};
+  const conv = inboxConversations.find(c => c.id === inboxActiveConvId);
+  const corregible = !!(conv && conv.agent_id && inboxPuedeCorregir());
   const items = [
     ...(messages || []).map(m => ({ t: m.created_at, tipo: 'msg', d: m })),
     ...(notas || []).map(n => ({ t: n.created_at, tipo: 'nota', d: n })),
@@ -26007,7 +26062,12 @@ function inboxHilo(messages, notas) {
         (m.adjunto_url ? inboxAdjuntoHTML(m) : '') +
         (texto ? '<div>' + texto + '</div>' : '') +
       '</div>' +
-      '<div class="crm-inbox-bubble-time">' + hora + '</div>' +
+      '<div class="crm-inbox-bubble-time">' + hora +
+        (corregible && m.role === 'assistant' && m.autor === 'agente' && m.id
+          ? (inboxMensajesPorId[m.id] = m, ' · <button class="inbox-corregir" title="Enseñarle al agente qué debió decir" ' +
+             'onclick="agMejAbrirInbox(\'' + esc(conv.id) + '\',\'' + esc(m.id) + '\')">Corregir</button>')
+          : '') +
+      '</div>' +
     '</div>';
   }).join('');
 }

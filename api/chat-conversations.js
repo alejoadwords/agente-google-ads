@@ -328,7 +328,7 @@ export default async function handler(req) {
       method: 'POST',
       headers: sbHeaders(),
       body: JSON.stringify({
-        conversation_id, role: 'assistant', content: content || '',
+        conversation_id, role: 'assistant', content: content || '', autor: 'equipo',
         ...(adjunto ? {
           adjunto_url: adjunto.url,
           adjunto_tipo: adjunto.tipo || 'document',
