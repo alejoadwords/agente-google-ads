@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-15-ruta-de-arranque",
+      "fecha": "2026-10-15",
+      "tipo": "nuevo",
+      "titulo": "Tu ruta de arranque: la cuenta lista para trabajar en 7 días",
+      "texto": "Las cuentas nuevas ven en Inicio una ruta de siete días: ajustar el proceso a tu negocio, traer tus contactos, conectar WhatsApp, redes y tu web, repartir los leads al equipo, encender las primeras automatizaciones y dejar a tu agente entrenado y atendiendo. Cada paso se marca solo cuando lo haces, y varios tienen «Hazlo por mí» con plantillas según tu sector. Los días son una sugerencia: todo está abierto desde el primero. Si completas los pasos esenciales durante la prueba, te regalamos 7 días más de Pro. Tu equipo ve su propia ruta corta para empezar a atender.",
+      "accion": {
+        "texto": "Ver mi ruta",
+        "ir": "ruta"
+      }
+    },
+    {
       "id": "2026-10-15-mejorar-el-agente",
       "fecha": "2026-10-15",
       "tipo": "nuevo",

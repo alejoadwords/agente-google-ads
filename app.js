@@ -10429,7 +10429,7 @@ function showView(id){
   // Parrilla y cuentas conectadas: ambas viven ahora en la cuenta, así que
   // hay que traerlas al entrar. Se pinta antes para no dejar la vista en blanco.
   if(id==='social-studio'){ renderStudio(); socialSincronizar(); studioSincronizar().then(renderStudio); }
-  if(id==='home')setTimeout(function(){renderPulso();},80);
+  if(id==='home')setTimeout(function(){renderPulso();rutaPintar();},80);
 }
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
 
@@ -10744,6 +10744,7 @@ function irA(destino) {
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
         case 'conversaciones':navGo('conversaciones'); break;
         case 'analisis':      navGo('analisis'); break;
+        case 'ruta':          rutaMostrar().then(() => rutaAbrir()); break;
         // Un destino mal escrito dejaba un botón que no hacía absolutamente
         // nada al pulsarlo. Nadie lo notaba al publicar la novedad.
         default:
@@ -27439,6 +27440,7 @@ function cmdkCommands() {
     { group: 'Ir a', icon: '📇', label: 'CRM · Contactos',                 kw: 'contactos lista importar leads', run: () => { navGo('crm'); setTimeout(() => crmSetView('list'), 100); } },
     { group: 'Ir a', icon: '📅', label: 'CRM · Agenda',                    kw: 'agenda tareas calendario citas', run: () => { navGo('crm'); setTimeout(() => crmSetView('agenda'), 100); } },
     { group: 'Ir a', icon: '📣', label: 'Marketing · Campañas',            kw: 'campanas email whatsapp masivo', run: () => navGo('marketing') },
+    { group: 'Ir a', icon: '🧭', label: 'Ruta de arranque',               kw: 'ruta arranque primeros pasos guia configurar empezar', run: () => rutaMostrar() },
     { group: 'Ir a', icon: '⚡', label: 'Marketing · Automatizaciones',    kw: 'automatizaciones flujos flows', run: () => { navGo('marketing'); setTimeout(() => crmSetView('autos'), 100); } },
     { group: 'Ir a', icon: '📥', label: 'Marketing · Fuentes y formularios', kw: 'fuentes formularios webhook hotmart importar', run: () => { navGo('marketing'); setTimeout(() => crmSetView('sources'), 100); } },
     { group: 'Ir a', icon: '📄', label: 'Marketing · Propuestas',          kw: 'propuestas cotizacion comercial', run: () => { navGo('marketing'); setTimeout(() => crmSetView('proposals'), 100); } },
@@ -28132,6 +28134,329 @@ function pulsoStudioCards() {
       act: () => showView('social-studio'),
     }];
   } catch { return []; }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// RUTA DE ARRANQUE
+// Lo que una cuenta nueva tiene que dejar funcionando en su primera semana
+// (15-10-2026). Los pasos y cómo se detecta cada uno viven en api/_ruta.js:
+// aquí solo se pintan y se dan los atajos. Nada se tacha a mano: cada paso se
+// marca solo cuando de verdad está hecho en la cuenta.
+// ══════════════════════════════════════════════════════════════════════════
+let _ruta = null, _rutaPidiendo = null;
+
+async function rutaCargar(forzar) {
+  if (_rutaPidiendo) return _rutaPidiendo;
+  if (_ruta && !forzar) return _ruta;
+  _rutaPidiendo = (async () => {
+    try {
+      const r = await fetchAuth('/api/ruta');
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+      _ruta = d;
+    } catch (e) {
+      console.warn('ruta', e);
+      _ruta = { error: e.message || 'error' };
+    } finally { _rutaPidiendo = null; }
+    return _ruta;
+  })();
+  return _rutaPidiendo;
+}
+
+function rutaPaso(id) { return (_ruta && _ruta.pasos || []).find(p => p.id === id) || null; }
+
+async function rutaPintar(forzar) {
+  const box = document.getElementById('ruta-section');
+  if (!box) return;
+  const d = await rutaCargar(forzar);
+  // Si no se pudo leer, la tarjeta no aparece: Inicio no se rompe por esto.
+  if (!d || d.error || !d.visible) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const sig = rutaPaso(d.siguiente);
+  const dia = (d.dias || {})[d.dia_actual] || {};
+  const pct = d.progreso ? d.progreso.pct : 0;
+  const terminada = d.progreso && d.progreso.hechos >= d.progreso.total;
+  box.style.display = 'block';
+  box.innerHTML = '<div style="border:1px solid var(--border);border-radius:var(--rlg);padding:16px 18px;background:var(--bg);margin-bottom:14px">' +
+    '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:200px">' +
+        '<div style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--blue)">' +
+          (d.rol === 'asesor' ? 'Tus primeros pasos' : 'Tu ruta de arranque · Día ' + d.dia_actual + ' de 7') + '</div>' +
+        '<div style="font-size:var(--fs-md);font-weight:800;margin-top:3px">' +
+          (terminada ? '¡Tu cuenta quedó lista para trabajar!' : esc(dia.meta || 'Deja tu cuenta funcionando')) + '</div>' +
+      '</div>' +
+      '<div style="font-size:22px;font-weight:800;color:var(--blue)">' + pct + '%</div>' +
+    '</div>' +
+    '<div style="height:6px;background:var(--bg-muted);border-radius:4px;overflow:hidden;margin:10px 0 12px">' +
+      '<div style="height:100%;width:' + pct + '%;background:var(--blue);border-radius:4px"></div></div>' +
+    (sig && !terminada
+      ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+          '<div style="flex:1;min-width:200px"><div style="font-size:13.5px;font-weight:700">Siguiente: ' + esc(sig.titulo) + '</div>' +
+          '<div style="font-size:12px;color:var(--muted);margin-top:2px">' + esc(sig.porque) + '</div></div>' +
+          (sig.hazlo ? '<button class="btn-sec sm" onclick="rutaHazlo(\'' + esc(sig.hazlo) + '\')">' + icn('sparkles', 12) + ' Hazlo por mí</button>' : '') +
+          '<button class="btn-pri sm" onclick="rutaIr(\'' + esc(sig.ir) + '\')">' + esc(sig.boton) + '</button>' +
+        '</div>'
+      : '') +
+    rutaPremioHtml(d) +
+    '<div style="display:flex;gap:14px;margin-top:10px;font-size:12px">' +
+      '<a href="#" onclick="rutaAbrir();return false">Ver toda la ruta</a>' +
+      '<a href="#" style="color:var(--muted2)" onclick="rutaOcultar();return false">Ocultar</a>' +
+    '</div>' +
+  '</div>';
+}
+
+function rutaPremioHtml(d) {
+  const p = d.premio;
+  if (!p || d.rol === 'asesor') return '';
+  const fecha = (iso) => iso ? new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' }) : '';
+  if (p.otorgado_at) {
+    return '<div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--success-bg);color:var(--success);font-size:12.5px;font-weight:700">' +
+      '¡Ganaste ' + (p.dias || 7) + ' días más de Pro! Tu prueba ahora va hasta el ' + esc(fecha(p.trial_until)) + '.</div>';
+  }
+  if (!p.en_prueba) return '';
+  const faltan = (d.esenciales && d.esenciales.faltan) || [];
+  const nombres = faltan.map(id => id === 'entrada' ? 'una entrada de leads (WhatsApp, redes o web)' : (rutaPaso(id) || {}).titulo).filter(Boolean);
+  return '<div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--blue-lt);font-size:12.5px;color:var(--text)">' +
+    icn('star', 12) + ' <b>Gana ' + (p.dias || 7) + ' días más de Pro:</b> completa los pasos esenciales antes del ' + esc(fecha(p.trial_until)) + '.' +
+    (nombres.length ? ' Te ' + (nombres.length === 1 ? 'falta' : 'faltan') + ': ' + esc(nombres.join(' · ')) + '.' : '') + '</div>';
+}
+
+function rutaAbrir() {
+  const d = _ruta;
+  if (!d || d.error) { showToast('No se pudo cargar tu ruta', 'error'); return; }
+  document.getElementById('ruta-panel')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'ruta-panel';
+  ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  const dias = Object.keys(d.dias || {}).map(Number).sort((a, b) => a - b);
+  ov.innerHTML = '<div class="auto-modal" style="max-width:620px">' +
+    '<div class="auto-modal-head"><div><div style="font-size:var(--fs-md);font-weight:800">' +
+      (d.rol === 'asesor' ? 'Tus primeros pasos' : 'Tu ruta de arranque') + '</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' + d.progreso.hechos + ' de ' + d.progreso.total +
+      ' · cada paso se marca solo cuando está hecho. Puedes hacerlos en el orden que quieras.</div></div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button></div>' +
+    '<div class="auto-modal-body" style="max-height:70vh;overflow-y:auto">' +
+      rutaPremioHtml(d) +
+      dias.map(n => {
+        const info = d.dias[n] || {};
+        const pasos = d.pasos.filter(p => p.dia === n);
+        if (!pasos.length) return '';
+        const hoy = n === d.dia_actual && d.rol !== 'asesor';
+        return '<div style="margin-top:16px">' +
+          '<div style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:' + (hoy ? 'var(--blue)' : 'var(--muted2)') + '">' +
+            (d.rol === 'asesor' ? '' : 'Día ' + n + ' · ') + esc(info.titulo || '') + (hoy ? ' · hoy' : '') + '</div>' +
+          (info.meta ? '<div style="font-size:12px;color:var(--muted);margin:2px 0 6px">' + esc(info.meta) + '</div>' : '') +
+          pasos.map(p =>
+            '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">' +
+              '<div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;' +
+                (p.hecho ? 'background:var(--success);color:#fff' : 'border:2px solid var(--border)') + '">' + (p.hecho ? icn('check', 12) : '') + '</div>' +
+              '<div style="flex:1;min-width:0">' +
+                '<div style="font-size:13px;font-weight:700;' + (p.hecho ? 'color:var(--muted)' : '') + '">' + esc(p.titulo) +
+                  (p.esencial ? ' <span style="font-size:10px;font-weight:800;color:var(--blue)">ESENCIAL</span>' : '') +
+                  (p.opcional && !p.entrada ? ' <span style="font-size:10px;font-weight:700;color:var(--muted2)">opcional</span>' : '') + '</div>' +
+                '<div style="font-size:12px;color:var(--muted)">' + esc(p.porque) + '</div>' +
+              '</div>' +
+              (p.hecho ? '' :
+                '<div style="display:flex;gap:6px;flex-shrink:0">' +
+                  (p.hazlo ? '<button class="btn-ghost sm" title="Hazlo por mí" onclick="rutaHazlo(\'' + esc(p.hazlo) + '\')">' + icn('sparkles', 12) + '</button>' : '') +
+                  '<button class="btn-sec sm" onclick="rutaIr(\'' + esc(p.ir) + '\')">' + esc(p.boton) + '</button>' +
+                '</div>') +
+            '</div>').join('') +
+          (n === 2 && d.rol !== 'asesor' ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:6px">Con una de las tres entradas basta para avanzar; con las tres, no se te escapa nadie.</div>' : '') +
+        '</div>';
+      }).join('') +
+    '</div></div>';
+  document.body.appendChild(ov);
+}
+
+async function rutaOcultar() {
+  const ok = await confirmarAguaP({ titulo: '¿Ocultar tu ruta?', texto: 'La vuelves a ver cuando quieras buscando «Ruta» en el buscador (⌘K). Los pasos se siguen marcando solos.', confirmar: 'Ocultar' });
+  if (!ok) return;
+  try { await fetchAuth('/api/ruta', { method: 'POST', body: JSON.stringify({ accion: 'ocultar' }) }); } catch {}
+  if (_ruta) _ruta.visible = false;
+  rutaPintar();
+}
+
+async function rutaMostrar() {
+  try { await fetchAuth('/api/ruta', { method: 'POST', body: JSON.stringify({ accion: 'mostrar' }) }); } catch {}
+  await rutaPintar(true);
+  showView('home');
+}
+
+// Los destinos de los botones. Los que ya conoce irA() pasan por él.
+function rutaIr(destino) {
+  document.getElementById('ruta-panel')?.remove();
+  switch (destino) {
+    case 'importar': navGo('crm'); setTimeout(() => { if (typeof impOpen === 'function') impOpen(); }, 250); break;
+    case 'canales': irA('fuentes'); break;
+    case 'agentes': navGo('conversaciones'); setTimeout(() => crmSetView('agents'), 150); break;
+    case 'automatizaciones': navGo('marketing'); setTimeout(() => crmSetView('autos'), 150); break;
+    case 'celular': openSettings(); setTimeout(() => { try { switchSettingsTab('notificaciones'); } catch {} }, 220); break;
+    default: irA(destino);
+  }
+  // Al volver a Inicio se vuelve a mirar: lo que hizo ya se ve marcado.
+  _ruta = null;
+}
+
+// ── «Hazlo por mí»: plantillas por sector ───────────────────────────────────
+// Las etapas van en el orden de las siete del proceso: nuevo, contactado,
+// calificado, propuesta, negociación, ganado y perdido. Se renombran, no se
+// borran: las claves nuevo/ganado/perdido las usan seis módulos.
+const RUTA_ETAPAS_SECTOR = {
+  'Inmobiliaria':            ['Cliente recibido', 'Contactado', 'Visita agendada', 'Oferta', 'Negociación', 'Cerrado', 'No se dio'],
+  'Salud / Bienestar':       ['Solicitud recibida', 'Contactado', 'Cita agendada', 'Valoración hecha', 'Tratamiento propuesto', 'Paciente activo', 'No continuó'],
+  'Educación / Cursos':      ['Interesado', 'Contactado', 'Información enviada', 'Clase de prueba', 'Inscripción en proceso', 'Matriculado', 'No se matriculó'],
+  'Servicios profesionales': ['Nuevo', 'Contactado', 'Reunión de diagnóstico', 'Propuesta enviada', 'Negociación', 'Cliente', 'Perdido'],
+  'E-commerce / Retail':     ['Nuevo', 'Contactado', 'Interesado en un producto', 'Cotización', 'Pago pendiente', 'Compró', 'No compró'],
+  'Tecnología / SaaS':       ['Nuevo', 'Contactado', 'Demo agendada', 'Prueba en curso', 'Propuesta', 'Cliente', 'Perdido'],
+  'Restaurantes / Food':     ['Nuevo', 'Contactado', 'Cotización de evento', 'Reserva confirmada', 'Pago pendiente', 'Atendido', 'Cancelado'],
+  'Agencia de marketing':    ['Nuevo', 'Contactado', 'Diagnóstico', 'Propuesta enviada', 'Negociación', 'Cliente', 'Perdido'],
+  'Industria y manufactura': ['Nuevo', 'Contactado', 'Necesidad técnica', 'Cotización enviada', 'Negociación', 'Orden de compra', 'Perdido'],
+};
+const RUTA_CLAVES = ['nuevo', 'contactado', 'calificado', 'propuesta', 'negociacion', 'ganado', 'perdido'];
+
+const RUTA_AGENTE_SECTOR = {
+  'Inmobiliaria': 'Ayudas a quien busca comprar, arrendar o vender un inmueble: preguntas qué busca (operación, zona, presupuesto, habitaciones), le muestras opciones del catálogo y le agendas una visita con un asesor.',
+  'Salud / Bienestar': 'Atiendes a pacientes: resuelves dudas sobre servicios, horarios y precios, y agendas su cita. Nunca das diagnósticos ni recomendaciones médicas: eso lo hace el profesional.',
+  'Educación / Cursos': 'Atiendes a interesados en los cursos: les explicas programas, horarios, modalidad y precios, y los llevas a una clase de prueba o a inscribirse.',
+  'Servicios profesionales': 'Atiendes a posibles clientes: entiendes qué necesitan, explicas cómo trabajamos y agendas una reunión de diagnóstico con el equipo.',
+  'E-commerce / Retail': 'Ayudas a comprar: resuelves dudas de productos, tallas, disponibilidad, envíos y medios de pago, y guías hasta la compra.',
+  'Tecnología / SaaS': 'Atiendes a empresas interesadas en el producto: entiendes su necesidad, explicas lo que resuelve y agendas una demo.',
+  'Restaurantes / Food': 'Atiendes reservas, pedidos y cotizaciones de eventos: horarios, menú, precios y disponibilidad.',
+  'Agencia de marketing': 'Atiendes a negocios que buscan crecer con marketing: entiendes su situación, explicas los servicios y agendas un diagnóstico.',
+  'Industria y manufactura': 'Atiendes solicitudes de cotización: entiendes la necesidad técnica, cantidades y plazos, y pasas el caso a un asesor comercial.',
+};
+
+function rutaModal(id, titulo, cuerpo, pie) {
+  document.getElementById(id)?.remove();
+  const ov = document.createElement('div');
+  ov.id = id; ov.className = 'auto-modal-overlay';
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  ov.innerHTML = '<div class="auto-modal" style="max-width:500px">' +
+    '<div class="auto-modal-head"><div style="font-size:var(--fs-md);font-weight:800">' + titulo + '</div>' +
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">&#10005;</button></div>' +
+    '<div class="auto-modal-body">' + cuerpo + '<div id="' + id + '-msg" style="font-size:12px;color:var(--danger);margin-top:8px"></div></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--border)">' + pie + '</div></div>';
+  document.body.appendChild(ov);
+}
+
+function rutaHazlo(que) {
+  document.getElementById('ruta-panel')?.remove();
+  const sector = (_ruta && _ruta.sector) || '';
+  const negocio = (_ruta && _ruta.negocio && _ruta.negocio.nombre) || 'tu negocio';
+  if (que === 'plantilla_proceso') {
+    const etapas = RUTA_ETAPAS_SECTOR[sector];
+    if (!etapas) { rutaIr('crm'); setTimeout(() => { if (typeof pipeAbrirGestor === 'function') pipeAbrirGestor(); }, 400); return; }
+    rutaModal('ruta-hz', 'Tu proceso de venta para ' + esc(sector),
+      '<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Así quedarían las etapas de tu proceso principal. Los leads que ya tengas se quedan donde están; solo cambian los nombres.</div>' +
+      etapas.map((e, i) => '<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">' +
+        '<span style="width:20px;height:20px;border-radius:50%;background:var(--bg-muted);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">' + (i + 1) + '</span>' +
+        '<span style="font-size:13px;font-weight:600">' + esc(e) + '</span></div>').join(''),
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove();pipeAbrirGestor()">Prefiero editarlo yo</button>' +
+      '<button class="btn-pri sm" id="ruta-hz-btn" onclick="rutaAplicarProceso()">Usar estas etapas</button>');
+    return;
+  }
+  if (que === 'plantilla_agente') {
+    const guia = RUTA_AGENTE_SECTOR[sector] || 'Atiendes a quien escribe: entiendes qué necesita, resuelves sus dudas y lo pasas a un asesor cuando hace falta.';
+    rutaModal('ruta-hz', 'Tu agente IA',
+      '<div class="auto-field"><label class="auto-label">Nombre del agente</label><input class="auto-input" id="ruta-ag-nombre" maxlength="60" value="' + esc('Asistente de ' + negocio) + '"></div>' +
+      '<div class="auto-field"><label class="auto-label">Qué hace</label><textarea class="auto-input" id="ruta-ag-ctx" rows="5">' + esc(guia + ((_ruta.negocio && _ruta.negocio.descripcion) ? '\n\nSobre ' + negocio + ': ' + _ruta.negocio.descripcion : '')) + '</textarea></div>' +
+      '<div style="font-size:11.5px;color:var(--muted)">Después lo entrenas con tus precios, tu catálogo y tus preguntas frecuentes, y le asignas un canal.</div>',
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="ruta-hz-btn" onclick="rutaCrearAgente()">Crear agente</button>');
+    return;
+  }
+  if (que === 'auto_bienvenida' || que === 'auto_rescate') {
+    const bienvenida = que === 'auto_bienvenida';
+    const texto = bienvenida
+      ? 'Hola {{nombre}},\n\nGracias por escribirnos. Ya recibimos tus datos y en breve alguien de nuestro equipo se comunica contigo.\n\nUn saludo,\n' + negocio
+      : 'Hola {{nombre}},\n\nHace unos días hablamos y queríamos saber si sigues interesado. Si tienes cualquier duda, responde este correo y te ayudamos.\n\nUn saludo,\n' + negocio;
+    rutaModal('ruta-hz', bienvenida ? 'Bienvenida automática' : 'Rescate de leads inactivos',
+      '<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">' + (bienvenida
+        ? 'Cada lead nuevo con correo recibe este mensaje al entrar, y a su responsable le queda la tarea de llamarlo.'
+        : 'Si un lead pasa <b>3 días</b> sin movimiento, a su responsable le queda una tarea para retomarlo y el lead recibe este correo.') + '</div>' +
+      '<div class="auto-field"><label class="auto-label">Asunto</label><input class="auto-input" id="ruta-au-asunto" maxlength="120" value="' + esc(bienvenida ? 'Gracias por escribirnos' : '¿Sigues interesado?') + '"></div>' +
+      '<div class="auto-field" style="margin-bottom:0"><label class="auto-label">Mensaje</label><textarea class="auto-input" id="ruta-au-texto" rows="7">' + esc(texto) + '</textarea></div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:6px">{{nombre}} se cambia por el nombre de cada persona. Queda activa: puedes editarla o apagarla en Marketing → Automatizaciones.</div>',
+      '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>' +
+      '<button class="btn-pri sm" id="ruta-hz-btn" onclick="rutaCrearAuto(' + (bienvenida ? 'true' : 'false') + ')">Activarla</button>');
+  }
+}
+
+async function rutaAplicarProceso() {
+  const btn = document.getElementById('ruta-hz-btn'), msg = document.getElementById('ruta-hz-msg');
+  const etapas = RUTA_ETAPAS_SECTOR[(_ruta && _ruta.sector) || ''];
+  btn.disabled = true; btn.textContent = 'Aplicando…';
+  try {
+    await crmLoadStages();
+    const porClave = Object.fromEntries((crmStages || []).map(s => [s.key, s]));
+    if (!RUTA_CLAVES.every(k => porClave[k])) throw new Error('tu proceso ya tiene etapas propias: edítalo desde el engranaje del tablero');
+    for (let i = 0; i < RUTA_CLAVES.length; i++) {
+      const r = await fetchAuth('/api/pipeline-stages', { method: 'PUT', body: JSON.stringify({ id: porClave[RUTA_CLAVES[i]].id, label: etapas[i] }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'HTTP ' + r.status);
+    }
+    crmStagesLoaded = false;
+    await crmLoadStages();
+    document.getElementById('ruta-hz')?.remove();
+    showToast('Listo: tu proceso ya tiene las etapas de tu negocio', 'success');
+    rutaPintar(true);
+  } catch (e) {
+    msg.textContent = 'No se pudo aplicar: ' + (e.message || 'error');
+    btn.disabled = false; btn.textContent = 'Usar estas etapas';
+  }
+}
+
+async function rutaCrearAgente() {
+  const btn = document.getElementById('ruta-hz-btn'), msg = document.getElementById('ruta-hz-msg');
+  const name = (document.getElementById('ruta-ag-nombre').value || '').trim();
+  const ctx = (document.getElementById('ruta-ag-ctx').value || '').trim();
+  if (!name) { msg.textContent = 'Ponle un nombre.'; return; }
+  btn.disabled = true; btn.textContent = 'Creando…';
+  try {
+    const qs = agencyActiveClientId ? '?client_id=' + encodeURIComponent(agencyActiveClientId) : '';
+    const r = await fetchAuth('/api/chat-agents' + qs, { method: 'POST', body: JSON.stringify({ name, business_ctx: ctx, tone: 'informal' }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    document.getElementById('ruta-hz')?.remove();
+    showToast('Agente creado. Ahora entrénalo con tus datos', 'success');
+    _ruta = null;
+    navGo('conversaciones');
+    setTimeout(async () => { crmSetView('agents'); try { await crmLoadAgents(); crmOpenAgentModal(d.agent.id); } catch {} }, 200);
+  } catch (e) {
+    msg.textContent = 'No se pudo crear: ' + (e.message || 'error');
+    btn.disabled = false; btn.textContent = 'Crear agente';
+  }
+}
+
+async function rutaCrearAuto(bienvenida) {
+  const btn = document.getElementById('ruta-hz-btn'), msg = document.getElementById('ruta-hz-msg');
+  const subject = (document.getElementById('ruta-au-asunto').value || '').trim();
+  const body = (document.getElementById('ruta-au-texto').value || '').trim();
+  if (!subject || !body) { msg.textContent = 'Escribe el asunto y el mensaje.'; return; }
+  btn.disabled = true; btn.textContent = 'Activando…';
+  const steps = bienvenida
+    ? [{ type: 'create_activity', title: 'Primer contacto con el lead nuevo' },
+       { type: 'condition', field: 'has_email', op: 'eq', value: 'true' },
+       { type: 'send_email', subject, body }]
+    : [{ type: 'create_activity', title: 'Retomar contacto: lleva 3 días sin movimiento' },
+       { type: 'condition', field: 'has_email', op: 'eq', value: 'true' },
+       { type: 'send_email', subject, body }];
+  try {
+    const qs = agencyActiveClientId ? '?client_id=' + encodeURIComponent(agencyActiveClientId) : '';
+    const r = await fetchAuth('/api/automations' + qs, { method: 'POST', body: JSON.stringify({
+      name: bienvenida ? 'Bienvenida a leads nuevos' : 'Rescate de leads inactivos',
+      trigger: bienvenida ? { type: 'lead_created' } : { type: 'lead_inactive', days: 3 },
+      steps, active: true,
+    }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    document.getElementById('ruta-hz')?.remove();
+    showToast(bienvenida ? 'Bienvenida activada' : 'Rescate activado', 'success');
+    rutaPintar(true);
+  } catch (e) {
+    msg.textContent = 'No se pudo activar: ' + (e.message || 'error');
+    btn.disabled = false; btn.textContent = 'Activarla';
+  }
 }
 
 async function renderPulso(force) {
@@ -38846,6 +39171,7 @@ function cuPintarTabla(filasDadas) {
           '<div class="cu-mini">' + esc(c.empresa ? (c.nombre ? c.nombre + ' · ' : '') + c.correo : (c.nombre ? c.correo : '')) + '</div>' +
           (c.miembro_de ? '<div class="cu-mini">Miembro del equipo de ' + esc(c.miembro_de) + '</div>' : '') +
           (c.onboarding === 'a medias' ? '<div class="cu-mini" style="color:var(--warning)">Alta sin terminar</div>' : '') +
+          cuRutaMini(c.ruta) +
         '</td>' +
         '<td><span class="cu-chip ' + esc(c.estado.replace(' ', '-')) + '">' + esc(c.estado.charAt(0).toUpperCase() + c.estado.slice(1)) + '</span>' +
           '<div class="cu-mini" style="margin-top:3px">' + planTxt + (c.origen_plan === 'cortesia' ? ' · cortesía' : '') + '</div></td>' +
@@ -38860,6 +39186,17 @@ function cuPintarTabla(filasDadas) {
         '</td></tr>';
     }).join('') + '</tbody></table>' +
     (filas.length > 300 ? '<div class="cu-mini" style="padding:10px">Se muestran 300 de ' + filas.length + '. Afina la búsqueda.</div>' : '');
+}
+
+// El avance de la ruta de arranque de una cuenta nueva. «Sin avanzar» a los
+// 2 días es la misma regla del correo de cuentas trabadas (api/cron-ruta.js).
+function cuRutaMini(r) {
+  if (!r) return '';
+  const trabada = r.pct < 100 && r.ultimo_avance_at && Date.now() - new Date(r.ultimo_avance_at) > 2 * 86400000;
+  const color = r.pct >= 100 ? 'var(--success)' : trabada ? 'var(--warning)' : '';
+  return '<div class="cu-mini"' + (color ? ' style="color:' + color + '"' : '') + '>' +
+    'Ruta ' + r.pct + ' % · día ' + Math.min(r.dia || 1, 7) +
+    (r.premio ? ' · ganó el premio' : '') + (trabada ? ' · sin avanzar' : '') + (r.oculta ? ' · la ocultó' : '') + '</div>';
 }
 
 function cuDiagnosticar(id) {

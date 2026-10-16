@@ -84,6 +84,7 @@ export const CADA = {
   'cron-partners': 60,          // 17 * * * * — comisiones de Partners
   'cron-palomma': 5,            // */5 * * * * — eventos de Palomma → leads
   'cron-webhooks': 1,           // * * * * * — avisos salientes de la API pública
+  'cron-ruta': 24 * 60,          // 0 13 * * * — el correo diario de la ruta de arranque
 };
 
 // Los que solo corren de lunes a viernes. Su silencio se mide en minutos
@@ -122,6 +123,7 @@ export const DESDE_POR_CRON = {
   'cron-webhooks': '2026-10-09T00:00:00Z',
   'cron-partners': '2026-10-06T23:00:00Z',
   'cron-palomma': '2026-10-15T23:00:00Z',
+  'cron-ruta': '2026-10-16T14:00:00Z',
   'cron-catalogo': '2026-09-28T22:00:00Z',
   'cron-conectores': '2026-09-27T17:00:00Z',
   'cron-integridad': '2026-09-27T17:00:00Z',

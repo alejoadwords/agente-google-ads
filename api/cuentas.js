@@ -313,11 +313,14 @@ export default async function handler(req) {
         usuarios.push(...pag);
         if (pag.length < 500) break;
       }
-      const [miembros, empresas, ultimos] = await Promise.all([
+      const [miembros, empresas, ultimos, rutas] = await Promise.all([
         sbGet('team_members?status=eq.active&select=member_user_id,owner_user_id'),
         sbGet('onboarding_cuenta?select=user_id,empresa,telefono,objetivo,completado_at'),
         sbGet('acceso_cuentas?select=cuenta_id,admin_email,inicio&order=inicio.desc&limit=500'),
+        // El avance de la ruta de arranque es un extra: si falla, la lista sale igual.
+        sbGet('ruta_cuenta?select=user_id,pct,dia,siguiente,premio_at,ultimo_avance_at,oculta_at').catch(() => []),
       ]);
+      const rutaDe = new Map(rutas.filter(r => r.pct != null).map(r => [r.user_id, r]));
       const dueñoDe = new Map(miembros.filter(m => m.member_user_id).map(m => [m.member_user_id, m.owner_user_id]));
       const correoDe = new Map(usuarios.map(u => [u.id, correoPrincipal(u)]));
       const empresaDe = new Map(empresas.map(e => [e.user_id, e]));
@@ -350,6 +353,8 @@ export default async function handler(req) {
           es_equipo: equipo.includes(correo),
           onboarding: onb ? (onb.completado_at ? 'completo' : 'a medias') : null,
           ultimo_acceso: ultimoAcceso.get(u.id) || null,
+          ruta: rutaDe.has(u.id) ? (({ pct, dia, siguiente, premio_at, ultimo_avance_at, oculta_at }) =>
+            ({ pct, dia, siguiente, premio: !!premio_at, ultimo_avance_at, oculta: !!oculta_at }))(rutaDe.get(u.id)) : null,
         };
       });
       return jsonResp({ cuentas });
