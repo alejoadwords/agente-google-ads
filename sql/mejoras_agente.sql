@@ -40,3 +40,45 @@ alter table chat_messages add column if not exists autor text;
 alter table agente_mejoras add column if not exists origen text not null default 'probador';
 alter table agente_mejoras add column if not exists conversation_id uuid;
 alter table agente_mejoras add column if not exists mensaje_id uuid;
+
+-- Fase 3 (16-10-2026): el revisor. Lee solo las conversaciones del agente ya
+-- terminadas, detecta la respuesta que salió mal y deja una sugerencia lista
+-- (propuesta del entrenador + cómo respondería con el cambio). El cliente la
+-- aplica o la descarta; lo descartado se le recuerda al revisor para que no
+-- insista.
+create table if not exists agente_sugerencias (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  agent_id uuid not null,
+  conversation_id uuid not null,
+  mensaje_id uuid,
+  problema text not null,          -- lo que detectó el revisor, como lo diría el dueño
+  propuesta jsonb not null,        -- ya validada por validarPropuesta
+  resumen jsonb,
+  conversacion jsonb,              -- hasta la respuesta señalada, limpia
+  respuesta_antes text,
+  respuesta_despues text,
+  estado text not null default 'pendiente',   -- pendiente | aplicada | descartada | caducada
+  mejora_id uuid,
+  creado_at timestamptz not null default now(),
+  resuelto_at timestamptz,
+  resuelto_por text
+);
+alter table agente_sugerencias enable row level security;
+create index if not exists agente_sugerencias_agente on agente_sugerencias (agent_id, estado, creado_at desc);
+alter table chat_conversations add column if not exists revision_agente_at timestamptz;
+alter table chat_agents add column if not exists revisar boolean not null default true;
+
+-- Las conversaciones que el revisor tiene que leer: con agente, terminadas
+-- (2 h sin mensajes), de los últimos 3 días y con algo nuevo desde su última
+-- revisión. Función porque PostgREST no compara dos columnas entre sí.
+create or replace function conversaciones_por_revisar(limite int default 30)
+returns setof chat_conversations language sql stable as $$
+  select * from chat_conversations c
+  where c.agent_id is not null
+    and c.last_message_at < now() - interval '2 hours'
+    and c.last_message_at > now() - interval '3 days'
+    and (c.revision_agente_at is null or c.revision_agente_at < c.last_message_at)
+  order by c.last_message_at asc
+  limit limite
+$$;

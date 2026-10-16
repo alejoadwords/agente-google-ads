@@ -20,11 +20,13 @@ import { getRegla, saveRegla } from './_qualify.js';
 import { ensayarAgente } from './_inbox-engine.js';
 import { registrarUso } from './_uso-ia.js';
 import { inicioDelMes, planDeCuenta } from './_cupo-agente.js';
-import { promptEntrenador, validarPropuesta, aplicarPropuesta, resumenDelCambio, fotoDelAgente, CAMPOS_AGENTE } from './_mejoras-agente.js';
+import { validarPropuesta, aplicarPropuesta, resumenDelCambio, fotoDelAgente, CAMPOS_AGENTE } from './_mejoras-agente.js';
+import { sb, limpio, conversacionReal, cargarAgente, llamarEntrenador, aplicarYGuardar, MODELO_ENTRENADOR } from './_mejoras-agente-red.js';
+export { conversacionReal };
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const MODELO = 'claude-sonnet-5';
+const MODELO = MODELO_ENTRENADOR;
 const ORIGEN = 'mejora';
 
 // Cada propuesta es una llamada al modelo más caro: con cupo, como todo lo de IA.
@@ -35,16 +37,7 @@ export function cupoMejoras(plan) {
 }
 
 const sbH = (extra = {}) => ({ apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', ...extra });
-async function sb(ruta, init = {}) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1${ruta}`, { ...init, headers: sbH(init.prefer ? { Prefer: init.prefer } : {}) });
-  const t = await r.text();
-  if (!r.ok) throw new Error('Supabase ' + r.status + ': ' + t.slice(0, 200));
-  return t ? JSON.parse(t) : null;
-}
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
-
-const limpio = (t) => String(t || '')
-  .replace(/\[(CAPTURA|CALIFICACION|ESCALAR|RESERVA|CANCELAR_CITA|CAMBIAR_CITA|FOTOS)\b[\s\S]*?\](\s*\])?/g, '').trim();
 
 async function usadas(cuenta) {
   try {
@@ -59,6 +52,20 @@ async function usadas(cuenta) {
 async function planDe(cuenta) {
   const r = await planDeCuenta(cuenta).catch(() => ({ ok: false }));
   return r.ok ? r.plan : undefined;
+}
+
+// Un fallo de Acuarius: ticket con la conversación dentro. OJO: la columna
+// support_tickets.conversation_id es el hilo de «Ayuda», no la conversación del
+// inbox; esa va en contexto.
+async function crearReporte({ cuenta, quien, agent, propuesta, correccion, conversacion, extra = {} }) {
+  const [t] = await sb('/support_tickets', { method: 'POST', prefer: 'return=representation', body: JSON.stringify({
+    user_id: cuenta, author_user_id: quien.actorId,
+    email: await correoDe(quien.actorId), plan: (await planDe(cuenta)) || null,
+    asunto: 'Agente: ' + propuesta.cambio.asunto,
+    detalle: propuesta.cambio.detalle + '\n\nLo que escribió el cliente: ' + correccion,
+    contexto: { origen: 'mejorar-agente', agente: agent.id, agente_nombre: agent.name, conversacion, ...extra },
+  }) }) || [];
+  return t || null;
 }
 
 async function correoDe(userId) {
@@ -79,63 +86,6 @@ async function ensayosDeHoy(cuenta) {
   } catch { return 0; }
 }
 
-// La conversación real hasta el mensaje corregido (incluido), como la vio el
-// agente: en bruto y con los 40 anteriores como mucho. Solo se corrige lo que
-// escribió el agente: un mensaje del equipo o un texto fijo del sistema no se
-// arregla cambiando su configuración.
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export async function conversacionReal(cuenta, convId, mensajeId) {
-  if (!UUID.test(String(convId || '')) || !UUID.test(String(mensajeId || ''))) return { error: 'Falta el mensaje a corregir.' };
-  const [conv] = await sb(`/chat_conversations?id=eq.${convId}&user_id=eq.${encodeURIComponent(cuenta)}&select=id,agent_id&limit=1`) || [];
-  if (!conv) return { error: 'Esa conversación no existe en tu cuenta.', status: 404 };
-  if (!conv.agent_id) return { error: 'Esta conversación no la atiende un agente de IA.' };
-  const [msg] = await sb(`/chat_messages?id=eq.${mensajeId}&conversation_id=eq.${convId}&select=id,role,autor,created_at&limit=1`) || [];
-  if (!msg) return { error: 'Ese mensaje no está en la conversación.', status: 404 };
-  if (msg.role !== 'assistant' || msg.autor !== 'agente') return { error: 'Solo se pueden corregir los mensajes que escribió el agente.' };
-  const filas = await sb(`/chat_messages?conversation_id=eq.${convId}&created_at=lte.${encodeURIComponent(msg.created_at)}` +
-    `&select=id,role,content&order=created_at.desc,id.desc&limit=60`) || [];
-  // Con la misma hora puede colarse uno posterior: se corta en el corregido.
-  const hasta = filas.findIndex(f => f.id === msg.id);
-  const mensajes = filas.slice(Math.max(hasta, 0)).slice(0, 40).reverse()
-    .filter(f => f.role === 'user' || f.role === 'assistant')
-    .map(f => ({ role: f.role, content: String(f.content || '').slice(0, 6000) }));
-  return { agentId: conv.agent_id, mensajes, indice: mensajes.length - 1 };
-}
-
-async function cargarAgente(cuenta, agentId) {
-  if (!agentId) return null;
-  return (await sb(`/chat_agents?id=eq.${encodeURIComponent(agentId)}&user_id=eq.${encodeURIComponent(cuenta)}&select=*&limit=1`))?.[0] || null;
-}
-
-// La conversación del probador hasta el mensaje corregido, en texto, marcándolo.
-function transcripcion(mensajes, indice) {
-  return (mensajes || []).slice(0, indice + 1).map((m, i) =>
-    (m.role === 'user' ? 'CLIENTE' : 'AGENTE') + (i === indice ? ' ← ESTA ES LA RESPUESTA QUE HAY QUE CORREGIR' : '') + ':\n' + limpio(m.content)
-  ).join('\n\n');
-}
-
-async function llamarEntrenador(agent, regla, mensajes, indice, correccion) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return { error: 'Falta la clave de la IA en el servidor.' };
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({
-      model: MODELO, max_tokens: 2000,
-      system: promptEntrenador(agent, regla),
-      messages: [{ role: 'user', content: 'CONVERSACIÓN DE PRUEBA:\n\n' + transcripcion(mensajes, indice) +
-        '\n\nLO QUE DICE EL CLIENTE QUE ESTUVO MAL O QUE DEBIÓ DECIR:\n' + correccion }],
-    }),
-  }).catch(e => ({ ok: false, status: 0, text: async () => String(e?.message || e) }));
-  if (!r.ok) {
-    return { error: r.status === 529 || r.status === 429 ? 'La IA está saturada en este momento. Vuelve a intentarlo en unos minutos.' : 'El entrenador no respondió. Vuelve a intentarlo en un momento.' };
-  }
-  const d = await r.json();
-  const texto = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-  if (d.stop_reason === 'max_tokens') return { error: 'La propuesta llegó incompleta. Vuelve a intentarlo.', uso: d.usage, modelo: d.model };
-  return { texto, uso: d.usage, modelo: d.model };
-}
-
 export default async function handler(req) {
   const sesion = await verificarSesion(req);
   if (!sesion.id) return json(await cuerpoSinSesion(sesion, 'agente-mejorar'), 401);
@@ -147,6 +97,13 @@ export default async function handler(req) {
 
   // ── Historial, reglas y cupo ─────────────────────────────────────────────
   if (req.method === 'GET') {
+    // Cuántas sugerencias esperan en cada agente, para el aviso en la lista.
+    if (new URL(req.url).searchParams.get('pendientes')) {
+      const filas = await sb(`/agente_sugerencias?user_id=eq.${encodeURIComponent(cuenta)}&estado=eq.pendiente&select=agent_id&limit=500`) || [];
+      const por = {};
+      for (const f of filas) por[f.agent_id] = (por[f.agent_id] || 0) + 1;
+      return json({ pendientes: por });
+    }
     const agentId = new URL(req.url).searchParams.get('agent_id');
     const agent = await cargarAgente(cuenta, agentId);
     if (!agent) return json({ error: 'Ese agente no existe en tu cuenta.' }, 404);
@@ -154,7 +111,9 @@ export default async function handler(req) {
       `&select=id,tipo,origen,conversation_id,correccion,explicacion,cambio,respuesta_antes,respuesta_despues,creado_at,deshecho_at,actor_id&order=creado_at.desc&limit=60`) || [];
     const plan = await planDe(cuenta);
     const n = await usadas(cuenta);
-    return json({ reglas: agent.reglas || [], historial, cupo: { cupo: cupoMejoras(plan), usadas: n } });
+    const sugerencias = await sb(`/agente_sugerencias?agent_id=eq.${agent.id}&user_id=eq.${encodeURIComponent(cuenta)}&estado=eq.pendiente` +
+      `&select=id,conversation_id,problema,propuesta,resumen,respuesta_antes,respuesta_despues,creado_at&order=creado_at.desc&limit=20`) || [];
+    return json({ reglas: agent.reglas || [], historial, sugerencias, revisar: agent.revisar !== false, cupo: { cupo: cupoMejoras(plan), usadas: n } });
   }
 
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
@@ -179,6 +138,45 @@ export default async function handler(req) {
     }
     await sb(`/agente_mejoras?id=eq.${m.id}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ deshecho_at: new Date().toISOString(), deshecho_por: quien.actorId }) });
     return json({ ok: true });
+  }
+
+  // ── Sugerencias del revisor (fase 3) ─────────────────────────────────────
+  if (accion === 'revisar') {
+    const agent = await cargarAgente(cuenta, body.agent_id);
+    if (!agent) return json({ error: 'Ese agente no existe en tu cuenta.' }, 404);
+    await sb(`/chat_agents?id=eq.${agent.id}&user_id=eq.${encodeURIComponent(cuenta)}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ revisar: !!body.activo }) });
+    return json({ ok: true, revisar: !!body.activo });
+  }
+  if (accion === 'descartar_sugerencia' || accion === 'aplicar_sugerencia') {
+    const [sug] = await sb(`/agente_sugerencias?id=eq.${encodeURIComponent(body.id || '')}&user_id=eq.${encodeURIComponent(cuenta)}&select=*&limit=1`) || [];
+    if (!sug) return json({ error: 'Esa sugerencia no existe.' }, 404);
+    if (sug.estado !== 'pendiente') return json({ error: 'Esa sugerencia ya se resolvió.' }, 409);
+    const cerrar = (estado, extra = {}) => sb(`/agente_sugerencias?id=eq.${sug.id}`, { method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({ estado, resuelto_at: new Date().toISOString(), resuelto_por: quien.actorId, ...extra }) });
+    if (accion === 'descartar_sugerencia') { await cerrar('descartada'); return json({ ok: true }); }
+
+    const agent = await cargarAgente(cuenta, sug.agent_id);
+    if (!agent) { await cerrar('caducada'); return json({ error: 'Ese agente ya no existe.' }, 404); }
+    const regla = await getRegla(cuenta, agent.id).catch(() => null);
+    // Se detectó con la configuración de entonces: si cambió y ya no cuadra
+    // (el texto a reemplazar ya no está, la regla a editar se quitó), caduca.
+    const v = validarPropuesta(sug.propuesta, agent, regla);
+    if (v.error) { await cerrar('caducada'); return json({ error: 'El agente cambió desde que se detectó esto y la sugerencia ya no aplica. La quitamos.' }, 409); }
+    const fila = { actor_id: quien.actorId, correccion: sug.problema, origen: 'revisor', conversation_id: sug.conversation_id,
+      mensaje_id: sug.mensaje_id, conversacion: sug.conversacion, respuesta_antes: sug.respuesta_antes, respuesta_despues: sug.respuesta_despues };
+    if (v.propuesta.tipo === 'fallo_plataforma') {
+      const t = await crearReporte({ cuenta, quien, agent, propuesta: v.propuesta, correccion: 'Detectado por el revisor: ' + sug.problema,
+        conversacion: sug.conversacion, extra: { conversation_id: sug.conversation_id, mensaje_id: sug.mensaje_id, sugerencia: sug.id } });
+      if (!t?.id) return json({ error: 'No se pudo crear el reporte. Inténtalo de nuevo o escríbenos por soporte.' }, 502);
+      const [m] = await sb('/agente_mejoras', { method: 'POST', prefer: 'return=representation', body: JSON.stringify({
+        ...fila, user_id: cuenta, agent_id: agent.id, tipo: 'reporte', explicacion: v.propuesta.explicacion || null,
+        cambio: v.propuesta.cambio, antes: fotoDelAgente(agent, regla), ticket_id: t.id }) }) || [];
+      await cerrar('aplicada', { mejora_id: m?.id || null });
+      return json({ ok: true, ticket: t.id });
+    }
+    const { id } = await aplicarYGuardar({ cuenta, agent, regla, propuesta: v.propuesta, fila });
+    await cerrar('aplicada', { mejora_id: id });
+    return json({ ok: true, id });
   }
 
   // Desde el inbox (fase 2) llega una conversación de verdad: los mensajes los
@@ -257,31 +255,16 @@ export default async function handler(req) {
 
     if (propuesta.tipo === 'fallo_plataforma') {
       // No se toca el agente: es nuestro. Ticket con la conversación dentro.
-      const [t] = await sb('/support_tickets', { method: 'POST', prefer: 'return=representation', body: JSON.stringify({
-        user_id: cuenta, author_user_id: quien.actorId,
-        email: await correoDe(quien.actorId), plan: (await planDe(cuenta)) || null,
-        asunto: 'Agente: ' + propuesta.cambio.asunto,
-        detalle: propuesta.cambio.detalle + '\n\nLo que escribió el cliente: ' + correccion,
-        contexto: { origen: 'mejorar-agente', agente: agent.id, agente_nombre: agent.name, conversacion: fila.conversacion,
-          ...(real ? { conversation_id: body.conversation_id, mensaje_id: body.mensaje_id } : {}) },
-        ...(real ? { conversation_id: body.conversation_id } : {}),
-      }) }) || [];
+      const t = await crearReporte({ cuenta, quien, agent, propuesta, correccion, conversacion: fila.conversacion,
+        extra: real ? { conversation_id: body.conversation_id, mensaje_id: body.mensaje_id } : {} });
       fila.ticket_id = t?.id || null;
       await sb('/agente_mejoras', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify(fila) });
       if (!t?.id) return json({ error: 'No se pudo crear el reporte. Inténtalo de nuevo o escríbenos por soporte.' }, 502);
       return json({ ok: true, ticket: t.id });
     }
 
-    const nuevo = aplicarPropuesta(agent, regla, propuesta);
-    const patch = { updated_at: new Date().toISOString() };
-    for (const k of CAMPOS_AGENTE) if (JSON.stringify(nuevo.agente[k] ?? null) !== JSON.stringify(agent[k] ?? null)) patch[k] = nuevo.agente[k];
-    if (Object.keys(patch).length > 1) {
-      await sb(`/chat_agents?id=eq.${agent.id}&user_id=eq.${encodeURIComponent(cuenta)}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify(patch) });
-    }
-    if (JSON.stringify(nuevo.regla ?? null) !== JSON.stringify(regla ?? null) && nuevo.regla) await saveRegla(cuenta, agent.id, nuevo.regla);
-    fila.despues = fotoDelAgente(nuevo.agente, nuevo.regla);
-    const [m] = await sb('/agente_mejoras', { method: 'POST', prefer: 'return=representation', body: JSON.stringify(fila) }) || [];
-    return json({ ok: true, id: m?.id || null, reglas: nuevo.agente.reglas || [] });
+    const { id, nuevo } = await aplicarYGuardar({ cuenta, agent, regla, propuesta, fila });
+    return json({ ok: true, id, reglas: nuevo.agente.reglas || [] });
   }
 
   return json({ error: 'Acción desconocida' }, 400);

@@ -224,3 +224,94 @@ export function resumenDelCambio(agent, regla, propuesta) {
   if (t === 'fallo_plataforma') { antes = ''; despues = c.detalle; }
   return { titulo, antes, despues };
 }
+
+// ── El revisor (fase 3) ─────────────────────────────────────────────────────
+// Lee una conversación real ya terminada y señala, como mucho, UNA respuesta
+// del agente que salió mal. No propone el cambio: eso lo hace el entrenador de
+// arriba, igual que si el problema lo hubiera escrito el dueño. Va con Haiku
+// porque lee todas las conversaciones; el entrenador (Sonnet) solo entra
+// cuando hay algo.
+
+// Por cuenta y día: conversaciones que se revisan y sugerencias que se crean.
+// Cada revisión cuesta ~0,007 USD; cada sugerencia, ~0,03 más.
+export const CUPO_REVISION = {
+  free: { conversaciones: 0, sugerencias: 0 },
+  trial: { conversaciones: 5, sugerencias: 2 },
+  pro: { conversaciones: 15, sugerencias: 3 },
+  agency: { conversaciones: 50, sugerencias: 10 },
+  admin: { conversaciones: 50, sugerencias: 10 },
+};
+export function cupoRevision(plan) {
+  const p = String(plan || '').toLowerCase().trim();
+  const alias = { individual: 'pro', agencia: 'agency' };
+  return CUPO_REVISION[alias[p] || p] || CUPO_REVISION.pro;
+}
+export const MAX_PENDIENTES = 10;   // por agente: si nadie las mira, no se apilan más
+
+// mensajes: [{ role, autor, content, nuevo }] en orden. Solo los del agente que
+// llegaron después de la última revisión («nuevo») se pueden señalar.
+export function transcripcionRevisor(mensajes) {
+  return mensajes.map((m, i) => {
+    const quien = m.role === 'user' ? 'CLIENTE'
+      : m.autor === 'agente' ? (m.nuevo ? `AGENTE #${i}` : 'AGENTE (ya revisado)')
+      : m.autor === 'equipo' ? 'PERSONA DEL EQUIPO' : 'MENSAJE AUTOMÁTICO';
+    return quien + ':\n' + limpiarBloques(m.content);
+  }).join('\n\n');
+}
+
+export function limpiarBloques(t) {
+  return String(t || '').replace(/\[(CAPTURA|CALIFICACION|ESCALAR|RESERVA|CANCELAR_CITA|CAMBIAR_CITA|FOTOS)\b[\s\S]*?\](\s*\])?/g, '').trim().slice(0, 3000);
+}
+
+export function promptRevisor(agent, descartadas = [], canal = 'whatsapp') {
+  const reglas = (agent.reglas || []).map(r => '- ' + r.texto).join('\n') || '(ninguna)';
+  const desc = descartadas.filter(Boolean).slice(0, 15).map(d => '- ' + d).join('\n');
+  const formato = canal === 'whatsapp'
+    ? 'En WhatsApp la negrita es con UN asterisco (*así*); con dos (**así**) el cliente ve los asteriscos. Tampoco existen los títulos con # ni las tablas.'
+    : 'En este canal no hay ningún formato: asteriscos, guiones bajos o # se ven tal cual.';
+  return `Revisas conversaciones reales de ${canal === 'whatsapp' ? 'WhatsApp' : canal} entre clientes y el agente de IA «${agent.name}» de un negocio. Tu trabajo: encontrar la respuesta del agente que su dueño querría corregir, si la hay.
+
+LO QUE EL AGENTE SABE DEL NEGOCIO (resumen):
+${corta(agent.business_ctx, 3500)}
+
+REGLAS QUE EL DUEÑO YA LE ENSEÑÓ:
+${reglas}
+${desc ? `
+EL DUEÑO YA DESCARTÓ ESTAS OBSERVACIONES (no las vuelvas a señalar ni algo equivalente):
+${desc}
+` : ''}
+QUÉ CUENTA COMO PROBLEMA (tiene que ser claro, no una preferencia tuya):
+- Ignoró o no respondió algo que el cliente preguntó o dijo.
+- Repitió una pregunta que el cliente ya había contestado.
+- Dio un dato que contradice lo que sabe del negocio, o se inventó algo.
+- Incumplió una de las reglas del dueño.
+- Aceptó o propuso algo fuera del horario o de las condiciones del negocio.
+- El cliente pidió hablar con una persona y no se le pasó.
+- El cliente se molestó o se fue por cómo respondió el agente.
+- Un tono claramente inadecuado para un negocio (frío, grosero, robótico, demasiado largo para un chat).
+- Formato que el cliente ve roto. ${formato}
+
+QUÉ NO ES PROBLEMA: que el cliente no comprara; detalles de estilo que ninguna regla pide; algo que dijo una PERSONA DEL EQUIPO o un MENSAJE AUTOMÁTICO (no son del agente); respuestas "AGENTE (ya revisado)".
+
+Solo puedes señalar mensajes marcados "AGENTE #n". Si no hay un problema claro, lo correcto es no señalar nada: la mayoría de conversaciones están bien.
+
+RESPONDE SOLO CON UN JSON, sin texto alrededor:
+{"indice": n o null, "gravedad": "alta" | "media", "problema": "qué estuvo mal y qué debió hacer, en 1-2 frases, como se lo diría el dueño a un asesor nuevo"}`;
+}
+
+// Devuelve { indice, problema } o null. Lo que no cuadre se descarta en
+// silencio: una sugerencia de más es ruido que enseña a ignorarlas.
+export function validarRevision(bruto, mensajes) {
+  const m = String(bruto || '').match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  let p; try { p = JSON.parse(m[0]); } catch { return null; }
+  if (p == null || p.indice == null) return null;
+  const i = Number.isInteger(p.indice) ? p.indice : (/^#?\d+$/.test(String(p.indice)) ? parseInt(String(p.indice).replace('#', ''), 10) : null);
+  if (i === null || !mensajes[i]) return null;
+  const msg = mensajes[i];
+  if (msg.role !== 'assistant' || msg.autor !== 'agente' || !msg.nuevo) return null;
+  if (!['alta', 'media'].includes(p.gravedad)) return null;
+  const problema = corta(p.problema, 600);
+  if (problema.length < 10) return null;
+  return { indice: i, problema, gravedad: p.gravedad };
+}

@@ -23359,7 +23359,7 @@ function crmRenderAgents() {
   list.innerHTML = crmAgents.map(ag => {
     const connections = ag.channel_connections || [];
     const activeConns = connections.filter(c => c.is_active);
-    return `<div class="crm-agent-card" onclick="crmOpenAgentModal('${esc(ag.id)}')">
+    return `<div class="crm-agent-card" data-agente="${esc(ag.id)}" onclick="crmOpenAgentModal('${esc(ag.id)}')">
       <div class="crm-agent-avatar">${esc(ag.name.charAt(0).toUpperCase())}</div>
       <div class="crm-agent-info">
         <div class="crm-agent-name">${esc(ag.name)}</div>
@@ -23373,6 +23373,23 @@ function crmRenderAgents() {
         onclick="event.stopPropagation();agBorrar('${esc(ag.id)}',${escJsAttr(ag.name)},${activeConns.length})">${ICONO_PAPELERA}</button>
     </div>`;
   }).join('');
+  agSugMarcarLista().catch(() => {});
+}
+
+// Las sugerencias del revisor esperan en el paso «Mejoras», que nadie abre
+// si no sabe que hay algo. Se avisa en la tarjeta del agente. Si falla, no se
+// pinta nada: la lista no depende de esto.
+async function agSugMarcarLista() {
+  const r = await fetchAuth('/api/agente-mejorar?pendientes=1');
+  if (!r.ok) return;
+  const d = await r.json().catch(() => ({}));
+  for (const [id, n] of Object.entries(d.pendientes || {})) {
+    const caja = document.querySelector('.crm-agent-card[data-agente="' + CSS.escape(id) + '"] .crm-agent-channels');
+    if (!caja || !n || caja.querySelector('.ag-sug-chip')) continue;
+    caja.insertAdjacentHTML('beforeend', '<button class="ag-sug-chip" title="El revisor encontró respuestas para mejorar" ' +
+      'onclick="event.stopPropagation();crmOpenAgentModal(\'' + esc(id) + '\');agIrAPaso(7)">' + icn('sparkles', 11) + ' ' +
+      n + (n === 1 ? ' mejora sugerida' : ' mejoras sugeridas') + '</button>');
+  }
 }
 
 // «Mi cuenta» sin agentes, en una agencia, casi nunca es que no haya: es que
@@ -24042,6 +24059,35 @@ function agMejPintarLista() {
   const fecha = t => new Date(t).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   const cupo = d.cupo || {};
   let h = '';
+
+  // El revisor: lee solo las conversaciones terminadas y deja aquí lo que
+  // encontró. Nada se aplica sin que alguien lo apruebe.
+  h += '<label class="ag-sug-revisar"><input type="checkbox" ' + (d.revisar ? 'checked' : '') + ' onchange="agSugRevisar(this)"> ' +
+    '<span><strong>Revisar mis conversaciones automáticamente</strong><br>' +
+    'Cuando una conversación del agente termina, la IA la lee y, si una respuesta salió mal, te deja aquí el cambio listo para aprobar.</span></label>';
+  const sugs = d.sugerencias || [];
+  if (sugs.length) {
+    const caja = (t, x, c) => '<div class="ag-mej-caja ' + c + '"><h6>' + t + '</h6><p>' + (x ? esc(x).replace(/\n/g, '<br>') : '<span class="ag-mej-vacio">(nada)</span>') + '</p></div>';
+    h += '<div class="crm-section-divider">Sugerencias del revisor (' + sugs.length + ')</div>' + sugs.map(x => {
+      const r = x.resumen || {};
+      const reporte = x.propuesta?.tipo === 'fallo_plataforma';
+      return '<div class="ag-sug" id="ag-sug-' + esc(x.id) + '">' +
+        '<div class="ag-mej-hist-cab"><span class="ag-mej-tipo">' + esc(r.titulo || '') + '</span>' +
+        '<span class="ag-mej-fecha">' + fecha(x.creado_at) + '</span></div>' +
+        '<p class="ag-mej-correccion">' + esc(x.problema) + '</p>' +
+        (x.propuesta?.explicacion ? '<p class="ag-mej-ayuda">' + esc(x.propuesta.explicacion) + '</p>' : '') +
+        (reporte
+          ? caja('Lo que le reportaríamos al equipo de Acuarius', r.despues, 'despues')
+          : '<div class="ag-mej-antes-despues">' + (r.antes ? caja('Antes', r.antes, 'antes') : '') + caja(r.antes ? 'Después' : 'Se agrega', r.despues, 'despues') + '</div>') +
+        '<div class="ag-mej-antes-despues">' + caja('Respondió', x.respuesta_antes, 'antes resp') +
+          (x.respuesta_despues ? caja('Con el cambio respondería', x.respuesta_despues, 'despues') : '') + '</div>' +
+        '<div class="ag-mej-botones">' +
+          '<button class="btn-pri sm" onclick="agSugResolver(\'' + esc(x.id) + '\', true, this)">' + (reporte ? 'Reportar al equipo' : 'Aplicar al agente') + '</button>' +
+          '<button class="btn-ghost sm" onclick="agSugResolver(\'' + esc(x.id) + '\', false, this)">Descartar</button>' +
+          '<button class="btn-ghost sm" onclick="agSugVerConv(\'' + esc(x.conversation_id) + '\')">Ver la conversación</button>' +
+        '</div></div>';
+    }).join('');
+  }
   if (cupo.cupo) {
     h += '<p class="ag-mej-ayuda">' + (cupo.usadas == null
       ? 'No se pudo contar cuántas mejoras con IA llevas este mes.'
@@ -24072,6 +24118,50 @@ function agMejPintarLista() {
         '</div>').join('')
     : '<p class="ag-mej-ayuda">Aquí quedará cada cambio que le hagas desde el probador, con la opción de deshacerlo.</p>';
   el.innerHTML = h;
+}
+
+async function agSugRevisar(cb) {
+  cb.disabled = true;
+  try {
+    const r = await fetchAuth('/api/agente-mejorar', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'revisar', agent_id: agEditingId, activo: cb.checked }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.error) throw new Error(d.error || 'No se pudo guardar');
+    showToast(cb.checked ? 'El revisor leerá las conversaciones de este agente' : 'Revisión automática apagada');
+  } catch (e) {
+    cb.checked = !cb.checked;
+    showToast(e.message, 'error');
+  } finally { cb.disabled = false; }
+}
+
+// Descartar también enseña: el revisor recibe lo descartado y no lo repite.
+async function agSugResolver(id, aplicar, btn) {
+  if (aplicar && !(await confirmarAguaP({ titulo: 'Aplicar esta mejora', texto: 'El agente responderá así desde el próximo mensaje. Podrás deshacerlo en el historial.', confirmar: 'Aplicar' }))) return;
+  btn.disabled = true;
+  try {
+    const r = await fetchAuth('/api/agente-mejorar', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: aplicar ? 'aplicar_sugerencia' : 'descartar_sugerencia', id }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.error) {
+      showToast(d.error || 'No se pudo completar', 'error');
+      if (r.status === 409) agMejCargar();   // caducó o ya estaba resuelta: se refresca
+      else btn.disabled = false;
+      return;
+    }
+    showToast(!aplicar ? 'Descartada. El revisor no volverá a señalar esto.' : d.ticket ? 'Reportado al equipo de Acuarius' : 'Listo: el agente ya lo aprendió');
+    if (aplicar && !d.ticket) await agMejRefrescarForm(null);
+    agMejCargar();
+  } catch (e) {
+    btn.disabled = false;
+    showToast('No se pudo completar', 'error');
+  }
+}
+
+function agSugVerConv(convId) {
+  if (!convId) return;
+  crmCloseAgentModal();
+  _convPorUrl = convId;
+  inboxAbrirConvPendiente();
 }
 
 async function agMejQuitarRegla(i, btn) {

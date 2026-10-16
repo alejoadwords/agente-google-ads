@@ -141,5 +141,44 @@ const appjs = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8')
 ok(/m\.role === 'assistant' && m\.autor === 'agente'/.test(appjs), 'en el inbox, «Corregir» solo en mensajes del agente');
 ok(/crmLoadAgents\(\)\.catch/.test(appjs), 'tras aplicar desde el inbox se recarga la lista de agentes (si no, guardar el agente pisaría la mejora)');
 
+
+console.log('\nFase 3: el revisor');
+const R = await import('../api/_mejoras-agente.js');
+const conv3 = [
+  { id: 'u0', role: 'user', autor: null, content: 'Hola, busco apto en el norte', nuevo: false },
+  { id: 'a0', role: 'assistant', autor: 'agente', content: 'Hola [CAPTURA: zona=norte]', nuevo: false },
+  { id: 'u1', role: 'user', autor: null, content: '¿y tienen con piscina?', nuevo: false },
+  { id: 'a1', role: 'assistant', autor: 'agente', content: '¿En qué zona buscas?', nuevo: true },
+  { id: 'e1', role: 'assistant', autor: 'equipo', content: 'Hola, soy Laura', nuevo: false },
+];
+const tr = R.transcripcionRevisor(conv3);
+ok(tr.includes('AGENTE #3:') && tr.includes('AGENTE (ya revisado)') && tr.includes('PERSONA DEL EQUIPO'), 'solo los mensajes nuevos del agente llevan número para señalar');
+ok(!tr.includes('[CAPTURA'), 'sin los bloques ocultos');
+ok(R.validarRevision('{"indice": 3, "gravedad": "alta", "problema": "Repitió la pregunta de la zona que ya estaba contestada"}', conv3)?.indice === 3, 'un hallazgo válido sobre un mensaje nuevo del agente');
+ok(R.validarRevision('{"indice": "#3", "gravedad": "media", "problema": "No respondió lo de la piscina"}', conv3)?.indice === 3, '«#3» también vale');
+ok(R.validarRevision('{"indice": 1, "gravedad": "alta", "problema": "Saludó sin presentarse con el nombre"}', conv3) === null, 'un mensaje ya revisado no se vuelve a señalar');
+ok(R.validarRevision('{"indice": 4, "gravedad": "alta", "problema": "Laura no se presentó bien"}', conv3) === null, 'lo que escribió el equipo no es del agente');
+ok(R.validarRevision('{"indice": 2, "gravedad": "alta", "problema": "El cliente preguntó mal"}', conv3) === null, 'un mensaje del cliente tampoco');
+ok(R.validarRevision('{"indice": 3, "gravedad": "baja", "problema": "Podría usar más emojis"}', conv3) === null, 'gravedad baja → nada (ruido)');
+ok(R.validarRevision('{"indice": null}', conv3) === null && R.validarRevision('todo bien', conv3) === null, 'sin problema o sin JSON → nada');
+ok(R.validarRevision('{"indice": 99, "gravedad": "alta", "problema": "algo que no existe"}', conv3) === null, 'un índice inventado → nada');
+const pr = R.promptRevisor({ name: 'Aura', business_ctx: 'Inmobiliaria', reglas: [{ texto: 'No digas de nada' }] }, ['Usó «Perfecto»']);
+ok(pr.includes('No digas de nada') && pr.includes('Usó «Perfecto»') && /no las vuelvas a señalar/.test(pr), 'el revisor ve las reglas y lo que el dueño ya descartó');
+ok(R.cupoRevision('free').conversaciones === 0 && R.cupoRevision('agencia').sugerencias === 10 && R.cupoRevision('raro').conversaciones === 15, 'cupo diario por plan (free no revisa)');
+
+const rv = readFileSync(new URL('../api/_revisor-agente.js', import.meta.url), 'utf8');
+ok(/agent\.revisar === false/.test(rv), 'respeta el interruptor del agente');
+ok(/pendientes >= MAX_PENDIENTES\) return 'pendientes-llenas'/.test(rv), 'si nadie mira las sugerencias, no se apilan más');
+ok(/v\.propuesta\.pregunta\) \{ await marcarRevisada/.test(rv), 'si el entrenador necesita preguntar, no hay a quién: se deja');
+ok(/await marcarRevisada\(conv\.id\)\.catch/.test(rv), 'un error no se reintenta cada 10 minutos (se pagaría cada vez)');
+ok(!/aplicarYGuardar/.test(rv), 'el revisor NUNCA aplica nada: solo sugiere');
+ok(/origen: 'revisor-ensayo'/.test(rv), 'su ensayo no gasta el tope diario del probador del cliente');
+const ep3 = readFileSync(new URL('../api/agente-mejorar.js', import.meta.url), 'utf8');
+ok(/validarPropuesta\(sug\.propuesta, agent, regla\)/.test(ep3) && /'caducada'/.test(ep3), 'al aplicar una sugerencia se revalida con la configuración de HOY; si ya no cuadra, caduca');
+ok(!/\.\.\.\(real \? \{ conversation_id: body\.conversation_id \} : \{\}\),\n\s*\}\) \}\)/.test(ep3) && /support_tickets\.conversation_id es el hilo de «Ayuda»/.test(ep3), 'el ticket no pisa conversation_id (es el hilo de Ayuda)');
+const vj = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+ok(vj.crons.some(c => c.path === '/api/cron-revisor-agente'), 'el cron está programado');
+ok(/'cron-revisor-agente': 10/.test(readFileSync(new URL('../api/_latido.js', import.meta.url), 'utf8')), '…y vigilado por su latido');
+
 console.log(mal ? `\n${mal} fallo(s)` : '\nTodo en verde');
 process.exit(mal ? 1 : 0);
