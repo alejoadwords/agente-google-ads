@@ -8,7 +8,10 @@
 
 import { cifrar, descifrar } from './_cifrado.js';
 import { tokenShopify, gqlShopify, wooFetch, Q_PRODUCTOS_SHOPIFY, shopifyGqlAProducto,
-         normalizarProductoShopify, normalizarProductoWoo } from './_tienda.js';
+         normalizarProductoShopify, normalizarProductoWoo,
+         pedidosShopifyPagina, pedidosWooPagina, normalizarPedidoShopify, normalizarPedidoWoo } from './_tienda.js';
+import { importarPagina } from './_tienda-motor.js';
+import { intakeLead } from './_lead-intake.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -105,4 +108,41 @@ export async function sincronizarProductos(tienda, { topeMs = 9000 } = {}) {
     await sbTienda(`/tiendas?id=eq.${tienda.id}`, 'PATCH', { cursor_productos: JSON.stringify({ c: cursor, p: pagina, desde }) }, 'return=minimal');
   }
   return { terminada, vistos };
+}
+
+/**
+ * La importación del historial, por páginas de 50 pedidos. El estado vive en
+ * tiendas.historial ({estado, desde, pagina, pedidos, clientes}) y avanza en
+ * cada vuelta del cron hasta acabar. Repetir una página no duplica nada: el
+ * pedido que ya está se salta.
+ */
+export async function avanzarHistorial(tienda, { topeMs = 12000 } = {}) {
+  const t0 = Date.now();
+  const h = { ...(tienda.historial || {}) };
+  if (h.estado !== 'corriendo') return h;
+  const io = { sb: sbTienda, intake: intakeLead, ahora: () => Date.now() };
+  const guardarEstado = () => sbTienda(`/tiendas?id=eq.${tienda.id}`, 'PATCH', { historial: h }, 'return=minimal');
+  try {
+    const creds = await credencialesDe(tienda);
+    const token = tienda.plataforma === 'shopify' ? await accesoShopify(tienda, creds) : null;
+    // Una página de 50 tarda unos 6 s; no se empieza una que no da tiempo a acabar.
+    while (Date.now() - t0 < topeMs - 7000) {
+      const pag = tienda.plataforma === 'shopify'
+        ? await pedidosShopifyPagina(tienda.dominio, token, { desde: h.desde, pagina: h.pagina })
+        : await pedidosWooPagina(tienda.dominio, creds, { desde: h.desde, pagina: h.pagina || 1 });
+      const pedidos = pag.pedidos.map(tienda.plataforma === 'shopify' ? normalizarPedidoShopify : normalizarPedidoWoo);
+      const r = await importarPagina(io, { ...tienda, historial: undefined }, pedidos);
+      h.pedidos = (h.pedidos || 0) + r.importados;
+      h.clientes = (h.clientes || 0) + r.clientes;
+      h.leidos = (h.leidos || 0) + pag.pedidos.length;
+      if (!pag.siguiente) { h.estado = 'terminado'; h.terminado_at = new Date().toISOString(); h.pagina = null; break; }
+      h.pagina = pag.siguiente;
+      await guardarEstado();
+    }
+  } catch (e) {
+    h.estado = 'error';
+    h.error = String(e.message || e).slice(0, 300);
+  }
+  await guardarEstado();
+  return h;
 }

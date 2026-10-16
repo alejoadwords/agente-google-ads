@@ -4,6 +4,7 @@
 //   2. Los carritos con una hora sin compra → «carrito abandonado».
 //   3. Quien cumplió N días sin comprar → «sin comprar».
 //   4. Las sincronizaciones de catálogo a medio camino.
+//   5. Las importaciones de historial de pedidos en curso.
 //
 // Es el ÚNICO que consume la cola (como cron-palomma): dos consumidores a la
 // vez convertirían el mismo pedido en dos leads. Un aviso que falla se
@@ -15,7 +16,7 @@ import { registrarError } from './_registro-errores.js';
 import { intakeLead } from './_lead-intake.js';
 import { claseDeTema, normalizarPedidoShopify, normalizarCarritoShopify, normalizarPedidoWoo } from './_tienda.js';
 import { procesarPedido, procesarCarrito, barrerCarritos, barrerRecompra } from './_tienda-motor.js';
-import { sbTienda, guardarProducto, borrarProducto, sincronizarProductos } from './_tienda-catalogo.js';
+import { sbTienda, guardarProducto, borrarProducto, sincronizarProductos, avanzarHistorial } from './_tienda-catalogo.js';
 
 const TOPE_MS = 22000;
 const MAX_INTENTOS = 5;
@@ -43,7 +44,7 @@ export async function procesarEvento(tienda, ev) {
 export default async function handler() {
   const t0 = Date.now();
   await latir('cron-tiendas', { empezo: new Date().toISOString() });
-  const cuenta = { eventos: 0, fallidos: 0, carritos: 0, recuperados: 0, recompra: 0, catalogos: 0 };
+  const cuenta = { eventos: 0, fallidos: 0, carritos: 0, recuperados: 0, recompra: 0, catalogos: 0, historial: 0 };
   try {
     const tiendas = (await sbTienda('/tiendas?activo=is.true&select=*')) || [];
     const porId = new Map(tiendas.map(t => [t.id, t]));
@@ -103,6 +104,17 @@ export default async function handler() {
         await sbTienda(`/tiendas?id=eq.${t.id}`, 'PATCH', { ultimo_error: 'No se pudo leer el catálogo: ' + String(e.message || e).slice(0, 200), estado: 'error', cursor_productos: null }, 'return=minimal').catch(() => {});
         await registrarError({ origen: 'servidor', donde: 'cron-tiendas.catalogo', error: e, usuario: t.user_id });
       }
+    }
+
+    // ── 5. Historial de pedidos ────────────────────────────────────────────
+    // Va al final: lo que pasa HOY (pedidos, carritos) no espera a lo de ayer.
+    for (const t of tiendas.filter(x => x.historial?.estado === 'corriendo')) {
+      const queda = TOPE_MS - (Date.now() - t0);
+      if (queda < 9000) break;
+      const antes = t.historial.pedidos || 0;
+      const h = await avanzarHistorial(t, { topeMs: queda - 1500 });
+      cuenta.historial += (h.pedidos || 0) - antes;
+      if (h.estado === 'error') await registrarError({ origen: 'servidor', donde: 'cron-tiendas.historial', error: new Error(h.error), usuario: t.user_id });
     }
 
     await latir('cron-tiendas', cuenta);

@@ -363,8 +363,13 @@ export async function intakeLead(userId, clientId, data) {
       }
     } catch (e) { console.error('asignar en intake:', e); }
     }
-    await enqueueAutomations(userId, created, 'lead_created');
-    if (leadTags.length) await enqueueAutomations(userId, created, 'tag_added', leadTags);
+    // `silencioso`: una importación de historia (los pedidos viejos de una
+    // tienda). Sus clientes ya compraron hace meses: una bienvenida a cada uno
+    // sería un correo masivo que nadie pidió.
+    if (data.silencioso !== true) {
+      await enqueueAutomations(userId, created, 'lead_created');
+      if (leadTags.length) await enqueueAutomations(userId, created, 'tag_added', leadTags);
+    }
     return { lead: created, created: true, otraOportunidadDe: yaExiste ? yaExiste.id : null };
   }
 
@@ -399,6 +404,6 @@ export async function intakeLead(userId, clientId, data) {
   const added = mergedTags.filter(t => !(lead.tags || []).includes(t));
   if (added.length) patch.tags = mergedTags;
   await sb(`/leads?id=eq.${lead.id}`, 'PATCH', patch, 'return=minimal');
-  if (added.length) await enqueueAutomations(userId, { ...lead, tags: mergedTags }, 'tag_added', added);
+  if (added.length && data.silencioso !== true) await enqueueAutomations(userId, { ...lead, tags: mergedTags }, 'tag_added', added);
   return { lead: { ...lead, ...patch }, created: false };
 }

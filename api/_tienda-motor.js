@@ -268,3 +268,85 @@ export async function barrerRecompra(io, { limite = 60 } = {}) {
   }
   return encolados;
 }
+
+// ── Historial ───────────────────────────────────────────────────────────────
+// Los pedidos de antes de conectar. Reglas (16-10-2026):
+//   · NADA se dispara: ni bienvenida, ni «pedido pagado», ni reparto, ni tarea
+//     de primer contacto. Son clientes de hace meses.
+//   · Un cliente = UN lead ganado, aunque tenga diez pedidos: su valor es lo
+//     que lleva gastado y su fecha, la de su primera compra. Así Análisis no
+//     amanece con «800 leads nuevos hoy» ni 800 ventas de hoy.
+//   · Si la persona ya tiene una oportunidad abierta (escribe por WhatsApp),
+//     sus pedidos se le enlazan y no se le toca la etapa.
+//   · Solo pedidos pagados o enviados. Un pedido que ya entró en vivo se salta,
+//     así que importar dos veces no duplica nada.
+export const HISTORIAL = { pagado: 'historial', enviado: 'historial', historial: true };
+
+export async function importarPedido(io, tienda, p) {
+  if (!['pagado', 'enviado'].includes(p.estado)) return 'omitido';
+  if (await previo(io, tienda.id, 'pedido', p.externo_id)) return 'ya estaba';
+  const userId = tienda.user_id, clientId = tienda.client_id || null;
+  const fila = {
+    user_id: userId, client_id: clientId, tienda_id: tienda.id, tipo: 'pedido',
+    externo_id: p.externo_id, numero: p.numero, checkout: p.checkout,
+    nombre: p.nombre, email: p.email, telefono: p.telefono, total: p.total, moneda: p.moneda,
+    estado: p.estado, productos: p.productos, enlace: p.enlace,
+    creado_at: p.creado_at, pagado_at: p.pagado_at || p.creado_at, enviado_at: p.enviado_at, disparos: HISTORIAL,
+  };
+  if (!p.email && !p.telefono) { await guardar(io, { ...fila, lead_id: null }); return 'sin contacto'; }
+
+  // ¿Ya es cliente? Por un pedido suyo que ya esté guardado.
+  const llave = [p.email ? `email.eq.${enc(p.email)}` : null, p.telefono ? `telefono.eq.${enc(p.telefono)}` : null].filter(Boolean).join(',');
+  const suyo = ((await io.sb(`/tienda_pedidos?tienda_id=eq.${tienda.id}&lead_id=not.is.null&or=(${llave})&select=lead_id&limit=1`)) || [])[0];
+  let lead = await leadVivo(io, suyo?.lead_id);
+  let nuevo = false;
+  if (!lead) {
+    const r = await io.intake(userId, clientId, {
+      name: p.nombre, email: p.email, phone: p.telefono,
+      source: 'tienda', sourceLabel: tienda.nombre || 'Tienda', tags: ['tienda'],
+      stage: 'ganado', silencioso: true, sinAsignar: true, sinPrimerContacto: true,
+      note: 'Cliente de ' + (tienda.nombre || 'la tienda') + ' (importado del historial de pedidos)',
+    });
+    lead = r?.lead || null;
+    nuevo = !!r?.created;
+  }
+  const fecha = p.pagado_at || p.creado_at;
+  if (lead && nuevo) {
+    await io.sb(`/leads?id=eq.${lead.id}`, 'PATCH', {
+      value: p.total, created_at: fecha, closed_at: lead.stage === 'ganado' ? fecha : null,
+      ...(p.moneda ? { close_currency: p.moneda } : {}),
+    }, 'return=minimal');
+  } else if (lead && lead.stage === 'ganado' && lead.source === 'tienda') {
+    // Otro pedido del mismo cliente: suma a lo que lleva gastado.
+    await io.sb(`/leads?id=eq.${lead.id}`, 'PATCH', { value: (Number(lead.value) || 0) + (Number(p.total) || 0) }, 'return=minimal');
+  }
+  await guardar(io, { ...fila, lead_id: lead?.id || null });
+  return nuevo ? 'cliente nuevo' : 'sumado';
+}
+
+/**
+ * Una página de pedidos. Los de la MISMA persona van en fila (si no, dos
+ * pedidos suyos a la vez la crearían dos veces); personas distintas, en
+ * paralelo. Devuelve cuántos pedidos y clientes nuevos entraron.
+ */
+export async function importarPagina(io, tienda, pedidos, { enParalelo = 4 } = {}) {
+  const grupos = new Map();
+  for (const p of pedidos) {
+    const k = p.email || p.telefono || 'id:' + p.externo_id;
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(p);
+  }
+  const lista = [...grupos.values()];
+  let i = 0, importados = 0, clientes = 0;
+  async function obrero() {
+    while (i < lista.length) {
+      for (const p of lista[i++]) {
+        const r = await importarPedido(io, tienda, p);
+        if (r === 'cliente nuevo' || r === 'sumado' || r === 'sin contacto') importados++;
+        if (r === 'cliente nuevo') clientes++;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(enParalelo, lista.length) }, obrero));
+  return { importados, clientes };
+}

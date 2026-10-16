@@ -384,3 +384,31 @@ export async function borrarWebhooksWoo(base, creds, ids) {
     await wooFetch(base, creds, '/webhooks/' + encodeURIComponent(id) + '?force=true', { method: 'DELETE' }).catch(() => {});
   }
 }
+
+// ── Historial de pedidos ────────────────────────────────────────────────────
+// Por páginas, del más viejo al más nuevo. Shopify por REST y no GraphQL: el
+// REST devuelve el pedido con la MISMA forma que el webhook, así que lo lee el
+// mismo normalizarPedidoShopify. Sin el permiso read_all_orders Shopify solo
+// entrega los últimos 60 días (lo decimos en la pantalla).
+const CAMPOS_PEDIDO_SHOPIFY = 'id,name,order_number,email,contact_email,phone,customer,billing_address,shipping_address,financial_status,fulfillment_status,cancelled_at,total_price,currency,line_items,created_at,processed_at,updated_at,order_status_url,checkout_token';
+
+export function siguienteDeLink(link) {
+  const m = String(link || '').split(',').find(p => /rel="next"/.test(p));
+  const pi = m && m.match(/[?&]page_info=([^&>]+)/);
+  return pi ? decodeURIComponent(pi[1]) : null;
+}
+
+export async function pedidosShopifyPagina(dominio, token, { desde, pagina }) {
+  const base = `https://${dominio}/admin/api/${SHOPIFY_API}/orders.json?limit=50&fields=${CAMPOS_PEDIDO_SHOPIFY}`;
+  const url = pagina ? base + '&page_info=' + encodeURIComponent(pagina)
+    : base + '&status=any&order=created_at+asc' + (desde ? '&created_at_min=' + encodeURIComponent(desde) : '');
+  const r = await fetch(url, { headers: { 'X-Shopify-Access-Token': token, Accept: 'application/json' } });
+  const texto = await r.text();
+  if (!r.ok) throw new Error(errorShopify(r.status, texto));
+  return { pedidos: JSON.parse(texto).orders || [], siguiente: siguienteDeLink(r.headers.get('link')) };
+}
+
+export async function pedidosWooPagina(base, creds, { desde, pagina = 1 }) {
+  const lista = await wooFetch(base, creds, `/orders?per_page=50&page=${pagina}&orderby=date&order=asc` + (desde ? '&after=' + encodeURIComponent(desde) : ''));
+  return { pedidos: lista || [], siguiente: (lista || []).length === 50 ? pagina + 1 : null };
+}

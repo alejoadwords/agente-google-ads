@@ -151,7 +151,7 @@ function baseFalsa() {
     intakes.push(d);
     let lead = t.leads.find(l => l.user_id === userId && !['ganado', 'perdido'].includes(l.stage) && ((d.email && l.email === d.email) || (d.phone && l.phone === d.phone)));
     if (lead) { lead.tags = [...new Set([...(lead.tags || []), ...(d.tags || [])])]; return { lead: { ...lead }, created: false }; }
-    lead = { id: id(), user_id: userId, client_id: clientId, name: d.name, email: d.email, phone: d.phone, stage: 'nuevo', tags: d.tags || [], deleted_at: null };
+    lead = { id: id(), user_id: userId, client_id: clientId, name: d.name, email: d.email, phone: d.phone, stage: d.stage || 'nuevo', source: d.source, tags: d.tags || [], deleted_at: null };
     t.leads.push(lead);
     return { lead: { ...lead }, created: true };
   }
@@ -272,6 +272,45 @@ console.log('\nEl motor: WooCommerce y la recompra\n');
   reloj.ahora += 60 * 86400000;
   n = await M.barrerRecompra(io);
   ok(n === 0, 'pasada la ventana de 3 días ya no se manda tarde');
+}
+
+console.log('\nEl historial de pedidos\n');
+{
+  const { t, io, intakes } = baseFalsa();
+  const tienda = { id: 'T1', user_id: 'u1', client_id: null, nombre: 'Moda Ana', moneda: 'COP', plataforma: 'shopify' };
+  t.automations.push({ id: 'A1', user_id: 'u1', client_id: null, active: true, trigger: { type: 'pedido_pagado' } });
+  t.leads.push({ id: 'L0', user_id: 'u1', client_id: null, name: 'Dora', email: 'dora@x.co', stage: 'contactado', source: 'whatsapp', value: null, tags: [], deleted_at: null });
+  const o = (id, email, estado, total, fecha) => T.normalizarPedidoShopify({ id, name: '#' + id, email, total_price: String(total), currency: 'COP',
+    financial_status: estado === 'pendiente' ? 'pending' : 'paid', fulfillment_status: estado === 'enviado' ? 'fulfilled' : null,
+    created_at: fecha, processed_at: fecha, updated_at: fecha, line_items: [{ title: 'Taza', quantity: 1, price: String(total) }] });
+  const pagina = [
+    o(1, 'ana@x.co', 'pagado', 100000, '2026-03-01T10:00:00Z'),
+    o(2, 'bea@x.co', 'enviado', 50000, '2026-04-01T10:00:00Z'),
+    o(3, 'ana@x.co', 'enviado', 30000, '2026-05-01T10:00:00Z'),
+    o(4, 'carlos@x.co', 'pendiente', 9000, '2026-05-02T10:00:00Z'),
+    o(5, null, 'pagado', 7000, '2026-05-03T10:00:00Z'),
+    o(6, 'dora@x.co', 'pagado', 20000, '2026-06-01T10:00:00Z'),
+  ];
+  const r = await M.importarPagina(io, tienda, pagina);
+  const ana = t.leads.find(l => l.email === 'ana@x.co');
+  ok(t.leads.filter(l => l.email === 'ana@x.co').length === 1, 'dos pedidos de la misma persona, en la misma página: UN cliente');
+  ok(ana.stage === 'ganado' && ana.value === 130000, 'ganado, con lo que lleva gastado', ana);
+  ok(ana.created_at === '2026-03-01T10:00:00.000Z' && ana.closed_at === '2026-03-01T10:00:00.000Z', 'con la fecha de su primera compra: no cuenta como lead ni venta de hoy');
+  ok(!t.leads.some(l => l.email === 'carlos@x.co'), 'un pedido sin pagar no se importa');
+  ok(t.tienda_pedidos.some(p => p.externo_id === '5' && !p.lead_id), 'sin correo ni teléfono: el pedido queda para las cifras, sin lead');
+  const dora = t.leads.find(l => l.id === 'L0');
+  ok(dora.stage === 'contactado' && dora.value == null && t.tienda_pedidos.find(p => p.externo_id === '6').lead_id === 'L0', 'quien tiene una conversación abierta queda igual, con su pedido enlazado');
+  ok(intakes.every(d => d.silencioso === true && d.sinAsignar === true && d.sinPrimerContacto === true), 'sin automatizaciones, sin reparto, sin tarea de primer contacto');
+  ok(!t.automation_jobs.length && !t.lead_activities.length, 'y no se dispara ni anota nada');
+  ok(r.importados === 5 && r.clientes === 2, 'cuenta pedidos y clientes nuevos', r);
+
+  await M.importarPagina(io, tienda, pagina);
+  ok(t.leads.length === 3 && ana.value === 130000 && t.tienda_pedidos.filter(p => p.tipo === 'pedido').length === 5, 'importar dos veces no duplica ni vuelve a sumar');
+  await M.procesarPedido(io, tienda, { ...pagina[0], estado: 'enviado' });
+  ok(!t.automation_jobs.length, 'el aviso en vivo de un pedido importado no dispara «pedido pagado» ni «enviado»');
+  const fuente = leer('api/_lead-intake.js');
+  ok((fuente.match(/data\.silencioso !== true/g) || []).length === 2, 'intakeLead respeta el modo silencioso al crear y al sumar etiquetas');
+  ok(T.siguienteDeLink('<https://x/orders.json?limit=50&page_info=abc%3D>; rel="previous", <https://x/orders.json?limit=50&page_info=def>; rel="next"') === 'def' && T.siguienteDeLink('<https://x?page_info=abc>; rel="previous"') === null, 'la paginación de Shopify sigue el enlace «next»');
 }
 
 console.log('\nEl receptor de webhooks\n');

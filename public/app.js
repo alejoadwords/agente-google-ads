@@ -25062,6 +25062,7 @@ async function tiendaEstado() {
             ' · ' + (res.carritos || 0) + ' carritos abandonados · ' + (res.recuperados || 0) + ' recuperados</div>' +
           (t.ultimo_error ? '<div style="margin-top:6px;color:var(--danger)">' + esc(t.ultimo_error) + '</div>' : '') +
           ((t.webhooks_fallidos || []).length ? '<div style="margin-top:6px;color:var(--warning)">No se pudieron crear algunos avisos (' + esc(t.webhooks_fallidos.join(', ')) + '). Desconecta y vuelve a conectar después de revisar los permisos de la app.</div>' : '') +
+          tiendaHistorialHtml(t) +
           (!tieneCarrito && t.plataforma ? '<div style="margin-top:8px"><button class="btn-sec sm" onclick="rutaHazlo(\'auto_carrito\')">Activar recuperación de carritos</button></div>' : '') +
         '</div>' +
         '<div style="display:flex;gap:6px">' +
@@ -25125,6 +25126,51 @@ async function tiendaGuardar(plataforma) {
   } catch (e) {
     msg.textContent = e.message || 'No se pudo conectar';
     btn.disabled = false; btn.textContent = 'Conectar';
+  }
+}
+
+// El historial de pedidos: dónde va, o el botón para traerlo.
+function tiendaHistorialHtml(t) {
+  const h = t.historial || {};
+  if (h.estado === 'corriendo') return '<div style="margin-top:6px;color:var(--blue)">Trayendo pedidos anteriores… ' + (h.pedidos || 0) + ' pedidos y ' + (h.clientes || 0) + ' clientes hasta ahora. Sigue solo cada 5 minutos.</div>';
+  if (h.estado === 'error') return '<div style="margin-top:6px;color:var(--danger)">El historial se detuvo: ' + esc(h.error || 'error') + ' <button class="btn-ghost sm" onclick="tiendaHistorial(\'' + esc(t.id) + '\')">Reintentar</button></div>';
+  if (h.estado === 'terminado') return '<div style="margin-top:6px">Historial: ' + (h.pedidos || 0) + ' pedidos de ' + (h.clientes || 0) + ' clientes nuevos, importados ' + esc(cuHace(h.terminado_at)) + '.</div>';
+  return '<div style="margin-top:8px"><button class="btn-sec sm" onclick="tiendaHistorial(\'' + esc(t.id) + '\')">Traer pedidos anteriores</button></div>';
+}
+
+function tiendaHistorial(id) {
+  const opcion = (rango, titulo, texto) =>
+    '<button class="btn-ghost" style="display:block;width:100%;text-align:left;padding:11px 13px;margin-bottom:8px;border:1px solid var(--border);border-radius:10px;white-space:normal" onclick="tiendaHistorialEmpezar(\'' + esc(id) + '\',\'' + rango + '\',this)">' +
+      '<div style="font-size:13px;font-weight:700;color:var(--text)">' + titulo + '</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);font-weight:500;margin-top:2px">' + texto + '</div></button>';
+  rutaModal('tienda-hist', 'Traer pedidos anteriores',
+    '<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.55">Cada cliente entra <b>una sola vez</b> como venta ganada, con lo que lleva gastado y la fecha de su primera compra. ' +
+      '<b>No se les envía nada</b>, no se reparten a tu equipo y no cuentan como leads nuevos de hoy. Quien ya tenga una conversación abierta contigo queda igual, con sus pedidos enlazados.</div>' +
+    opcion('90', 'Últimos 90 días', 'Lo más reciente: sirve para empezar a hacer recompra ya.') +
+    opcion('365', 'Último año', 'Tu base de clientes del año, con lo que compró cada uno.') +
+    opcion('todo', 'Todo el historial', 'Desde el primer pedido. Puede tardar varias horas si son miles.') +
+    '<div style="font-size:11.5px;color:var(--muted);margin-top:4px">En Shopify, para traer más de 60 días la app necesita también el permiso <b>read_all_orders</b>.</div>',
+    '<button class="btn-ghost sm" onclick="this.closest(\'.auto-modal-overlay\').remove()">Cancelar</button>');
+}
+
+async function tiendaHistorialEmpezar(id, rango, btn) {
+  const msg = document.getElementById('tienda-hist-msg');
+  document.querySelectorAll('#tienda-hist button').forEach(b => { b.disabled = true; });
+  if (btn) btn.style.borderColor = 'var(--blue)';
+  msg.style.color = 'var(--muted)';
+  msg.textContent = 'Empezando… la primera tanda tarda unos segundos.';
+  try {
+    const r = await fetchAuth('/api/tiendas' + prodAlcance(), { method: 'POST', body: JSON.stringify({ accion: 'historial', id, rango }) });
+    const d = await leerRespuesta(r);
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    document.getElementById('tienda-hist')?.remove();
+    const h = d.historial || {};
+    showToast(h.estado === 'terminado' ? 'Historial listo: ' + h.pedidos + ' pedidos de ' + h.clientes + ' clientes' : 'Arrancó: ' + h.pedidos + ' pedidos hasta ahora; el resto sigue solo', 'success');
+    tiendaEstado();
+  } catch (e) {
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'No se pudo traer: ' + (e.message || 'error');
+    document.querySelectorAll('#tienda-hist button').forEach(b => { b.disabled = false; });
   }
 }
 

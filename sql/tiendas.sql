@@ -104,3 +104,6 @@ alter table public.client_products alter column precio type numeric using precio
 
 -- Shopify: el dominio que ve el cliente (mitienda.com), para los enlaces a productos.
 alter table public.tiendas add column if not exists dominio_publico text;
+
+-- La importación de pedidos anteriores: {estado, desde, c|p, pedidos, clientes, terminado_at, error}.
+alter table public.tiendas add column if not exists historial jsonb;

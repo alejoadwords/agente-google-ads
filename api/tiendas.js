@@ -4,6 +4,7 @@
 //   POST {accion:'conectar', plataforma, dominio, client_id, client_secret | token | ck, cs}
 //   POST {accion:'sincronizar', id}       vuelve a leer todo el catálogo
 //   POST {accion:'desconectar', id}       quita webhooks, productos y credenciales
+//   POST {accion:'historial', id, rango}  trae los pedidos anteriores ('90' | '365' | 'todo')
 //
 // Conectar PRUEBA antes de guardar: las credenciales, que la API responde y
 // que los webhooks se crean. Una tienda guardada «conectada» que nunca manda
@@ -18,7 +19,7 @@ import { quienPregunta, alcanceDeCliente } from './_perfiles.js';
 import { cifrar } from './_cifrado.js';
 import { dominioShopify, dominioWoo, tokenShopify, gqlShopify, Q_TIENDA_SHOPIFY, webhooksShopify, borrarWebhooksShopify,
          wooFetch, webhooksWoo, borrarWebhooksWoo, APP } from './_tienda.js';
-import { sbTienda, credencialesDe, accesoShopify, sincronizarProductos } from './_tienda-catalogo.js';
+import { sbTienda, credencialesDe, accesoShopify, sincronizarProductos, avanzarHistorial } from './_tienda-catalogo.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -27,7 +28,7 @@ const CORS = {
 };
 const jsonResp = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 const enc = encodeURIComponent;
-const CAMPOS = 'id,plataforma,dominio,dominio_publico,nombre,moneda,activo,estado,ultimo_error,productos,pedidos,ultimo_evento_at,ultimo_sync_at,cursor_productos,webhooks,created_at';
+const CAMPOS = 'id,plataforma,dominio,dominio_publico,nombre,moneda,activo,estado,ultimo_error,productos,pedidos,ultimo_evento_at,ultimo_sync_at,cursor_productos,webhooks,historial,created_at';
 
 const hex = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map(b => b.toString(16).padStart(2, '0')).join('');
 
@@ -84,6 +85,22 @@ async function manejar(req) {
     const r = await sincronizarProductos(tienda, { topeMs: 8000 }).catch(e => ({ error: e.message }));
     if (r.error) return jsonResp({ error: r.error }, 502);
     return jsonResp({ ok: true, ...r });
+  }
+
+  if (body.accion === 'historial') {
+    if (tienda.historial?.estado === 'corriendo') return jsonResp({ error: 'El historial ya se está trayendo.' }, 409);
+    const dias = { '90': 90, '365': 365 }[String(body.rango)] || null;
+    if (!dias && body.rango !== 'todo') return jsonResp({ error: 'Elige desde cuándo.' }, 400);
+    const h = {
+      estado: 'corriendo', rango: String(body.rango),
+      desde: dias ? new Date(Date.now() - dias * 86400000).toISOString() : null,
+      pagina: null, pedidos: 0, clientes: 0, leidos: 0, empezo_at: new Date().toISOString(),
+    };
+    await sbTienda(`/tiendas?id=eq.${tienda.id}`, 'PATCH', { historial: h }, 'return=minimal');
+    // La primera tanda ya mismo, para ver que arrancó; el resto, el cron.
+    const r = await avanzarHistorial({ ...tienda, historial: h }, { topeMs: 15000 });
+    if (r.estado === 'error') return jsonResp({ error: r.error }, 502);
+    return jsonResp({ ok: true, historial: r });
   }
 
   if (body.accion === 'desconectar') {
