@@ -477,6 +477,8 @@ console.log('\nTiendanube y VTEX\n');
   const app = leer('public/app.js');
   ok(/tiendaConectar\(\\'tiendanube\\'\)/.test(app) && /tiendaConectar\(\\'vtex\\'\)/.test(app), 'la pantalla ofrece Tiendanube y VTEX');
   ok(/nubeConfigurada\(\)\) return jsonResp/.test(leer('api/tiendas.js')), 'sin la app de Tiendanube configurada se dice, no se manda a un enlace roto');
+  ok(/d\.nube_disponible \? '<button/.test(app) && /nube_disponible: nubeConfigurada\(\)/.test(leer('api/tiendas.js')), 'sin la app de Tiendanube, el botón ni aparece (decisión del 16-10-2026)');
+  ok(!/Tiendanube/.test(leer('public/novedades.json')), 'y ninguna novedad la anuncia');
 }
 
 console.log('\nLa ruta de una tienda\n');

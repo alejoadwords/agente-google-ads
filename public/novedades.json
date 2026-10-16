@@ -2,11 +2,11 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
-      "id": "2026-10-16-tiendanube-y-vtex",
+      "id": "2026-10-16-tienda-vtex",
       "fecha": "2026-10-16",
       "tipo": "nuevo",
-      "titulo": "Ahora también Tiendanube y VTEX",
-      "texto": "En Marketing → Fuentes puedes conectar tu tienda de Tiendanube (autorizas a Acuarius con un clic) o de VTEX (con una llave de aplicación). Igual que con Shopify y WooCommerce: cada pedido pagado entra como venta ganada con su cliente, tu agente conoce tus productos con su precio y stock, puedes traer tus pedidos anteriores y ves todo en Análisis → Tienda. En Tiendanube también recuperas los carritos abandonados; VTEX no los entrega, así que ahí ese recordatorio no aplica.",
+      "titulo": "Ahora también puedes conectar VTEX",
+      "texto": "En Marketing → Fuentes puedes conectar tu tienda VTEX con una llave de aplicación. Igual que con Shopify y WooCommerce: cada pedido pagado entra como venta ganada con su cliente, tu agente conoce tus productos con su precio y stock, puedes traer tus pedidos anteriores y ves todo en Análisis → Tienda. VTEX no entrega los carritos abandonados, así que con VTEX ese recordatorio no aplica.",
       "accion": {
         "texto": "Conectar mi tienda",
         "ir": "fuentes"

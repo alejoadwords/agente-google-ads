@@ -25053,7 +25053,7 @@ async function tiendaEstado() {
         '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
           '<button class="btn-pri sm" onclick="tiendaConectar(\'shopify\')">Shopify</button>' +
           '<button class="btn-sec sm" onclick="tiendaConectar(\'woocommerce\')">WooCommerce</button>' +
-          '<button class="btn-sec sm" onclick="tiendaConectar(\'tiendanube\')">Tiendanube</button>' +
+          (d.nube_disponible ? '<button class="btn-sec sm" onclick="tiendaConectar(\'tiendanube\')">Tiendanube</button>' : '') +
           '<button class="btn-sec sm" onclick="tiendaConectar(\'vtex\')">VTEX</button>' +
         '</div>';
       return;
@@ -30706,7 +30706,7 @@ function autoBuilderRender() {
         '</select></div>' +
       (AUTO_TRIGGERS_TIENDA.some(([v]) => v === t.type) ?
         (t.type === 'sin_comprar' ? '<div class="auto-field"><label class="auto-label">Días desde su última compra</label><select class="auto-input" onchange="_autoDraft.trigger.days=parseInt(this.value);autoRefreshNodes()">' + [15, 30, 45, 60, 90, 180].map(n => '<option value="' + n + '"' + (parseInt(t.days) === n ? ' selected' : '') + '>' + n + ' días</option>').join('') + '</select></div>' : '') +
-        '<div class="auto-vars-hint">' + esc(AUTO_TIENDA_AYUDA[t.type] || '') + ' Necesita una tienda conectada en Marketing → Fuentes.' + (_autoDraft.trigger.type === 'carrito_abandonado' ? ' Funciona con Shopify, WooCommerce y Tiendanube; VTEX no da los carritos.' : '') + ' Variables del pedido: {{pedido}}, {{total}}, {{productos}}, {{tienda}}' +
+        '<div class="auto-vars-hint">' + esc(AUTO_TIENDA_AYUDA[t.type] || '') + ' Necesita una tienda conectada en Marketing → Fuentes.' + (_autoDraft.trigger.type === 'carrito_abandonado' ? ' VTEX no entrega los carritos, así que con VTEX no se dispara.' : '') + ' Variables del pedido: {{pedido}}, {{total}}, {{productos}}, {{tienda}}' +
           (t.type === 'carrito_abandonado' ? ', {{enlace_carrito}} (el enlace para terminar la compra)' : ', {{enlace_pedido}}') + '.</div>'
       : '') +
       (t.type === 'stage_changed' ? '<div class="auto-field"><label class="auto-label">Etapa destino</label><select class="auto-input" onchange="_autoDraft.trigger.stage=this.value;autoRefreshNodes()"><option value="">Cualquier etapa</option>' + autoStageOptions(t.stage) + '</select></div>' : '') +
@@ -34252,7 +34252,7 @@ async function srcRender() {
   // La tienda va primero: para quien vende en línea es LA fuente.
   const tiendaSection =
     '<div style="max-width:860px;margin-bottom:26px">' +
-      '<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:10px">Tienda en línea (Shopify, WooCommerce, Tiendanube, VTEX)</div>' +
+      '<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:10px">Tienda en línea</div>' +
       '<div id="src-tienda" style="border:1px solid var(--border);border-radius:14px;padding:14px 18px;background:var(--panel);font-size:12.5px;color:var(--muted)">Cargando…</div>' +
     '</div>';
 

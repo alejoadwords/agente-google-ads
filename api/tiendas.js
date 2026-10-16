@@ -88,7 +88,9 @@ async function manejar(req) {
       t.webhooks_fallidos = (t.webhooks && t.webhooks.fallidos) || [];
       delete t.cursor_productos; delete t.webhooks;
     }
-    return jsonResp({ tiendas });
+    // Tiendanube solo se ofrece cuando la app de Acuarius existe en su portal
+    // de Partners (variables en Vercel); hasta entonces, ni se menciona.
+    return jsonResp({ tiendas, nube_disponible: nubeConfigurada() });
   }
   if (req.method !== 'POST') return jsonResp({ error: 'Método no permitido' }, 405);
 
