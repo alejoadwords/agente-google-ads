@@ -278,6 +278,16 @@ let hx = P.panelSeo(dd, { seccion: 'trafico' });
 ok(hx.includes('De dónde llegan las visitas') && hx.includes('Buscadores (orgánico)') && hx.includes('70%') && hx.includes('Redes sociales pagadas'), 'Tráfico: de dónde llegan las visitas, por canal y en porcentaje');
 ok(hx.includes('Desde buscadores: a qué páginas llegaron') && hx.includes('google 11, bing 3') && hx.includes('/crm'), 'Tráfico: a qué páginas llegaron desde buscadores y desde cuál');
 ok(hx.includes('¿Qué buscaron en Google para llegar?') && hx.includes('tarda unos días'), 'sin búsquedas de Search Console todavía: lo explica (caso acuarius.app)');
+const dq = { ...dd, trafico: { ...dd.trafico, ga4Detalle: [...dd.trafico.ga4Detalle,
+  { mes: '2026-09', tipo: 'calidad', valor: '__total', sesiones: 1000, comprometidas: 840, usuarios: 800, nuevos: 776, vistas: 3900, interaccion_seg: 15200 },
+  { mes: '2026-08', tipo: 'calidad', valor: '__total', sesiones: 500, comprometidas: 440, usuarios: 400, nuevos: 380, vistas: 2100, interaccion_seg: 8500 },
+  { mes: '2026-09', tipo: 'calidad', valor: 'Organic Search', sesiones: 100, comprometidas: 60, usuarios: 90, nuevos: 80, vistas: 250, interaccion_seg: 9000 },
+  { mes: '2026-09', tipo: 'calidad', valor: 'Direct', sesiones: 900, comprometidas: 780, usuarios: 710, nuevos: 696, vistas: 3650, interaccion_seg: 6200 }] } };
+const cq = P.calidadDe(dq, '2026-09');
+ok(Math.round(cq.total.interaccion * 100) === 84 && Math.round(cq.total.nuevos * 100) === 97 && Math.round(cq.total.paginas * 10) === 39 && Math.round(cq.total.tiempo) === 19, 'calidad: % con interacción, % nuevos, páginas por visita y tiempo por usuario', cq.total);
+ok(cq.organico && cq.organico.usuarios === 90 && cq.ia === null, 'por canal (buscadores aparte; sin IA si GA4 no tiene ese canal)');
+hx = P.panelSeo(dq, { seccion: 'trafico' });
+ok(hx.includes('Calidad de las visitas (septiembre 2026, frente a agosto 2026)') && hx.includes('▲ 100%') && hx.includes('▼ 4 pts') && hx.includes('Desde buscadores'), 'la tabla compara con el mes anterior: usuarios en %, interacción en puntos');
 hx = P.panelSeo(dd, { seccion: 'geo' });
 ok(hx.includes('A qué páginas llegaron y qué hicieron') && hx.includes('4 min 49 s') && hx.includes('20%'), 'IAs: página de entrada, cuánto se quedaron y cuántos se involucraron');
 ok(hx.includes('Pregunta en Perplexity: «mejor crm para agencias»') && hx.includes('Colombia · computador · 12'), 'IAs: la pregunta de Perplexity cuando viene en la dirección; país y dispositivo');

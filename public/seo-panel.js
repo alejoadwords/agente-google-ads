@@ -402,6 +402,7 @@ function seccionTrafico(datos) {
   const meses = r.serie.filter(x => x.mes !== actual);
   if (r.hayGsc && meses.length > 1) h += '<h3 class="sd-h3">Clics desde Google, mes a mes</h3>' + barrasValor(meses.map(x => ({ etiqueta: nombreMes(x.mes).slice(0, 3), valor: x.clics })));
   if (r.hayGa4 && meses.length > 1) h += '<h3 class="sd-h3">Visitas desde buscadores, mes a mes</h3>' + barrasValor(meses.map(x => ({ etiqueta: nombreMes(x.mes).slice(0, 3), valor: x.organicas })));
+  h += seccionCalidad(datos);
   h += seccionOrigenes(datos);
   h += seccionEntradasOrganicas(datos);
   const hayConsultas = (datos.trafico.gscConsultas || []).length > 0;
@@ -466,6 +467,41 @@ function seccionOrigenes(datos) {
   h += `<details class="sd-grupo"><summary><strong>Fuentes exactas</strong> <span class="sd-tenue">· sitio o red que envió cada visita</span></summary><div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Fuente</th><th>Tipo</th><th>Visitas</th><th>Tiempo medio</th><th>Conversiones</th></tr></thead><tbody>` +
     filas.slice(0, 25).map(f => `<tr><td>${esc(f.fuente)} <span class="sd-tenue">/ ${esc(f.valor2)}</span></td><td>${esc(NOMBRE_CANAL[f.valor] || f.valor)}</td><td>${num(f.sesiones)}</td><td>${duracionTxt(f.duracion)}</td><td>${num(f.conversiones)}</td></tr>`).join('') + '</tbody></table></div></details>';
   return h;
+}
+
+// Calidad de las visitas (pedido de Alejandro tras ver un reporte de Looker
+// Studio): no solo cuántas llegan, sino si se quedan.
+export function calidadDe(datos, mes) {
+  const filas = ((datos.trafico || {}).ga4Detalle || []).filter(x => x.tipo === 'calidad' && x.mes === mes);
+  const de = (canal) => {
+    const f = filas.find(x => x.valor === canal);
+    if (!f || !f.sesiones) return null;
+    return { usuarios: f.usuarios, nuevos: f.usuarios ? f.nuevos / f.usuarios : 0, interaccion: f.comprometidas / f.sesiones,
+      paginas: f.vistas / f.sesiones, tiempo: f.usuarios ? f.interaccion_seg / f.usuarios : 0, sesiones: f.sesiones };
+  };
+  return { total: de('__total'), organico: de('Organic Search'), ia: de('AI Assistant') };
+}
+
+function seccionCalidad(datos) {
+  const det = (datos.trafico || {}).ga4Detalle || [];
+  const { cerrado, actual } = mesesDeTrafico(datos);
+  const mes = det.some(x => x.tipo === 'calidad' && x.mes === cerrado) ? cerrado : actual;
+  const ahora = calidadDe(datos, mes), antes = calidadDe(datos, prevMes(mes));
+  if (!ahora.total) return '';
+  const pp = (v) => Math.round(v * 100) + '%';
+  const varPts = (a, b) => (a == null || b == null) ? '' : (() => { const d = Math.round((a - b) * 100); return d === 0 ? '' : ` <span class="${d > 0 ? 'sd-sube' : 'sd-baja'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)} pts</span>`; })();
+  const varRel = (a, b) => (a == null || !b) ? '' : (() => { const d = Math.round((a - b) / b * 100); return d === 0 ? '' : ` <span class="${d > 0 ? 'sd-sube' : 'sd-baja'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)}%</span>`; })();
+  const fila = (nombre, a, b) => !a ? '' : `<tr><td><strong>${nombre}</strong></td>
+    <td>${num(a.usuarios)}${varRel(a.usuarios, b?.usuarios)}</td>
+    <td>${pp(a.nuevos)}</td>
+    <td>${pp(a.interaccion)}${varPts(a.interaccion, b?.interaccion)}</td>
+    <td>${(Math.round(a.paginas * 10) / 10).toLocaleString('es-CO')}${varRel(a.paginas, b?.paginas)}</td>
+    <td>${duracionTxt(a.tiempo)}${varRel(a.tiempo, b?.tiempo)}</td></tr>`;
+  return `<h3 class="sd-h3">Calidad de las visitas (${nombreMes(mes)}, frente a ${nombreMes(prevMes(mes))})</h3>
+    <p class="sd-nota">No solo cuántas visitas llegan, sino si se quedan. «Con interacción» = la visita duró más de 10 segundos, vio 2 o más páginas o hizo una conversión.</p>
+    <div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th></th><th>Usuarios</th><th>Nuevos</th><th>Con interacción</th><th>Páginas por visita</th><th>Tiempo por usuario</th></tr></thead><tbody>` +
+    fila('Todo el sitio', ahora.total, antes.total) + fila('Desde buscadores', ahora.organico, antes.organico) + fila('Desde IAs', ahora.ia, antes.ia) +
+    '</tbody></table></div>';
 }
 
 function seccionEntradasOrganicas(datos) {

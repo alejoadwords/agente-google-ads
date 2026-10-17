@@ -264,3 +264,10 @@ create table if not exists seo_ga4_detalle (
   primary key (proyecto_id, mes, tipo, fuente, valor, valor2)
 );
 alter table seo_ga4_detalle enable row level security;
+
+-- Calidad del tráfico (17-10-2026), tipo 'calidad' en seo_ga4_detalle:
+-- valor = canal ('__total' = todo el sitio, sin sumar usuarios entre canales).
+alter table seo_ga4_detalle add column if not exists usuarios int not null default 0;
+alter table seo_ga4_detalle add column if not exists nuevos int not null default 0;
+alter table seo_ga4_detalle add column if not exists vistas int not null default 0;
+alter table seo_ga4_detalle add column if not exists interaccion_seg real not null default 0;

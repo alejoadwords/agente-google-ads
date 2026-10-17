@@ -62,6 +62,8 @@ export async function cargarProyecto(id, { publico = false } = {}) {
   const [ya, ma] = mesActual.split('-').map(Number);
   const mesAnterior = ma === 1 ? (ya - 1) + '-12' : ya + '-' + String(ma - 1).padStart(2, '0');
   const meses2 = `mes=in.(${mesAnterior},${mesActual})`;
+  const [yp, mp] = mesAnterior.split('-').map(Number);
+  const mesPrevio = mp === 1 ? (yp - 1) + '-12' : yp + '-' + String(mp - 1).padStart(2, '0');
   const [gscDias, gscConsultas, gscPaginas, ga4Dias, ga4Ia, ga4Detalle] = await Promise.all([
     p.gsc_propiedad ? todas(`/seo_gsc_dias?proyecto_id=eq.${id}&select=fecha,clics,impresiones,posicion&order=fecha.asc`) : [],
     p.gsc_propiedad ? todas(`/seo_gsc_consultas?proyecto_id=eq.${id}&${meses2}&select=mes,consulta,clics,impresiones,posicion&order=clics.desc,impresiones.desc`) : [],
@@ -69,7 +71,8 @@ export async function cargarProyecto(id, { publico = false } = {}) {
     p.ga4_propiedad ? todas(`/seo_ga4_dias?proyecto_id=eq.${id}&select=fecha,sesiones,usuarios,conversiones,sesiones_organicas,conversiones_organicas,sesiones_ia,conversiones_ia&order=fecha.asc`) : [],
     p.ga4_propiedad ? todas(`/seo_ga4_ia?proyecto_id=eq.${id}&select=mes,fuente,sesiones,conversiones&order=mes.asc`) : [],
     // De dónde llega cada visita (fuentes, páginas de entrada, IAs): los dos meses que se reportan.
-    p.ga4_propiedad ? todas(`/seo_ga4_detalle?proyecto_id=eq.${id}&${meses2}&select=mes,tipo,fuente,valor,valor2,sesiones,comprometidas,duracion,conversiones&order=sesiones.desc`) : [],
+    // Tres meses: el que se reporta, el anterior (para comparar) y el en curso.
+    p.ga4_propiedad ? todas(`/seo_ga4_detalle?proyecto_id=eq.${id}&mes=in.(${mesPrevio},${mesAnterior},${mesActual})&select=mes,tipo,fuente,valor,valor2,sesiones,comprometidas,duracion,conversiones,usuarios,nuevos,vistas,interaccion_seg&order=sesiones.desc`) : [],
   ]);
   const trafico = { gscDias, gscConsultas, gscPaginas, ga4Dias, ga4Ia, ga4Detalle, mesActual, mesAnterior };
   const proyecto = { ...p };

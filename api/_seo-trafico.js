@@ -157,12 +157,18 @@ export async function detalleGa4(p, url, token, desde, hoy) {
   const rango = [{ startDate: desde, endDate: hoy }];
   const sesiones = [{ name: 'sessions' }, { name: 'engagedSessions' }, { name: 'averageSessionDuration' }, { name: 'keyEvents' }];
   const orden = [{ metric: { metricName: 'sessions' }, desc: true }];
-  const [fuentes, entOrg, entIa, refIa, paisIa] = await Promise.all([
+  // Calidad: cómo se comportan las visitas (usuarios, nuevos, interacción,
+  // páginas, tiempo). Por canal y el total aparte: los usuarios no se suman
+  // entre canales (una persona entra por dos y es una sola).
+  const calidadMetricas = [{ name: 'sessions' }, { name: 'engagedSessions' }, { name: 'totalUsers' }, { name: 'newUsers' }, { name: 'screenPageViews' }, { name: 'userEngagementDuration' }];
+  const [fuentes, entOrg, entIa, refIa, paisIa, calCanal, calTotal] = await Promise.all([
     google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }, { name: 'sessionDefaultChannelGroup' }, { name: 'sessionSource' }, { name: 'sessionMedium' }], metrics: sesiones, orderBys: orden, limit: 3000 }),
     google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }, { name: 'sessionSource' }, { name: 'landingPage' }], metrics: sesiones, dimensionFilter: FILTRO_ORG, orderBys: orden, limit: 2000 }),
     google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }, { name: 'sessionSource' }, { name: 'landingPagePlusQueryString' }], metrics: sesiones, dimensionFilter: FILTRO_IA, orderBys: orden, limit: 2000 }),
     google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }, { name: 'sessionSource' }, { name: 'pageReferrer' }], metrics: [{ name: 'sessions' }], dimensionFilter: FILTRO_IA, orderBys: orden, limit: 2000 }),
     google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }, { name: 'sessionSource' }, { name: 'country' }, { name: 'deviceCategory' }], metrics: [{ name: 'sessions' }], dimensionFilter: FILTRO_IA, orderBys: orden, limit: 2000 }),
+    google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }, { name: 'sessionDefaultChannelGroup' }], metrics: calidadMetricas, limit: 1000 }),
+    google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }], metrics: calidadMetricas, limit: 100 }),
   ]);
   const mesDe = (ym) => ym.slice(0, 4) + '-' + ym.slice(4, 6);
   const m = (r, i) => +(r.metricValues[i]?.value || 0);
@@ -170,7 +176,7 @@ export async function detalleGa4(p, url, token, desde, hoy) {
   const sumar = (f) => {
     const k = [f.mes, f.tipo, f.fuente, f.valor, f.valor2].join('|');
     const x = filas[k];
-    if (!x) { filas[k] = { proyecto_id: p.id, comprometidas: 0, duracion: null, conversiones: 0, ...f }; return; }
+    if (!x) { filas[k] = { proyecto_id: p.id, comprometidas: 0, duracion: null, conversiones: 0, usuarios: 0, nuevos: 0, vistas: 0, interaccion_seg: 0, ...f }; return; }
     // Dos fuentes que caen en la misma IA (chatgpt.com y chat.openai.com): se suman.
     const durTotal = (x.duracion || 0) * x.sesiones + (f.duracion || 0) * f.sesiones;
     x.sesiones += f.sesiones; x.comprometidas += f.comprometidas || 0; x.conversiones += f.conversiones || 0;
@@ -200,6 +206,13 @@ export async function detalleGa4(p, url, token, desde, hoy) {
     const ia = nombreIA(d[1]); if (!ia) continue;
     sumar({ mes: mesDe(d[0]), tipo: 'pais_ia', fuente: ia, valor: corto(d[2], 100), valor2: corto(d[3], 40), sesiones: m(r, 0) });
   }
+  const calidad = (r, canal) => {
+    const d = r.dimensionValues.map(v => v.value);
+    sumar({ mes: mesDe(d[0]), tipo: 'calidad', fuente: '', valor: canal ?? corto(d[1], 100), valor2: '',
+      sesiones: m(r, 0), comprometidas: m(r, 1), usuarios: m(r, 2), nuevos: m(r, 3), vistas: m(r, 4), interaccion_seg: m(r, 5) });
+  };
+  for (const r of calCanal.rows || []) calidad(r);
+  for (const r of calTotal.rows || []) calidad(r, '__total');
   const meses = mesesAtras(hoy.slice(0, 7), 40).filter(x => x >= desde.slice(0, 7));
   await sb(`/seo_ga4_detalle?proyecto_id=eq.${p.id}&mes=in.(${meses.join(',')})`, { method: 'DELETE', prefer: 'return=minimal' });
   await guardar('seo_ga4_detalle', 'proyecto_id,mes,tipo,fuente,valor,valor2', Object.values(filas));
