@@ -180,5 +180,32 @@ const vj = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), '
 ok(vj.crons.some(c => c.path === '/api/cron-revisor-agente'), 'el cron está programado');
 ok(/'cron-revisor-agente': 10/.test(readFileSync(new URL('../api/_latido.js', import.meta.url), 'utf8')), '…y vigilado por su latido');
 
+
+console.log('\nSe EJECUTA lo de red (con la red simulada), no solo se lee');
+// El 16-10 se movió llamarEntrenador a otro módulo sin traerle promptEntrenador:
+// las pruebas que solo leían el código pasaban y «Corregir» falló para todos.
+{
+  process.env.ANTHROPIC_API_KEY = 'k';
+  const RED = await import('../api/_mejoras-agente-red.js');
+  const antes = globalThis.fetch;
+  const vistas = [];
+  globalThis.fetch = async (url, init = {}) => {
+    vistas.push(String(url));
+    if (String(url).includes('anthropic.com')) return new Response(JSON.stringify({ model: 'claude-sonnet-5', stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 },
+      content: [{ type: 'text', text: '{"tipo":"regla","explicacion":"x","cambio":{"texto":"No digas de nada."}}' }] }), { status: 200 });
+    return new Response(JSON.stringify([{ id: 'm1' }]), { status: 200 });
+  };
+  try {
+    const r = await RED.llamarEntrenador(agente, regla, [{ role: 'user', content: 'Hola' }, { role: 'assistant', content: 'Hola [CAPTURA: a=b]' }], 1, 'no saludes así');
+    ok(!r.error && /No digas de nada/.test(r.texto), 'llamarEntrenador corre de punta a punta', r.error);
+    const g = await RED.aplicarYGuardar({ cuenta: 'u', agent: agente, regla, propuesta: { tipo: 'regla', cambio: { texto: 'Nueva' } }, fila: { correccion: 'c' } });
+    ok(g.id === 'm1' && g.nuevo.agente.reglas.length === 2, 'aplicarYGuardar corre de punta a punta');
+  } catch (e) {
+    ok(false, 'lo de red no revienta al ejecutarse', e.message);
+  } finally { globalThis.fetch = antes; }
+}
+ok(/return await manejar\(req\);[\s\S]*registrarError\(\{ origen: 'servidor', donde: 'agente-mejorar'/.test(readFileSync(new URL('../api/agente-mejorar.js', import.meta.url), 'utf8')),
+  'un error inesperado del endpoint queda en error_log y se explica, no es un 500 mudo');
+
 console.log(mal ? `\n${mal} fallo(s)` : '\nTodo en verde');
 process.exit(mal ? 1 : 0);

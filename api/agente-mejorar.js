@@ -19,6 +19,7 @@ import { quienPregunta, exigeModulo } from './_perfiles.js';
 import { getRegla, saveRegla } from './_qualify.js';
 import { ensayarAgente } from './_inbox-engine.js';
 import { registrarUso } from './_uso-ia.js';
+import { registrarError } from './_registro-errores.js';
 import { inicioDelMes, planDeCuenta } from './_cupo-agente.js';
 import { validarPropuesta, aplicarPropuesta, resumenDelCambio, fotoDelAgente, CAMPOS_AGENTE } from './_mejoras-agente.js';
 import { sb, limpio, conversacionReal, cargarAgente, llamarEntrenador, aplicarYGuardar, MODELO_ENTRENADOR } from './_mejoras-agente-red.js';
@@ -86,7 +87,19 @@ async function ensayosDeHoy(cuenta) {
   } catch { return 0; }
 }
 
+// Un error sin capturar llegaba al navegador como un 500 mudo («No se pudo
+// completar») y no dejaba rastro: así pasó un ReferenceError del 16-10 que
+// rompió «Corregir» para todos. Ahora queda en error_log y se dice qué pasó.
 export default async function handler(req) {
+  try {
+    return await manejar(req);
+  } catch (e) {
+    await registrarError({ origen: 'servidor', donde: 'agente-mejorar', error: e }).catch(() => {});
+    return json({ error: 'El entrenador tuvo un error de nuestro lado y ya nos llegó el aviso. Inténtalo de nuevo en unos minutos.' }, 500);
+  }
+}
+
+async function manejar(req) {
   const sesion = await verificarSesion(req);
   if (!sesion.id) return json(await cuerpoSinSesion(sesion, 'agente-mejorar'), 401);
   let quien;

@@ -5,7 +5,7 @@
 // pura sigue en _mejoras-agente.js. Solo se importa desde funciones edge.
 
 import { saveRegla } from './_qualify.js';
-import { aplicarPropuesta, fotoDelAgente, CAMPOS_AGENTE } from './_mejoras-agente.js';
+import { aplicarPropuesta, fotoDelAgente, CAMPOS_AGENTE, promptEntrenador } from './_mejoras-agente.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
