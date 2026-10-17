@@ -266,6 +266,24 @@ ok(ht.includes('Clics desde Google') && ht.includes('▲ 50%') && ht.includes('L
 ht = P.panelSeo(dt, { seccion: 'geo' });
 ok(ht.includes('Visitas que te llegaron desde las IAs') && ht.includes('ChatGPT · 10 visitas') && ht.includes('Es un mínimo'), 'Presencia en IAs: las visitas reales desde cada IA, dichas como mínimo');
 ok(P.panelSeo({ ...datos, trafico: {} }, { seccion: 'trafico' }).includes('se conectan Google Search Console'), 'sin conexión, lo dice');
+const dd = { ...dt, trafico: { ...dt.trafico, gscConsultas: [], ga4Detalle: [
+  { mes: '2026-09', tipo: 'fuente', fuente: 'google', valor: 'Organic Search', valor2: 'organic', sesiones: 70, comprometidas: 40, duracion: 95, conversiones: 1 },
+  { mes: '2026-09', tipo: 'fuente', fuente: 'fb', valor: 'Paid Social', valor2: 'paid', sesiones: 30, comprometidas: 5, duracion: 10, conversiones: 0 },
+  { mes: '2026-09', tipo: 'entrada_org', fuente: 'google', valor: '/crm', sesiones: 11, comprometidas: 6, duracion: 120, conversiones: 0 },
+  { mes: '2026-09', tipo: 'entrada_org', fuente: 'bing', valor: '/crm', sesiones: 3, comprometidas: 1, duracion: 60, conversiones: 0 },
+  { mes: '2026-09', tipo: 'entrada_ia', fuente: 'ChatGPT', valor: '/', sesiones: 15, comprometidas: 3, duracion: 288.7, conversiones: 0 },
+  { mes: '2026-09', tipo: 'referente_ia', fuente: 'Perplexity', valor: 'https://www.perplexity.ai/search/mejor-crm-para-agencias-Xy12ab34', sesiones: 2 },
+  { mes: '2026-09', tipo: 'pais_ia', fuente: 'ChatGPT', valor: 'Colombia', valor2: 'desktop', sesiones: 12 }] } };
+let hx = P.panelSeo(dd, { seccion: 'trafico' });
+ok(hx.includes('De dónde llegan las visitas') && hx.includes('Buscadores (orgánico)') && hx.includes('70%') && hx.includes('Redes sociales pagadas'), 'Tráfico: de dónde llegan las visitas, por canal y en porcentaje');
+ok(hx.includes('Desde buscadores: a qué páginas llegaron') && hx.includes('google 11, bing 3') && hx.includes('/crm'), 'Tráfico: a qué páginas llegaron desde buscadores y desde cuál');
+ok(hx.includes('¿Qué buscaron en Google para llegar?') && hx.includes('tarda unos días'), 'sin búsquedas de Search Console todavía: lo explica (caso acuarius.app)');
+hx = P.panelSeo(dd, { seccion: 'geo' });
+ok(hx.includes('A qué páginas llegaron y qué hicieron') && hx.includes('4 min 49 s') && hx.includes('20%'), 'IAs: página de entrada, cuánto se quedaron y cuántos se involucraron');
+ok(hx.includes('Pregunta en Perplexity: «mejor crm para agencias»') && hx.includes('Colombia · computador · 12'), 'IAs: la pregunta de Perplexity cuando viene en la dirección; país y dispositivo');
+ok(hx.includes('ChatGPT y Gemini no lo comparten'), 'dice con honestidad que la pregunta hecha a ChatGPT no llega');
+hx = P.panelSeo(dd, { seccion: 'resumen' });
+ok(/data-seccion="geo"[^>]*>\s*<div class="sd-tarjeta-t">Visitas desde IAs/.test(hx) && /data-seccion="trafico"[^>]*>\s*<div class="sd-tarjeta-t">Visitas desde buscadores/.test(hx), 'las tarjetas del resumen llevan a su sección (Alejandro, 17-10)');
 const cero = P.panelSeo({ ...dt, trafico: { ...dt.trafico, gscDias: [{ fecha: '2026-08-05', clics: 0, impresiones: 4, posicion: 30 }, { fecha: '2026-09-05', clics: 0, impresiones: 0, posicion: null }] } }, { seccion: 'trafico' });
 ok(cero.includes('igual</span> que en agosto') && !cero.includes('NaN'), 'con cero en los dos meses dice «igual que en agosto» (caso real: acuarius.app)');
 
@@ -301,6 +319,10 @@ console.log('\nFase 3: sincronizar con Google, ejecutado (fetch simulado)');
         { dimensionValues: [{ value: '20261015' }, { value: 'Organic Search' }], metricValues: [{ value: '40' }, { value: '2' }] },
         { dimensionValues: [{ value: '20261015' }, { value: 'Direct' }], metricValues: [{ value: '60' }, { value: '1' }] }] });
       if (dims === 'date') return res({ rows: [{ dimensionValues: [{ value: '20261015' }], metricValues: [{ value: '80' }] }] });
+      if (dims.startsWith('yearMonth')) {
+        if (dims === 'yearMonth,sessionSource,landingPagePlusQueryString') return res({ rows: [{ dimensionValues: [{ value: '202610' }, { value: 'chatgpt.com' }, { value: '/' }], metricValues: [{ value: '7' }, { value: '2' }, { value: '200.5' }, { value: '1' }] }] });
+        return res({ rows: [] });
+      }
       return res({ rows: [
         { dimensionValues: [{ value: '20261015' }, { value: 'chatgpt.com' }], metricValues: [{ value: '7' }, { value: '1' }] },
         { dimensionValues: [{ value: '20261001' }, { value: 'perplexity.ai' }], metricValues: [{ value: '3' }, { value: '0' }] }] });
@@ -331,6 +353,9 @@ console.log('\nFase 3: sincronizar con Google, ejecutado (fetch simulado)');
     ok(dia && dia.includes('"sesiones":100') && dia.includes('"sesiones_organicas":40') && dia.includes('"usuarios":80') && dia.includes('"sesiones_ia":7'), 'por día: total, orgánicas, usuarios e IA', dia);
     const ia = escrito.find(x => x.includes('/seo_ga4_ia?on_conflict'));
     ok(ia && ia.includes('"fuente":"ChatGPT"') && ia.includes('"fuente":"Perplexity"'), 'las visitas de IA por fuente y mes');
+    const det = escrito.find(x => x.includes('/seo_ga4_detalle?on_conflict'));
+    ok(det && det.includes('"tipo":"entrada_ia"') && det.includes('"fuente":"ChatGPT"') && det.includes('"duracion":200.5'), 'el detalle por IA se guarda (página, tiempo, conversiones)', det);
+    ok(escrito.some(x => x.startsWith('DELETE /seo_ga4_detalle?proyecto_id=eq.p1&mes=in.(')), 'el detalle de cada mes se reemplaza entero');
     escrito.length = 0; modoGsc = 'sin';
     r = await T.sincronizarGsc({ ...pr, gsc_meses_atras: 5 });
     ok(!r.ok && r.estado === 'sin_acceso' && r.error.includes('sa@prueba.iam.gserviceaccount.com'), 'sin acceso: dice qué correo agregar');

@@ -20,6 +20,16 @@
 .sd-tarjetas{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:18px}
 .sd-tarjeta{background:var(--sd-panel);border:1.5px solid var(--sd-borde);border-radius:var(--sd-r);padding:12px 14px}
 .sd-tarjeta.sd-bien{border-color:var(--sd-bien);background:var(--sd-bien-bg)}
+.sd-tarjeta-link{cursor:pointer;transition:border-color .15s}
+.sd-tarjeta-link:hover{border-color:var(--sd-azul)}
+.sd-flecha{color:var(--sd-azul);font-size:12px}
+.sd-canales{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.sd-canal{display:grid;grid-template-columns:200px 1fr 170px;gap:10px;align-items:center;font-size:12.5px}
+.sd-canal-t{font-weight:700}
+.sd-canal-b{height:10px;border-radius:999px;background:var(--sd-azul-lt);overflow:hidden}
+.sd-canal-b div{height:100%;background:var(--sd-azul);border-radius:999px}
+.sd-canal-v{font-weight:700}
+@media (max-width:600px){.sd-canal{grid-template-columns:1fr;gap:3px}}
 .sd-tarjeta.sd-pendiente{border-color:var(--sd-azul);background:var(--sd-azul-lt)}
 .sd-tarjeta.sd-mal{border-color:var(--sd-mal);background:var(--sd-mal-bg)}
 .sd-tarjeta-t{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--sd-tenue)}

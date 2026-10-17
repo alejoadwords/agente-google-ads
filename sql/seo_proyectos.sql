@@ -249,3 +249,18 @@ alter table seo_gsc_consultas enable row level security;
 alter table seo_gsc_paginas enable row level security;
 alter table seo_ga4_dias enable row level security;
 alter table seo_ga4_ia enable row level security;
+
+-- Detalle de GA4 por mes (17-10-2026): de dónde llega cada visita. Una tabla
+-- para varios cortes, según `tipo`:
+--   fuente      valor = canal, valor2 = fuente / medio        (todo el sitio)
+--   entrada_org valor = página de entrada, fuente = buscador  (orgánico)
+--   entrada_ia  valor = página de entrada, fuente = la IA
+--   referente_ia valor = dirección exacta de origen (Perplexity suele traer la pregunta)
+--   pais_ia     valor = país, valor2 = dispositivo
+create table if not exists seo_ga4_detalle (
+  proyecto_id uuid not null references seo_proyectos(id) on delete cascade,
+  mes text not null, tipo text not null, fuente text not null default '', valor text not null default '', valor2 text not null default '',
+  sesiones int not null default 0, comprometidas int not null default 0, duracion real, conversiones real not null default 0,
+  primary key (proyecto_id, mes, tipo, fuente, valor, valor2)
+);
+alter table seo_ga4_detalle enable row level security;

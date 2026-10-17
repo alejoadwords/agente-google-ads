@@ -134,6 +134,7 @@ export async function sincronizarGa4(p) {
     }
     await guardar('seo_ga4_dias', 'proyecto_id,fecha', Object.values(porDia));
     await guardar('seo_ga4_ia', 'proyecto_id,mes,fuente', Object.values(porMes));
+    await detalleGa4(p, url, token, desdeIA, hoy);
     await marcar(p, 'ga4', { estado: 'ok', error: null, sincronizado_at: new Date().toISOString(), meses_atras: HISTORIAL_GA4 });
     return { ok: true, dias: Object.keys(porDia).length, fuentesIA: Object.keys(porMes).length };
   } catch (e) {
@@ -143,6 +144,66 @@ export async function sincronizarGa4(p) {
     if (g.estado === 'error') await registrarError({ origen: 'servidor', donde: 'seo-trafico.ga4', error: e, usuario: p.user_id, detalle: p.id }).catch(() => {});
     return { ok: false, estado: g.estado, error: g.texto, detalle: e.message };
   }
+}
+
+// De dónde llega cada visita, por mes (seo_ga4_detalle). Meses enteros desde
+// `desde`; cada mes se reemplaza completo. Lo que GA4 SÍ sabe de una visita
+// que llega de una IA: a qué página entró, desde qué dirección, de qué país,
+// cuánto se quedó y si convirtió. Lo que se le preguntó a la IA, no: ChatGPT
+// no lo comparte (Perplexity a veces lo deja en la dirección de origen).
+const FILTRO_IA = { filter: { fieldName: 'sessionSource', stringFilter: { matchType: 'PARTIAL_REGEXP', value: REGEX_IA, caseSensitive: false } } };
+const FILTRO_ORG = { filter: { fieldName: 'sessionDefaultChannelGroup', stringFilter: { value: 'Organic Search' } } };
+export async function detalleGa4(p, url, token, desde, hoy) {
+  const rango = [{ startDate: desde, endDate: hoy }];
+  const sesiones = [{ name: 'sessions' }, { name: 'engagedSessions' }, { name: 'averageSessionDuration' }, { name: 'keyEvents' }];
+  const orden = [{ metric: { metricName: 'sessions' }, desc: true }];
+  const [fuentes, entOrg, entIa, refIa, paisIa] = await Promise.all([
+    google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }, { name: 'sessionDefaultChannelGroup' }, { name: 'sessionSource' }, { name: 'sessionMedium' }], metrics: sesiones, orderBys: orden, limit: 3000 }),
+    google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }, { name: 'sessionSource' }, { name: 'landingPage' }], metrics: sesiones, dimensionFilter: FILTRO_ORG, orderBys: orden, limit: 2000 }),
+    google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }, { name: 'sessionSource' }, { name: 'landingPagePlusQueryString' }], metrics: sesiones, dimensionFilter: FILTRO_IA, orderBys: orden, limit: 2000 }),
+    google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }, { name: 'sessionSource' }, { name: 'pageReferrer' }], metrics: [{ name: 'sessions' }], dimensionFilter: FILTRO_IA, orderBys: orden, limit: 2000 }),
+    google(url, token, { dateRanges: rango, dimensions: [{ name: 'yearMonth' }, { name: 'sessionSource' }, { name: 'country' }, { name: 'deviceCategory' }], metrics: [{ name: 'sessions' }], dimensionFilter: FILTRO_IA, orderBys: orden, limit: 2000 }),
+  ]);
+  const mesDe = (ym) => ym.slice(0, 4) + '-' + ym.slice(4, 6);
+  const m = (r, i) => +(r.metricValues[i]?.value || 0);
+  const filas = {};
+  const sumar = (f) => {
+    const k = [f.mes, f.tipo, f.fuente, f.valor, f.valor2].join('|');
+    const x = filas[k];
+    if (!x) { filas[k] = { proyecto_id: p.id, comprometidas: 0, duracion: null, conversiones: 0, ...f }; return; }
+    // Dos fuentes que caen en la misma IA (chatgpt.com y chat.openai.com): se suman.
+    const durTotal = (x.duracion || 0) * x.sesiones + (f.duracion || 0) * f.sesiones;
+    x.sesiones += f.sesiones; x.comprometidas += f.comprometidas || 0; x.conversiones += f.conversiones || 0;
+    x.duracion = x.sesiones ? durTotal / x.sesiones : null;
+  };
+  const corto = (t, n = 500) => String(t || '').slice(0, n);
+  for (const r of fuentes.rows || []) {
+    const d = r.dimensionValues.map(v => v.value);
+    sumar({ mes: mesDe(d[0]), tipo: 'fuente', fuente: corto(d[2], 200), valor: corto(d[1], 100), valor2: corto(d[3], 100), sesiones: m(r, 0), comprometidas: m(r, 1), duracion: m(r, 2), conversiones: m(r, 3) });
+  }
+  for (const r of entOrg.rows || []) {
+    const d = r.dimensionValues.map(v => v.value);
+    sumar({ mes: mesDe(d[0]), tipo: 'entrada_org', fuente: corto(d[1], 200), valor: corto(d[2]), valor2: '', sesiones: m(r, 0), comprometidas: m(r, 1), duracion: m(r, 2), conversiones: m(r, 3) });
+  }
+  for (const r of entIa.rows || []) {
+    const d = r.dimensionValues.map(v => v.value);
+    const ia = nombreIA(d[1]); if (!ia) continue;
+    sumar({ mes: mesDe(d[0]), tipo: 'entrada_ia', fuente: ia, valor: corto(d[2]), valor2: '', sesiones: m(r, 0), comprometidas: m(r, 1), duracion: m(r, 2), conversiones: m(r, 3) });
+  }
+  for (const r of refIa.rows || []) {
+    const d = r.dimensionValues.map(v => v.value);
+    const ia = nombreIA(d[1]); if (!ia) continue;
+    sumar({ mes: mesDe(d[0]), tipo: 'referente_ia', fuente: ia, valor: corto(d[2]), valor2: '', sesiones: m(r, 0) });
+  }
+  for (const r of paisIa.rows || []) {
+    const d = r.dimensionValues.map(v => v.value);
+    const ia = nombreIA(d[1]); if (!ia) continue;
+    sumar({ mes: mesDe(d[0]), tipo: 'pais_ia', fuente: ia, valor: corto(d[2], 100), valor2: corto(d[3], 40), sesiones: m(r, 0) });
+  }
+  const meses = mesesAtras(hoy.slice(0, 7), 40).filter(x => x >= desde.slice(0, 7));
+  await sb(`/seo_ga4_detalle?proyecto_id=eq.${p.id}&mes=in.(${meses.join(',')})`, { method: 'DELETE', prefer: 'return=minimal' });
+  await guardar('seo_ga4_detalle', 'proyecto_id,mes,tipo,fuente,valor,valor2', Object.values(filas));
+  return Object.keys(filas).length;
 }
 
 // ¿Toca sincronizar hoy? Una vez al día (hora de Colombia), o si nunca se hizo.

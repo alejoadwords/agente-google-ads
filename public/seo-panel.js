@@ -175,8 +175,9 @@ function cambioHtml(c, s = {}) {
 }
 
 const posHtml = (p) => (p == null ? '<span class="sd-tenue">+100</span>' : `<strong>${p}</strong>`);
-const tarjeta = (titulo, valor, nota = '', clase = '') =>
-  `<div class="sd-tarjeta ${clase}"><div class="sd-tarjeta-t">${titulo}</div><div class="sd-tarjeta-v">${valor}</div>${nota ? `<div class="sd-tarjeta-n">${nota}</div>` : ''}</div>`;
+// Con `seccion`, la tarjeta lleva a donde se explica esa cifra.
+const tarjeta = (titulo, valor, nota = '', clase = '', seccion = '') =>
+  `<div class="sd-tarjeta ${clase}${seccion ? ' sd-tarjeta-link' : ''}"${seccion ? ` data-seccion="${seccion}" role="button" tabindex="0" title="Ver el detalle"` : ''}><div class="sd-tarjeta-t">${titulo}${seccion ? ' <span class="sd-flecha">→</span>' : ''}</div><div class="sd-tarjeta-v">${valor}</div>${nota ? `<div class="sd-tarjeta-n">${nota}</div>` : ''}</div>`;
 
 function barrasMes(puntos) {
   // puntos: [{ etiqueta, valor (0-100) }]
@@ -196,16 +197,17 @@ function seccionResumen(datos, series) {
   const marca = esc(datos.proyecto.marca || datos.proyecto.nombre);
   const tr = resumenTrafico(datos);
   let h = `<div class="sd-tarjetas">
-    ${tr.hayGsc && tr.cerrado ? tarjeta('Clics desde Google', num(tr.cerrado.clics), nombreMes(tr.cerrado.mes) + (tr.previo ? ' · ' + delta(tr.cerrado.clics, tr.previo.clics) : '')) : ''}
-    ${tr.hayGa4 && tr.cerrado && tr.cerrado.ia ? tarjeta('Visitas desde IAs', num(tr.cerrado.ia), nombreMes(tr.cerrado.mes), 'sd-pendiente') : ''}
-    ${tarjeta('Keywords en seguimiento', r.total, r.medidas ? `${r.enTop100} aparecen en los 100 primeros de Google` : 'Aún sin medir')}
-    ${tarjeta('En la primera página', r.enTop10, r.enTop3 ? `${r.enTop3} en los 3 primeros puestos` : 'Top 10 de Google')}
-    ${tarjeta('Posición promedio', r.promedio ?? '—', r.suben || r.bajan ? `${r.suben} suben · ${r.bajan} bajan en el último mes` : '')}
-    ${tarjeta('Presencia en IAs', g ? g.tasa + '%' : '—', g ? `${marca} aparece en ${g.menciones} de ${g.total} respuestas (${nombreMes(g.periodo)})` : 'Aún sin medir')}
-    ${tarjeta('Acciones realizadas', hechas, todas.length ? `de ${todas.length} en el plan · mes ${meses.length} de trabajo` : '')}
+    ${tr.hayGsc && tr.cerrado ? tarjeta('Clics desde Google', num(tr.cerrado.clics), nombreMes(tr.cerrado.mes) + (tr.previo ? ' · ' + delta(tr.cerrado.clics, tr.previo.clics) : ''), '', 'trafico') : ''}
+    ${tr.hayGa4 && tr.cerrado ? tarjeta('Visitas desde buscadores', num(tr.cerrado.organicas), nombreMes(tr.cerrado.mes) + (tr.previo ? ' · ' + delta(tr.cerrado.organicas, tr.previo.organicas) : ''), '', 'trafico') : ''}
+    ${tr.hayGa4 && tr.cerrado && tr.cerrado.ia ? tarjeta('Visitas desde IAs', num(tr.cerrado.ia), nombreMes(tr.cerrado.mes), 'sd-pendiente', 'geo') : ''}
+    ${tarjeta('Keywords en seguimiento', r.total, r.medidas ? `${r.enTop100} aparecen en los 100 primeros de Google` : 'Aún sin medir', '', 'posiciones')}
+    ${tarjeta('En la primera página', r.enTop10, r.enTop3 ? `${r.enTop3} en los 3 primeros puestos` : 'Top 10 de Google', '', 'posiciones')}
+    ${tarjeta('Posición promedio', r.promedio ?? '—', r.suben || r.bajan ? `${r.suben} suben · ${r.bajan} bajan en el último mes` : '', '', 'posiciones')}
+    ${tarjeta('Presencia en IAs', g ? g.tasa + '%' : '—', g ? `${marca} aparece en ${g.menciones} de ${g.total} respuestas (${nombreMes(g.periodo)})` : 'Aún sin medir', '', 'geo')}
+    ${tarjeta('Acciones realizadas', hechas, todas.length ? `de ${todas.length} en el plan · mes ${meses.length} de trabajo` : '', '', 'cronograma')}
     ${(datos.contenidos || []).length ? (() => {
       const cs = datos.contenidos, rev = cs.filter(c => c.estado === 'en_revision').length;
-      return tarjeta('Contenido', cs.filter(c => c.estado === 'publicado').length + ' publicadas', (rev ? rev + ' esperando tu revisión · ' : '') + cs.length + ' en el calendario', rev ? 'sd-pendiente' : '');
+      return tarjeta('Contenido', cs.filter(c => c.estado === 'publicado').length + ' publicadas', (rev ? rev + ' esperando tu revisión · ' : '') + cs.length + ' en el calendario', rev ? 'sd-pendiente' : '', 'contenido');
     })() : ''}
   </div>`;
   const grupos = porCluster(datos, series).filter(gr => gr.keywords.length);
@@ -400,7 +402,15 @@ function seccionTrafico(datos) {
   const meses = r.serie.filter(x => x.mes !== actual);
   if (r.hayGsc && meses.length > 1) h += '<h3 class="sd-h3">Clics desde Google, mes a mes</h3>' + barrasValor(meses.map(x => ({ etiqueta: nombreMes(x.mes).slice(0, 3), valor: x.clics })));
   if (r.hayGa4 && meses.length > 1) h += '<h3 class="sd-h3">Visitas desde buscadores, mes a mes</h3>' + barrasValor(meses.map(x => ({ etiqueta: nombreMes(x.mes).slice(0, 3), valor: x.organicas })));
-  if (r.hayGsc) {
+  h += seccionOrigenes(datos);
+  h += seccionEntradasOrganicas(datos);
+  const hayConsultas = (datos.trafico.gscConsultas || []).length > 0;
+  if (!hayConsultas) {
+    h += `<div class="sd-aviso"><strong>¿Qué buscaron en Google para llegar?</strong> ${r.hayGsc
+      ? 'Las búsquedas exactas las da Search Console y todavía no tiene datos de este sitio (una propiedad recién creada tarda unos días). Aparecerán aquí solas, clasificadas por clúster.'
+      : 'Las búsquedas exactas las da Google Search Console: aparecerán aquí, clasificadas por clúster, en cuanto se conecte.'}</div>`;
+  }
+  if (r.hayGsc && hayConsultas) {
     const mesC = ((datos.trafico.gscConsultas || []).some(x => x.mes === cerrado)) ? cerrado : actual;
     const grupos = clasificarConsultas(datos, mesC);
     if (grupos.length) {
@@ -419,6 +429,59 @@ function seccionTrafico(datos) {
     }
   }
   return h;
+}
+
+// ── El detalle de GA4: de dónde llega cada visita ──
+// El mes que se muestra: el cerrado si tiene datos; si no, el que va en curso.
+function detalleDe(datos, tipo) {
+  const det = (datos.trafico || {}).ga4Detalle || [];
+  const { cerrado, actual } = mesesDeTrafico(datos);
+  const mes = det.some(x => x.mes === cerrado && x.tipo === tipo) ? cerrado : actual;
+  return { mes, filas: det.filter(x => x.mes === mes && x.tipo === tipo) };
+}
+const duracionTxt = (seg) => { const s = Math.round(seg || 0); return s < 60 ? s + ' s' : Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0') + ' s'; };
+const rutaDe = (u) => String(u || '').replace(/^https?:\/\/(www\.)?/, '') || '(sin dato)';
+const NOMBRE_CANAL = { 'Organic Search': 'Buscadores (orgánico)', 'Direct': 'Directo', 'Referral': 'Otros sitios', 'Organic Social': 'Redes sociales', 'Paid Social': 'Redes sociales pagadas', 'Paid Search': 'Google Ads / búsqueda pagada', 'Email': 'Correo', 'AI Assistant': 'Asistentes de IA', 'Unassigned': 'Sin clasificar', 'Organic Video': 'Video', 'Display': 'Display', 'Cross-network': 'Varias redes (Performance Max)', 'Organic Shopping': 'Shopping orgánico', 'Paid Video': 'Video pagado', 'SMS': 'SMS' };
+// La dirección de origen dicha en claro. Perplexity suele dejar la pregunta en
+// la URL (/search/que-crm-recomiendas-XyZ): se muestra como texto.
+export function origenLegible(u) {
+  const t = String(u || '');
+  if (!t) return 'No se sabe (la IA no envió la dirección)';
+  const m = t.match(/perplexity\.ai\/search\/([^?#]+)/i);
+  if (m) return 'Pregunta en Perplexity: «' + decodeURIComponent(m[1]).replace(/-[A-Za-z0-9_.]{6,}$/, '').replace(/[-_]+/g, ' ').trim() + '»';
+  return rutaDe(t);
+}
+
+function seccionOrigenes(datos) {
+  const { mes, filas } = detalleDe(datos, 'fuente');
+  if (!filas.length) return '';
+  const porCanal = {};
+  for (const f of filas) { const c = (porCanal[f.valor] ||= { sesiones: 0, conv: 0 }); c.sesiones += f.sesiones; c.conv += f.conversiones; }
+  const total = filas.reduce((a, f) => a + f.sesiones, 0) || 1;
+  const canales = Object.entries(porCanal).sort((a, b) => b[1].sesiones - a[1].sesiones);
+  let h = `<h3 class="sd-h3">De dónde llegan las visitas (${nombreMes(mes)})</h3>
+    <div class="sd-canales">${canales.map(([c, x]) => `<div class="sd-canal"><div class="sd-canal-t">${esc(NOMBRE_CANAL[c] || c)}</div>
+      <div class="sd-canal-b"><div style="width:${Math.max(1, Math.round(x.sesiones / total * 100))}%"></div></div>
+      <div class="sd-canal-v">${num(x.sesiones)} <span class="sd-tenue">· ${Math.round(x.sesiones / total * 100)}%${x.conv ? ' · ' + num(x.conv) + ' conv.' : ''}</span></div></div>`).join('')}</div>`;
+  h += `<details class="sd-grupo"><summary><strong>Fuentes exactas</strong> <span class="sd-tenue">· sitio o red que envió cada visita</span></summary><div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Fuente</th><th>Tipo</th><th>Visitas</th><th>Tiempo medio</th><th>Conversiones</th></tr></thead><tbody>` +
+    filas.slice(0, 25).map(f => `<tr><td>${esc(f.fuente)} <span class="sd-tenue">/ ${esc(f.valor2)}</span></td><td>${esc(NOMBRE_CANAL[f.valor] || f.valor)}</td><td>${num(f.sesiones)}</td><td>${duracionTxt(f.duracion)}</td><td>${num(f.conversiones)}</td></tr>`).join('') + '</tbody></table></div></details>';
+  return h;
+}
+
+function seccionEntradasOrganicas(datos) {
+  const { mes, filas } = detalleDe(datos, 'entrada_org');
+  if (!filas.length) return '';
+  const porPagina = {};
+  for (const f of filas) {
+    const x = (porPagina[f.valor] ||= { pagina: f.valor, sesiones: 0, comprometidas: 0, durPeso: 0, conv: 0, buscadores: {} });
+    x.sesiones += f.sesiones; x.comprometidas += f.comprometidas; x.durPeso += (f.duracion || 0) * f.sesiones; x.conv += f.conversiones;
+    x.buscadores[f.fuente] = (x.buscadores[f.fuente] || 0) + f.sesiones;
+  }
+  const lista = Object.values(porPagina).sort((a, b) => b.sesiones - a.sesiones);
+  return `<h3 class="sd-h3">Desde buscadores: a qué páginas llegaron (${nombreMes(mes)})</h3>
+    <div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Página de entrada</th><th>Buscador</th><th>Visitas</th><th>Se quedaron</th><th>Tiempo medio</th><th>Conversiones</th></tr></thead><tbody>` +
+    lista.slice(0, 20).map(x => `<tr><td class="sd-url">${esc(x.pagina === '(not set)' ? '(sin dato)' : x.pagina)}</td><td>${Object.entries(x.buscadores).sort((a, b) => b[1] - a[1]).map(([b, n]) => esc(b) + ' ' + num(n)).join(', ')}</td>
+      <td>${num(x.sesiones)}</td><td>${x.sesiones ? Math.round(x.comprometidas / x.sesiones * 100) + '%' : '—'}</td><td>${duracionTxt(x.sesiones ? x.durPeso / x.sesiones : 0)}</td><td>${num(x.conv)}</td></tr>`).join('') + '</tbody></table></div>';
 }
 
 // Las visitas que llegaron desde las IAs (GA4), para la sección de GEO.
@@ -440,6 +503,23 @@ function traficoIA(datos) {
   // Sin el mes en curso: a medias parecería una caída.
   const serie = Object.entries(porMes).filter(([m]) => m !== actual).sort().slice(-12);
   if (serie.length > 1) h += barrasValor(serie.map(([m, v]) => ({ etiqueta: nombreMes(m).slice(0, 3), valor: v })));
+  // Qué se sabe de esas visitas.
+  const ent = detalleDe(datos, 'entrada_ia'), refs = detalleDe(datos, 'referente_ia'), paises = detalleDe(datos, 'pais_ia');
+  if (ent.filas.length) {
+    h += `<h3 class="sd-h3">A qué páginas llegaron y qué hicieron (${nombreMes(ent.mes)})</h3>
+      <div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>IA</th><th>Página de entrada</th><th>Visitas</th><th>Se quedaron</th><th>Tiempo medio</th><th>Conversiones</th></tr></thead><tbody>` +
+      ent.filas.slice(0, 20).map(f => `<tr><td>${esc(f.fuente)}</td><td class="sd-url">${esc(f.valor === '(not set)' ? '(sin dato)' : f.valor)}</td><td>${num(f.sesiones)}</td>
+        <td>${f.sesiones ? Math.round(f.comprometidas / f.sesiones * 100) + '%' : '—'}</td><td>${duracionTxt(f.duracion)}</td><td>${num(f.conversiones)}</td></tr>`).join('') + '</tbody></table></div>';
+  }
+  if (refs.filas.length) {
+    h += `<h3 class="sd-h3">Desde dónde exactamente</h3><div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>IA</th><th>Origen</th><th>Visitas</th></tr></thead><tbody>` +
+      refs.filas.slice(0, 15).map(f => `<tr><td>${esc(f.fuente)}</td><td>${esc(origenLegible(f.valor))}</td><td>${num(f.sesiones)}</td></tr>`).join('') + '</tbody></table></div>';
+  }
+  if (paises.filas.length) {
+    const dispositivo = { desktop: 'computador', mobile: 'celular', tablet: 'tableta' };
+    h += `<h3 class="sd-h3">De dónde son</h3><div class="sd-chips">${paises.filas.slice(0, 12).map(f => `<span class="sd-chip">${esc(f.valor)} · ${esc(dispositivo[f.valor2] || f.valor2)} · ${num(f.sesiones)}</span>`).join('')}</div>`;
+  }
+  h += '<p class="sd-nota">Lo que la persona le preguntó a la IA no llega al sitio: ChatGPT y Gemini no lo comparten. Perplexity a veces lo deja en la dirección de origen, y entonces se muestra arriba. Para saber en qué preguntas te recomiendan las IAs, mira la medición de arriba.</p>';
   return h;
 }
 
