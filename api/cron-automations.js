@@ -91,6 +91,7 @@ const TOPE_POSTGREST = 1000;
 // juntos: la firma no cambia, así que los 18 sitios que llaman siguen igual.
 let _bitacora = [];
 async function log(automationId, userId, leadId, stepIndex, action, result, detail) {
+  if (result === 'sent' && PASOS_DE_CONTACTO.has(action)) _enviosEnVuelta.push({ lead_id: leadId, automation_id: automationId });
   _bitacora.push({
     automation_id: automationId, user_id: userId, lead_id: leadId,
     step_index: stepIndex, action, result, detail: (detail || '').slice(0, 500),
@@ -725,21 +726,64 @@ async function porIds(tabla, ids, extra) {
   return indice;
 }
 
+// ── Una bienvenida por persona al día ───────────────────────────────────────
+// Las automatizaciones son por OPORTUNIDAD (decisión de Alejandro, 17-10-2026):
+// Venta y Arriendo dicen cosas distintas. Pero si la misma persona entra a los
+// dos procesos el mismo día, recibiría dos bienvenidas seguidas. Un flujo de
+// «lead nuevo» no le escribe si otra oportunidad suya ya recibió un mensaje de
+// bienvenida en las últimas 24 horas. Los pasos internos (tarea, aviso al
+// asesor, etiquetas) sí corren: la oportunidad sigue necesitando atención.
+const _enviosEnVuelta = [];          // {lead_id, automation_id}: la bitácora se escribe al final de la vuelta
+const _hermanosDe = new Map();       // grupo → ids de sus oportunidades
+const _bienvenidasDe = new Map();    // usuario → ids de sus flujos de «lead nuevo»
+
+export async function otraBienvenidaReciente(lead, userId, consultar = sb) {
+  try {
+    const grupo = lead.contacto_id || lead.id;
+    if (!_hermanosDe.has(grupo)) {
+      const filas = await consultar(`/leads?user_id=eq.${encodeURIComponent(userId)}&or=(id.eq.${grupo},contacto_id.eq.${grupo})&deleted_at=is.null&select=id`);
+      _hermanosDe.set(grupo, (filas || []).map(l => l.id));
+    }
+    const otros = _hermanosDe.get(grupo).filter(id => id !== lead.id);
+    if (!otros.length) return false;
+    if (!_bienvenidasDe.has(userId)) {
+      const filas = await consultar(`/automations?user_id=eq.${encodeURIComponent(userId)}&trigger->>type=eq.lead_created&select=id`);
+      _bienvenidasDe.set(userId, (filas || []).map(a => a.id));
+    }
+    const flujos = _bienvenidasDe.get(userId);
+    if (!flujos.length) return false;
+    if (_enviosEnVuelta.some(e => otros.includes(e.lead_id) && flujos.includes(e.automation_id))) return true;
+    const desde = new Date(Date.now() - 86400000).toISOString();
+    const r = await consultar(`/automation_logs?lead_id=in.(${otros.join(',')})&automation_id=in.(${flujos.join(',')})&result=eq.sent` +
+      `&action=in.(${[...PASOS_DE_CONTACTO].join(',')})&created_at=gte.${encodeURIComponent(desde)}&select=id&limit=1`);
+    return (r || []).length > 0;
+  } catch (e) {
+    // Si no se puede comprobar, se manda: perder una bienvenida es peor que
+    // el caso raro de dos el mismo día.
+    console.error('[automations] otraBienvenidaReciente:', e.message);
+    return false;
+  }
+}
+
 async function processJobs() {
   const jobs = await colaDeTrabajos();
   if (!jobs.length) return 0;
+  // Lo de la vuelta anterior no vale: una oportunidad nueva pudo crearse entre medias.
+  _enviosEnVuelta.length = 0; _hermanosDe.clear(); _bienvenidasDe.clear();
 
   const autos = await porIds('/automations', jobs.map(j => j.automation_id), 'select=*');
   const leads = await porIds('/leads', jobs.map(j => j.lead_id), 'deleted_at=is.null&select=*');
 
-  // Los trabajos del MISMO lead van en fila: dos flujos tocando a la vez las
-  // notas o la etapa del mismo contacto se pisarían, y el que escriba último
-  // borra al otro. Los de leads distintos avanzan en paralelo, que es de donde
-  // sale la velocidad.
+  // Los trabajos de la MISMA PERSONA van en fila: dos flujos tocando a la vez
+  // las notas o la etapa del mismo contacto se pisarían, y dos bienvenidas de
+  // sus dos oportunidades saldrían a la vez sin verse. Personas distintas
+  // avanzan en paralelo, que es de donde sale la velocidad.
   const porLead = new Map();
   for (const j of jobs) {
-    if (!porLead.has(j.lead_id)) porLead.set(j.lead_id, []);
-    porLead.get(j.lead_id).push(j);
+    const l = leads[j.lead_id];
+    const clave = (l && (l.contacto_id || l.id)) || j.lead_id;
+    if (!porLead.has(clave)) porLead.set(clave, []);
+    porLead.get(clave).push(j);
   }
   const grupos = [...porLead.values()];
 
@@ -790,6 +834,10 @@ async function ejecutarTrabajo(job, auto, lead) {
 
         // Ventana horaria: los mensajes al lead esperan la próxima hora hábil
         const contactaAlLead = PASOS_DE_CONTACTO.has(step.type);
+        if (contactaAlLead && auto.trigger?.type === 'lead_created' && await otraBienvenidaReciente(lead, auto.user_id)) {
+          await log(auto.id, job.user_id, lead.id, i, step.type, 'skipped', 'La persona ya recibió hoy la bienvenida de otra de sus oportunidades: no se le escribe dos veces');
+          i++; continue;
+        }
         if (contactaAlLead && !inSendWindow(auto.trigger?.window)) {
           const runAt = nextWindowStart(auto.trigger.window);
           await sb(`/automation_jobs?id=eq.${job.id}`, 'PATCH', { step_index: i, run_at: runAt }, 'return=minimal');

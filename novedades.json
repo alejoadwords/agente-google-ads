@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-17-una-bienvenida-por-persona",
+      "fecha": "2026-10-17",
+      "tipo": "mejora",
+      "titulo": "Una sola bienvenida al día por persona",
+      "texto": "Si la misma persona entra el mismo día a dos de tus procesos (por ejemplo, Venta y Arriendo), ya no recibe dos bienvenidas seguidas: la segunda no le escribe si en las últimas 24 horas ya recibió la de su otra oportunidad. Las tareas y los avisos a tu equipo sí corren en las dos, y cada proceso sigue teniendo su propia bienvenida para quien entra solo a uno. En el registro de la automatización queda el motivo.",
+      "accion": {
+        "texto": "Ver automatizaciones",
+        "ir": "automatizaciones"
+      }
+    },
+    {
       "id": "2026-10-16-importar-a-un-tablero",
       "fecha": "2026-10-16",
       "tipo": "mejora",

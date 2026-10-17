@@ -10742,6 +10742,7 @@ function irA(destino) {
         case 'listas':        navGo('marketing'); setTimeout(() => crmSetView('listas'), 150); break;
         case 'campanas':      navGo('marketing'); setTimeout(() => crmSetView('campaigns'), 150); break;
         case 'fuentes':       navGo('marketing'); setTimeout(() => crmSetView('sources'), 150); break;
+        case 'automatizaciones': navGo('marketing'); setTimeout(() => crmSetView('autos'), 150); break;
         case 'conversaciones':navGo('conversaciones'); break;
         case 'analisis':      navGo('analisis'); break;
         case 'analisis-tienda': navGo('analisis'); setTimeout(() => crmSetView('tienda'), 150); break;

@@ -62,7 +62,16 @@ globalThis.fetch = async (url, init = {}) => {
 
 const v1 = (await import('../api/v1.js?v=' + T)).default;
 const llavesApi = (await import('../api/llaves-api.js?v=' + T)).default;
-const cron = (await import('../api/cron-webhooks.js?v=' + T)).default;
+const cronReal = (await import('../api/cron-webhooks.js?v=' + T)).default;
+// La entrega nace con la hora de la BASE y el cron toma las que tengan
+// proximo_at <= la hora LOCAL. Con el reloj del equipo atrasado unos segundos
+// (el Mac de Alejandro iba 2,6 s detrás el 17-10-2026) las de la prueba
+// quedaban «en el futuro» y el cron no las veía. Antes de cada vuelta se
+// corren un minuto atrás las pendientes de esta cuenta de prueba.
+const cron = async (req) => {
+  await sbPatch(`api_entregas?user_id=eq.${DUENO}&estado=eq.pendiente`, { proximo_at: new Date(Date.now() - 60000).toISOString() });
+  return cronReal(req);
+};
 
 async function api(llave, metodo, ruta, cuerpo, extra = {}) {
   const headers = { 'Content-Type': 'application/json', ...extra };
