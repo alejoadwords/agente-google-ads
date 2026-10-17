@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco · Dashboard SEO</title>
+<!-- Banco del dashboard SEO: la página pública /seo/<código> con datos de un
+     archivo local (pruebas/.seo-datos-tmp.json, que NO se comitea: lo genera
+     un volcado de un proyecto real). Arrancar con node pruebas/servidor-boceto.mjs -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/public/seo-panel.css">
+<style>
+  :root{--text:#0D0F1C;--muted:#5A607A;--muted2:#9DA3BE;--border:#E4E6F0;--bg:#F4F5FB;--panel:#FFFFFF;--blue:#1E2BCC;--blue-lt:#EEF0FF;--blue-md:#AEB4F5;--success:#16A34A;--success-bg:#ECFDF3;--danger:#DC2626;--danger-bg:#FEF2F2;--r:12px}
+  body{margin:0;background:var(--bg);font-family:'Outfit',sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 16px}
+  .doc{background:var(--panel);border-radius:18px;padding:26px 28px}
+</style></head>
+<body><div class="wrap"><div class="doc" id="doc">Cargando…</div></div>
+<script type="module">
+import { panelSeo } from '/public/seo-panel.js';
+const datos = await (await fetch('/pruebas/.seo-datos-tmp.json')).json();
+const doc = document.getElementById('doc');
+let seccion = new URLSearchParams(location.search).get('s') || 'resumen';
+const pintar = () => { doc.innerHTML = panelSeo(datos, { seccion, agencia: datos.agencia }); };
+doc.addEventListener('click', e => { const b = e.target.closest('[data-seccion]'); if (b) { seccion = b.dataset.seccion; pintar(); } });
+pintar();
+</script></body></html>

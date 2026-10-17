@@ -2,14 +2,14 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
-      "id": "2026-10-17-agente-conoce-compras",
+      "id": "2026-10-17-proyecto-seo-completo",
       "fecha": "2026-10-17",
-      "tipo": "mejora",
-      "titulo": "Tu agente IA reconoce a quien ya te compró",
-      "texto": "Si tienes tu tienda conectada, cuando alguien que ya te compró escribe por WhatsApp, tu agente sabe qué se llevó y en qué va cada pedido: pagado y en preparación, o enviado con su enlace de seguimiento si lo hay. Si pregunta por la guía, la fecha de entrega o quiere cambiar algo, no se lo inventa: le pasa la conversación a tu equipo. Y si dejó un carrito sin terminar, puede ofrecerle el enlace para completar la compra cuando venga al caso.",
+      "tipo": "nuevo",
+      "titulo": "Proyecto SEO completo, con un enlace en vivo para tu cliente",
+      "texto": "El Proyecto SEO se renovó. Puedes tener varios proyectos por cliente y organizar las keywords en clústeres temáticos con su página pilar. Las posiciones se miden solas cada semana y la presencia en ChatGPT, Gemini, Claude y Perplexity cada mes, repitiendo cada pregunta 3 veces porque las IAs no responden siempre igual. Suma un cronograma mes a mes que arranca con la configuración on-page inicial. Y lo mejor: un enlace para tu cliente, sin cuenta, con su reporte en vivo de posiciones, presencia en IAs, cronograma y competencia. Todo tu equipo ve ahora el mismo proyecto.",
       "accion": {
-        "texto": "Ir a Conversaciones",
-        "ir": "conversaciones"
+        "texto": "Abrir Proyecto SEO",
+        "ir": "/proyecto-seo"
       }
     },
     {

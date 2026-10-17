@@ -1,0 +1,122 @@
+/* public/seo-panel.css — el dashboard SEO (public/seo-panel.js).
+   Lo cargan la app (index.html) y la página pública (seo.html). Dentro de la
+   app toma los tokens de la app; en la página pública, que no los tiene, usa
+   los valores de respaldo de aquí abajo. */
+.seo-doc{
+  --sd-texto:var(--text,#0D0F1C); --sd-tenue:var(--muted,#5A607A); --sd-tenue2:var(--muted2,#9DA3BE);
+  --sd-borde:var(--border,#E3E6F0); --sd-fondo:var(--bg,#FFFFFF); --sd-panel:var(--panel,#FFFFFF);
+  --sd-azul:var(--blue,#2563EB); --sd-azul-lt:var(--blue-lt,#EEF3FF); --sd-azul-md:var(--blue-md,#A9C1FB);
+  --sd-bien:var(--success,#16A34A); --sd-bien-bg:var(--success-bg,#ECFDF3); --sd-mal:var(--danger,#DC2626); --sd-mal-bg:var(--danger-bg,#FEF2F2);
+  --sd-r:var(--r,12px);
+  color:var(--sd-texto); font-size:13px; line-height:1.5;
+}
+.seo-doc *{box-sizing:border-box}
+.sd-cab{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:12px}
+.sd-cab-t{font-size:20px;font-weight:800;letter-spacing:-.02em}
+.sd-tenue{color:var(--sd-tenue2)}
+.sd-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1.5px solid var(--sd-borde);margin-bottom:16px;scrollbar-width:none}
+.sd-tab{background:none;border:none;border-bottom:2.5px solid transparent;margin-bottom:-1.5px;padding:9px 12px;font-family:inherit;font-size:13px;font-weight:700;color:var(--sd-tenue);cursor:pointer;white-space:nowrap}
+.sd-tab.act{color:var(--sd-azul);border-bottom-color:var(--sd-azul)}
+.sd-tarjetas{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:18px}
+.sd-tarjeta{background:var(--sd-panel);border:1.5px solid var(--sd-borde);border-radius:var(--sd-r);padding:12px 14px}
+.sd-tarjeta.sd-bien{border-color:var(--sd-bien);background:var(--sd-bien-bg)}
+.sd-tarjeta.sd-mal{border-color:var(--sd-mal);background:var(--sd-mal-bg)}
+.sd-tarjeta-t{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--sd-tenue)}
+.sd-tarjeta-v{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:2px 0}
+.sd-tarjeta-n{font-size:11.5px;color:var(--sd-tenue)}
+.sd-h3{font-size:14px;font-weight:800;margin:20px 0 8px}
+.sd-nota{font-size:12px;color:var(--sd-tenue);margin:0 0 10px}
+.sd-vacio{padding:28px 10px;text-align:center;color:var(--sd-tenue)}
+.sd-tabla-envoltura{overflow-x:auto;border:1.5px solid var(--sd-borde);border-radius:var(--sd-r)}
+.sd-tabla{width:100%;border-collapse:collapse;font-size:12.5px}
+.sd-tabla th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--sd-tenue);padding:8px 10px;border-bottom:1.5px solid var(--sd-borde);white-space:nowrap;background:var(--sd-fondo)}
+.sd-tabla td{padding:8px 10px;border-bottom:1px solid var(--sd-borde);vertical-align:middle}
+.sd-tabla tr:last-child td{border-bottom:none}
+.sd-url{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;color:var(--sd-tenue)}
+.sd-sube{color:var(--sd-bien);font-weight:700}
+.sd-baja{color:var(--sd-mal);font-weight:700}
+.sd-spark polyline{fill:none;stroke:var(--sd-azul);stroke-width:1.8;stroke-linejoin:round}
+.sd-spark circle{fill:var(--sd-azul)}
+.sd-geo-titular{display:flex;gap:16px;align-items:center;background:var(--sd-azul-lt);border-radius:var(--sd-r);padding:16px 18px;margin-bottom:16px}
+.sd-geo-cifra{font-size:42px;font-weight:800;letter-spacing:-.03em;color:var(--sd-azul);flex-shrink:0}
+.sd-geo-titular .sd-nota{margin:6px 0 0}
+.sd-geo-tabla td:not(:first-child){text-align:center;white-space:nowrap;font-weight:700}
+.sd-celda-si{background:var(--sd-bien-bg);color:var(--sd-bien)}
+.sd-celda-medio{background:var(--sd-azul-lt);color:var(--sd-azul)}
+.sd-celda-no{color:var(--sd-tenue2)}
+.sd-chips{display:flex;flex-wrap:wrap;gap:6px}
+.sd-chip{padding:3px 10px;border-radius:999px;border:1.5px solid var(--sd-borde);font-size:11.5px;font-weight:600}
+.sd-chip-propio{border-color:var(--sd-bien);background:var(--sd-bien-bg);color:var(--sd-bien)}
+.sd-aviso{margin-top:18px;padding:12px 14px;border:1.5px dashed var(--sd-azul-md);border-radius:var(--sd-r);font-size:12.5px;color:var(--sd-tenue)}
+.sd-barras{display:flex;gap:8px;align-items:flex-end;height:150px;padding:8px 0}
+.sd-barra{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;min-width:24px}
+.sd-barra-col{flex:1;width:100%;max-width:38px;display:flex;align-items:flex-end;background:var(--sd-azul-lt);border-radius:6px}
+.sd-barra-col div{width:100%;background:var(--sd-azul);border-radius:6px}
+.sd-barra-v{font-size:11px;font-weight:700;margin-top:4px}
+.sd-barra-e{font-size:10.5px;color:var(--sd-tenue);text-transform:capitalize}
+.sd-progreso{margin-bottom:16px}
+.sd-progreso-t{font-size:12.5px;font-weight:700;margin-bottom:5px}
+.sd-progreso-b{height:8px;border-radius:999px;background:var(--sd-borde);overflow:hidden}
+.sd-progreso-b div{height:100%;background:var(--sd-bien);border-radius:999px}
+.sd-crono{display:flex;flex-direction:column;gap:12px}
+.sd-mes{border:1.5px solid var(--sd-borde);border-radius:var(--sd-r);padding:12px 14px;background:var(--sd-panel)}
+.sd-mes-cab{font-weight:800;font-size:14px;margin-bottom:8px;text-transform:capitalize}
+.sd-mes-n{display:inline-block;padding:1px 8px;margin-right:6px;border-radius:999px;background:var(--sd-azul-lt);color:var(--sd-azul);font-size:10.5px;letter-spacing:.03em;text-transform:uppercase}
+.sd-acciones{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.sd-accion{display:flex;gap:10px;align-items:flex-start}
+.sd-estado{flex-shrink:0;width:72px;text-align:center;padding:2px 0;border-radius:999px;font-size:10.5px;font-weight:800;background:var(--sd-borde);color:var(--sd-tenue)}
+.sd-accion-hecha .sd-estado{background:var(--sd-bien-bg);color:var(--sd-bien)}
+.sd-accion-en_curso .sd-estado{background:var(--sd-azul-lt);color:var(--sd-azul)}
+.sd-accion-t{font-weight:700}
+.sd-accion-d{font-size:12px;color:var(--sd-tenue);margin-top:2px}
+.sd-cat{font-size:10.5px;font-weight:700;color:var(--sd-tenue2);margin-left:4px}
+@media (max-width:600px){
+  .sd-geo-titular{flex-direction:column;align-items:flex-start}
+  .sd-tarjeta-v{font-size:22px}
+}
+
+/* ── La pantalla de la agencia en la app (public/seo-proyecto.js) ── */
+.seo-adm{max-width:1120px;margin:0 auto;padding:22px 20px 60px}
+.seo-adm h2{font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0}
+.seo-adm-cab{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.seo-adm-sub{font-size:12px;color:var(--muted);margin:2px 0 0}
+.seo-adm-nota{font-size:12.5px;color:var(--muted);margin:0 0 12px;display:flex;gap:6px;align-items:flex-start}
+.seo-adm-cupo{font-size:11.5px;color:var(--muted2);margin:0 0 14px}
+.seo-adm-cargando{padding:40px 0;text-align:center;color:var(--muted)}
+.seo-adm-volver{background:none;border:none;padding:0;margin-bottom:4px;font-family:inherit;font-size:12px;font-weight:700;color:var(--blue);cursor:pointer}
+.seo-adm-acciones{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.seo-adm-botones{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
+.seo-adm-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.seo-adm-proy{text-align:left;background:var(--panel);border:1.5px solid var(--border);border-radius:var(--r);padding:14px 16px;cursor:pointer;font-family:inherit;color:var(--text)}
+.seo-adm-proy:hover{border-color:var(--blue-md)}
+.seo-adm-proy-t{font-weight:800;font-size:14.5px}
+.seo-adm-proy-d{font-size:12.5px;color:var(--muted)}
+.seo-adm-proy-f{font-size:11px;color:var(--muted2);margin-top:6px}
+.seo-adm-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1.5px solid var(--border);margin-bottom:16px;scrollbar-width:none}
+.seo-adm-tabs button{background:none;border:none;border-bottom:2.5px solid transparent;margin-bottom:-1.5px;padding:9px 12px;font-family:inherit;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.seo-adm-tabs button.act{color:var(--blue);border-bottom-color:var(--blue)}
+.seo-adm-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.seo-adm-form label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:var(--muted)}
+.seo-adm-form .seo-adm-ancho{grid-column:1/-1}
+.seo-adm-form textarea{resize:vertical;font-family:inherit}
+.seo-adm-check{flex-direction:row !important;align-items:center;font-weight:600 !important}
+.seo-adm-check input{width:15px;height:15px;accent-color:var(--blue)}
+.seo-adm-caja{border:1.5px solid var(--blue-md);border-radius:var(--r);padding:14px;margin-bottom:14px;background:var(--panel)}
+.seo-adm-cluster{border:1.5px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;background:var(--panel)}
+.seo-adm-cluster-cab{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}
+.seo-adm-kws{display:flex;flex-wrap:wrap;gap:6px}
+.seo-adm-kw{display:inline-flex;align-items:center;gap:5px;padding:3px 4px 3px 10px;border-radius:999px;border:1.5px solid var(--border);font-size:12px}
+.seo-adm-kw-pos{font-size:10.5px;font-weight:800;color:var(--muted2)}
+.seo-adm-kw button{border:none;background:none;cursor:pointer;color:var(--muted2);font-size:13px;padding:0 4px;display:inline-flex}
+.seo-adm-kw button:hover{color:var(--blue)}
+.seo-adm-preguntas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.seo-adm-preguntas li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--panel)}
+.seo-adm-preguntas input{min-width:280px}
+.seo-adm-acc{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.seo-adm-acc li{display:flex;gap:10px;align-items:flex-start}
+.seo-adm-acc-t{flex:1;font-size:13px}
+.seo-adm-interna{opacity:.6}
+.seo-adm-estado{min-width:96px;font-size:11.5px}
+.seo-adm-estado-hecha{color:var(--success)}
+.seo-adm-estado-en_curso{color:var(--blue)}
+@media (max-width:640px){ .seo-adm{padding:16px 12px 60px} .seo-adm-preguntas input{min-width:0;width:100%} }

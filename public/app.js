@@ -10429,6 +10429,8 @@ function showView(id){
   // Parrilla y cuentas conectadas: ambas viven ahora en la cuenta, así que
   // hay que traerlas al entrar. Se pinta antes para no dejar la vista en blanco.
   if(id==='social-studio'){ renderStudio(); socialSincronizar(); studioSincronizar().then(renderStudio); }
+  // El Proyecto SEO vive en public/seo-proyecto.js (17-10-2026).
+  if(id==='seo-project' && typeof seoAbrir==='function') seoAbrir();
   if(id==='home')setTimeout(function(){renderPulso();rutaPintar();},80);
 }
 function switchSb(el){document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));el.classList.add('active')}

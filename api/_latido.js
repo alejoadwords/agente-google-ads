@@ -87,6 +87,7 @@ export const CADA = {
   'cron-ruta': 24 * 60,          // 0 13 * * * — el correo diario de la ruta de arranque
   'cron-tiendas': 5,             // */5 — pedidos, carritos y catálogo de las tiendas en línea
   'cron-revisor-agente': 10,    // 3,13,…,53 — el revisor de conversaciones del agente
+  'cron-seo': 30,               // 8,38 — posiciones semanales y GEO mensual de los proyectos SEO
 };
 
 // Los que solo corren de lunes a viernes. Su silencio se mide en minutos
@@ -128,6 +129,7 @@ export const DESDE_POR_CRON = {
   'cron-ruta': '2026-10-16T14:00:00Z',
   'cron-tiendas': '2026-10-16T06:00:00Z',
   'cron-revisor-agente': '2026-10-16T06:00:00Z',
+  'cron-seo': '2026-10-18T00:00:00Z',
   'cron-catalogo': '2026-09-28T22:00:00Z',
   'cron-conectores': '2026-09-27T17:00:00Z',
   'cron-integridad': '2026-09-27T17:00:00Z',

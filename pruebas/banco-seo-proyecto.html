@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banco · Proyecto SEO (agencia)</title>
+<!-- Banco de la pantalla de la agencia (public/seo-proyecto.js) con el CSS
+     real de la app. Solo se simula el servidor: responde con
+     pruebas/.seo-datos-tmp.json (volcado local, NO se comitea).
+     Arrancar con node pruebas/servidor-boceto.mjs -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/public/seo-panel.css">
+<style id="estilos-reales"></style>
+<style>html,body{overflow:auto!important;height:auto!important;background:var(--bg)} .view{display:block!important}</style>
+</head><body>
+<div class="view" id="view-seo-project"><div class="seop-wrap"><div id="seop-setup"></div><div id="seop-main"></div></div></div>
+<script>
+// Lo mínimo de app.js que usa la pantalla.
+function esc(t){return String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function icn(){return '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>'}
+function emptyAgua(i,t,s,c){return '<div class="empty-agua"><div class="empty-agua-title">'+t+'</div><div class="empty-agua-sub">'+s+'</div>'+(c||'')+'</div>'}
+function showToast(t,tipo){console.log('toast',tipo||'ok',t)}
+function showView(){ seoAbrir(); }
+async function confirmarAguaP(){return true}
+function ddAbrir(a,o,v,cb){cb(o[1]?.id)}
+let agencyActiveClientId='';
+let DATOS=null;
+async function fetchAuth(url,init){
+  if(!DATOS) DATOS=await (await fetch('/pruebas/.seo-datos-tmp.json')).json();
+  if(init&&init.method==='POST'){ const b=JSON.parse(init.body); console.log('POST',b.accion); return {ok:true,json:async()=>({ok:true,agregadas:1,id:'x',medidas:3,hechas:5,pendientes:20})}; }
+  if(url.includes('?id=')) return {ok:true,json:async()=>({...DATOS,enlaces:[{id:'e1',token:'a'.repeat(32),vistas:3,ultima_vista:'2026-10-16'}],motores:['chatgpt','gemini','claude','perplexity']})};
+  return {ok:true,json:async()=>({proyectos:[{id:DATOS.proyecto.id,nombre:DATOS.proyecto.nombre,dominio:DATOS.proyecto.dominio,inicio:DATOS.proyecto.inicio}],cupo:{plan:'agency',posiciones:{usados:39,cupo:3000},geo:{usados:96,cupo:1000}},motores:['chatgpt']})};
+}
+</script>
+<script>
+// /seo-panel.js en la app es la raíz; en el banco vive en /public/.
+</script>
+<script type="module">
+const html = await (await fetch('/public/index.html')).text();
+document.getElementById('estilos-reales').textContent = (html.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+const src = (await (await fetch('/public/seo-proyecto.js')).text()).replace("import('/seo-panel.js')", "import('/public/seo-panel.js')");
+const s = document.createElement('script'); s.textContent = src; document.body.appendChild(s);
+const tab = new URLSearchParams(location.search).get('tab');
+if (tab) SEO.tab = tab;
+await seoAbrir();
+if (new URLSearchParams(location.search).get('abrir')) await seoAbrirProyecto(DATOS.proyecto.id);
+</script>
+</body></html>

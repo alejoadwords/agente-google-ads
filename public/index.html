@@ -4152,6 +4152,7 @@ body.con-soporte #movil-host{top:var(--soporte-alto,0px)}
      que sí funciona y no se cobra por evento. Si algún día se quiere el panel
      de Vercel, hay que habilitarlo en el proyecto ANTES de volver a poner esto:
      el guion solo lo sirve el edge cuando la función está activa. -->
+<link rel="stylesheet" href="/seo-panel.css">
 </head>
 <!-- La clase nace puesta y el interruptor de más abajo la quita si los agentes
      vuelven. Antes la ponía `ocultarAgentes()` al estar listo el DOM, y hasta
@@ -6207,6 +6208,7 @@ if (window.AGENTES_ACTIVOS) {
 
 <div id="movil-host" hidden></div>
 <script src="/app.js"></script>
+<script src="/seo-proyecto.js"></script>
 <script src="/movil-enganche.js"></script>
 
 <!-- CRM MODAL: crear / editar lead -->

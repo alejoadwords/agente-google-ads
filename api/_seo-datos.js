@@ -1,0 +1,54 @@
+// api/_seo-datos.js — cargar un proyecto SEO entero.
+//
+// Lo usan la app (api/seo-proyectos.js) y el enlace público
+// (api/seo-publico.js) con la MISMA consulta: si cada uno armara la suya,
+// algún día el cliente vería cifras distintas de las de la agencia. Con
+// `publico` se quitan las acciones ocultas al cliente y los datos internos
+// (quién creó qué). Solo se importa desde edge.
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const sbH = (extra = {}) => ({ apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, ...extra });
+
+async function una(ruta) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1${ruta}`, { headers: sbH() });
+  if (!r.ok) throw new Error('Supabase ' + r.status + ': ' + (await r.text()).slice(0, 200));
+  return r.json();
+}
+
+// PostgREST corta en 1.000 filas: se pide por tramos hasta que no venga más.
+export async function todas(ruta, tramo = 1000) {
+  const out = [];
+  for (let desde = 0; desde < 100000; desde += tramo) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1${ruta}`, { headers: sbH({ Range: `${desde}-${desde + tramo - 1}`, 'Range-Unit': 'items' }) });
+    if (!r.ok && r.status !== 416) throw new Error('Supabase ' + r.status + ': ' + (await r.text()).slice(0, 200));
+    const filas = r.status === 416 ? [] : await r.json();
+    out.push(...filas);
+    if (filas.length < tramo) break;
+  }
+  return out;
+}
+
+const CAMPOS_PROYECTO = 'id,user_id,client_id,nombre,dominio,marca,pais,idioma,competidores,inicio,creado_at,actualizado_at';
+
+export async function cargarProyecto(id, { publico = false } = {}) {
+  const [p] = await una(`/seo_proyectos?id=eq.${id}&archivado_at=is.null&select=${CAMPOS_PROYECTO}&limit=1`);
+  if (!p) return null;
+  const hace400 = new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10);
+  const hace13m = new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 7);
+  const [clusters, keywords, posiciones, preguntas, geo, acciones] = await Promise.all([
+    una(`/seo_clusters?proyecto_id=eq.${id}&borrado_at=is.null&select=id,nombre,pagina_pilar,descripcion,orden&order=orden.asc,creado_at.asc`),
+    todas(`/seo_keywords?proyecto_id=eq.${id}&borrado_at=is.null&select=id,kw,cluster_id,creado_at&order=creado_at.asc`),
+    todas(`/seo_posiciones?proyecto_id=eq.${id}&fecha=gte.${hace400}&select=keyword_id,fecha,pos,url&order=fecha.asc,id.asc`),
+    una(`/seo_geo_preguntas?proyecto_id=eq.${id}&borrado_at=is.null&select=id,pregunta,intencion,cluster_id&order=creado_at.asc`),
+    todas(`/seo_geo_resultados?proyecto_id=eq.${id}&periodo=gte.${hace13m}&select=pregunta_id,periodo,motor,corrida,mencionada,citada,posicion,competidores,citas,fragmento,error&order=periodo.asc,id.asc`),
+    una(`/seo_acciones?proyecto_id=eq.${id}&borrado_at=is.null${publico ? '&visible_cliente=eq.true' : ''}` +
+      `&select=id,mes,categoria,titulo,detalle,estado,hecha_at,visible_cliente,orden,plantilla&order=mes.asc,orden.asc,creado_at.asc`),
+  ]);
+  // Los 5 primeros de Google solo de la última medición (la competencia de hoy).
+  const ultima = posiciones.length ? posiciones[posiciones.length - 1].fecha : null;
+  const top = ultima ? await todas(`/seo_posiciones?proyecto_id=eq.${id}&fecha=eq.${ultima}&select=keyword_id,top`) : [];
+  const proyecto = { ...p };
+  if (publico) { delete proyecto.user_id; delete proyecto.client_id; }
+  return { proyecto, clusters, keywords, posiciones, top, preguntas, geo, acciones, ultimaMedicion: ultima };
+}

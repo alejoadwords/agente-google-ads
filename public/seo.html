@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light">
+<title>Reporte SEO</title>
+<!-- El dashboard SEO que ve el cliente (/seo/<código>). Los datos se leen al
+     abrir —api/seo-publico.js, misma carga que la app— y se dibujan con
+     public/seo-panel.js, el MISMO módulo de la app. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/seo-panel.css">
+<style>
+  :root{
+    --text:#0D0F1C; --muted:#5A607A; --muted2:#9DA3BE; --border:#E4E6F0; --bg:#F4F5FB; --panel:#FFFFFF;
+    --blue:#1E2BCC; --blue-lt:#EEF0FF; --blue-md:#AEB4F5; --success:#16A34A; --success-bg:#ECFDF3;
+    --danger:#DC2626; --danger-bg:#FEF2F2; --r:12px; --sombra:0 10px 40px rgba(20,22,31,.06);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);font-family:'Outfit',system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:var(--text)}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 16px 56px}
+  .doc{background:var(--panel);border-radius:18px;box-shadow:var(--sombra);padding:26px 28px;position:relative;overflow:hidden}
+  .doc::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:var(--blue)}
+  .estado{text-align:center;padding:80px 16px;color:var(--muted);font-size:14px;line-height:1.6}
+  .estado b{display:block;font-size:18px;color:var(--text);margin-bottom:6px}
+  .pie{text-align:center;font-size:11.5px;color:var(--muted2);margin-top:18px}
+  @media (max-width:640px){ .doc{padding:20px 14px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="doc" id="doc"><div class="estado">Cargando el reporte…</div></div>
+  <div class="pie">Reporte en vivo: los datos se actualizan solos.</div>
+</div>
+<script type="module">
+import { panelSeo, esc } from '/seo-panel.js';
+const doc = document.getElementById('doc');
+const m = location.pathname.match(/^\/seo\/([a-f0-9]{32})$/);
+const t = m ? m[1] : new URLSearchParams(location.search).get('t');
+let datos = null, seccion = 'resumen';
+try { seccion = sessionStorage.getItem('seo-seccion') || 'resumen'; } catch {}
+
+function pintar() {
+  doc.innerHTML = panelSeo(datos, { seccion, agencia: datos.agencia });
+  if (datos.proyecto?.nombre) document.title = 'Reporte SEO · ' + datos.proyecto.nombre;
+}
+doc.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-seccion]');
+  if (!b || !datos) return;
+  seccion = b.dataset.seccion;
+  try { sessionStorage.setItem('seo-seccion', seccion); } catch {}
+  pintar();
+});
+
+// Fallar a la vista: un enlace mal copiado, revocado o una caída se dicen
+// con palabras, nunca una página en blanco.
+(async () => {
+  if (!t) { doc.innerHTML = '<div class="estado"><b>Este enlace no está completo</b>Revisa que lo hayas copiado entero.</div>'; return; }
+  try {
+    const r = await fetch('/api/seo-publico?t=' + encodeURIComponent(t), { cache: 'no-store' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { doc.innerHTML = '<div class="estado"><b>' + (r.status === 410 ? 'Este reporte ya no está disponible' : 'No pudimos abrir el reporte') + '</b>' + esc(d.error || 'Intenta de nuevo en unos minutos.') + '</div>'; return; }
+    datos = d;
+    pintar();
+  } catch {
+    doc.innerHTML = '<div class="estado"><b>No pudimos abrir el reporte</b>Revisa tu conexión e intenta de nuevo.</div>';
+  }
+})();
+</script>
+</body>
+</html>
