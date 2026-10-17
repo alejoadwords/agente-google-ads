@@ -497,6 +497,17 @@ async function initAuth(){
       setTimeout(() => { if (typeof teamInit === 'function') teamInit(); }, 800);
       return true;
     }
+    // De dónde llegó esta cuenta (api/origen-cuenta.js lee la cookie que dejó
+    // public/origen.js en la primera visita). Una sola vez por navegador; el
+    // servidor solo lo acepta en cuentas de menos de 3 días. Sin esperar: no
+    // puede frenar la entrada.
+    try {
+      const uid = clerkInstance.user.id;
+      const creadaHace = Date.now() - (clerkInstance.user.createdAt ? new Date(clerkInstance.user.createdAt).getTime() : 0);
+      if (uid && creadaHace < 3 * 86400000 && !localStorage.getItem('acu_origen_enviado_' + uid)) {
+        fetchAuth('/api/origen-cuenta', { method: 'POST' }).then(r => { if (r.ok) localStorage.setItem('acu_origen_enviado_' + uid, '1'); }).catch(() => {});
+      }
+    } catch (e) {}
     // Alta guiada: una cuenta nueva que no la terminó vuelve a ella. Solo se
     // pregunta por cuentas creadas desde que existe (api/onboarding.js), para
     // no sumar una petición al arranque de todas las demás.

@@ -56,13 +56,13 @@ process.env.SUPABASE_URL = 'https://sb.test'; process.env.SUPABASE_SERVICE_KEY =
   globalThis.fetch = async (url) => {
     const u = String(url);
     const res = (b) => new Response(JSON.stringify(b), { status: 200 });
-    if (u.includes('/seo_proyectos?')) return res([{ id: 'p', user_id: 'u1', client_id: 'cli', nombre: 'N', dominio: 'acuarius.app' }]);
+    if (u.includes('/seo_proyectos?')) return res([{ id: 'p', user_id: 'u1', client_id: 'cli', nombre: 'N', dominio: 'cliente.com' }]);
     if (u.includes('/leads?')) {
       pedidaLeads = u;
       return res([
-        { created_at: '2026-10-18T15:00:00Z', stage: 'ganado', value: 99, custom_fields: { 'Canal de origen': 'Buscadores', Origen: 'Google', 'Página de entrada': '/precios', Sitio: 'acuarius.app', nombre_secreto: 'Ana' } },
-        { created_at: '2026-10-18T16:00:00Z', stage: 'nuevo', value: 0, custom_fields: { 'Canal de origen': 'IA', Origen: 'ChatGPT', 'Página de entrada': '/', Sitio: 'www.acuarius.app' } },
-        { created_at: '2026-10-18T16:00:00Z', stage: 'nuevo', value: 0, custom_fields: { 'Canal de origen': 'IA', Origen: 'ChatGPT', 'Página de entrada': '/', Sitio: 'otroacuarius.app' } }]);
+        { created_at: '2026-10-18T15:00:00Z', stage: 'ganado', value: 99, custom_fields: { 'Canal de origen': 'Buscadores', Origen: 'Google', 'Página de entrada': '/precios', Sitio: 'cliente.com', nombre_secreto: 'Ana' } },
+        { created_at: '2026-10-18T16:00:00Z', stage: 'nuevo', value: 0, custom_fields: { 'Canal de origen': 'IA', Origen: 'ChatGPT', 'Página de entrada': '/', Sitio: 'www.cliente.com' } },
+        { created_at: '2026-10-18T16:00:00Z', stage: 'nuevo', value: 0, custom_fields: { 'Canal de origen': 'IA', Origen: 'ChatGPT', 'Página de entrada': '/', Sitio: 'otrocliente.com' } }]);
     }
     return res([]);
   };
@@ -79,6 +79,57 @@ process.env.SUPABASE_URL = 'https://sb.test'; process.env.SUPABASE_SERVICE_KEY =
     const r = P.panelSeo({ ...d, trafico: { ...d.trafico, mesActual: '2026-10', mesAnterior: '2026-09' } }, { seccion: 'resumen' });
     ok(r.includes('Leads desde buscadores e IAs') && r.includes('data-seccion="trafico"'), 'y en el resumen, con enlace a Tráfico');
   } catch (e) { ok(false, 'cargarProyecto no revienta', e.stack); }
+  finally { globalThis.fetch = antes; }
+}
+
+console.log('\nRegistros de cuentas de acuarius.app');
+{
+  const vm = await import('node:vm');
+  const codigo = readFileSync(new URL('../public/origen.js', import.meta.url), 'utf8');
+  const correr = (href, referrer, cookieInicial = '') => {
+    const escritas = [];
+    const doc = { referrer, _c: cookieInicial, get cookie() { return this._c; }, set cookie(v) { escritas.push(v); this._c = v.split(';')[0]; } };
+    vm.runInNewContext(codigo, { document: doc, location: new URL(href), URLSearchParams, URL, encodeURIComponent, JSON, Date, Object });
+    return escritas;
+  };
+  let w = correr('https://acuarius.app/precios?utm_source=newsletter&utm_medium=email', 'https://chatgpt.com/');
+  ok(w.length === 1 && w[0].includes('domain=.acuarius.app') && w[0].includes('max-age=2592000') && w[0].includes('Secure'), 'la cookie se comparte con la app (*.acuarius.app), dura 30 días', w);
+  const val = JSON.parse(decodeURIComponent(w[0].split(';')[0].split('=').slice(1).join('=')));
+  ok(val.r === 'https://chatgpt.com/' && val.u.includes('/precios') && val.p.utm_source === 'newsletter', 'guarda referente, página y utm');
+  ok(correr('https://app.acuarius.app/registro', 'https://www.google.com/', 'acu_origen=x').length === 0, 'gana la PRIMERA visita: no se pisa');
+  w = correr('https://app.acuarius.app/registro', 'https://acuarius.app/precios');
+  ok(JSON.parse(decodeURIComponent(w[0].split(';')[0].split('=').slice(1).join('='))).r === '', 'pasar de acuarius.app a la app no es un origen');
+  const { leerCookieOrigen } = await import('../api/origen-cuenta.js');
+  const lc = leerCookieOrigen('otra=1; acu_origen=' + encodeURIComponent(JSON.stringify({ u: 'https://acuarius.app/', r: 'https://www.perplexity.ai/search/x', t: 1, p: { utm_source: 'x' } })) + '; z=2');
+  ok(lc.ref.includes('perplexity') && lc.url === 'https://acuarius.app/' && lc.params.utm_source === 'x', 'el servidor lee la cookie de la petición');
+  ok(leerCookieOrigen('a=1') === null && leerCookieOrigen('acu_origen=%7Bmal') === null, 'sin cookie o rota → null (no revienta)');
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  ok(/fetchAuth\('\/api\/origen-cuenta', \{ method: 'POST' \}\)/.test(app) && /acu_origen_enviado_/.test(app), 'la app lo manda al primer ingreso, una sola vez');
+  const oc = readFileSync(new URL('../api/origen-cuenta.js', import.meta.url), 'utf8');
+  ok(/DIAS_CUENTA_NUEVA = 3/.test(oc) && /resolution=ignore-duplicates/.test(oc), 'solo cuentas nuevas (3 días) y una vez por cuenta');
+  for (const pag of ['index.html', 'registro.html', 'login.html']) ok(readFileSync(new URL('../public/' + pag, import.meta.url), 'utf8').includes('<script src="/origen.js"></script>'), 'la app carga origen.js en ' + pag);
+}
+{
+  const { cargarProyecto } = await import('../api/_seo-datos.js');
+  const antes = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    const res = (b) => new Response(JSON.stringify(b), { status: 200 });
+    if (u.includes('/seo_proyectos?')) return res([{ id: 'p', user_id: 'u1', client_id: 'c', nombre: 'Acuarius', dominio: 'acuarius.app' }]);
+    if (u.includes('/cuentas_origen?')) return res([{ user_id: 'a', canal: 'IA', origen: 'ChatGPT', pagina: '/', creado_at: '2026-10-18T15:00:00Z' }, { user_id: 'b', canal: 'Buscadores', origen: 'Google', pagina: '/precios', creado_at: '2026-10-18T15:00:00Z' }]);
+    if (u.includes('/cobros?')) return res([{ user_id: 'b', monto: 39 }]);
+    if (u.includes('/leads?')) throw new Error('no debía pedir leads del CRM');
+    return res([]);
+  };
+  try {
+    const d = await cargarProyecto('p', { publico: true });
+    ok(d.trafico.unidadConversion === 'registros' && d.trafico.leadsWeb.length === 2, 'acuarius.app cuenta REGISTROS de cuentas, no leads del CRM');
+    ok(d.trafico.leadsWeb.find(x => x.canal === 'Buscadores').ganados === 1 && d.trafico.leadsWeb.find(x => x.canal === 'Buscadores').valor === 39, 'y «pagaron» con lo cobrado');
+    ok(!JSON.stringify(d.trafico.leadsWeb).includes('"user_id"'), 'agregado: sin ids de cuentas');
+    const P = await import('../public/seo-panel.js');
+    const h = P.panelSeo({ ...d, trafico: { ...d.trafico, mesActual: '2026-10', mesAnterior: '2026-09' } }, { seccion: 'trafico' });
+    ok(h.includes('Registros y pagos que trajo la web') && h.includes('Registros desde IAs') && h.includes('Pagaron'), 'el reporte dice «registros» y «pagaron»');
+  } catch (e) { ok(false, 'registros de cuentas no revienta', e.stack); }
   finally { globalThis.fetch = antes; }
 }
 

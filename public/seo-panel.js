@@ -200,7 +200,8 @@ function seccionResumen(datos, series) {
     ${tr.hayGsc && tr.cerrado ? tarjeta('Clics desde Google', num(tr.cerrado.clics), nombreMes(tr.cerrado.mes) + (tr.previo ? ' · ' + delta(tr.cerrado.clics, tr.previo.clics) : ''), '', 'trafico') : ''}
     ${tr.hayGa4 && tr.cerrado ? tarjeta('Visitas desde buscadores', num(tr.cerrado.organicas), nombreMes(tr.cerrado.mes) + (tr.previo ? ' · ' + delta(tr.cerrado.organicas, tr.previo.organicas) : ''), '', 'trafico') : ''}
     ${(() => { const lw = (datos.trafico || {}).leadsWeb || []; if (!lw.length) return ''; const rl = resumenLeads(datos, null);
-      return tarjeta('Leads desde buscadores e IAs', num(rl.buscadores.leads + rl.ia.leads), (rl.buscadores.ganados + rl.ia.ganados ? num(rl.buscadores.ganados + rl.ia.ganados) + ' ventas · ' : '') + 'desde el ' + fechaCorta(CAPTURA_DESDE), 'sd-pendiente', 'trafico'); })()}
+      const U = unidad(datos);
+      return tarjeta(U.Plural + ' desde buscadores e IAs', num(rl.buscadores.leads + rl.ia.leads), (rl.buscadores.ganados + rl.ia.ganados ? num(rl.buscadores.ganados + rl.ia.ganados) + ' ' + U.venta + ' · ' : '') + 'desde el ' + fechaCorta(CAPTURA_DESDE), 'sd-pendiente', 'trafico'); })()}
     ${tr.hayGa4 && tr.cerrado && tr.cerrado.ia ? tarjeta('Visitas desde IAs', num(tr.cerrado.ia), nombreMes(tr.cerrado.mes), 'sd-pendiente', 'geo') : ''}
     ${tarjeta('Keywords en seguimiento', r.total, r.medidas ? `${r.enTop100} aparecen en los 100 primeros de Google` : 'Aún sin medir', '', 'posiciones')}
     ${tarjeta('En la primera página', r.enTop10, r.enTop3 ? `${r.enTop3} en los 3 primeros puestos` : 'Top 10 de Google', '', 'posiciones')}
@@ -519,29 +520,38 @@ export function resumenLeads(datos, mes) {
 }
 const plata = (v) => '$' + Math.round(v || 0).toLocaleString('es-CO');
 
+// Cómo se llama la conversión: leads del CRM, o registros de cuentas en el
+// sitio de Acuarius (api/_seo-datos.js → unidadConversion).
+const unidad = (datos) => ((datos.trafico || {}).unidadConversion === 'registros'
+  ? { Plural: 'Registros', plural: 'registros', uno: 'registro llegó', varios: 'registros llegaron', venta: 'pagaron', ventas: 'pagos' }
+  : { Plural: 'Leads', plural: 'leads', uno: 'lead llegó', varios: 'leads llegaron', venta: 'ventas', ventas: 'ventas' });
+
 function seccionLeads(datos) {
   const todas = (datos.trafico || {}).leadsWeb || [];
+  const U = unidad(datos);
   const { cerrado, actual } = mesesDeTrafico(datos);
   const mes = todas.some(x => x.mes === cerrado) ? cerrado : actual;
   const r = resumenLeads(datos, mes);
-  let h = `<h3 class="sd-h3">Leads y ventas que trajo la web (${nombreMes(mes)})</h3>`;
+  let h = `<h3 class="sd-h3">${U.Plural} y ${U.ventas} que trajo la web (${nombreMes(mes)})</h3>`;
   if (!todas.length) {
-    return h + `<div class="sd-aviso">Desde el ${fechaCorta(CAPTURA_DESDE)} cada lead que llega por los formularios del sitio guarda de dónde vino: Google, una IA, un anuncio, redes… Aquí se verán los leads y las ventas que trae el SEO en cuanto entren los primeros.</div>`;
+    return h + `<div class="sd-aviso">Desde el ${fechaCorta(CAPTURA_DESDE)} cada ${U.plural === 'registros' ? 'cuenta nueva' : 'lead que llega por los formularios del sitio'} guarda de dónde vino: Google, una IA, un anuncio, redes… Aquí se verán ${U.plural === 'registros' ? 'los registros y los pagos' : 'los leads y las ventas'} que trae el SEO en cuanto entren los primeros.</div>`;
   }
   h += '<div class="sd-tarjetas">' +
-    tarjeta('Leads desde buscadores', num(r.buscadores.leads), r.buscadores.ganados ? `${num(r.buscadores.ganados)} ventas · ${plata(r.buscadores.valor)}` : 'Sin ventas aún') +
-    tarjeta('Leads desde IAs', num(r.ia.leads), r.ia.ganados ? `${num(r.ia.ganados)} ventas · ${plata(r.ia.valor)}` : 'Sin ventas aún', r.ia.leads ? 'sd-pendiente' : '') +
-    tarjeta('Leads de la web', num(r.total), 'Todos los canales') + '</div>';
-  h += `<div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Canal</th><th>Leads</th><th>Ventas</th><th>Valor vendido</th></tr></thead><tbody>` +
+    tarjeta(U.Plural + ' desde buscadores', num(r.buscadores.leads), r.buscadores.ganados ? `${num(r.buscadores.ganados)} ${U.venta} · ${plata(r.buscadores.valor)}` : 'Sin ' + U.ventas + ' aún') +
+    tarjeta(U.Plural + ' desde IAs', num(r.ia.leads), r.ia.ganados ? `${num(r.ia.ganados)} ${U.venta} · ${plata(r.ia.valor)}` : 'Sin ' + U.ventas + ' aún', r.ia.leads ? 'sd-pendiente' : '') +
+    tarjeta(U.Plural + ' de la web', num(r.total), 'Todos los canales') + '</div>';
+  h += `<div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Canal</th><th>${U.Plural}</th><th>${U.venta === 'pagaron' ? 'Pagaron' : 'Ventas'}</th><th>${U.venta === 'pagaron' ? 'Pagado' : 'Valor vendido'}</th></tr></thead><tbody>` +
     r.canales.map(c => `<tr><td>${esc(c.canal)}</td><td>${num(c.leads)}</td><td>${num(c.ganados)}</td><td>${c.valor ? plata(c.valor) : '—'}</td></tr>`).join('') + '</tbody></table></div>';
   const porPagina = {};
   for (const f of r.filas.filter(x => x.canal === 'Buscadores' || x.canal === 'IA')) { const x = (porPagina[f.pagina || '(sin dato)'] ||= { leads: 0, ganados: 0, origenes: {} }); x.leads += f.leads; x.ganados += f.ganados; x.origenes[f.origen] = (x.origenes[f.origen] || 0) + f.leads; }
   const paginas = Object.entries(porPagina).sort((a, b) => b[1].leads - a[1].leads).slice(0, 10);
   if (paginas.length) {
-    h += `<h3 class="sd-h3">Páginas que convierten las visitas de buscadores e IAs en leads</h3><div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Página de entrada</th><th>De dónde</th><th>Leads</th><th>Ventas</th></tr></thead><tbody>` +
+    h += `<h3 class="sd-h3">Páginas que convierten las visitas de buscadores e IAs en ${U.plural}</h3><div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Página de entrada</th><th>De dónde</th><th>${U.Plural}</th><th>${U.venta === 'pagaron' ? 'Pagaron' : 'Ventas'}</th></tr></thead><tbody>` +
       paginas.map(([pg, x]) => `<tr><td class="sd-url">${esc(pg)}</td><td>${Object.entries(x.origenes).map(([o, n]) => esc(o) + ' ' + num(n)).join(', ')}</td><td>${num(x.leads)}</td><td>${num(x.ganados)}</td></tr>`).join('') + '</tbody></table></div>';
   }
-  return h + `<p class="sd-nota">Cuenta los leads que entraron por los formularios de ${esc(datos.proyecto.dominio)} desde el ${fechaCorta(CAPTURA_DESDE)}, con el canal de la primera página que vieron en esa visita. Una venta es un lead marcado como ganado en el CRM.</p>`;
+  return h + (U.plural === 'registros'
+    ? `<p class="sd-nota">Cuenta las cuentas nuevas de Acuarius desde el ${fechaCorta(CAPTURA_DESDE)}, con el canal de la primera visita a acuarius.app o a la app (hasta 30 días antes de registrarse). «Pagaron» = cuentas con un cobro registrado.</p>`
+    : `<p class="sd-nota">Cuenta los leads que entraron por los formularios de ${esc(datos.proyecto.dominio)} desde el ${fechaCorta(CAPTURA_DESDE)}, con el canal de la primera página que vieron en esa visita. Una venta es un lead marcado como ganado en el CRM.</p>`);
 }
 
 function seccionEntradasOrganicas(datos) {
@@ -581,7 +591,8 @@ function traficoIA(datos) {
   if (serie.length > 1) h += barrasValor(serie.map(([m, v]) => ({ etiqueta: nombreMes(m).slice(0, 3), valor: v })));
   const lia = resumenLeads(datos, null).ia;
   if (((datos.trafico || {}).leadsWeb || []).length) {
-    h += `<p class="sd-nota"><strong>${num(lia.leads)} ${lia.leads === 1 ? 'lead llegó' : 'leads llegaron'} desde una IA</strong> desde el ${fechaCorta(CAPTURA_DESDE)}${lia.ganados ? `, con ${num(lia.ganados)} ventas por ${plata(lia.valor)}` : ''}.</p>`;
+    const U = unidad(datos);
+    h += `<p class="sd-nota"><strong>${num(lia.leads)} ${lia.leads === 1 ? U.uno : U.varios} desde una IA</strong> desde el ${fechaCorta(CAPTURA_DESDE)}${lia.ganados ? `, ${num(lia.ganados)} ${U.venta} (${plata(lia.valor)})` : ''}.</p>`;
   }
   // Qué se sabe de esas visitas.
   const ent = detalleDe(datos, 'entrada_ia'), refs = detalleDe(datos, 'referente_ia'), paises = detalleDe(datos, 'pais_ia');

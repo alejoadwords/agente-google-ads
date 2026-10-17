@@ -53,6 +53,29 @@ async function leadsDelSitio(p) {
   return Object.values(grupos);
 }
 
+// acuarius.app es el sitio de Acuarius: sus conversiones no son leads del CRM
+// sino CUENTAS nuevas (cuentas_origen, api/origen-cuenta.js). Una «venta» es
+// una cuenta que pagó (cobros).
+export const SITIO_PROPIO = 'acuarius.app';
+async function registrosDeCuentas() {
+  const desde = new Date(Date.now() - 400 * 86400000).toISOString();
+  const [filas, pagos] = await Promise.all([
+    todas(`/cuentas_origen?creado_at=gte.${desde}&select=user_id,canal,origen,pagina,creado_at`),
+    todas(`/cobros?monto=gt.0&select=user_id,monto`).catch(() => []),
+  ]);
+  const pago = {};
+  for (const c of pagos) pago[c.user_id] = (pago[c.user_id] || 0) + Number(c.monto || 0);
+  const grupos = {};
+  for (const f of filas) {
+    const mes = new Date(Date.parse(f.creado_at) - 5 * 3600 * 1000).toISOString().slice(0, 7);
+    const k = [mes, f.canal, f.origen || '', f.pagina || ''].join('|');
+    const g = (grupos[k] ||= { mes, canal: f.canal, origen: f.origen || '', pagina: f.pagina || '', leads: 0, ganados: 0, valor: 0 });
+    g.leads++;
+    if (pago[f.user_id]) { g.ganados++; g.valor += pago[f.user_id]; }
+  }
+  return Object.values(grupos);
+}
+
 const CAMPOS_PROYECTO = 'id,user_id,client_id,nombre,dominio,marca,pais,idioma,competidores,inicio,correo_cliente,nombre_cliente,creado_at,actualizado_at,' +
   'gsc_propiedad,ga4_propiedad,gsc_estado,ga4_estado,gsc_error,ga4_error,gsc_sincronizado_at,ga4_sincronizado_at';
 
@@ -98,8 +121,10 @@ export async function cargarProyecto(id, { publico = false } = {}) {
     // Tres meses: el que se reporta, el anterior (para comparar) y el en curso.
     p.ga4_propiedad ? todas(`/seo_ga4_detalle?proyecto_id=eq.${id}&mes=in.(${mesPrevio},${mesAnterior},${mesActual})&select=mes,tipo,fuente,valor,valor2,sesiones,comprometidas,duracion,conversiones,usuarios,nuevos,vistas,interaccion_seg&order=sesiones.desc`) : [],
   ]);
-  const leadsWeb = await leadsDelSitio(p).catch(() => []);
-  const trafico = { gscDias, gscConsultas, gscPaginas, ga4Dias, ga4Ia, ga4Detalle, mesActual, mesAnterior, leadsWeb };
+  const propio = String(p.dominio || '').replace(/^www\./, '') === SITIO_PROPIO;
+  const leadsWeb = await (propio ? registrosDeCuentas() : leadsDelSitio(p)).catch(() => []);
+  const trafico = { gscDias, gscConsultas, gscPaginas, ga4Dias, ga4Ia, ga4Detalle, mesActual, mesAnterior, leadsWeb,
+    unidadConversion: propio ? 'registros' : 'leads' };
   const proyecto = { ...p };
   if (publico) {
     delete proyecto.user_id; delete proyecto.client_id; delete proyecto.correo_cliente;
