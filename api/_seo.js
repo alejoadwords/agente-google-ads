@@ -251,7 +251,10 @@ export function errorGoogle(api, status, mensaje, correo) {
   if (status === 403 || status === 401 || /permission|not have|sufficient/i.test(m)) {
     return { estado: 'sin_acceso', texto: api === 'gsc'
       ? 'Acuarius todavía no tiene acceso. En Search Console › Configuración › Usuarios y permisos, agrega ' + (correo || 'el correo de Acuarius') + ' con permiso «Restringido».'
-      : 'Acuarius todavía no tiene acceso. En Google Analytics › Administrar › Gestión de acceso a la propiedad, agrega ' + (correo || 'el correo de Acuarius') + ' con el rol «Lector».' };
+      // GA4 responde lo mismo si falta el acceso que si el número no es una
+      // propiedad (no revela cuáles existen): se dicen las dos cosas. Visto con
+      // acuarius.app: tenía el acceso y el número era otro ID.
+      : 'Google no deja leer esa propiedad. Revisa dos cosas: que el número sea el ID DE LA PROPIEDAD (9 o 10 cifras, en Administrar › Detalles de la propiedad; no el de la cuenta ni el del flujo de datos) y que ' + (correo || 'el correo de Acuarius') + ' tenga el rol «Lector» en esa propiedad o en su cuenta. Si lo acabas de agregar, espera unos minutos y vuelve a probar.' };
   }
   if (status === 404 || /not found|invalid/i.test(m)) return { estado: 'sin_acceso', texto: api === 'gsc' ? 'Esa propiedad no existe en Search Console. Revisa cómo está escrita.' : 'Ese ID de propiedad de GA4 no existe. Es el número que sale en Administrar › Detalles de la propiedad.' };
   return { estado: 'error', texto: 'Google respondió con un error (' + status + '). Se reintenta solo.' };

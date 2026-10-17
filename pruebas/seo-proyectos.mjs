@@ -235,6 +235,8 @@ ok(S.rangoMes('2026-10', '2026-10-17').hasta === '2026-10-17' && S.rangoMes('202
 let eg = S.errorGoogle('gsc', 403, 'User does not have sufficient permission', 'sa@x.iam');
 ok(eg.estado === 'sin_acceso' && eg.texto.includes('sa@x.iam') && eg.texto.includes('Restringido'), 'sin permiso: le dice qué correo agregar y dónde');
 ok(S.errorGoogle('gsc', 403, 'Google Search Console API has not been used in project 1').estado === 'error', 'API apagada: es un error nuestro, no del cliente');
+eg = S.errorGoogle('ga4', 403, 'User does not have sufficient permissions for this property.', 'sa@x.iam');
+ok(eg.estado === 'sin_acceso' && eg.texto.includes('ID DE LA PROPIEDAD') && eg.texto.includes('sa@x.iam'), 'GA4: dice que puede ser el acceso O un número equivocado (Google no distingue)');
 
 console.log('\nFase 3: el dashboard con tráfico');
 const dt = { ...datos, keywords: [{ id: 'k1', kw: 'arriendo apartamentos barranquilla', cluster_id: 'c1' }], clusters: [{ id: 'c1', nombre: 'Arriendo' }],
