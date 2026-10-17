@@ -7,6 +7,7 @@
 // El envío al canal lo pone quien llama (cada plataforma tiene su API), así el
 // motor no sabe nada de Graph ni de TikTok.
 
+import { comprasDelContacto, bloqueCompras } from './_tienda-agente.js';
 import { ensureCatalog, enqueueAutomations, pipelinePrincipal } from './_lead-intake.js';
 import { getPolicy } from './_channel-policy.js';
 import { asignarLead } from './_assign.js';
@@ -1607,7 +1608,7 @@ export function partesDelPrompt(...args) {
 // datos capturados, que son distintos en cada mensaje.
 const CORTE_CACHE = 'un precio inventado lo tiene que desmentir despues una persona\n';
 
-export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null, canal = 'whatsapp', referral = null, reservas = null, suyas = null) {
+export function buildSystemPrompt(agent, capturedData, reglaCalificacion = null, propiedades = null, canal = 'whatsapp', referral = null, reservas = null, suyas = null, compras = null) {
   const faqs = (agent.faqs || []).map(f => `P: ${f.q}\nR: ${f.a}`).join('\n\n');
   const captured = Object.entries(capturedData || {})
     .filter(([k, v]) => v && !k.startsWith('_'))
@@ -1706,7 +1707,7 @@ SI TE MANDAN UNA FOTO:
 - Que se parezca a algo del listado NO significa que sea eso. No afirmes que es una propiedad concreta salvo que te lo diga la persona; si crees reconocerla, preguntale
 - Si la foto no se entiende o no tiene que ver, dilo con amabilidad y pide lo que necesitas
 
-${bloqueDeAhora(reservas?.zona, new Date(), [agent.business_ctx, faqs].filter(Boolean).join('\n'))}${bloqueDeAnuncio(referral)}${bloqueReservas(reservas, canal)}${bloqueCitas(suyas)}${capturedData?.celular ? `YA TIENES SU NUMERO: ${capturedData.celular}${canal === 'whatsapp' ? ' (es el de este mismo WhatsApp)' : ''}.
+${bloqueDeAhora(reservas?.zona, new Date(), [agent.business_ctx, faqs].filter(Boolean).join('\n'))}${bloqueDeAnuncio(referral)}${bloqueReservas(reservas, canal)}${bloqueCitas(suyas)}${bloqueCompras(compras, reservas?.zona)}${capturedData?.celular ? `YA TIENES SU NUMERO: ${capturedData.celular}${canal === 'whatsapp' ? ' (es el de este mismo WhatsApp)' : ''}.
 - NO se lo vuelvas a pedir, ni aunque haya pasado mucho rato. Pedir un dato que ya dio es lo que mas delata a un bot
 - Si van a llamarle, a lo sumo confirma: «¿le llamamos a este mismo numero?». La regla de pedir el telefono pronto ya esta cumplida
 
@@ -2862,6 +2863,16 @@ export async function processIncoming({ channel, externalId, contactId, contactN
       })
     : null;
 
+  // Lo que esta persona ya compró en la tienda conectada (_tienda-agente.js).
+  // Solo de SU lead y los enlazados. Si falla, el agente contesta igual, sin
+  // el historial, y queda en el registro.
+  const compras = conv.lead_id
+    ? await comprasDelContacto(connection.user_id, conv.lead_id).catch(async (e) => {
+        await registrarError({ origen: 'inbox', donde: 'compras del contacto', error: e, usuario: connection.user_id });
+        return null;
+      })
+    : null;
+
   // Lo ya sabido va DEBAJO de lo capturado: si en la conversación dio otro
   // número para que le llamen, manda ese.
   const conocido = await conocidoDeLaConversacion(conv, suyos).catch(() => ({}));
@@ -2872,7 +2883,7 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   // La hora que pide en ESTE mensaje, con su veredicto calculado (horaPedida).
   const relojPedido = relojDelNegocio(reservas?.zona, new Date(), contextoDeHorario(agent));
   const hp = horaPedida(textoMensaje, relojPedido);
-  const system = partesDelPrompt(agent, { ...conocido, ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}), _propietario: propietario, _horaPedidaTexto: bloqueHoraPedida(relojPedido, hp) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas);
+  const system = partesDelPrompt(agent, { ...conocido, ...capturedData, ...(conv.contact_name ? { nombre: conv.contact_name } : {}), _propietario: propietario, _horaPedidaTexto: bloqueHoraPedida(relojPedido, hp) }, reglaCal, inventario, conv.channel || channel, conv.referral || null, reservas, suyas, compras);
   // «Escribiendo…» antes de pensar.
   //
   // El modelo contesta en medio segundo y eso delata al bot más que cualquier

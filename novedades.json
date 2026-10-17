@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-17-agente-conoce-compras",
+      "fecha": "2026-10-17",
+      "tipo": "mejora",
+      "titulo": "Tu agente IA reconoce a quien ya te compró",
+      "texto": "Si tienes tu tienda conectada, cuando alguien que ya te compró escribe por WhatsApp, tu agente sabe qué se llevó y en qué va cada pedido: pagado y en preparación, o enviado con su enlace de seguimiento si lo hay. Si pregunta por la guía, la fecha de entrega o quiere cambiar algo, no se lo inventa: le pasa la conversación a tu equipo. Y si dejó un carrito sin terminar, puede ofrecerle el enlace para completar la compra cuando venga al caso.",
+      "accion": {
+        "texto": "Ir a Conversaciones",
+        "ir": "conversaciones"
+      }
+    },
+    {
       "id": "2026-10-17-tareas-con-su-cliente",
       "fecha": "2026-10-17",
       "tipo": "arreglo",
