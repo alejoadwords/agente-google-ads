@@ -48,9 +48,11 @@ export async function sincronizarGsc(p) {
   const url = 'https://searchconsole.googleapis.com/webmasters/v3/sites/' + encodeURIComponent(p.gsc_propiedad) + '/searchAnalytics/query';
   try {
     const token = await tokenServicio('https://www.googleapis.com/auth/webmasters.readonly');
-    const primera = !p.gsc_meses_atras;
-    // Por día: todo el historial la primera vez; después, los últimos 10 días.
-    const dias = await google(url, token, { startDate: primera ? restar(hoy, HISTORIAL_GSC * 31) : restar(hoy, 10), endDate: hoy, dimensions: ['date'], dataState: 'all', rowLimit: 25000 });
+    // Por día: TODO el historial en cada vuelta (una sola petición, ~500 filas).
+    // Una propiedad recién creada en Search Console llega vacía y Google la va
+    // llenando días después, también hacia atrás: con solo «los últimos 10
+    // días» esos meses no se habrían pedido nunca (acuarius.app, 17-10-2026).
+    const dias = await google(url, token, { startDate: restar(hoy, HISTORIAL_GSC * 31), endDate: hoy, dimensions: ['date'], dataState: 'all', rowLimit: 25000 });
     await guardar('seo_gsc_dias', 'proyecto_id,fecha', (dias.rows || []).map(r => ({
       proyecto_id: p.id, fecha: r.keys[0], clics: r.clicks || 0, impresiones: r.impressions || 0, ctr: r.ctr ?? null, posicion: r.position ?? null })));
     // Búsquedas y páginas por mes: el mes en curso, el anterior en los primeros
@@ -60,6 +62,13 @@ export async function sincronizarGsc(p) {
     if (+hoy.slice(8, 10) <= 5) meses.push(mesesAtras(actual, 2)[1]);
     let hechos = p.gsc_meses_atras || 1;
     if (hechos < HISTORIAL_GSC) { meses.push(mesesAtras(actual, hechos + 1)[hechos]); hechos++; }
+    // Y los meses que ya tienen impresiones pero ninguna búsqueda guardada (se
+    // pidieron cuando Google aún no los mostraba): dos por vuelta.
+    const conImpresiones = [...new Set((dias.rows || []).filter(r => r.impressions > 0).map(r => r.keys[0].slice(0, 7)))];
+    if (conImpresiones.length) {
+      const guardados = new Set((await sb(`/seo_gsc_consultas?proyecto_id=eq.${p.id}&mes=in.(${conImpresiones.join(',')})&select=mes`) || []).map(x => x.mes));
+      conImpresiones.filter(m => !guardados.has(m) && !meses.includes(m)).sort().reverse().slice(0, 2).forEach(m => meses.push(m));
+    }
     for (const mes of [...new Set(meses)]) {
       const { desde, hasta } = rangoMes(mes, hoy);
       const [consultas, paginas] = await Promise.all([
