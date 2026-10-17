@@ -225,6 +225,107 @@ console.log('\nFase 2: lo que carga el enlace (fetch simulado)');
   finally { globalThis.fetch = antes; }
 }
 
+console.log('\nFase 3: tráfico (lo puro)');
+ok(S.nombreIA('chatgpt.com') === 'ChatGPT' && S.nombreIA('perplexity.ai') === 'Perplexity' && S.nombreIA('gemini.google.com') === 'Gemini' && S.nombreIA('claude.ai') === 'Claude' && S.nombreIA('copilot.microsoft.com') === 'Copilot', 'reconoce las IAs por la fuente de GA4');
+ok(S.nombreIA('google') === null && S.nombreIA('facebook.com') === null, 'Google y redes no son IA');
+ok(S.propiedadGsc('', 'certainpezzano.com') === 'sc-domain:certainpezzano.com' && S.propiedadGsc('https://www.x.com', 'x.com') === 'https://www.x.com/' && S.propiedadGsc('X.com', '') === 'sc-domain:x.com', 'propiedad de Search Console: dominio o prefijo de URL');
+ok(S.propiedadGa4('412345678') === '412345678' && S.propiedadGa4('properties/412345678') === '412345678' && S.propiedadGa4('G-ABC123') === null, 'GA4: el ID de propiedad, no el de medición');
+ok(S.mesesAtras('2026-02', 3).join() === '2026-02,2026-01,2025-12', 'meses hacia atrás cruzando el año');
+ok(S.rangoMes('2026-10', '2026-10-17').hasta === '2026-10-17' && S.rangoMes('2026-09', '2026-10-17').hasta === '2026-09-30', 'el mes en curso llega hasta hoy');
+let eg = S.errorGoogle('gsc', 403, 'User does not have sufficient permission', 'sa@x.iam');
+ok(eg.estado === 'sin_acceso' && eg.texto.includes('sa@x.iam') && eg.texto.includes('Restringido'), 'sin permiso: le dice qué correo agregar y dónde');
+ok(S.errorGoogle('gsc', 403, 'Google Search Console API has not been used in project 1').estado === 'error', 'API apagada: es un error nuestro, no del cliente');
+
+console.log('\nFase 3: el dashboard con tráfico');
+const dt = { ...datos, keywords: [{ id: 'k1', kw: 'arriendo apartamentos barranquilla', cluster_id: 'c1' }], clusters: [{ id: 'c1', nombre: 'Arriendo' }],
+  trafico: { mesActual: '2026-10', mesAnterior: '2026-09',
+    gscDias: [{ fecha: '2026-08-05', clics: 80, impresiones: 2000, posicion: 12 }, { fecha: '2026-09-05', clics: 100, impresiones: 3000, posicion: 10 }, { fecha: '2026-09-06', clics: 20, impresiones: 1000, posicion: 6 }, { fecha: '2026-10-01', clics: 30, impresiones: 900, posicion: 9 }],
+    gscConsultas: [
+      { mes: '2026-09', consulta: 'arriendo apartamentos barranquilla', clics: 40, impresiones: 900, posicion: 4 },
+      { mes: '2026-09', consulta: 'apartamentos en arriendo norte barranquilla', clics: 20, impresiones: 500, posicion: 7 },
+      { mes: '2026-09', consulta: 'certain pezzano', clics: 30, impresiones: 60, posicion: 1 },
+      { mes: '2026-09', consulta: 'avaluo comercial casa', clics: 2, impresiones: 300, posicion: 18 }],
+    gscPaginas: [{ mes: '2026-09', pagina: 'https://certainpezzano.com/arriendo', clics: 60, impresiones: 1400, posicion: 5 }],
+    ga4Dias: [{ fecha: '2026-09-05', sesiones: 500, usuarios: 400, conversiones: 12, sesiones_organicas: 200, conversiones_organicas: 5, sesiones_ia: 14, conversiones_ia: 2 }],
+    ga4Ia: [{ mes: '2026-09', fuente: 'ChatGPT', sesiones: 10, conversiones: 2 }, { mes: '2026-09', fuente: 'Perplexity', sesiones: 4, conversiones: 0 }] } };
+const rt = P.resumenTrafico(dt);
+ok(rt.cerrado.clics === 120 && rt.previo.clics === 80 && rt.cerrado.posicion === 9, 'mes cerrado vs anterior; la posición media pondera por impresiones', rt.cerrado);
+ok(rt.cerrado.ia === 14 && rt.cerrado.convOrg === 5, 'visitas desde IAs y conversiones orgánicas');
+const grupos = P.clasificarConsultas(dt, '2026-09');
+const gArr = grupos.find(g => g.nombre === 'Arriendo');
+ok(gArr && gArr.consultas.length === 2 && gArr.consultas.find(q => q.seguimiento)?.consulta === 'arriendo apartamentos barranquilla', 'la búsqueda en seguimiento y una parecida van a su clúster', grupos.map(g => [g.nombre, g.consultas.map(q => q.consulta)]));
+ok(grupos.find(g => g.clave === '__marca')?.consultas[0].consulta === 'certain pezzano', 'las búsquedas de la marca, aparte');
+ok(grupos.find(g => g.clave === '__nuevas')?.consultas[0].consulta === 'avaluo comercial casa', 'lo que no encaja en ningún clúster: «nuevas»');
+const sinClusters = P.clasificarConsultas({ ...dt, clusters: [], keywords: [{ id: 'k9', kw: 'arriendo apartamentos barranquilla', cluster_id: null }] }, '2026-09');
+ok(sinClusters.find(g => g.clave === '__seguimiento')?.consultas.length === 1 && sinClusters.find(g => g.clave === '__nuevas')?.consultas.length === 2, 'sin clústeres, lo que está en seguimiento y lo nuevo van en grupos distintos', sinClusters.map(g => [g.clave, g.consultas.length]));
+let ht = P.panelSeo(dt, { seccion: 'trafico' });
+ok(ht.includes('Clics desde Google') && ht.includes('▲ 50%') && ht.includes('Las búsquedas que te traen tráfico') && ht.includes('★ arriendo') && !ht.includes('undefined') && !ht.includes('NaN'), 'la sección Tráfico se dibuja con comparación y búsquedas por clúster');
+ht = P.panelSeo(dt, { seccion: 'geo' });
+ok(ht.includes('Visitas que te llegaron desde las IAs') && ht.includes('ChatGPT · 10 visitas') && ht.includes('Es un mínimo'), 'Presencia en IAs: las visitas reales desde cada IA, dichas como mínimo');
+ok(P.panelSeo({ ...datos, trafico: {} }, { seccion: 'trafico' }).includes('se conectan Google Search Console'), 'sin conexión, lo dice');
+
+console.log('\nFase 3: sincronizar con Google, ejecutado (fetch simulado)');
+{
+  const par = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
+  const pk = Buffer.from(await crypto.subtle.exportKey('pkcs8', par.privateKey)).toString('base64');
+  process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL = 'sa@prueba.iam.gserviceaccount.com';
+  process.env.GOOGLE_SERVICE_ACCOUNT_KEY = '-----BEGIN PRIVATE KEY-----\\n' + pk.match(/.{1,64}/g).join('\\n') + '\\n-----END PRIVATE KEY-----\\n';
+  const T = await import('../api/_seo-trafico.js');
+  const antes = globalThis.fetch;
+  const escrito = [];
+  let modoGsc = 'ok';
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url), m = init.method || 'GET';
+    const res = (b, st = 200) => new Response(JSON.stringify(b), { status: st });
+    if (u.includes('oauth2.googleapis.com/token')) {
+      const jwt = new URLSearchParams(init.body).get('assertion').split('.');
+      const firmaOk = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', par.publicKey, Buffer.from(jwt[2], 'base64url'), new TextEncoder().encode(jwt[0] + '.' + jwt[1]));
+      return firmaOk ? res({ access_token: 'tok', expires_in: 3600 }) : res({ error: 'invalid_grant' }, 400);
+    }
+    if (u.includes('searchconsole.googleapis.com')) {
+      if (modoGsc === 'sin') return res({ error: { message: 'User does not have sufficient permission for site' } }, 403);
+      const b = JSON.parse(init.body);
+      if (b.dimensions[0] === 'date') return res({ rows: [{ keys: ['2026-10-15'], clicks: 5, impressions: 100, ctr: 0.05, position: 8.2 }] });
+      if (b.dimensions[0] === 'query') return res({ rows: [{ keys: ['arriendo barranquilla'], clicks: 3, impressions: 50, position: 6 }] });
+      return res({ rows: [{ keys: ['https://x.com/a'], clicks: 3, impressions: 50, position: 6 }] });
+    }
+    if (u.includes('analyticsdata.googleapis.com')) {
+      const b = JSON.parse(init.body);
+      const dims = b.dimensions.map(d => d.name).join();
+      if (dims === 'date,sessionDefaultChannelGroup') return res({ rows: [
+        { dimensionValues: [{ value: '20261015' }, { value: 'Organic Search' }], metricValues: [{ value: '40' }, { value: '2' }] },
+        { dimensionValues: [{ value: '20261015' }, { value: 'Direct' }], metricValues: [{ value: '60' }, { value: '1' }] }] });
+      if (dims === 'date') return res({ rows: [{ dimensionValues: [{ value: '20261015' }], metricValues: [{ value: '80' }] }] });
+      return res({ rows: [
+        { dimensionValues: [{ value: '20261015' }, { value: 'chatgpt.com' }], metricValues: [{ value: '7' }, { value: '1' }] },
+        { dimensionValues: [{ value: '20261001' }, { value: 'perplexity.ai' }], metricValues: [{ value: '3' }, { value: '0' }] }] });
+    }
+    if (m !== 'GET') escrito.push(m + ' ' + u.replace('https://sb.test/rest/v1', '') + ' ' + String(init.body || '').slice(0, 300));
+    return res(m === 'GET' ? [] : null);
+  };
+  try {
+    const pr = { id: 'p1', user_id: 'u', dominio: 'x.com', gsc_propiedad: 'sc-domain:x.com', gsc_meses_atras: 0, ga4_propiedad: '412345678', ga4_meses_atras: 0 };
+    let r = await T.sincronizarGsc(pr);
+    ok(r.ok, 'Search Console: token firmado con la llave de la cuenta de servicio y datos traídos', r);
+    ok(escrito.some(x => x.includes('/seo_gsc_dias?on_conflict') && x.includes('"clics":5')) && escrito.some(x => x.includes('/seo_gsc_consultas?on_conflict') && x.includes('arriendo barranquilla')), 'guarda los días y las búsquedas del mes');
+    ok(escrito.some(x => x.startsWith('DELETE /seo_gsc_consultas?proyecto_id=eq.p1&mes=eq.')), 'el mes se reemplaza entero (no quedan búsquedas con cifras viejas)');
+    ok(escrito.some(x => x.includes('/seo_proyectos?id=eq.p1') && x.includes('"gsc_estado":"ok"') && x.includes('"gsc_meses_atras":2')), 'queda conectado y avanza el historial un mes');
+    escrito.length = 0;
+    r = await T.sincronizarGa4(pr);
+    ok(r.ok, 'GA4: datos traídos', r);
+    const dia = escrito.find(x => x.includes('/seo_ga4_dias?on_conflict'));
+    ok(dia && dia.includes('"sesiones":100') && dia.includes('"sesiones_organicas":40') && dia.includes('"usuarios":80') && dia.includes('"sesiones_ia":7'), 'por día: total, orgánicas, usuarios e IA', dia);
+    const ia = escrito.find(x => x.includes('/seo_ga4_ia?on_conflict'));
+    ok(ia && ia.includes('"fuente":"ChatGPT"') && ia.includes('"fuente":"Perplexity"'), 'las visitas de IA por fuente y mes');
+    escrito.length = 0; modoGsc = 'sin';
+    r = await T.sincronizarGsc({ ...pr, gsc_meses_atras: 5 });
+    ok(!r.ok && r.estado === 'sin_acceso' && r.error.includes('sa@prueba.iam.gserviceaccount.com'), 'sin acceso: dice qué correo agregar');
+    ok(escrito.some(x => x.includes('"gsc_estado":"sin_acceso"')) && !escrito.some(x => x.includes('/error_log')), 'queda marcado en el proyecto, sin ruido en error_log (es cosa del cliente)');
+    ok(T.tocaSincronizar(null) && !T.tocaSincronizar(new Date().toISOString()), 'una vez al día');
+  } catch (e) { ok(false, 'la sincronización no revienta al ejecutarse', e.stack); }
+  finally { globalThis.fetch = antes; }
+}
+
 console.log('\nLo demás');
 const cron = (await import('../api/cron-seo.js')).default;
 ok((await cron(new Request('https://x/api/cron-seo'))).status === 401, 'el cron sin secreto → 401');

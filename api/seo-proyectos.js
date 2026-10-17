@@ -19,6 +19,9 @@ import { medirPosiciones, medirGeo, motoresActivos, planDe } from './_seo-medir.
 import { dominio, accionesIniciales, hoyCO, MAX_KEYWORDS, MAX_PREGUNTAS, MAX_COMPETIDORES, CATEGORIAS, ESTADOS,
   TIPOS_CONTENIDO, transicionContenido, editableContenido } from './_seo.js';
 import { avisarClienteRevision } from './_seo-avisos.js';
+import { sincronizarGsc, sincronizarGa4 } from './_seo-trafico.js';
+import { correoServicio } from './_google-sa.js';
+import { propiedadGsc, propiedadGa4 } from './_seo.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -88,7 +91,7 @@ async function manejar(req) {
       if (!p) return json({ error: 'Ese proyecto no existe o no es de tu cuenta.' }, 404);
       const datos = await cargarProyecto(p.id);
       const enlaces = await sb(`/seo_enlaces?proyecto_id=eq.${p.id}&revocado_at=is.null&select=id,token,vistas,ultima_vista,creado_at,creado_por_nombre&order=creado_at.desc`) || [];
-      return json({ ...datos, enlaces, motores: motoresActivos() });
+      return json({ ...datos, enlaces, motores: motoresActivos(), correoServicio: correoServicio() });
     }
     const pedido = url.searchParams.get('client_id') || null;
     if (clienteAjeno(quien, pedido)) return json({ error: 'No tienes acceso a ese cliente.' }, 403);
@@ -357,6 +360,31 @@ async function manejar(req) {
     if (!c) return json({ error: 'Esa pieza no existe.' }, 404);
     await sb(`/seo_contenidos?id=eq.${c.id}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ borrado_at: ahora() }) });
     return json({ ok: true });
+  }
+
+  // ── Tráfico: Search Console y GA4 (fase 3) ────────────────────────────────
+  if (a === 'conectar') {
+    if (!p) return json({ error: 'Ese proyecto no existe o no es de tu cuenta.' }, 404);
+    const c = {};
+    if (b.gsc_propiedad !== undefined) { c.gsc_propiedad = b.gsc_propiedad ? propiedadGsc(b.gsc_propiedad, p.dominio) : null; c.gsc_estado = null; c.gsc_error = null; c.gsc_meses_atras = 0; }
+    if (b.ga4_propiedad !== undefined) {
+      c.ga4_propiedad = b.ga4_propiedad ? propiedadGa4(b.ga4_propiedad) : null;
+      if (b.ga4_propiedad && !c.ga4_propiedad) return json({ error: 'El ID de propiedad de GA4 es un número de 9 o 10 cifras (Administrar › Detalles de la propiedad). No es el ID de medición «G-…».' }, 400);
+      c.ga4_estado = null; c.ga4_error = null; c.ga4_meses_atras = 0;
+    }
+    await sb(`/seo_proyectos?id=eq.${p.id}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify(c) });
+    // Se prueba en el momento: quien conecta sabe ya si falta darle acceso.
+    const nuevo = { ...p, ...c };
+    const [gsc, ga4] = await Promise.all([
+      b.gsc_propiedad !== undefined && nuevo.gsc_propiedad ? sincronizarGsc(nuevo) : null,
+      b.ga4_propiedad !== undefined && nuevo.ga4_propiedad ? sincronizarGa4(nuevo) : null,
+    ]);
+    return json({ ok: true, gsc, ga4 });
+  }
+  if (a === 'sincronizar') {
+    if (!p) return json({ error: 'Ese proyecto no existe o no es de tu cuenta.' }, 404);
+    const [gsc, ga4] = await Promise.all([p.gsc_propiedad ? sincronizarGsc(p) : null, p.ga4_propiedad ? sincronizarGa4(p) : null]);
+    return json({ ok: true, gsc, ga4 });
   }
 
   // ── Enlace público ────────────────────────────────────────────────────────

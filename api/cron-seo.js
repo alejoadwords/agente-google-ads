@@ -11,6 +11,7 @@ import { latir } from './_latido.js';
 import { registrarError } from './_registro-errores.js';
 import { medirPosiciones, medirGeo } from './_seo-medir.js';
 import { tocaMedirPosiciones, periodoCO } from './_seo.js';
+import { sincronizarGsc, sincronizarGa4, tocaSincronizar } from './_seo-trafico.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -28,7 +29,19 @@ export default async function handler(req) {
   try {
     const proyectos = await sb('/seo_proyectos?archivado_at=is.null&select=*&order=actualizado_at.asc&limit=500');
     r.proyectos = proyectos.length;
-    // Primero las posiciones (rápidas y semanales), después el GEO.
+    // Primero el tráfico de Search Console y GA4 (una vez al día, rápido), luego
+    // las posiciones (semanales) y al final el GEO (la cola larga del mes).
+    for (const p of proyectos) {
+      if (Date.now() - empezo > PRESUPUESTO_MS * 0.35) break;
+      try {
+        const tareas = [];
+        if (p.gsc_propiedad && tocaSincronizar(p.gsc_sincronizado_at)) tareas.push(sincronizarGsc(p));
+        if (p.ga4_propiedad && tocaSincronizar(p.ga4_sincronizado_at)) tareas.push(sincronizarGa4(p));
+        const res = await Promise.all(tareas);
+        r.trafico = (r.trafico || 0) + res.filter(x => x?.ok).length;
+      } catch (e) { r.fallidos++; await registrarError({ origen: 'servidor', donde: 'cron-seo.trafico', error: e, usuario: p.user_id, detalle: p.id }); }
+    }
+    // Las posiciones (rápidas y semanales), después el GEO.
     for (const p of proyectos) {
       if (Date.now() - empezo > PRESUPUESTO_MS * 0.5) break;
       try {

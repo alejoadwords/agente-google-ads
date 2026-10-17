@@ -201,3 +201,58 @@ export const editableContenido = (estado) => estado === 'borrador' || estado ===
 
 // El cliente comenta sobre lo que puede ver: todo menos los borradores.
 export const comentableContenido = (estado) => ['en_revision', 'cambios', 'aprobado', 'publicado'].includes(estado);
+
+// ── Tráfico: Search Console y GA4 (fase 3) ──────────────────────────────────
+// De qué asistente de IA llegó una visita, por su fuente en GA4. GA4 tiene
+// desde mayo de 2026 un canal «AI Assistant», pero no publica su lista y deja
+// a Perplexity o Claude en «Referral»: se clasifica aquí, por la fuente.
+export const FUENTES_IA = [
+  [/chatgpt|openai/i, 'ChatGPT'], [/perplexity/i, 'Perplexity'], [/gemini|bard\.google/i, 'Gemini'],
+  [/copilot|bing\.com\/chat/i, 'Copilot'], [/claude\.ai|anthropic/i, 'Claude'], [/deepseek/i, 'DeepSeek'],
+  [/grok|x\.ai/i, 'Grok'], [/meta\.ai/i, 'Meta AI'], [/you\.com/i, 'You.com'], [/mistral|chat\.mistral/i, 'Mistral'],
+];
+export const REGEX_IA = 'chatgpt|openai|perplexity|gemini|bard\\.google|copilot|claude\\.ai|anthropic|deepseek|grok|x\\.ai|meta\\.ai|you\\.com|mistral';
+export function nombreIA(fuente) {
+  const f = String(fuente || '');
+  for (const [re, nombre] of FUENTES_IA) if (re.test(f)) return nombre;
+  return null;
+}
+
+// Lo que escribe la agencia → la propiedad tal como la nombra Search Console.
+export function propiedadGsc(texto, dom) {
+  const t = String(texto || '').trim();
+  if (!t) return dom ? 'sc-domain:' + dominio(dom) : null;
+  if (/^sc-domain:/i.test(t)) return 'sc-domain:' + dominio(t.replace(/^sc-domain:/i, ''));
+  if (/^https?:\/\//i.test(t)) return t.replace(/\/*$/, '/');
+  return 'sc-domain:' + dominio(t);
+}
+export const propiedadGa4 = (texto) => {
+  const m = String(texto || '').match(/(?:properties\/)?(\d{6,12})/);
+  return m ? m[1] : null;
+};
+
+// Meses 'YYYY-MM' hacia atrás desde `mes` (incluido).
+export function mesesAtras(mes, n) {
+  let [y, m] = mes.split('-').map(Number);
+  const out = [];
+  for (let i = 0; i < n; i++) { out.push(y + '-' + String(m).padStart(2, '0')); m--; if (m < 1) { m = 12; y--; } }
+  return out;
+}
+export function rangoMes(mes, hoy = hoyCO()) {
+  const [y, m] = mes.split('-').map(Number);
+  const fin = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  return { desde: mes + '-01', hasta: fin < hoy ? fin : hoy };
+}
+
+// Un error de Google, dicho para que la agencia sepa qué hacer.
+export function errorGoogle(api, status, mensaje, correo) {
+  const m = String(mensaje || '');
+  if (/has not been used|is disabled|SERVICE_DISABLED/i.test(m)) return { estado: 'error', texto: 'La conexión con Google está en configuración de nuestro lado. Ya nos llegó el aviso.' };
+  if (status === 403 || status === 401 || /permission|not have|sufficient/i.test(m)) {
+    return { estado: 'sin_acceso', texto: api === 'gsc'
+      ? 'Acuarius todavía no tiene acceso. En Search Console › Configuración › Usuarios y permisos, agrega ' + (correo || 'el correo de Acuarius') + ' con permiso «Restringido».'
+      : 'Acuarius todavía no tiene acceso. En Google Analytics › Administrar › Gestión de acceso a la propiedad, agrega ' + (correo || 'el correo de Acuarius') + ' con el rol «Lector».' };
+  }
+  if (status === 404 || /not found|invalid/i.test(m)) return { estado: 'sin_acceso', texto: api === 'gsc' ? 'Esa propiedad no existe en Search Console. Revisa cómo está escrita.' : 'Ese ID de propiedad de GA4 no existe. Es el número que sale en Administrar › Detalles de la propiedad.' };
+  return { estado: 'error', texto: 'Google respondió con un error (' + status + '). Se reintenta solo.' };
+}

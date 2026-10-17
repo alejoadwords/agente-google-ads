@@ -29,7 +29,8 @@ export async function todas(ruta, tramo = 1000) {
   return out;
 }
 
-const CAMPOS_PROYECTO = 'id,user_id,client_id,nombre,dominio,marca,pais,idioma,competidores,inicio,correo_cliente,nombre_cliente,creado_at,actualizado_at';
+const CAMPOS_PROYECTO = 'id,user_id,client_id,nombre,dominio,marca,pais,idioma,competidores,inicio,correo_cliente,nombre_cliente,creado_at,actualizado_at,' +
+  'gsc_propiedad,ga4_propiedad,gsc_estado,ga4_estado,gsc_error,ga4_error,gsc_sincronizado_at,ga4_sincronizado_at';
 
 export async function cargarProyecto(id, { publico = false } = {}) {
   const [p] = await una(`/seo_proyectos?id=eq.${id}&archivado_at=is.null&select=${CAMPOS_PROYECTO}&limit=1`);
@@ -55,12 +56,27 @@ export async function cargarProyecto(id, { publico = false } = {}) {
   const ids = contenidos.map(c => c.id);
   const comentarios = ids.length ? await todas(`/seo_contenido_comentarios?contenido_id=in.(${ids.join(',')})` +
     `&select=id,contenido_id,version,autor_tipo,autor_nombre,accion,texto,creado_at&order=creado_at.asc`) : [];
+  // Tráfico (fase 3): por día todo el historial; búsquedas y páginas, el mes
+  // en curso y el anterior (lo que se reporta); las IAs, por mes.
+  const mesActual = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 7);
+  const [ya, ma] = mesActual.split('-').map(Number);
+  const mesAnterior = ma === 1 ? (ya - 1) + '-12' : ya + '-' + String(ma - 1).padStart(2, '0');
+  const meses2 = `mes=in.(${mesAnterior},${mesActual})`;
+  const [gscDias, gscConsultas, gscPaginas, ga4Dias, ga4Ia] = await Promise.all([
+    p.gsc_propiedad ? todas(`/seo_gsc_dias?proyecto_id=eq.${id}&select=fecha,clics,impresiones,posicion&order=fecha.asc`) : [],
+    p.gsc_propiedad ? todas(`/seo_gsc_consultas?proyecto_id=eq.${id}&${meses2}&select=mes,consulta,clics,impresiones,posicion&order=clics.desc,impresiones.desc`) : [],
+    p.gsc_propiedad ? todas(`/seo_gsc_paginas?proyecto_id=eq.${id}&${meses2}&select=mes,pagina,clics,impresiones,posicion&order=clics.desc`) : [],
+    p.ga4_propiedad ? todas(`/seo_ga4_dias?proyecto_id=eq.${id}&select=fecha,sesiones,usuarios,conversiones,sesiones_organicas,conversiones_organicas,sesiones_ia,conversiones_ia&order=fecha.asc`) : [],
+    p.ga4_propiedad ? todas(`/seo_ga4_ia?proyecto_id=eq.${id}&select=mes,fuente,sesiones,conversiones&order=mes.asc`) : [],
+  ]);
+  const trafico = { gscDias, gscConsultas, gscPaginas, ga4Dias, ga4Ia, mesActual, mesAnterior };
   const proyecto = { ...p };
   if (publico) {
     delete proyecto.user_id; delete proyecto.client_id; delete proyecto.correo_cliente;
+    for (const k of ['gsc_propiedad', 'ga4_propiedad', 'gsc_estado', 'ga4_estado', 'gsc_error', 'ga4_error']) delete proyecto[k];
     for (const c of contenidos) if (c.estado === 'borrador') { c.cuerpo = null; c.enlace_doc = null; }
   }
   const visibles = new Set(contenidos.filter(c => !publico || c.estado !== 'borrador').map(c => c.id));
   return { proyecto, clusters, keywords, posiciones, top, preguntas, geo, acciones, ultimaMedicion: ultima,
-    contenidos, comentarios: comentarios.filter(x => visibles.has(x.contenido_id)) };
+    contenidos, comentarios: comentarios.filter(x => visibles.has(x.contenido_id)), trafico };
 }

@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-17-seo-trafico",
+      "fecha": "2026-10-17",
+      "tipo": "nuevo",
+      "titulo": "El reporte SEO ahora trae el tráfico de Google y de las IAs",
+      "texto": "Conecta el Search Console y el Google Analytics de tu cliente agregando el correo de Acuarius como lector (los pasos están en Proyecto SEO › Ajustes). El reporte suma una sección de Tráfico con clics, impresiones y posición media mes a mes, visitas desde buscadores y desde asistentes de IA con sus conversiones, y todas las búsquedas que traen tráfico clasificadas en tus clústeres, también las que nadie había elegido. En Presencia en IAs ya se ve cuántas visitas llegaron desde ChatGPT, Gemini, Perplexity y Copilot. Los datos se guardan en Acuarius, así que el histórico no se pierde aunque Google lo borre.",
+      "accion": {
+        "texto": "Abrir Proyecto SEO",
+        "ir": "/proyecto-seo"
+      }
+    },
+    {
       "id": "2026-10-17-agente-no-inventa-productos",
       "fecha": "2026-10-17",
       "tipo": "arreglo",

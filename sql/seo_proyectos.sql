@@ -193,3 +193,59 @@ create index if not exists seo_contenido_comentarios_c on seo_contenido_comentar
 alter table seo_contenidos enable row level security;
 alter table seo_contenido_versiones enable row level security;
 alter table seo_contenido_comentarios enable row level security;
+
+-- ── Fase 3 (17-10-2026): tráfico de Search Console y GA4 ───────────────────
+-- Se guarda en nuestra base (Google da 16 meses de Search Console; aquí el
+-- histórico no caduca). Conexión por cuenta de servicio: el cliente agrega el
+-- correo de Acuarius como lector de su Search Console y de su GA4.
+alter table seo_proyectos add column if not exists gsc_propiedad text;      -- 'sc-domain:x.com' o 'https://x.com/'
+alter table seo_proyectos add column if not exists ga4_propiedad text;      -- solo números
+alter table seo_proyectos add column if not exists gsc_estado text;         -- ok | sin_acceso | error
+alter table seo_proyectos add column if not exists ga4_estado text;
+alter table seo_proyectos add column if not exists gsc_error text;
+alter table seo_proyectos add column if not exists ga4_error text;
+alter table seo_proyectos add column if not exists gsc_sincronizado_at timestamptz;
+alter table seo_proyectos add column if not exists ga4_sincronizado_at timestamptz;
+alter table seo_proyectos add column if not exists gsc_meses_atras int not null default 0;  -- historial ya traído
+alter table seo_proyectos add column if not exists ga4_meses_atras int not null default 0;
+
+create table if not exists seo_gsc_dias (
+  proyecto_id uuid not null references seo_proyectos(id) on delete cascade,
+  fecha date not null,
+  clics int not null default 0, impresiones int not null default 0, ctr real, posicion real,
+  primary key (proyecto_id, fecha)
+);
+-- Todas las búsquedas que dieron impresiones en el mes, aunque no estén en
+-- seguimiento: así se ve cómo crece cada clúster más allá de las keywords elegidas.
+create table if not exists seo_gsc_consultas (
+  proyecto_id uuid not null references seo_proyectos(id) on delete cascade,
+  mes text not null, consulta text not null,
+  clics int not null default 0, impresiones int not null default 0, ctr real, posicion real,
+  primary key (proyecto_id, mes, consulta)
+);
+create table if not exists seo_gsc_paginas (
+  proyecto_id uuid not null references seo_proyectos(id) on delete cascade,
+  mes text not null, pagina text not null,
+  clics int not null default 0, impresiones int not null default 0, ctr real, posicion real,
+  primary key (proyecto_id, mes, pagina)
+);
+create table if not exists seo_ga4_dias (
+  proyecto_id uuid not null references seo_proyectos(id) on delete cascade,
+  fecha date not null,
+  sesiones int not null default 0, usuarios int not null default 0, conversiones real not null default 0,
+  sesiones_organicas int not null default 0, conversiones_organicas real not null default 0,
+  sesiones_ia int not null default 0, conversiones_ia real not null default 0,
+  primary key (proyecto_id, fecha)
+);
+-- De qué IA llegó cada visita (ChatGPT, Perplexity, Gemini…), por mes.
+create table if not exists seo_ga4_ia (
+  proyecto_id uuid not null references seo_proyectos(id) on delete cascade,
+  mes text not null, fuente text not null,
+  sesiones int not null default 0, conversiones real not null default 0,
+  primary key (proyecto_id, mes, fuente)
+);
+alter table seo_gsc_dias enable row level security;
+alter table seo_gsc_consultas enable row level security;
+alter table seo_gsc_paginas enable row level security;
+alter table seo_ga4_dias enable row level security;
+alter table seo_ga4_ia enable row level security;

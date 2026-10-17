@@ -575,11 +575,77 @@ function seoPintarAjustes(c) {
       '<a class="btn-ghost sm" href="/seo/' + esc(e.token) + '" target="_blank" rel="noopener">' + icn('external', 12) + '</a>' +
       '<button class="btn-ghost sm" onclick="seoRevocarEnlace(\'' + esc(e.id) + '\')">Desactivar</button></span></li>').join('') + '</ul>'
       : '<p class="seo-adm-sub">Todavía no hay enlace.</p>') + '</section>';
+  h += seoSeccionTrafico();
   h += '<section class="seo-adm-cluster"><div class="seo-adm-cluster-cab"><strong>Datos del proyecto</strong><button class="btn-ghost sm" onclick="seoFormProyecto(true)">' + icn('edit', 12) + ' Editar</button></div>' +
     '<p class="seo-adm-sub">Dominio: ' + esc(p.dominio) + ' · Marca: ' + esc(p.marca || '—') + ' · País: ' + esc((SEO_PAISES.find(x => x[0] === p.pais) || [])[1] || p.pais) +
     ' · Inicio: ' + esc(p.inicio) + ' · Competidores: ' + esc((p.competidores || []).join(', ') || '—') + '</p></section>' + seoLineaCupo() +
     '<div class="seo-adm-botones"><button class="btn-ghost sm" onclick="seoArchivar()">' + icn('archivar', 12) + ' Archivar proyecto</button></div>';
   c.innerHTML = h;
+}
+
+// ── Tráfico: Search Console y GA4 (fase 3) ──────────────────────────────────
+// El cliente agrega el correo de Acuarius como lector y aquí se escribe qué
+// propiedad leer. Se prueba al guardar: quien conecta sabe ya si falta el acceso.
+function seoEstadoConexion(estado, error, at) {
+  if (!estado) return '<span class="seo-adm-sub">Sin conectar</span>';
+  if (estado === 'ok') return '<span class="seo-adm-ok">' + icn('check', 12) + ' Conectado' + (at ? ' · actualizado ' + esc(String(at).slice(0, 10)) : '') + '</span>';
+  return '<span class="seo-adm-mal">' + icn('alert', 12) + ' ' + esc(error || 'No se pudo leer') + '</span>';
+}
+function seoSeccionTrafico() {
+  const p = SEO.datos.proyecto;
+  const correo = SEO.datos.correoServicio || '';
+  return '<section class="seo-adm-cluster"><div class="seo-adm-cluster-cab"><strong>Tráfico: Search Console y Google Analytics</strong>' +
+    ((p.gsc_propiedad || p.ga4_propiedad) ? '<button class="btn-ghost sm" onclick="seoSincronizar(this)">' + icn('refresh', 12) + ' Actualizar ahora</button>' : '') + '</div>' +
+    '<p class="seo-adm-sub">Para ver clics, impresiones, visitas orgánicas y visitas desde IAs, tu cliente (o tú, si tienes acceso) agrega este correo como lector:</p>' +
+    '<div class="seo-adm-correo"><code>' + esc(correo || 'falta configurar la cuenta de servicio') + '</code>' +
+    (correo ? '<button class="btn-ghost sm" onclick="seoCopiarTexto(\'' + esc(correo) + '\')">' + icn('copy', 12) + ' Copiar</button>' : '') + '</div>' +
+    '<ol class="seo-adm-pasos"><li><strong>Search Console</strong> › Configuración › Usuarios y permisos › Agregar usuario › pega el correo › permiso «Restringido».</li>' +
+    '<li><strong>Google Analytics</strong> › Administrar › Gestión de acceso a la propiedad › + › pega el correo › rol «Lector» (sin marcar «notificar»).</li></ol>' +
+    '<div class="seo-adm-form">' +
+    '<label>Propiedad de Search Console<input class="auto-input" id="seo-t-gsc" value="' + esc(p.gsc_propiedad || '') + '" placeholder="sc-domain:' + esc(p.dominio) + '"><span class="seo-adm-estado-con">' + seoEstadoConexion(p.gsc_estado, p.gsc_error, p.gsc_sincronizado_at) + '</span></label>' +
+    '<label>ID de propiedad de GA4<input class="auto-input" id="seo-t-ga4" value="' + esc(p.ga4_propiedad || '') + '" placeholder="Ej: 412345678 (no el «G-…»)"><span class="seo-adm-estado-con">' + seoEstadoConexion(p.ga4_estado, p.ga4_error, p.ga4_sincronizado_at) + '</span></label>' +
+    '</div><div class="seo-adm-botones"><button class="btn-pri sm" onclick="seoConectarTrafico(this)">Guardar y probar</button></div>' +
+    '<p class="seo-adm-sub">La primera vez se trae el historial que da Google (16 meses de Search Console, 13 de Analytics); después se actualiza solo cada día y queda guardado aquí aunque Google lo borre.</p></section>';
+}
+
+async function seoCopiarTexto(t) {
+  try { await navigator.clipboard.writeText(t); showToast('Copiado'); } catch { showToast('No se pudo copiar: selecciónalo a mano', 'error'); }
+}
+
+function seoResultadoConexion(nombre, r) {
+  if (!r) return '';
+  if (r.ok) return nombre + ': conectado';
+  return nombre + ': ' + (r.error || 'no se pudo leer');
+}
+
+async function seoConectarTrafico(btn) {
+  const p = SEO.datos.proyecto;
+  const gsc = document.getElementById('seo-t-gsc').value.trim();
+  const ga4 = document.getElementById('seo-t-ga4').value.trim();
+  const cuerpo = { accion: 'conectar', proyecto_id: p.id };
+  if (gsc !== (p.gsc_propiedad || '')) cuerpo.gsc_propiedad = gsc;
+  if (ga4 !== (p.ga4_propiedad || '')) cuerpo.ga4_propiedad = ga4;
+  if (!('gsc_propiedad' in cuerpo) && !('ga4_propiedad' in cuerpo)) return seoSincronizar(btn);
+  const antes = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Probando con Google…';
+  try {
+    const r = await seoPost(cuerpo);
+    const partes = [seoResultadoConexion('Search Console', r.gsc), seoResultadoConexion('Analytics', r.ga4)].filter(Boolean);
+    const bien = [r.gsc, r.ga4].filter(Boolean).every(x => x.ok);
+    showToast(partes.join(' · ') || 'Guardado', bien ? undefined : 'error');
+    await seoRecargar();
+  } catch (e) { showToast(e.message, 'error'); btn.disabled = false; btn.textContent = antes; }
+}
+
+async function seoSincronizar(btn) {
+  const antes = btn.innerHTML;
+  btn.disabled = true; btn.textContent = 'Actualizando…';
+  try {
+    const r = await seoPost({ accion: 'sincronizar', proyecto_id: SEO.datos.proyecto.id });
+    const partes = [seoResultadoConexion('Search Console', r.gsc), seoResultadoConexion('Analytics', r.ga4)].filter(Boolean);
+    showToast(partes.join(' · ') || 'Nada que actualizar', [r.gsc, r.ga4].filter(Boolean).every(x => x.ok) ? undefined : 'error');
+    await seoRecargar();
+  } catch (e) { showToast(e.message, 'error'); } finally { btn.disabled = false; btn.innerHTML = antes; }
 }
 
 async function seoNuevoEnlace(btn) {

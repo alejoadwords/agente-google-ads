@@ -8,6 +8,7 @@
 
 export const SECCIONES = [
   ['resumen', 'Resumen'],
+  ['trafico', 'Tráfico'],
   ['posiciones', 'Posiciones'],
   ['geo', 'Presencia en IAs'],
   ['contenido', 'Contenido'],
@@ -193,7 +194,10 @@ function seccionResumen(datos, series) {
   const todas = datos.acciones || [];
   const hechas = todas.filter(a => a.estado === 'hecha').length;
   const marca = esc(datos.proyecto.marca || datos.proyecto.nombre);
+  const tr = resumenTrafico(datos);
   let h = `<div class="sd-tarjetas">
+    ${tr.hayGsc && tr.cerrado ? tarjeta('Clics desde Google', num(tr.cerrado.clics), nombreMes(tr.cerrado.mes) + (tr.previo ? ' · ' + delta(tr.cerrado.clics, tr.previo.clics) : '')) : ''}
+    ${tr.hayGa4 && tr.cerrado && tr.cerrado.ia ? tarjeta('Visitas desde IAs', num(tr.cerrado.ia), nombreMes(tr.cerrado.mes), 'sd-pendiente') : ''}
     ${tarjeta('Keywords en seguimiento', r.total, r.medidas ? `${r.enTop100} aparecen en los 100 primeros de Google` : 'Aún sin medir')}
     ${tarjeta('En la primera página', r.enTop10, r.enTop3 ? `${r.enTop3} en los 3 primeros puestos` : 'Top 10 de Google')}
     ${tarjeta('Posición promedio', r.promedio ?? '—', r.suben || r.bajan ? `${r.suben} suben · ${r.bajan} bajan en el último mes` : '')}
@@ -234,8 +238,8 @@ function seccionPosiciones(datos, series) {
 function seccionGeo(datos) {
   const marca = esc(datos.proyecto.marca || datos.proyecto.nombre);
   const per = periodosGeo(datos);
-  if (!(datos.preguntas || []).length) return '<p class="sd-vacio">Todavía no hay preguntas para medir la presencia en IAs.</p>';
-  if (!per.length) return '<p class="sd-vacio">La primera medición en ChatGPT, Gemini, Claude y Perplexity está en curso.</p>';
+  if (!(datos.preguntas || []).length) return '<p class="sd-vacio">Todavía no hay preguntas para medir la presencia en IAs.</p>' + traficoIA(datos);
+  if (!per.length) return '<p class="sd-vacio">La primera medición en ChatGPT, Gemini, Claude y Perplexity está en curso.</p>' + traficoIA(datos);
   const g = resumenGeo(datos, per[per.length - 1]);
   const previo = per.length > 1 ? resumenGeo(datos, per[per.length - 2]) : null;
   const delta = previo ? g.tasa - previo.tasa : null;
@@ -269,7 +273,7 @@ function seccionGeo(datos) {
   if (g.fuentes.length) {
     h += `<h3 class="sd-h3">Las páginas que citan las IAs como fuente</h3><p class="sd-nota">Perplexity muestra de dónde sacó su respuesta. Que aparezca tu web aquí es lo que trae visitas.</p><div class="sd-chips">${g.fuentes.map(([d, n]) => `<span class="sd-chip${d === datos.proyecto.dominio ? ' sd-chip-propio' : ''}">${esc(d)} · ${n}</span>`).join('')}</div>`;
   }
-  h += `<div class="sd-aviso"><strong>¿Y el tráfico que llega desde las IAs?</strong> Las visitas desde ChatGPT, Gemini, Perplexity, Copilot y Claude se verán aquí, mes a mes, en cuanto conectemos tu Google Analytics y tu Search Console.</div>`;
+  h += traficoIA(datos);
   return h;
 }
 
@@ -294,6 +298,148 @@ function seccionCompetencia(datos, series) {
   return `<p class="sd-nota">Sitios que aparecen en los 5 primeros resultados de Google para tus keywords, en la última medición.</p>
     <div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Sitio</th><th>Aparece en</th><th>Está por encima de ti en</th></tr></thead><tbody>` +
     c.map(x => `<tr><td>${esc(x.dominio)}</td><td>${x.apariciones} keywords</td><td>${x.ganan}</td></tr>`).join('') + '</tbody></table></div>';
+}
+
+// ── Tráfico: Search Console y GA4 (fase 3) ──────────────────────────────────
+const num = (n) => Math.round(n || 0).toLocaleString('es-CO');
+const STOP = new Set('de del la las el los en y o a para por con sin un una unos unas que como cual cuál es mi tu su al lo the of for and to in on with a an best mejor mejores'.split(' '));
+const tokens = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z0-9ñ]+/).filter(w => w.length > 1 && !STOP.has(w));
+
+// Mes cerrado que se reporta (el anterior) y el que va en curso.
+export function mesesDeTrafico(datos) {
+  const t = datos.trafico || {};
+  return { actual: t.mesActual, cerrado: t.mesAnterior };
+}
+
+export function resumenTrafico(datos) {
+  const t = datos.trafico || {};
+  const porMes = {};
+  const m = (mes) => (porMes[mes] ||= { mes, clics: 0, impresiones: 0, posPeso: 0, sesiones: 0, organicas: 0, ia: 0, conversiones: 0, convOrg: 0, convIa: 0, diasGsc: 0, diasGa4: 0 });
+  for (const d of t.gscDias || []) { const x = m(d.fecha.slice(0, 7)); x.clics += d.clics; x.impresiones += d.impresiones; x.posPeso += (d.posicion || 0) * d.impresiones; x.diasGsc++; }
+  for (const d of t.ga4Dias || []) { const x = m(d.fecha.slice(0, 7)); x.sesiones += d.sesiones; x.organicas += d.sesiones_organicas; x.ia += d.sesiones_ia; x.conversiones += d.conversiones; x.convOrg += d.conversiones_organicas; x.convIa += d.conversiones_ia; x.diasGa4++; }
+  const serie = Object.values(porMes).sort((a, b) => a.mes.localeCompare(b.mes)).slice(-13)
+    .map(x => ({ ...x, posicion: x.impresiones ? Math.round(x.posPeso / x.impresiones * 10) / 10 : null }));
+  const de = (mes) => serie.find(x => x.mes === mes) || null;
+  return { serie, cerrado: de(t.mesAnterior), previo: de(prevMes(t.mesAnterior)), actual: de(t.mesActual), hayGsc: !!(t.gscDias || []).length, hayGa4: !!(t.ga4Dias || []).length };
+}
+function prevMes(ym) {
+  if (!ym) return null;
+  let [y, mm] = ym.split('-').map(Number); mm--; if (mm < 1) { mm = 12; y--; }
+  return y + '-' + String(mm).padStart(2, '0');
+}
+
+// Cada búsqueda que trae tráfico, en su clúster: la que está en seguimiento,
+// la que se parece a las keywords de un clúster, la de la marca, o nueva.
+export function clasificarConsultas(datos, mes) {
+  const consultas = ((datos.trafico || {}).gscConsultas || []).filter(c => c.mes === mes);
+  const kwPorTexto = new Map((datos.keywords || []).map(k => [k.kw.trim().toLowerCase(), k]));
+  const clusters = (datos.clusters || []).map(c => {
+    const vocab = new Set(tokens(c.nombre));
+    for (const k of datos.keywords || []) if (k.cluster_id === c.id) tokens(k.kw).forEach(w => vocab.add(w));
+    return { ...c, vocab };
+  });
+  const marca = new Set([...tokens(datos.proyecto.marca), ...tokens(String(datos.proyecto.dominio || '').split('.')[0])].filter(w => w.length > 2));
+  const grupos = new Map();
+  const g = (clave, nombre) => grupos.get(clave) || grupos.set(clave, { clave, nombre, consultas: [], clics: 0, impresiones: 0 }).get(clave);
+  for (const c of consultas) {
+    const k = kwPorTexto.get(c.consulta.trim().toLowerCase());
+    const tk = tokens(c.consulta);
+    let destino = null;
+    if (k) destino = k.cluster_id ? clusters.find(x => x.id === k.cluster_id) : null;
+    if (!destino && !k) {
+      let mejor = null, puntaje = 0;
+      for (const cl of clusters) {
+        const comunes = tk.filter(w => cl.vocab.has(w)).length;
+        const sc = tk.length ? comunes / tk.length : 0;
+        if (comunes && sc > puntaje) { puntaje = sc; mejor = cl; }
+      }
+      if (mejor && puntaje >= 0.5) destino = mejor;
+    }
+    const esMarca = tk.some(w => marca.has(w));
+    const grupo = destino ? g(destino.id, destino.nombre) : esMarca ? g('__marca', 'Búsquedas de tu marca')
+      : k ? g('__seguimiento', 'En seguimiento, sin clúster') : g('__nuevas', 'Nuevas: fuera de las keywords elegidas');
+    grupo.consultas.push({ ...c, seguimiento: !!k });
+    grupo.clics += c.clics; grupo.impresiones += c.impresiones;
+  }
+  // Primero los clústeres, luego lo que está en seguimiento sin clúster, las
+  // nuevas (lo que más interesa descubrir) y al final la marca.
+  const orden = (x) => ({ __seguimiento: 1, __nuevas: 2, __marca: 3 }[x.clave] || 0);
+  return [...grupos.values()].sort((a, b) => orden(a) - orden(b) || b.clics - a.clics);
+}
+
+const delta = (a, b) => {
+  if (a == null || b == null || !b) return '';
+  const d = Math.round((a - b) / b * 100);
+  return d === 0 ? '<span class="sd-tenue">igual</span>' : `<span class="${d > 0 ? 'sd-sube' : 'sd-baja'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)}%</span>`;
+};
+
+function barrasValor(puntos) {
+  if (!puntos.length) return '';
+  const max = Math.max(...puntos.map(p => p.valor), 1);
+  return `<div class="sd-barras">${puntos.map(p => `<div class="sd-barra"><div class="sd-barra-col"><div style="height:${Math.max(2, Math.round(p.valor / max * 100))}%"></div></div><div class="sd-barra-v">${num(p.valor)}</div><div class="sd-barra-e">${esc(p.etiqueta)}</div></div>`).join('')}</div>`;
+}
+
+function seccionTrafico(datos) {
+  const r = resumenTrafico(datos);
+  if (!r.hayGsc && !r.hayGa4) return '<p class="sd-vacio">El tráfico aparece aquí cuando se conectan Google Search Console y Google Analytics.</p>';
+  const { cerrado, actual } = mesesDeTrafico(datos);
+  const c = r.cerrado, p = r.previo;
+  let h = `<p class="sd-nota">Cifras de ${cerrado ? nombreMes(cerrado) : 'el último mes'}, comparadas con el mes anterior.${r.actual ? ` En ${nombreMes(actual)} (en curso): ${r.hayGsc ? num(r.actual.clics) + ' clics desde Google' : ''}${r.hayGsc && r.hayGa4 ? ' · ' : ''}${r.hayGa4 ? num(r.actual.sesiones) + ' visitas' : ''}.` : ''}</p><div class="sd-tarjetas">`;
+  if (r.hayGsc) {
+    h += tarjeta('Clics desde Google', c ? num(c.clics) : '—', c && p ? delta(c.clics, p.clics) + ' frente a ' + nombreMes(p.mes) : '') +
+      tarjeta('Veces que apareciste', c ? num(c.impresiones) : '—', c && p ? delta(c.impresiones, p.impresiones) : 'Impresiones en Google') +
+      tarjeta('Posición media', c?.posicion ?? '—', 'En todas las búsquedas');
+  }
+  if (r.hayGa4) {
+    h += tarjeta('Visitas al sitio', c ? num(c.sesiones) : '—', c && p ? delta(c.sesiones, p.sesiones) : '') +
+      tarjeta('Visitas desde buscadores', c ? num(c.organicas) : '—', c ? num(c.convOrg) + ' conversiones' : '') +
+      tarjeta('Visitas desde IAs', c ? num(c.ia) : '—', c ? num(c.convIa) + ' conversiones' : '', c && c.ia ? 'sd-pendiente' : '');
+  }
+  h += '</div>';
+  const meses = r.serie.filter(x => x.mes !== actual);
+  if (r.hayGsc && meses.length > 1) h += '<h3 class="sd-h3">Clics desde Google, mes a mes</h3>' + barrasValor(meses.map(x => ({ etiqueta: nombreMes(x.mes).slice(0, 3), valor: x.clics })));
+  if (r.hayGa4 && meses.length > 1) h += '<h3 class="sd-h3">Visitas desde buscadores, mes a mes</h3>' + barrasValor(meses.map(x => ({ etiqueta: nombreMes(x.mes).slice(0, 3), valor: x.organicas })));
+  if (r.hayGsc) {
+    const mesC = ((datos.trafico.gscConsultas || []).some(x => x.mes === cerrado)) ? cerrado : actual;
+    const grupos = clasificarConsultas(datos, mesC);
+    if (grupos.length) {
+      h += `<h3 class="sd-h3">Las búsquedas que te traen tráfico (${nombreMes(mesC)})</h3><p class="sd-nota">Todas las búsquedas por las que apareciste en Google, en su clúster: también las que no estaban en seguimiento. ★ = keyword en seguimiento.</p>`;
+      for (const gr of grupos) {
+        h += `<details class="sd-grupo"${gr.clave === '__marca' ? '' : ' open'}><summary><strong>${esc(gr.nombre)}</strong> <span class="sd-tenue">· ${gr.consultas.length} ${gr.consultas.length === 1 ? 'búsqueda' : 'búsquedas'} · ${num(gr.clics)} clics · ${num(gr.impresiones)} impresiones</span></summary>
+          <div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Búsqueda</th><th>Clics</th><th>Impresiones</th><th>Posición media</th></tr></thead><tbody>` +
+          gr.consultas.slice(0, 25).map(q => `<tr><td>${q.seguimiento ? '★ ' : ''}${esc(q.consulta)}</td><td>${num(q.clics)}</td><td>${num(q.impresiones)}</td><td>${q.posicion ? Math.round(q.posicion * 10) / 10 : '—'}</td></tr>`).join('') +
+          (gr.consultas.length > 25 ? `<tr><td colspan="4" class="sd-tenue">y ${gr.consultas.length - 25} búsquedas más</td></tr>` : '') + '</tbody></table></div></details>';
+      }
+    }
+    const paginas = (datos.trafico.gscPaginas || []).filter(x => x.mes === mesC).slice(0, 10);
+    if (paginas.length) {
+      h += `<h3 class="sd-h3">Las páginas que más tráfico traen</h3><div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Página</th><th>Clics</th><th>Impresiones</th><th>Posición media</th></tr></thead><tbody>` +
+        paginas.map(x => `<tr><td class="sd-url">${esc(x.pagina.replace(/^https?:\/\/(www\.)?/, ''))}</td><td>${num(x.clics)}</td><td>${num(x.impresiones)}</td><td>${x.posicion ? Math.round(x.posicion * 10) / 10 : '—'}</td></tr>`).join('') + '</tbody></table></div>';
+    }
+  }
+  return h;
+}
+
+// Las visitas que llegaron desde las IAs (GA4), para la sección de GEO.
+function traficoIA(datos) {
+  const ia = (datos.trafico || {}).ga4Ia || [];
+  const { cerrado, actual } = mesesDeTrafico(datos);
+  if (!((datos.trafico || {}).ga4Dias || []).length) {
+    return `<div class="sd-aviso"><strong>¿Y el tráfico que llega desde las IAs?</strong> Las visitas desde ChatGPT, Gemini, Perplexity, Copilot y Claude se verán aquí, mes a mes, en cuanto se conecte Google Analytics.</div>`;
+  }
+  const mes = ia.some(x => x.mes === cerrado) ? cerrado : actual;
+  const delMes = ia.filter(x => x.mes === mes).sort((a, b) => b.sesiones - a.sesiones);
+  const total = delMes.reduce((a, x) => a + x.sesiones, 0), conv = delMes.reduce((a, x) => a + x.conversiones, 0);
+  const porMes = {};
+  for (const x of ia) porMes[x.mes] = (porMes[x.mes] || 0) + x.sesiones;
+  let h = `<h3 class="sd-h3">Visitas que te llegaron desde las IAs</h3>
+    <div class="sd-geo-titular"><div class="sd-geo-cifra">${num(total)}</div><div><strong>visitas en ${nombreMes(mes)} llegaron desde un asistente de IA${conv ? ', con ' + num(conv) + ' conversiones' : ''}.</strong>
+    <div class="sd-nota">Es un mínimo: algunas IAs no dicen de dónde viene la visita y esas llegan como «directo».</div></div></div>`;
+  if (delMes.length) h += `<div class="sd-chips">${delMes.map(x => `<span class="sd-chip">${esc(x.fuente)} · ${num(x.sesiones)} visitas${x.conversiones ? ' · ' + num(x.conversiones) + ' conv.' : ''}</span>`).join('')}</div>`;
+  // Sin el mes en curso: a medias parecería una caída.
+  const serie = Object.entries(porMes).filter(([m]) => m !== actual).sort().slice(-12);
+  if (serie.length > 1) h += barrasValor(serie.map(([m, v]) => ({ etiqueta: nombreMes(m).slice(0, 3), valor: v })));
+  return h;
 }
 
 // ── Calendario de contenido (fase 2) ────────────────────────────────────────
@@ -369,7 +515,7 @@ export function panelSeo(datos, { seccion = 'resumen', agencia = null, contenido
   const series = seriesDeKeywords(datos);
   const cuerpo = contenido
     ? () => detalleContenido(datos, contenido, { vistaCliente, formulario, nombre })
-    : ({ resumen: seccionResumen, posiciones: seccionPosiciones, geo: seccionGeo, contenido: (d, s) => seccionContenido(d, s, { vistaCliente }), cronograma: seccionCronograma, competencia: seccionCompetencia }[seccion] || seccionResumen);
+    : ({ resumen: seccionResumen, trafico: seccionTrafico, posiciones: seccionPosiciones, geo: seccionGeo, contenido: (d, s) => seccionContenido(d, s, { vistaCliente }), cronograma: seccionCronograma, competencia: seccionCompetencia }[seccion] || seccionResumen);
   if (contenido) seccion = 'contenido';
   return `<div class="seo-doc">
     <header class="sd-cab"><div><div class="sd-cab-t">${esc(datos.proyecto.nombre)}</div><div class="sd-tenue">${esc(datos.proyecto.dominio)}${agencia ? ' · Preparado por ' + esc(agencia) : ''}</div></div></header>
