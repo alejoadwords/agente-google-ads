@@ -19,7 +19,7 @@ import { medirPosiciones, medirGeo, motoresActivos, planDe } from './_seo-medir.
 import { dominio, accionesIniciales, hoyCO, MAX_KEYWORDS, MAX_PREGUNTAS, MAX_COMPETIDORES, CATEGORIAS, ESTADOS,
   TIPOS_CONTENIDO, transicionContenido, editableContenido } from './_seo.js';
 import { avisarClienteRevision } from './_seo-avisos.js';
-import { sincronizarGsc, sincronizarGa4 } from './_seo-trafico.js';
+import { sincronizarGsc, sincronizarGa4, propiedadesDelSitio } from './_seo-trafico.js';
 import { correoServicio } from './_google-sa.js';
 import { propiedadGsc, propiedadGa4 } from './_seo.js';
 
@@ -78,6 +78,13 @@ async function manejar(req) {
 
   const url = new URL(req.url);
   if (req.method === 'GET') {
+    // Las propiedades de Google del sitio del proyecto, para el desplegable.
+    const propiedadesDe = url.searchParams.get('propiedades');
+    if (propiedadesDe) {
+      const pr = await proyectoPropio(propiedadesDe);
+      if (!pr) return json({ error: 'Ese proyecto no existe o no es de tu cuenta.' }, 404);
+      return json(await propiedadesDelSitio(pr.dominio));
+    }
     const versionesDe = url.searchParams.get('versiones');
     if (versionesDe) {
       const c = await hijoPropio('seo_contenidos', versionesDe);

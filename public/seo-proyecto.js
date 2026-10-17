@@ -10,7 +10,7 @@
 // Se carga después de app.js: openSeoProject, seoImportKeywords y
 // seoImportGeoQueries de aquí reemplazan a las de allí.
 
-const SEO = { lista: null, cupo: null, motores: [], datos: null, enlaces: [], tab: 'cliente', seccion: 'resumen', alcance: undefined, panel: null, ocupado: false, pieza: null, piezaCliente: null };
+const SEO = { lista: null, cupo: null, motores: [], datos: null, enlaces: [], tab: 'cliente', seccion: 'resumen', alcance: undefined, panel: null, ocupado: false, pieza: null, piezaCliente: null, props: null };
 const SEO_TABS = [['cliente', 'Lo que ve tu cliente'], ['keywords', 'Clústeres y keywords'], ['geo', 'Preguntas para las IAs'], ['contenido', 'Contenido'], ['cronograma', 'Cronograma'], ['ajustes', 'Ajustes y enlace']];
 const SEO_TIPOS = [['articulo', 'Artículo'], ['pagina', 'Página'], ['landing', 'Landing'], ['post', 'Post'], ['video', 'Video'], ['otro', 'Otro']];
 const SEO_PAISES = [['co', 'Colombia'], ['mx', 'México'], ['ar', 'Argentina'], ['cl', 'Chile'], ['pe', 'Perú'], ['ec', 'Ecuador'], ['es', 'España'], ['us', 'Estados Unidos']];
@@ -576,6 +576,7 @@ function seoPintarAjustes(c) {
       '<button class="btn-ghost sm" onclick="seoRevocarEnlace(\'' + esc(e.id) + '\')">Desactivar</button></span></li>').join('') + '</ul>'
       : '<p class="seo-adm-sub">Todavía no hay enlace.</p>') + '</section>';
   h += seoSeccionTrafico();
+  setTimeout(seoCargarPropiedades, 0);
   h += '<section class="seo-adm-cluster"><div class="seo-adm-cluster-cab"><strong>Datos del proyecto</strong><button class="btn-ghost sm" onclick="seoFormProyecto(true)">' + icn('edit', 12) + ' Editar</button></div>' +
     '<p class="seo-adm-sub">Dominio: ' + esc(p.dominio) + ' · Marca: ' + esc(p.marca || '—') + ' · País: ' + esc((SEO_PAISES.find(x => x[0] === p.pais) || [])[1] || p.pais) +
     ' · Inicio: ' + esc(p.inicio) + ' · Competidores: ' + esc((p.competidores || []).join(', ') || '—') + '</p></section>' + seoLineaCupo() +
@@ -602,10 +603,46 @@ function seoSeccionTrafico() {
     '<ol class="seo-adm-pasos"><li><strong>Search Console</strong> › Configuración › Usuarios y permisos › Agregar usuario › pega el correo › permiso «Restringido».</li>' +
     '<li><strong>Google Analytics</strong> › Administrar › Gestión de acceso a la propiedad › + › pega el correo › rol «Lector» (sin marcar «notificar»).</li></ol>' +
     '<div class="seo-adm-form">' +
-    '<label>Propiedad de Search Console<input class="auto-input" id="seo-t-gsc" value="' + esc(p.gsc_propiedad || '') + '" placeholder="sc-domain:' + esc(p.dominio) + '"><span class="seo-adm-estado-con">' + seoEstadoConexion(p.gsc_estado, p.gsc_error, p.gsc_sincronizado_at) + '</span></label>' +
-    '<label>ID de propiedad de GA4<input class="auto-input" id="seo-t-ga4" value="' + esc(p.ga4_propiedad || '') + '" placeholder="Ej: 412345678 (no el «G-…»)"><span class="seo-adm-estado-con">' + seoEstadoConexion(p.ga4_estado, p.ga4_error, p.ga4_sincronizado_at) + '</span></label>' +
+    '<label>Propiedad de Search Console<button type="button" class="dd-btn" id="seo-t-gsc-dd" onclick="seoElegirPropiedad(\'gsc\', this)" disabled>Buscando las de ' + esc(p.dominio) + '…</button>' +
+      '<input class="auto-input" id="seo-t-gsc" value="' + esc(p.gsc_propiedad || '') + '" placeholder="o escríbela: sc-domain:' + esc(p.dominio) + '"><span class="seo-adm-estado-con">' + seoEstadoConexion(p.gsc_estado, p.gsc_error, p.gsc_sincronizado_at) + '</span></label>' +
+    '<label>Propiedad de GA4<button type="button" class="dd-btn" id="seo-t-ga4-dd" onclick="seoElegirPropiedad(\'ga4\', this)" disabled>Buscando las de ' + esc(p.dominio) + '…</button>' +
+      '<input class="auto-input" id="seo-t-ga4" value="' + esc(p.ga4_propiedad || '') + '" placeholder="o escribe el ID (9-10 cifras, no el «G-…»)"><span class="seo-adm-estado-con">' + seoEstadoConexion(p.ga4_estado, p.ga4_error, p.ga4_sincronizado_at) + '</span></label>' +
     '</div><div class="seo-adm-botones"><button class="btn-pri sm" onclick="seoConectarTrafico(this)">Guardar y probar</button></div>' +
     '<p class="seo-adm-sub">La primera vez se trae el historial que da Google (16 meses de Search Console, 13 de Analytics); después se actualiza solo cada día y queda guardado aquí aunque Google lo borre.</p></section>';
+}
+
+// Las propiedades que Acuarius puede leer de ESTE sitio (el servidor filtra
+// por dominio: la cuenta de servicio es la misma para todas las agencias).
+async function seoCargarPropiedades() {
+  const id = SEO.datos?.proyecto?.id;
+  if (!id) return;
+  try {
+    const d = await seoGet('propiedades=' + encodeURIComponent(id));
+    if (SEO.datos?.proyecto?.id !== id) return;
+    SEO.props = d;
+  } catch (e) { SEO.props = { gsc: [], ga4: [], errores: [e.message] }; }
+  for (const api of ['gsc', 'ga4']) {
+    const btn = document.getElementById('seo-t-' + api + '-dd');
+    const inp = document.getElementById('seo-t-' + api);
+    if (!btn || !inp) continue;
+    const lista = SEO.props[api] || [];
+    const actual = lista.find(x => x.id === inp.value.trim());
+    btn.disabled = !lista.length;
+    btn.textContent = actual ? actual.nombre : lista.length ? 'Elegir (' + lista.length + (lista.length === 1 ? ' disponible)' : ' disponibles)')
+      : 'Acuarius aún no ve ninguna de ' + SEO.datos.proyecto.dominio;
+    // Una sola y el campo vacío: se propone (falta guardar para conectar).
+    if (lista.length === 1 && !inp.value.trim()) { inp.value = lista[0].id; btn.textContent = lista[0].nombre + ' · guarda para conectar'; }
+  }
+  if ((SEO.props.errores || []).length) console.warn('propiedades SEO:', SEO.props.errores);
+}
+
+function seoElegirPropiedad(api, btn) {
+  const lista = (SEO.props || {})[api] || [];
+  const inp = document.getElementById('seo-t-' + api);
+  ddAbrir(btn, lista.map(x => ({ id: x.id, name: x.nombre + (x.cuenta ? ' (' + x.cuenta + ')' : '') })), inp.value.trim(), (id) => {
+    inp.value = id;
+    btn.textContent = (lista.find(x => x.id === id) || {}).nombre || id;
+  });
 }
 
 async function seoCopiarTexto(t) {

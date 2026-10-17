@@ -156,6 +156,7 @@
 .seo-adm-correo code{padding:6px 10px;border-radius:8px;background:var(--blue-lt);color:var(--blue);font-size:12.5px;word-break:break-all}
 .seo-adm-pasos{margin:0 0 12px;padding-left:18px;font-size:12.5px;color:var(--muted);line-height:1.6}
 .seo-adm-estado-con{font-size:11.5px;font-weight:600}
+.seo-adm-form label .dd-btn{margin-bottom:6px;text-align:left}
 .seo-adm-ok{color:var(--success)}
 .seo-adm-mal{color:var(--danger)}
 @media (max-width:640px){ .seo-adm{padding:16px 12px 60px} .seo-adm-preguntas input{min-width:0;width:100%} }

@@ -8,7 +8,7 @@
 // para no pasarse del tiempo de una función. Solo se importa desde edge.
 
 import { tokenServicio, correoServicio } from './_google-sa.js';
-import { hoyCO, mesesAtras, rangoMes, nombreIA, REGEX_IA, errorGoogle } from './_seo.js';
+import { hoyCO, mesesAtras, rangoMes, nombreIA, REGEX_IA, errorGoogle, mismoSitio } from './_seo.js';
 import { registrarError } from './_registro-errores.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -138,3 +138,48 @@ export async function sincronizarGa4(p) {
 
 // ¿Toca sincronizar hoy? Una vez al día (hora de Colombia), o si nunca se hizo.
 export const tocaSincronizar = (at, hoy = hoyCO()) => !at || hoyCO(new Date(at)) < hoy;
+
+// Las propiedades de Search Console y GA4 que Acuarius puede leer Y que son del
+// sitio del proyecto: para elegirlas de una lista en vez de buscar el ID.
+// GA4 se reconoce por la URL de su flujo web (Admin API).
+export async function propiedadesDelSitio(dom) {
+  const out = { gsc: [], ga4: [], errores: [] };
+  let token;
+  try { token = await tokenServicio(['https://www.googleapis.com/auth/webmasters.readonly', 'https://www.googleapis.com/auth/analytics.readonly']); }
+  catch (e) { out.errores.push('No se pudo hablar con Google: ' + e.message); return out; }
+  const H = { Authorization: 'Bearer ' + token };
+  const pedir = async (url) => { const r = await fetch(url, { headers: H }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d?.error?.message || 'HTTP ' + r.status); return d; };
+  await Promise.all([
+    (async () => {
+      try {
+        const d = await pedir('https://searchconsole.googleapis.com/webmasters/v3/sites');
+        out.gsc = (d.siteEntry || []).filter(x => mismoSitio(x.siteUrl, dom) && x.permissionLevel !== 'siteUnverifiedUser')
+          .map(x => ({ id: x.siteUrl, nombre: x.siteUrl.startsWith('sc-domain:') ? 'Dominio completo: ' + x.siteUrl.slice(10) : x.siteUrl }));
+      } catch (e) { out.errores.push('Search Console: ' + e.message); }
+    })(),
+    (async () => {
+      try {
+        const props = [];
+        let pagina = '';
+        for (let i = 0; i < 10; i++) {
+          const d = await pedir('https://analyticsadmin.googleapis.com/v1beta/accountSummaries?pageSize=200' + (pagina ? '&pageToken=' + pagina : ''));
+          for (const a of d.accountSummaries || []) for (const p of a.propertySummaries || []) props.push({ id: p.property.split('/')[1], nombre: p.displayName, cuenta: a.displayName });
+          if (!d.nextPageToken) break;
+          pagina = d.nextPageToken;
+        }
+        // De a 8 a la vez: con muchas cuentas conectadas, todas juntas chocan con la cuota.
+        for (let i = 0; i < props.length; i += 8) {
+          await Promise.all(props.slice(i, i + 8).map(async (p) => {
+            try {
+              const d = await pedir('https://analyticsadmin.googleapis.com/v1beta/properties/' + p.id + '/dataStreams');
+              const web = (d.dataStreams || []).map(x => x.webStreamData?.defaultUri).filter(Boolean);
+              const del = web.find(u => mismoSitio(u, dom));
+              if (del) out.ga4.push({ id: p.id, nombre: p.nombre + ' · ' + del, cuenta: p.cuenta });
+            } catch { /* una propiedad sin permiso de lectura de flujos no se lista */ }
+          }));
+        }
+      } catch (e) { out.errores.push('Google Analytics: ' + e.message); }
+    })(),
+  ]);
+  return out;
+}

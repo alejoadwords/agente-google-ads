@@ -227,6 +227,7 @@ console.log('\nFase 2: lo que carga el enlace (fetch simulado)');
 
 console.log('\nFase 3: tráfico (lo puro)');
 ok(S.nombreIA('chatgpt.com') === 'ChatGPT' && S.nombreIA('perplexity.ai') === 'Perplexity' && S.nombreIA('gemini.google.com') === 'Gemini' && S.nombreIA('claude.ai') === 'Claude' && S.nombreIA('copilot.microsoft.com') === 'Copilot', 'reconoce las IAs por la fuente de GA4');
+ok(S.mismoSitio('sc-domain:acuarius.app', 'acuarius.app') && S.mismoSitio('https://www.acuarius.app/', 'app.acuarius.app') && !S.mismoSitio('https://certainpezzano.com', 'acuarius.app') && !S.mismoSitio('noacuarius.app', 'acuarius.app'), 'mismo sitio: dominio o subdominio, nunca un dominio que solo se parece');
 ok(S.nombreIA('google') === null && S.nombreIA('facebook.com') === null, 'Google y redes no son IA');
 ok(S.propiedadGsc('', 'certainpezzano.com') === 'sc-domain:certainpezzano.com' && S.propiedadGsc('https://www.x.com', 'x.com') === 'https://www.x.com/' && S.propiedadGsc('X.com', '') === 'sc-domain:x.com', 'propiedad de Search Console: dominio o prefijo de URL');
 ok(S.propiedadGa4('412345678') === '412345678' && S.propiedadGa4('properties/412345678') === '412345678' && S.propiedadGa4('G-ABC123') === null, 'GA4: el ID de propiedad, no el de medición');
@@ -326,6 +327,25 @@ console.log('\nFase 3: sincronizar con Google, ejecutado (fetch simulado)');
     ok(!r.ok && r.estado === 'sin_acceso' && r.error.includes('sa@prueba.iam.gserviceaccount.com'), 'sin acceso: dice qué correo agregar');
     ok(escrito.some(x => x.includes('"gsc_estado":"sin_acceso"')) && !escrito.some(x => x.includes('/error_log')), 'queda marcado en el proyecto, sin ruido en error_log (es cosa del cliente)');
     ok(T.tocaSincronizar(null) && !T.tocaSincronizar(new Date().toISOString()), 'una vez al día');
+    // El desplegable: solo las propiedades del sitio del proyecto (caso real 17-10:
+    // la cuenta de servicio ve GA4 de Certain Pezzano Y de acuarius.app).
+    globalThis.fetch = async (url) => {
+      const u = String(url);
+      const res = (b, st = 200) => new Response(JSON.stringify(b), { status: st });
+      if (u.includes('oauth2.googleapis.com/token')) return res({ access_token: 'tok', expires_in: 3600 });
+      if (u.includes('/webmasters/v3/sites')) return res({ siteEntry: [{ siteUrl: 'https://acuarius.app/', permissionLevel: 'siteFullUser' }, { siteUrl: 'sc-domain:certainpezzano.com', permissionLevel: 'siteFullUser' }, { siteUrl: 'https://otro.com/', permissionLevel: 'siteUnverifiedUser' }] });
+      if (u.includes('/accountSummaries')) return res({ accountSummaries: [
+        { displayName: 'Certain Pezzano', propertySummaries: [{ property: 'properties/364735050', displayName: 'Certain Pezzano - GA4' }] },
+        { displayName: 'acuarius.app', propertySummaries: [{ property: 'properties/533200670', displayName: 'acuarius.app' }] }] });
+      if (u.includes('properties/364735050/dataStreams')) return res({ dataStreams: [{ type: 'WEB_DATA_STREAM', webStreamData: { defaultUri: 'https://certainpezzano.com' } }] });
+      if (u.includes('properties/533200670/dataStreams')) return res({ dataStreams: [{ type: 'WEB_DATA_STREAM', webStreamData: { defaultUri: 'https://acuarius.app/' } }] });
+      return res({});
+    };
+    const vis = await T.propiedadesDelSitio('acuarius.app');
+    ok(vis.ga4.length === 1 && vis.ga4[0].id === '533200670' && vis.gsc.length === 1 && vis.gsc[0].id === 'https://acuarius.app/', 'el desplegable trae SOLO las propiedades de este sitio', vis);
+    ok(!JSON.stringify(vis).includes('ertain'), 'nunca las de otro cliente que también dio acceso a Acuarius');
+    const vis2 = await T.propiedadesDelSitio('app.acuarius.app');
+    ok(vis2.ga4.length === 1 && vis2.gsc.length === 1, 'un subdominio reconoce las propiedades de su dominio');
   } catch (e) { ok(false, 'la sincronización no revienta al ejecutarse', e.stack); }
   finally { globalThis.fetch = antes; }
 }

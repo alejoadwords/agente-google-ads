@@ -259,3 +259,12 @@ export function errorGoogle(api, status, mensaje, correo) {
   if (status === 404 || /not found|invalid/i.test(m)) return { estado: 'sin_acceso', texto: api === 'gsc' ? 'Esa propiedad no existe en Search Console. Revisa cómo está escrita.' : 'Ese ID de propiedad de GA4 no existe. Es el número que sale en Administrar › Detalles de la propiedad.' };
   return { estado: 'error', texto: 'Google respondió con un error (' + status + '). Se reintenta solo.' };
 }
+
+// ¿Esta propiedad de Google es del sitio del proyecto? Mismo dominio o uno
+// es subdominio del otro (app.x.com ↔ x.com). La cuenta de servicio es UNA
+// para todas las agencias: sin este filtro, una agencia vería en la lista las
+// propiedades de los clientes de otra.
+export function mismoSitio(a, b) {
+  const x = dominio(String(a || '').replace(/^sc-domain:/i, '')), y = dominio(String(b || '').replace(/^sc-domain:/i, ''));
+  return !!x && !!y && (x === y || x.endsWith('.' + y) || y.endsWith('.' + x));
+}
