@@ -283,6 +283,9 @@ export async function intakeLead(userId, clientId, data) {
   const candidatos = new Map((await oportunidadesDe(
     (ruta) => sb(ruta), userId, clientId, { email: data.email, phone: data.phone }
   )).map(l => [l.id, l]));
+  // Las bajas son de la persona: si pidió no recibir correos o SMS desde una
+  // oportunidad, la nueva nace con esa baja (16-10-2026).
+  const bajas = ['no-email', 'no-sms'].filter(b => [...candidatos.values()].some(l => (l.tags || []).includes(b)));
 
   // ¿A cuál se suma? Si la entrada dice su proceso, a la oportunidad de ESE
   // proceso; si la persona no tiene ninguna ahí, se le abre una nueva enlazada
@@ -319,7 +322,7 @@ export async function intakeLead(userId, clientId, data) {
       // 'webhook' y no 'externa': es la clave con la que se configura la
       // regla de reparto «Webhook externo».
       source: data.source || 'webhook',
-      tags: leadTags,
+      tags: [...bajas, ...leadTags.filter(t => !bajas.includes(t))].slice(0, 15),
       notes: noteLine,
       ...(cfEntrada && Object.keys(cfEntrada).length ? { custom_fields: cfEntrada } : {}),
       ...(pipeline ? { pipeline_id: pipeline } : {}),

@@ -36187,8 +36187,9 @@ function impRender() {
       '<div class="auto-field"><label class="auto-label">Etiqueta para todos los importados (recomendado — así los segmentas en campañas)</label>' +
       '<input class="auto-input" id="imp-tags" list="crm-tag-datalist-imp" placeholder="ej: importados-' + new Date().toLocaleDateString('es-CO', { month: 'long' }) + '" style="width:100%">' +
       '<datalist id="crm-tag-datalist-imp">' + (typeof crmTags !== 'undefined' ? crmTags : []).map(t => '<option value="' + esc(t.name) + '">').join('') + '</datalist></div>' +
+      impTableroHtml() +
       '<div class="auto-field"><label class="auto-label">Etapa inicial</label><select class="auto-input" id="imp-stage">' + autoStageOptions('nuevo') + '</select></div>' +
-      '<div class="auto-field"><label class="auto-label">Si el email ya existe en tu CRM</label>' +
+      '<div class="auto-field"><label class="auto-label">Si la persona ya está en ' + ((crmPipelines || []).length > 1 ? 'ese tablero' : 'tu CRM') + '</label>' +
       '<select class="auto-input" id="imp-dedupe">' +
         '<option value="skip">Omitirlo (no tocar el lead existente)</option>' +
         '<option value="update">Actualizarlo (completa datos y suma etiquetas)</option>' +
@@ -36411,6 +36412,39 @@ function impBuildLeads() {
   }).filter(l => l.name || l.email);
 }
 
+// A qué tablero van los importados. Antes no se elegía: todo caía al principal,
+// pero la «Etapa inicial» ofrecía las etapas del tablero que se estaba
+// mirando. Importar desde Arriendo con una etapa de Arriendo dejaba a los
+// contactos en el principal con una etapa que ahí no existe: invisibles.
+let _impPipeline = null;
+function impTableroHtml() {
+  const lista = crmPipelines || [];
+  if (lista.length < 2) { _impPipeline = null; return ''; }
+  if (!_impPipeline || !lista.some(p => p.id === _impPipeline)) _impPipeline = crmPipelineId || (lista.find(p => p.is_default) || lista[0]).id;
+  return '<div class="auto-field"><label class="auto-label">Tablero</label>' +
+    '<select class="auto-input" id="imp-pipeline" onchange="impCambiarTablero(this.value)">' +
+      lista.map(p => '<option value="' + esc(p.id) + '"' + (p.id === _impPipeline ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') +
+    '</select>' +
+    '<div class="auto-vars-hint">Quien ya esté en otro tablero no se mueve: aquí se le abre una oportunidad nueva, enlazada a la suya.</div></div>';
+}
+
+async function impCambiarTablero(id) {
+  _impPipeline = id;
+  const sel = document.getElementById('imp-stage');
+  if (!sel) return;
+  sel.disabled = true;
+  try {
+    const r = await fetchAuth('/api/pipeline-stages?pipeline_id=' + encodeURIComponent(id));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    const etapas = d.stages || [];
+    sel.innerHTML = etapas.map(st => '<option value="' + esc(st.key) + '"' + (st.key === 'nuevo' ? ' selected' : '') + '>' + esc(st.label || st.key) + '</option>').join('');
+  } catch (e) {
+    showToast('No se pudieron leer las etapas de ese tablero: ' + (e.message || 'error'), 'error');
+  }
+  sel.disabled = false;
+}
+
 async function impRun() {
   const tags = (document.getElementById('imp-tags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
   const stage = document.getElementById('imp-stage')?.value || 'nuevo';
@@ -36434,12 +36468,15 @@ async function impRun() {
     try {
       const rLote = await fetchAuth('/api/leads' + qs, {
         method: 'POST',
-        body: JSON.stringify({ leads: leads.slice(i, i + BATCH), options: { tags, stage, dedupe, asignacion } }),
+        body: JSON.stringify({ leads: leads.slice(i, i + BATCH), options: { tags, stage, dedupe, asignacion },
+          pipeline_id: _impPipeline || crmPipelineId || null }),
       });
       if (!rLote.ok) throw await motivoDelFallo(rLote, 'importar contactos');
       const d = await rLote.json();
       if (d.result) {
         totals.created += d.result.created; totals.updated += d.result.updated;
+        totals.oportunidades = (totals.oportunidades || 0) + (d.result.oportunidades || 0);
+        if (d.result.tablero_ajeno) totals.tablero_ajeno = true;
         totals.skipped += d.result.skipped; totals.invalid += d.result.invalid;
         totals.email_invalido += (d.result.email_invalido || 0);
         if (d.result.limit_reached) totals.limit_reached = true;
@@ -36490,6 +36527,8 @@ async function impRun() {
           (totals.skipped ? '<span style="background:var(--bg-muted);color:var(--muted);padding:5px 12px;border-radius:20px;font-weight:700">' + totals.skipped + ' omitidos</span>' : '') +
           (totals.invalid ? '<span style="background:#FEF3C7;color:#B45309;padding:5px 12px;border-radius:20px;font-weight:700">' + totals.invalid + ' inválidos</span>' : '') +
         '</div>' +
+        (totals.tablero_ajeno ? '<div style="font-size:12px;color:var(--warning);margin-top:10px">El tablero elegido no es de este cliente: los contactos quedaron en el tablero principal.</div>' : '') +
+        (totals.oportunidades ? '<div style="font-size:12px;color:var(--muted);margin-top:10px">' + totals.oportunidades + (totals.oportunidades === 1 ? ' persona ya estaba' : ' personas ya estaban') + ' en otro tablero: se le' + (totals.oportunidades === 1 ? '' : 's') + ' abrió una oportunidad aquí, enlazada a la suya (cuentan entre los creados).</div>' : '') +
         (totals.email_invalido ? '<div style="font-size:12px;color:var(--muted);margin-top:10px">' + totals.email_invalido + ' contactos traían el correo mal escrito: se guardaron igual, sin correo.</div>' : '') +
         (totals.tags_ignoradas.length ? '<div style="font-size:12px;color:#B45309;margin-top:10px">No se pusieron estas etiquetas porque no están en el catálogo de la cuenta y solo un administrador puede crearlas: ' + esc(totals.tags_ignoradas.join(', ')) + '</div>' : '') +
         (totals.limit_reached ? '<div style="font-size:12px;color:#B45309;margin-top:12px">Alcanzaste el límite de leads de tu plan — los restantes no se importaron.</div>' : '') +

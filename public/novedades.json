@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-16-importar-a-un-tablero",
+      "fecha": "2026-10-16",
+      "tipo": "mejora",
+      "titulo": "Importa contactos al tablero que elijas",
+      "texto": "Si tienes varios tableros, al importar ahora eliges a cuál van, con sus propias etapas (por defecto, el que estás mirando). Antes todo caía al tablero principal. Si alguien del archivo ya está en otro tablero, no se mueve de allá: se le abre una oportunidad nueva en este, enlazada a la suya. Y cuando una persona se da de baja de tus correos, la baja vale para todas sus oportunidades, no solo para la que recibió el correo.",
+      "accion": {
+        "texto": "Ir al CRM",
+        "ir": "crm"
+      }
+    },
+    {
       "id": "2026-10-16-tienda-vtex",
       "fecha": "2026-10-16",
       "tipo": "nuevo",

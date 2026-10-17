@@ -634,12 +634,15 @@ export default async function handler(req) {
     // WhatsApp la mitad de la gente no tiene correo, y sin esto cada archivo
     // que se solape con el anterior vuelve a crear a las mismas personas —
     // gastando cupo del plan y ensuciando los informes.
+    const CAMPOS_IMPORT = 'id,name,email,phone,company,tags,pipeline_id,contacto_id,created_at';
     const emails = rows.map(r => String(r.email || '').trim().toLowerCase()).filter(Boolean);
     const scope = clientId ? `&client_id=eq.${clientId}` : '&client_id=is.null';
     let existingByEmail = {}, existingByPhone = {};
     if (emails.length) {
-      const exRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}${scope}&deleted_at=is.null&email=in.(${emails.map(e => '"' + e.replace(/"/g, '') + '"').join(',')})&select=id,email,tags`, { headers: sbHeaders() });
-      ((await exRes.json()) || []).forEach(l => { existingByEmail[(l.email || '').toLowerCase()] = l; });
+      const exRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}${scope}&deleted_at=is.null&email=in.(${emails.map(e => '"' + e.replace(/"/g, '') + '"').join(',')})&select=${CAMPOS_IMPORT}`, { headers: sbHeaders() });
+      // TODAS las oportunidades de cada persona, no la primera: puede estar en
+      // Venta y en Arriendo, y la que toca depende del tablero que se importa.
+      ((await exRes.json()) || []).forEach(l => { const k = (l.email || '').toLowerCase(); (existingByEmail[k] = existingByEmail[k] || []).push(l); });
     }
     const telesLote = rows.map(r => telClave(r.phone)).filter(Boolean);
     if (telesLote.length) {
@@ -651,13 +654,13 @@ export default async function handler(req) {
       const PAGINA = 1000, MAX_PAGINAS = 12;
       for (let p = 0; p < MAX_PAGINAS; p++) {
         const tRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}${scope}&deleted_at=is.null&phone=not.is.null&select=id,phone,email,tags&order=created_at.asc&limit=${PAGINA}&offset=${p * PAGINA}`,
+          `${SUPABASE_URL}/rest/v1/leads?user_id=eq.${userId}${scope}&deleted_at=is.null&phone=not.is.null&select=${CAMPOS_IMPORT}&order=created_at.asc&limit=${PAGINA}&offset=${p * PAGINA}`,
           { headers: sbHeaders() }
         );
         const pagina = (await tRes.json()) || [];
         pagina.forEach(l => {
           const k = telClave(l.phone);
-          if (k && !existingByPhone[k]) existingByPhone[k] = l;
+          if (k) (existingByPhone[k] = existingByPhone[k] || []).push(l);
         });
         if (pagina.length < PAGINA) break;
       }
@@ -665,9 +668,25 @@ export default async function handler(req) {
 
     // Los contactos importados van al pipeline pedido o al principal; sin esto
     // quedarian sin pipeline y no se verian en ningun tablero.
-    const pipelineImport = body.pipeline_id || await pipelinePrincipal(userId, clientId);
+    const principalImport = await pipelinePrincipal(userId, clientId);
+    // El tablero pedido tiene que ser de esta cuenta y de este cliente; si no,
+    // va al principal (no se mete a nadie en un tablero ajeno).
+    let pipelineImport = principalImport;
+    if (body.pipeline_id) {
+      const pr = await fetch(`${SUPABASE_URL}/rest/v1/pipelines?id=eq.${encodeURIComponent(body.pipeline_id)}&user_id=eq.${encodeURIComponent(userId)}${clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null'}&select=id&limit=1`, { headers: sbHeaders() })
+        .then(r => (r.ok ? r.json() : [])).catch(() => []);
+      if (pr?.[0]?.id) pipelineImport = pr[0].id;
+    }
+    // Pidió un tablero que no es de este ámbito (p. ej. «Mi cuenta» en una
+    // agencia): van al principal, y se dice en el resultado.
+    const tableroAjeno = !!body.pipeline_id && pipelineImport === principalImport && body.pipeline_id !== principalImport;
+    // ¿Se eligió un tablero? Entonces, quien ya está pero en OTRO proceso no se
+    // actualiza allá: se le abre una oportunidad aquí, enlazada (como hace
+    // intakeLead con los formularios). Sin tablero elegido, se actualiza la que
+    // tenga, como siempre.
+    const tableroElegido = !!body.pipeline_id && !tableroAjeno;
 
-    const result = { created: 0, updated: 0, skipped: 0, invalid: 0, limit_reached: false };
+    const result = { created: 0, updated: 0, skipped: 0, invalid: 0, limit_reached: false, oportunidades: 0, ...(tableroAjeno ? { tablero_ajeno: true } : {}) };
     const toInsert = [];
     const seenInBatch = new Set();
     for (const r of rows) {
@@ -695,7 +714,12 @@ export default async function handler(req) {
         result.tags_ignoradas = [...new Set([...(result.tags_ignoradas || []), ..._prepImp.ignoradas])];
       }
 
-      const existing = (email ? existingByEmail[email] : null) || (tel ? existingByPhone[tel] : null);
+      const candidatos = [...new Map([...(email ? existingByEmail[email] || [] : []), ...(tel ? existingByPhone[tel] || [] : [])]
+        .map(l => [l.id, l])).values()].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      const delTablero = tableroElegido ? candidatos.filter(l => esDelProceso(l, pipelineImport, principalImport)) : candidatos;
+      const existing = delTablero[0] || null;
+      // Está, pero en otro proceso: oportunidad nueva aquí, enlazada a las suyas.
+      const enOtro = !existing && candidatos.length ? candidatos[candidatos.length - 1] : null;
       if (existing) {
         if (dedupe === 'skip') { result.skipped++; continue; }
         const mergedTags = [...new Set([...(existing.tags || []), ...cleanTags])].slice(0, 15);
@@ -713,11 +737,16 @@ export default async function handler(req) {
         continue;
       }
       if (currentCount + toInsert.length >= planLimit) { result.limit_reached = true; result.skipped++; continue; }
+      // Las bajas son de la persona: la oportunidad nueva las hereda.
+      const bajas = enOtro ? ['no-email', 'no-sms'].filter(b => candidatos.some(l => (l.tags || []).includes(b))) : [];
+      if (enOtro) result.oportunidades++;
       toInsert.push({
         user_id: userId, client_id: clientId,
-        name: name || email || (r.phone ? String(r.phone).trim() : 'Sin nombre'), email,
-        phone: r.phone ? String(r.phone).trim().slice(0, 40) : null,
-        company: r.company ? String(r.company).trim().slice(0, 120) : null,
+        ...(enOtro ? { contacto_id: grupoDe(enOtro) } : {}),
+        name: name || (enOtro && enOtro.name) || email || (r.phone ? String(r.phone).trim() : 'Sin nombre'),
+        email: email || (enOtro && enOtro.email) || null,
+        phone: r.phone ? String(r.phone).trim().slice(0, 40) : ((enOtro && enOtro.phone) || null),
+        company: r.company ? String(r.company).trim().slice(0, 120) : ((enOtro && enOtro.company) || null),
         value: r.value ? parseFloat(String(r.value).replace(/[^\d.]/g, '')) || null : null,
         notes: r.notes ? String(r.notes).trim().slice(0, 1000) : null,
         stage, stage_position: 0,
@@ -726,7 +755,7 @@ export default async function handler(req) {
         ...(ETAPAS_CERRADAS.includes(String(stage || '').toLowerCase())
               ? { closed_at: new Date().toISOString() } : {}),
         source: 'importacion',
-        tags: cleanTags,
+        tags: [...bajas, ...cleanTags.filter(t => !bajas.includes(t))].slice(0, 15),
         custom_fields: {},
         ...(pipelineImport ? { pipeline_id: pipelineImport } : {}),
       });
@@ -818,7 +847,10 @@ export default async function handler(req) {
 
     // Etiquetas: normalizar + auto-tag por fuente + asegurar catálogo
     const _tagsPrep = await prepareTags(userId, clientId, tags, source || 'manual', puedeCrearEtiquetas);
-    const leadTags = _tagsPrep.list;
+    // Las bajas son de la persona: la oportunidad nueva hereda las de la que
+    // la origina, o le volveríamos a escribir a quien pidió que no.
+    const bajasOrigen = origen ? ['no-email', 'no-sms'].filter(b => (origen.tags || []).includes(b)) : [];
+    const leadTags = [...bajasOrigen, ..._tagsPrep.list.filter(t => !bajasOrigen.includes(t))].slice(0, 15);
     const tagsIgnoradas = _tagsPrep.ignoradas;
 
     // Plan-based lead limit check
@@ -972,7 +1004,9 @@ export default async function handler(req) {
           etiqueta: 'lead-nuevo',
         });
       } catch (e) { console.error('[push] lead nuevo:', e.message); }
-      if (leadTags.length) await enqueueAutomations(userId, rows[0], 'tag_added', leadTags);
+      // Una baja heredada no «se añadió»: no dispara flujos de etiqueta.
+      const nuevas = leadTags.filter(t => !bajasOrigen.includes(t));
+      if (nuevas.length) await enqueueAutomations(userId, rows[0], 'tag_added', nuevas);
     }
     return jsonResp({ lead: rows[0], tags_ignoradas: tagsIgnoradas }, 201);
   }

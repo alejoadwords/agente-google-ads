@@ -93,6 +93,70 @@ console.log('\nintakeLead, ejecutado\n');
   ok(e && e.lead, 'la entrada no se rompe');
 }
 
+console.log('\nLas bajas son de la persona\n');
+{
+  // La oportunidad nueva de alguien que pidió no recibir correos nace con su baja.
+  const B = { id: 'L1', user_id: 'u1', client_id: 'pro_main', name: 'Ana', email: 'ana@x.co', phone: null,
+              pipeline_id: 'p-venta', stage: 'contactado', created_at: hace(10), tags: ['no-email'], notes: null };
+  const posts = [];
+  globalThis.fetch = async (u, o = {}) => {
+    const url = String(u), metodo = o.method || 'GET';
+    let filas = [];
+    if (metodo === 'GET' && url.includes('/leads?') && url.includes('email=eq.')) filas = [B];
+    else if (metodo === 'GET' && url.includes('/pipelines?') && url.includes('id=eq.')) filas = [{ id: url.match(/id=eq\.([^&]+)/)[1] }];
+    else if (metodo === 'GET' && url.includes('/pipelines?')) filas = [{ id: 'p-venta', is_default: true }, { id: 'p-arriendo' }];
+    else if (metodo === 'POST' && /\/rest\/v1\/leads$/.test(url)) { posts.push(JSON.parse(o.body)); filas = [{ ...JSON.parse(o.body), id: 'NUEVO' }]; }
+    const txt = JSON.stringify(filas);
+    return { ok: true, status: 200, text: async () => txt, json: async () => filas, headers: { get: () => null } };
+  };
+  const { intakeLead } = await import('../api/_lead-intake.js');
+  await intakeLead('u1', 'pro_main', { name: 'Ana', email: 'ana@x.co', pipelineId: 'p-arriendo', source: 'web', tags: Array.from({ length: 20 }, (_, i) => 'etiqueta-' + i) });
+  const t = posts[0]?.tags || [];
+  ok(t[0] === 'no-email' && t.length <= 15, 'la oportunidad nueva hereda la baja, primero (con 20 etiquetas no se pierde)', JSON.stringify(t.slice(0, 3)));
+
+  // El enlace de baja marca a TODAS las oportunidades de la persona.
+  process.env.CRON_SECRET = 'cs';
+  const crypto = await import('node:crypto');
+  const firma = crypto.createHmac('sha256', 'cs').update('unsub:L2').digest('hex').slice(0, 32);
+  const quince = Array.from({ length: 15 }, (_, i) => 'e' + i);
+  const filas = {
+    L2: { id: 'L2', user_id: 'u1', email: 'Bea@X.co', contacto_id: 'L1', tags: [] },
+    grupo: [{ id: 'L1', tags: quince }, { id: 'L2', tags: [] }, { id: 'L3', tags: ['no-email'] }],
+  };
+  const parches = [];
+  let filtroGrupo = '';
+  globalThis.fetch = async (u, o = {}) => {
+    const url = String(u), metodo = o.method || 'GET';
+    if (metodo === 'PATCH') { parches.push({ id: url.match(/id=eq\.([^&]+)/)[1], tags: JSON.parse(o.body).tags }); return { ok: true, status: 204, json: async () => null }; }
+    if (url.includes('id=eq.L2&select')) return { ok: true, status: 200, json: async () => [filas.L2] };
+    if (url.includes('or=(')) { filtroGrupo = decodeURIComponent(url); return { ok: true, status: 200, json: async () => filas.grupo }; }
+    return { ok: true, status: 200, json: async () => [] };
+  };
+  const { default: baja } = await import('../api/unsubscribe.js');
+  let estado = 0;
+  const res = { setHeader() {}, status(n) { estado = n; return this; }, send() { return this; } };
+  await baja({ query: { l: 'L2', s: firma } }, res);
+  ok(estado === 200, 'la baja responde bien');
+  ok(parches.some(p => p.id === 'L1') && parches.some(p => p.id === 'L2') && !parches.some(p => p.id === 'L3'), 'marca a todas las oportunidades de la persona (la que ya la tenía no se toca)', JSON.stringify(parches.map(p => p.id)));
+  const l1 = parches.find(p => p.id === 'L1');
+  ok(l1 && l1.tags[0] === 'no-email' && l1.tags.length === 15, 'con 15 etiquetas, la baja queda (antes el recorte se la comía)');
+  ok(/id\.eq\.L1,contacto_id\.eq\.L1/.test(filtroGrupo) && /email\.eq\."Bea@X\.co"/.test(filtroGrupo) && /email\.eq\."bea@x\.co"/.test(filtroGrupo) && !/ilike/.test(filtroGrupo), 'busca por su grupo y por su correo exacto (nunca ilike: un «_» es comodín)');
+}
+
+console.log('\nEl importador respeta el tablero\n');
+{
+  const leads = leer('api/leads.js');
+  ok(/const tableroElegido = !!body\.pipeline_id && !tableroAjeno;/.test(leads), 'si se eligió tablero, cuenta como entrada con proceso');
+  ok(/candidatos\.filter\(l => esDelProceso\(l, pipelineImport, principalImport\)\)/.test(leads), 'actualiza a la persona solo si ya está en ESE tablero');
+  ok(/contacto_id: grupoDe\(enOtro\)/.test(leads) && /result\.oportunidades\+\+/.test(leads), 'si está en otro, le abre una oportunidad enlazada y la cuenta');
+  ok(/const bajas = enOtro \? \['no-email', 'no-sms'\]/.test(leads), 'que hereda sus bajas');
+  ok(/\(existingByEmail\[k\] = existingByEmail\[k\] \|\| \[\]\)\.push\(l\)/.test(leads), 'mira TODAS las oportunidades de cada correo, no la primera');
+  ok(/user_id=eq\.\$\{encodeURIComponent\(userId\)\}\$\{clientId \? `&client_id=eq/.test(leads) && /tablero_ajeno: true/.test(leads), 'el tablero pedido tiene que ser de la cuenta; si no, al principal y se dice');
+  const app = leer('public/app.js');
+  ok(/pipeline_id: _impPipeline \|\| crmPipelineId \|\| null/.test(app), 'la pantalla manda el tablero (antes todo caía al principal con etapas del tablero mirado)');
+  ok(/function impCambiarTablero\(/.test(app) && /\/api\/pipeline-stages\?pipeline_id=/.test(app), 'y al cambiar de tablero ofrece las etapas de ese tablero');
+}
+
 console.log('\nLas otras puertas siguen la misma regla\n');
 {
   const inbox = leer('api/_inbox-engine.js');

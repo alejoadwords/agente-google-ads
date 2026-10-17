@@ -54,14 +54,30 @@ export default async function handler(req, res) {
   }
   try {
     const H = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' };
-    const rows = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${l}&select=id,tags`, { headers: H }).then(r => r.json());
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(l)}&select=id,user_id,email,contacto_id,tags`, { headers: H }).then(r => r.json());
     const lead = rows?.[0];
     if (!lead) return res.status(404).send(page('No encontrado', 'Este contacto ya no existe.', false));
-    if (!(lead.tags || []).includes('no-email')) {
-      await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${l}`, {
+    // La baja es de la PERSONA, no de la oportunidad desde la que se pidió:
+    // si está en Venta y en Arriendo, el flujo de Arriendo tampoco puede
+    // volver a escribirle (Ley 1581). Todas las de su grupo y las de su correo
+    // en la misma cuenta (16-10-2026).
+    const grupo = lead.contacto_id || lead.id;
+    // Correo exacto (tal cual y en minúscula), nunca ilike: un «_» en el correo
+    // es comodín y podría dar de baja a otra persona.
+    const correos = lead.email ? [...new Set([String(lead.email), String(lead.email).toLowerCase()])].map(e => `email.eq.${encodeURIComponent('"' + e.replace(/"/g, '') + '"')}`) : [];
+    const filtro = [`id.eq.${grupo}`, `contacto_id.eq.${grupo}`, ...correos].join(',');
+    const suyas = await fetch(`${SUPABASE_URL}/rest/v1/leads?user_id=eq.${encodeURIComponent(lead.user_id)}&or=(${filtro})&select=id,tags&limit=200`, { headers: H }).then(r => r.ok ? r.json() : []).catch(() => []);
+    const todas = [lead, ...(suyas || []).filter(x => x.id !== lead.id)];
+    for (const x of todas) {
+      if ((x.tags || []).includes('no-email')) continue;
+      // La marca va PRIMERO: con 15 etiquetas, al final se la comía el recorte
+      // y la persona seguía recibiendo correos.
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${x.id}`, {
         method: 'PATCH', headers: { ...H, 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ tags: [...(lead.tags || []), 'no-email'].slice(0, 15), updated_at: new Date().toISOString() }),
+        body: JSON.stringify({ tags: ['no-email', ...(x.tags || []).filter(t => t !== 'no-email')].slice(0, 15), updated_at: new Date().toISOString() }),
       });
+      // La de la oportunidad desde la que pidió la baja TIENE que quedar.
+      if (!r.ok && x.id === lead.id) throw new Error('No se pudo guardar la baja (HTTP ' + r.status + ')');
     }
     return res.status(200).send(page('Listo, quedaste fuera de la lista', 'No volverás a recibir estos correos. Si fue un error, responde cualquier correo anterior y te reactivan.', true));
   } catch (e) {
