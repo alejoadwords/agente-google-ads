@@ -100,7 +100,8 @@ ok(inventos('$1.200.000', '').length === 1, 'y sin nada citable, todo importe es
 console.log('\nEl mensaje inventado no sale');
 const g = eng.slice(eng.indexOf('// ── El guardián ──'), eng.indexOf('// «Te estoy agendando'));
 ok(g.length > 200, 'el guardián existe en el camino de la conversación real');
-ok(/inventos\(cleanForUser\(reply\), citable\)/.test(g),
+// Desde el 17-10-2026 pasa por revisar(), que suma «Sí, tenemos X» sin respaldo.
+ok(/const revisar = \(txt\) => \[\.\.\.inventos\(txt, citable\)/.test(g) && /revisar\(cleanForUser\(reply\)\)/.test(g),
    'se comprueba el texto que iba a ver el contacto, no el bruto');
 ok(/responderViendo\(system, hist, \[/.test(g),
    'y se le da UNA oportunidad de corregirse');

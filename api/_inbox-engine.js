@@ -436,6 +436,20 @@ function alcanceProductos(userId, clientId) {
     (clientId ? `&or=(client_id.eq.${encodeURIComponent(clientId)},client_id.is.null)` : '&client_id=is.null');
 }
 
+// ¿Tiene inmuebles? Se guarda 5 minutos: se pregunta en cada mensaje.
+const _inmueblesDe = new Map();
+export async function tieneInmuebles(userId, clientId) {
+  const k = userId + '|' + (clientId || '');
+  const c = _inmueblesDe.get(k);
+  if (c && c.hasta > Date.now()) return c.hay;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/client_properties?user_id=eq.${encodeURIComponent(userId)}` +
+    (clientId ? `&client_id=eq.${encodeURIComponent(clientId)}` : '&client_id=is.null') + '&select=id&limit=1', { headers: sb() });
+  if (!r.ok) throw new Error('No se pudo consultar el inventario (HTTP ' + r.status + ')');
+  const hay = (await r.json()).length > 0;
+  _inmueblesDe.set(k, { hay, hasta: Date.now() + 5 * 60000 });
+  return hay;
+}
+
 // ¿Esta cuenta vende productos? Una sola fila basta para saberlo.
 export async function tieneProductos(userId, clientId) {
   if (!userId) return false;
@@ -565,6 +579,10 @@ export async function catalogoParaPrompt(userId, clientId, pistasInmueble, mensa
   let productos = false;
   try { productos = await tieneProductos(userId, clientId); } catch { productos = false; }
   if (!productos) {
+    // Sin productos ni inmuebles: la cuenta no tiene catálogo. Se dice así al
+    // agente, en vez de pasarle la búsqueda de inmuebles vacía (que le hablaba
+    // de barrios a una tienda de ropa y no le frenaba de inventar).
+    if (!(await tieneInmuebles(userId, clientId).catch(() => true))) return { clase: 'ninguno', lineas: [], total: 0 };
     // «¿Algo cerca?» en lo último que escribió: amplía a barrios vecinos aunque
     // en el pedido haya varias opciones.
     const recientes = (mensajesDelContacto || []).filter(m => m?.role === 'user').slice(-3).map(m => String(m.content || ''));
@@ -573,6 +591,19 @@ export async function catalogoParaPrompt(userId, clientId, pistasInmueble, mensa
   const pistas = await pistasDeProductos(userId, clientId, mensajesDelContacto).catch(() => ({}));
   return productosParaPrompt(userId, clientId, pistas);
 }
+
+// La cuenta no tiene catálogo cargado (17-10-2026). Sin esto, medido con
+// Claude real, el agente de una tienda de ropa respondía «Sí, tenemos
+// chaquetas de jean» 6 de 6 veces y se inventaba el surtido. Además lo revisa
+// afirmaSinRespaldo antes de enviar: esto es la primera barrera, no la única.
+export const BLOQUE_SIN_CATALOGO = `NO TIENES UN CATÁLOGO DE LO QUE SE VENDE.
+Solo sabes lo que dice literalmente tu contexto y tus preguntas frecuentes. No sabes qué productos, modelos, tallas o colores hay en este momento. Por eso:
+- Si preguntan «¿tienen…?», «¿venden…?», «¿hacen…?» o «¿qué tienen?», y eso no aparece tal cual en tu contexto, NO digas que sí y NO enumeres productos ni categorías que no estén escritos ahí. Tampoco digas que no: no lo sabes
+- Di con naturalidad que te lo confirma un asesor, pregúntale qué busca exactamente (tipo, talla, color, para cuándo) y ofrece pasarle la conversación. Si acepta o insiste, incluye [ESCALAR] al final
+- Asi: «Déjame confirmarte la disponibilidad con un asesor. ¿Qué buscas exactamente, talla y color?»
+- Lo que sí está en tu contexto (envíos, horarios, formas de pago, servicios que se nombran) lo puedes contar con normalidad
+
+`;
 
 // Lo que se le dice al agente sobre la lista de productos. Va en la parte
 // variable del prompt, igual que la de inmuebles.
@@ -957,6 +988,91 @@ export function inventos(respuesta, permitido) {
   // lado y al otro («$1.800.000» y «1800000» son lo mismo).
   const colchon = String(permitido || '').replace(/[^\d]/g, '');
   return [...cifrasDe(respuesta)].filter(c => !colchon.includes(c));
+}
+
+// ── «Sí, tenemos X» sin respaldo (17-10-2026) ────────────────────────────────
+// El guardián de arriba mira importes y códigos. Un «Sí, tenemos chaquetas de
+// jean» no lleva ninguno, y es justo lo que el modelo hace cuando la cuenta no
+// tiene catálogo: medido con Claude real, 6 de cada 6 veces afirmaba tener lo
+// que le preguntaran y se inventaba categorías enteras («camisetas, sudaderas,
+// pantalones…»). Quien escribe va a pedir lo que le dijeron que hay.
+//
+// Se mira lo que viene detrás de un verbo de oferta y, elemento por elemento,
+// si ALGUNA de sus palabras aparece en lo que el agente sabe (su contexto, sus
+// preguntas frecuentes, el catálogo, los servicios que agenda). Lo que dijo el
+// contacto NO cuenta: el fallo es precisamente repetirle «chaquetas».
+//
+// Las palabras genéricas no cuentan como producto (opciones, asesor, cita,
+// horario, hombre…): «tenemos un asesor que te ayuda» no es un invento.
+const VERBO_DE_OFERTA = /(\b(?:no|ni|si|que si)(?:\s+(?:tambien|ya|aun|todavia|nosotros|lo|la|los|las))?\s+)?\b(tenemos|manejamos|vendemos|ofrecemos|hacemos|realizamos|contamos con|disponemos de|trabajamos con)\b([^.!?¿¡\n]{0,160})/g;
+const PALABRAS_GENERICAS = new Set((
+  'varias varios opciones opcion bastante mucha mucho muchas muchos buen buena buenas buenos gran grandes todo toda todos todas ' +
+  'esto este esta estos estas para como desde hasta entre sobre donde cuando ahora ahorita momento siempre tambien solo otro otra otros otras ' +
+  'cualquier alguno alguna algunos algunas disponible disponibles disponibilidad stock existencia existencias diferente diferentes distinto ' +
+  'distintos estilo estilos modelo modelos tipo tipos color colores talla tallas talle talles tamano tamanos precio precios oferta ofertas ' +
+  'promocion promociones descuento descuentos asesor asesores equipo persona personas alguien especialista especialistas horario horarios ' +
+  'atencion cita citas agenda espacio espacios cupo cupos hora horas semana manana tarde noche informacion detalle detalles respuesta ' +
+  'ayuda gusto cuenta contacto numero whatsapp llamada mensaje mensajes servicio servicios producto productos catalogo variedad linea lineas ' +
+  'coleccion colecciones prenda prendas articulo articulos cosa cosas posible hombre hombres mujer mujeres nino ninos nina ninas bebe bebes ' +
+  'dama damas caballero caballeros adulto adultos unisex clasico clasicos clasica clasicas moderno modernos moderna modernas nuevo nuevos ' +
+  'nueva nuevas calidad excelente excelentes especial especiales general varios diversos diversas amplia amplio surtido seguro segura ' +
+  'claro cierto mismo misma usted ustedes ellos ellas nosotros contigo nuestro nuestra nuestros nuestras este casa esas esos aquel aquella ' +
+  'confirma confirmar confirmo confirmarte confirmarle dejame dejeme mejor revisar reviso consultar consulto verificar verifico preguntar ' +
+  'saber sabes cuentame cuenteme digame dime escribir llamar pasar paso exacto exacta exactamente detalle ahorita enseguida pronto ' +
+  'aqui aca alli alla ahi'
+).split(/\s+/));
+
+const palabrasDe = (t) => sinTildes(t).replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+// Relleno que no es un producto: las genéricas, los adverbios («principalmente»),
+// los gerundios («incluyendo») y los verbos con pronombre («pasarte»). Los
+// infinitivos sueltos NO: «collar» es una joya.
+const esRelleno = (w) => PALABRAS_GENERICAS.has(w) || w.endsWith('mente') || /(?:ando|iendo)$/.test(w) ||
+  /(?:ar|er|ir)(?:te|le|lo|la|les|los|me|nos|se)$/.test(w);
+// Un pedazo que empieza así es un complemento («incluyendo Cali», «en Medellín»),
+// no algo que se ofrece.
+const COMPLEMENTO = /^(?:incluyendo|incluido|incluida|incluso|como|en|a|al|de|del|desde|hasta|con|sin|por|excepto|menos|entre|sobre)\b/;
+
+// La raíz para comparar: singular y sin la vocal final, para que
+// «odontológicos» case con «odontológica» y «chaquetas» con «chaqueta».
+const raiz = (w) => { const x = singular(w); return x.length > 5 ? x.replace(/[aeo]$/, '') : x; };
+
+export function afirmaSinRespaldo(respuesta, conocimiento) {
+  const saber = ' ' + palabrasDe(conocimiento).map(raiz).join(' ') + ' ';
+  const sinRespaldo = [];
+  for (const m of sinTildes(respuesta).matchAll(VERBO_DE_OFERTA)) {
+    if (m[1]) continue;                                   // «no tenemos», «ni hacemos», «si manejamos» (no afirma)
+    let resto = m[3].trim();
+    if (/^que\b/.test(resto)) continue;                   // «tenemos que confirmarlo»
+    // Hasta donde cambia de idea: «tenemos X, pero te confirmo…»
+    // Hasta donde cambia de idea o empieza una oración: «tenemos X, que es…»,
+    // «tenemos X, pero te confirmo…».
+    resto = resto.split(/\b(?:pero|aunque|que|si|para que|porque|asi que|te cuento|le cuento)\b/)[0];
+    const pedazos = resto.split(/,|:|;|\(|\)|\s+y\s+|\s+o\s+|\s+—\s+|\s+-\s+|\//);
+    for (let i = 0; i < pedazos.length; i++) {
+      const pedazo = pedazos[i];
+      // Lo que sigue al verbo puede ser largo («bastante en ropa casual para
+      // hombre»). Pero un elemento de lista es corto: uno largo ya es otra frase
+      // («eso te lo confirma mejor un asesor») y ahí se deja de leer.
+      if (i > 0 && palabrasDe(pedazo).length > 5) break;
+      if (i > 0 && COMPLEMENTO.test(pedazo.trim())) continue;
+      const palabras = palabrasDe(pedazo).filter(w => w.length >= 4 && !esRelleno(w)).map(raiz);
+      if (!palabras.length) continue;
+      if (palabras.some(p => saber.includes(' ' + p))) continue;
+      sinRespaldo.push(pedazo.trim().slice(0, 60));
+    }
+  }
+  return [...new Set(sinRespaldo)];
+}
+
+// Lo que el agente SABE que ofrece el negocio. A diferencia de loQuePuedeCitar,
+// aquí no entra lo que escribió el contacto.
+export function loQueOfrece(agent, inventario, reservas) {
+  return [
+    agent?.persona, agent?.business_ctx, agent?.name,
+    ...(agent?.faqs || []).map(f => `${f.q} ${f.a}`),
+    ...(inventario?.lineas || []),
+    ...((reservas?.servicios) || []).map(s => s.nombre),
+  ].filter(Boolean).join(' \n ');
 }
 
 // Todo lo que el agente puede citar sin inventar.
@@ -1691,7 +1807,7 @@ PUEDES ENSEÑAR FOTOS:
 - De una opción que NO esté marcada «con fotos», no las ofrezcas ni prometas mandarlas: dile que se las hace llegar un asesor
 - Videos no tienes de ninguna. Si los piden, eso lo ve un asesor
 
-${propiedades && propiedades.clase !== 'productos' && !propiedades.lineas.length ? `NO TIENES NADA QUE ENCAJE CON LO QUE TE HAN PEDIDO.
+${propiedades?.clase === 'ninguno' ? BLOQUE_SIN_CATALOGO : ''}${propiedades && propiedades.clase !== 'productos' && propiedades.clase !== 'ninguno' && !propiedades.lineas.length ? `NO TIENES NADA QUE ENCAJE CON LO QUE TE HAN PEDIDO.
 Busqué en el inventario y no hay ni una opción con esas características. Esto es lo que toca hacer, y no hay alternativa:
 - Dilo claramente: "en este momento no tengo nada así"
 - NO te inventes opciones. Ni un barrio, ni un precio, ni una administración, ni "algo parecido". Si escribes un inmueble que no existe, esa persona va a pedir verlo
@@ -3049,7 +3165,11 @@ export async function processIncoming({ channel, externalId, contactId, contactN
   }
 
   const citable = loQuePuedeCitar(agent, inventario, hist);
-  let invento = fija ? [] : inventos(cleanForUser(reply), citable);
+  // «Sí, tenemos X» sin respaldo: solo donde no hay inventario de inmuebles
+  // (ahí ya mandan importes y códigos, y los barrios no son «productos»).
+  const ofrece = inventario?.clase === 'productos' || inventario?.clase === 'ninguno' ? loQueOfrece(agent, inventario, reservas) : null;
+  const revisar = (txt) => [...inventos(txt, citable), ...(ofrece !== null ? afirmaSinRespaldo(txt, ofrece) : [])];
+  let invento = fija ? [] : revisar(cleanForUser(reply));
   // Lo que se inventó la PRIMERA vez, para el registro. `invento` se vacía al
   // corregirse, y al escribirlo después quedaba la nota sin ningún dato: un
   // instrumento que no mide nada.
@@ -3059,11 +3179,11 @@ export async function processIncoming({ channel, externalId, contactId, contactN
     const otra = await responderViendo(system, hist, [
       { role: 'assistant', content: reply },
       { role: 'user', content: '(Aviso del sistema, no lo escribió el contacto) Tu mensaje anterior NO se envió. Traía estos datos que no están en tu inventario ni en tu contexto: ' +
-        invento.join(', ') + '. Eso es inventado y no se le puede decir a nadie.\n' +
+        invento.join(', ') + '. Eso es inventado y no se le puede decir a nadie. Si afirmaste que tenemos o hacemos algo que no está en tu contexto, no lo afirmes: di que te lo confirma un asesor.\n' +
         'Escribe otra vez ese mensaje usando SOLO lo que tienes delante. Si no tienes nada que encaje, dilo con naturalidad y ofrece pasar la conversación a un asesor añadiendo [ESCALAR] al final.\n' +
         'IMPORTANTE: el contacto no vio nada de esto y no te ha corregido. No empieces con «tienes razón», «disculpa» ni «me equivoqué»: quedaría pidiéndole perdón por algo que él no dijo. Escribe tu mensaje como si fuera el primero.' },
     ], { userId: connection.user_id, origen: 'whatsapp' }).catch(() => '');
-    const segundo = otra ? inventos(cleanForUser(otra), citable) : ['sin respuesta'];
+    const segundo = otra ? revisar(cleanForUser(otra)) : ['sin respuesta'];
     if (otra && !segundo.length) {
       reply = otra;
       invento = [];

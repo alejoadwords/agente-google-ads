@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-17-agente-no-inventa-productos",
+      "fecha": "2026-10-17",
+      "tipo": "arreglo",
+      "titulo": "Tu agente ya no dice que tienes lo que no tienes",
+      "texto": "Si tu cuenta todavía no tiene un catálogo cargado (hoja de productos o tienda conectada), tu agente IA podía responder «Sí, tenemos chaquetas de jean» a cualquier cosa que le preguntaran. Ahora sabe que no conoce tu surtido: dice que te lo confirma tu equipo y pregunta qué buscan. Y antes de enviar cada mensaje revisamos que no afirme tener algo que no está en su entrenamiento ni en tu catálogo; si lo hace, lo reescribe. Para que responda con tus productos y precios, conecta tu tienda o tu hoja de productos en Marketing → Fuentes.",
+      "accion": {
+        "texto": "Ir a Fuentes",
+        "ir": "fuentes"
+      }
+    },
+    {
       "id": "2026-10-17-seo-contenido-con-aprobacion",
       "fecha": "2026-10-17",
       "tipo": "nuevo",

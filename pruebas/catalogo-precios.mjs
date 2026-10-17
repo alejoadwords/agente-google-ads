@@ -262,7 +262,8 @@ ok(/Ni un barrio, ni un precio, ni una administración/.test(eng),
    'y le nombra lo que no puede inventarse');
 // El catálogo de productos trae su propio aviso de «no hay nada»
 // (bloqueProductos): el de inmuebles no se le pinta encima.
-ok(/\$\{propiedades && propiedades\.clase !== 'productos' && !propiedades\.lineas\.length \?/.test(eng),
+// Ni sobre la cuenta sin catálogo, que trae el suyo (BLOQUE_SIN_CATALOGO, 17-10-2026).
+ok(/\$\{propiedades && propiedades\.clase !== 'productos' && propiedades\.clase !== 'ninguno' && !propiedades\.lineas\.length \?/.test(eng),
    'solo cuando de verdad se buscó y no salió nada, no cuando aún no se ha buscado');
 
 console.log('\nY el tipo de inmueble también filtra');
