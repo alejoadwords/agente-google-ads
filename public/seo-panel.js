@@ -476,7 +476,8 @@ export function calidadDe(datos, mes) {
   const de = (canal) => {
     const f = filas.find(x => x.valor === canal);
     if (!f || !f.sesiones) return null;
-    return { usuarios: f.usuarios, nuevos: f.usuarios ? f.nuevos / f.usuarios : 0, interaccion: f.comprometidas / f.sesiones,
+    // GA4 a veces cuenta más usuarios nuevos que usuarios (191 de 187 en acuarius.app): tope 100 %.
+    return { usuarios: f.usuarios, nuevos: f.usuarios ? Math.min(1, f.nuevos / f.usuarios) : 0, interaccion: f.comprometidas / f.sesiones,
       paginas: f.vistas / f.sesiones, tiempo: f.usuarios ? f.interaccion_seg / f.usuarios : 0, sesiones: f.sesiones };
   };
   return { total: de('__total'), organico: de('Organic Search'), ia: de('AI Assistant') };
