@@ -313,9 +313,25 @@ export default async function handler(req) {
     if (!['task', 'meeting'].includes(type)) return jsonResp({ error: 'Tipo inválido' }, 400);
     if (!due_at) return jsonResp({ error: 'La fecha es requerida' }, 400);
 
+    // Con lead, el cliente es SIEMPRE el del lead, no el que tenga elegido la
+    // pantalla. Desde «Mi cuenta» (sin cliente) las citas y tareas de Certain
+    // quedaban sin cliente: no salían en su calendario ni en Productividad, y
+    // la revisión diaria las marcaba (17-10-2026). El lead tiene que ser de
+    // esta cuenta.
+    let clienteDeLaTarea = clientId;
+    if (lead_id) {
+      const lr = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(lead_id)}&user_id=eq.${encodeURIComponent(userId)}&select=client_id&limit=1`, { headers: sbHeaders() })
+        .then(r => (r.ok ? r.json() : null)).catch(() => null);
+      if (!lr) return jsonResp({ error: 'No se pudo leer el lead de la tarea. Reintenta en unos segundos.' }, 502);
+      if (!lr.length) return jsonResp({ error: 'Ese lead no es de esta cuenta.' }, 404);
+      clienteDeLaTarea = lr[0].client_id || null;
+      // Un miembro acotado a un cliente no crea en otro.
+      if (clienteDelMiembro && clienteDeLaTarea !== clienteDelMiembro) return jsonResp({ error: 'Ese lead es de otro cliente.' }, 403);
+    }
+
     const activity = {
       user_id: userId,
-      client_id: clientId,
+      client_id: clienteDeLaTarea,
       lead_id: lead_id || null,
       type,
       title: String(title).trim(),
@@ -367,6 +383,14 @@ export default async function handler(req) {
     const allowed = ['title', 'description', 'due_at', 'end_at', 'done', 'type', 'lead_id'];
     const update = { updated_at: new Date().toISOString() };
     for (const k of allowed) { if (body[k] !== undefined) update[k] = body[k]; }
+    // Si cambia de lead, el cliente va con él (ver el POST).
+    if (update.lead_id) {
+      const lr = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(update.lead_id)}&user_id=eq.${encodeURIComponent(userId)}&select=client_id&limit=1`, { headers: sbHeaders() })
+        .then(r => (r.ok ? r.json() : null)).catch(() => null);
+      if (!lr) return jsonResp({ error: 'No se pudo leer el lead. Reintenta en unos segundos.' }, 502);
+      if (!lr.length) return jsonResp({ error: 'Ese lead no es de esta cuenta.' }, 404);
+      update.client_id = lr[0].client_id || null;
+    }
 
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/activities?id=eq.${body.id}&user_id=eq.${userId}`,

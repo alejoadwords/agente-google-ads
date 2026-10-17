@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-17-tareas-con-su-cliente",
+      "fecha": "2026-10-17",
+      "tipo": "arreglo",
+      "titulo": "Las citas y tareas quedan siempre con el cliente de su lead",
+      "texto": "Si trabajas con clientes (perfil de agencia), una cita o tarea creada desde «Mi cuenta», o la de primer contacto que crea el reparto, podía quedar sin cliente y no aparecer en el calendario ni en Productividad al mirar ese cliente. Ahora cada una toma el cliente de su lead, y las que estaban así ya quedaron corregidas.",
+      "accion": {
+        "texto": "Ver la agenda",
+        "ir": "crm"
+      }
+    },
+    {
       "id": "2026-10-17-una-bienvenida-por-persona",
       "fecha": "2026-10-17",
       "tipo": "mejora",

@@ -517,7 +517,9 @@ async function actionCreateActivity(step, lead, auto) {
   const dueAt = new Date(Date.now() + (isNaN(days) ? 0 : days) * 864e5);
   dueAt.setHours(9, 0, 0, 0); // 9:00 am hora del server ≈ inicio de jornada
   await sb('/activities', 'POST', {
-    user_id: auto.user_id, client_id: auto.client_id, lead_id: lead.id,
+    // El cliente de la tarea es el de su lead (17-10-2026: la revisión diaria
+    // marcaba tareas cuyo cliente no coincidía con el de su lead).
+    user_id: auto.user_id, client_id: lead.client_id !== undefined ? lead.client_id : auto.client_id, lead_id: lead.id,
     type: 'task', title, description: renderVars(step.description || '', lead) || null,
     due_at: dueAt.toISOString(),
   }, 'return=minimal');

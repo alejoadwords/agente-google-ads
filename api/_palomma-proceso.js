@@ -91,7 +91,7 @@ async function avisarAsesora(conexion, lead, para, { titulo, texto, correo = tru
 
 // Lee el lead y mezcla campos propios sin pisar los demás.
 async function leerLead(id) {
-  return (await sb(`/leads?id=eq.${id}&select=id,name,email,phone,stage,pipeline_id,assigned_to,assigned_name,closed_at,custom_fields,deleted_at&limit=1`))?.[0] || null;
+  return (await sb(`/leads?id=eq.${id}&select=id,client_id,name,email,phone,stage,pipeline_id,assigned_to,assigned_name,closed_at,custom_fields,deleted_at&limit=1`))?.[0] || null;
 }
 async function mezclarCampos(lead, campos) {
   const cf = { ...(lead.custom_fields || {}) };

@@ -98,6 +98,15 @@ export async function crearTareaPrimerContacto(userId, lead, comercial) {
     ).then(r => (r.ok ? r.json() : [])).catch(() => []);
     if (yaHay?.length) return null;
 
+    // El cliente de la tarea es el de su lead. Quien llama a veces pasa un lead
+    // leído sin esa columna (Palomma lo hacía): la tarea quedaba sin cliente y
+    // la revisión diaria la marcaba como «no coincide con su lead» (17-10-2026).
+    if (lead.client_id === undefined) {
+      const fila = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${lead.id}&select=client_id&limit=1`, { headers: sb() })
+        .then(r => (r.ok ? r.json() : [])).catch(() => []);
+      lead = { ...lead, client_id: fila?.[0]?.client_id ?? null };
+    }
+
     const vence = new Date(Date.now() + regla.horas * 3600000).toISOString();
     const quien = comercial?.nombre ? ` (${comercial.nombre})` : '';
     const rows = await fetch(`${SUPABASE_URL}/rest/v1/activities`, {
