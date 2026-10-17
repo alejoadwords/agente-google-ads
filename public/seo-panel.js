@@ -368,7 +368,8 @@ export function clasificarConsultas(datos, mes) {
 }
 
 const delta = (a, b) => {
-  if (a == null || b == null || !b) return '';
+  if (a == null || b == null) return '';
+  if (!b) return a ? '<span class="sd-sube">▲ nuevo</span>' : '<span class="sd-tenue">igual</span>';
   const d = Math.round((a - b) / b * 100);
   return d === 0 ? '<span class="sd-tenue">igual</span>' : `<span class="${d > 0 ? 'sd-sube' : 'sd-baja'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)}%</span>`;
 };
@@ -386,7 +387,7 @@ function seccionTrafico(datos) {
   const c = r.cerrado, p = r.previo;
   let h = `<p class="sd-nota">Cifras de ${cerrado ? nombreMes(cerrado) : 'el último mes'}, comparadas con el mes anterior.${r.actual ? ` En ${nombreMes(actual)} (en curso): ${r.hayGsc ? num(r.actual.clics) + ' clics desde Google' : ''}${r.hayGsc && r.hayGa4 ? ' · ' : ''}${r.hayGa4 ? num(r.actual.sesiones) + ' visitas' : ''}.` : ''}</p><div class="sd-tarjetas">`;
   if (r.hayGsc) {
-    h += tarjeta('Clics desde Google', c ? num(c.clics) : '—', c && p ? delta(c.clics, p.clics) + ' frente a ' + nombreMes(p.mes) : '') +
+    h += tarjeta('Clics desde Google', c ? num(c.clics) : '—', c && p ? delta(c.clics, p.clics) + (c.clics === p.clics ? ' que en ' : ' frente a ') + nombreMes(p.mes) : '') +
       tarjeta('Veces que apareciste', c ? num(c.impresiones) : '—', c && p ? delta(c.impresiones, p.impresiones) : 'Impresiones en Google') +
       tarjeta('Posición media', c?.posicion ?? '—', 'En todas las búsquedas');
   }

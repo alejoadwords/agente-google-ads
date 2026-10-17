@@ -263,6 +263,8 @@ ok(ht.includes('Clics desde Google') && ht.includes('▲ 50%') && ht.includes('L
 ht = P.panelSeo(dt, { seccion: 'geo' });
 ok(ht.includes('Visitas que te llegaron desde las IAs') && ht.includes('ChatGPT · 10 visitas') && ht.includes('Es un mínimo'), 'Presencia en IAs: las visitas reales desde cada IA, dichas como mínimo');
 ok(P.panelSeo({ ...datos, trafico: {} }, { seccion: 'trafico' }).includes('se conectan Google Search Console'), 'sin conexión, lo dice');
+const cero = P.panelSeo({ ...dt, trafico: { ...dt.trafico, gscDias: [{ fecha: '2026-08-05', clics: 0, impresiones: 4, posicion: 30 }, { fecha: '2026-09-05', clics: 0, impresiones: 0, posicion: null }] } }, { seccion: 'trafico' });
+ok(cero.includes('igual</span> que en agosto') && !cero.includes('NaN'), 'con cero en los dos meses dice «igual que en agosto» (caso real: acuarius.app)');
 
 console.log('\nFase 3: sincronizar con Google, ejecutado (fetch simulado)');
 {
