@@ -161,3 +161,43 @@ export function desdeBlob(b) {
   }));
   return { kws, preguntas, geo, acciones };
 }
+
+// ── Calendario de contenido (fase 2) ────────────────────────────────────────
+export const TIPOS_CONTENIDO = ['articulo', 'pagina', 'landing', 'post', 'video', 'otro'];
+export const ESTADOS_CONTENIDO = ['borrador', 'en_revision', 'cambios', 'aprobado', 'publicado'];
+
+// Quién puede llevar una pieza de qué estado a cuál. Devuelve el estado nuevo
+// o { error }. La agencia trabaja la pieza; el cliente solo decide sobre lo
+// que le mandaron a revisar.
+const TRANSICIONES = {
+  agencia: {
+    enviar: { desde: ['borrador', 'cambios'], a: 'en_revision' },
+    publicar: { desde: ['aprobado'], a: 'publicado' },
+    borrador: { desde: ['en_revision', 'cambios', 'aprobado', 'publicado'], a: 'borrador' },
+  },
+  cliente: {
+    aprobar: { desde: ['en_revision'], a: 'aprobado' },
+    cambios: { desde: ['en_revision'], a: 'cambios' },
+  },
+};
+export function transicionContenido(estado, accion, actor) {
+  const t = TRANSICIONES[actor]?.[accion];
+  if (!t) return { error: 'Acción no permitida.' };
+  if (!t.desde.includes(estado)) {
+    const msj = {
+      enviar: 'Solo se envía a revisión un borrador o una pieza con cambios pedidos.',
+      publicar: 'Solo se marca como publicada una pieza aprobada por el cliente.',
+      aprobar: 'Esta pieza no está esperando tu revisión.',
+      cambios: 'Esta pieza no está esperando tu revisión.',
+    }[accion];
+    return { error: msj || 'Esa pieza ya está en ese estado.' };
+  }
+  return { estado: t.a };
+}
+
+// El texto de la pieza solo se edita mientras la trabaja la agencia: lo que el
+// cliente está revisando o ya aprobó no cambia por debajo.
+export const editableContenido = (estado) => estado === 'borrador' || estado === 'cambios';
+
+// El cliente comenta sobre lo que puede ver: todo menos los borradores.
+export const comentableContenido = (estado) => ['en_revision', 'cambios', 'aprobado', 'publicado'].includes(estado);

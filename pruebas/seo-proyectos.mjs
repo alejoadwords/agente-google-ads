@@ -123,6 +123,108 @@ console.log('\nEl enlace público, ejecutado (fetch simulado)');
   finally { globalThis.fetch = antes; }
 }
 
+console.log('\nFase 2: calendario de contenido');
+ok(S.transicionContenido('borrador', 'enviar', 'agencia').estado === 'en_revision' && S.transicionContenido('cambios', 'enviar', 'agencia').estado === 'en_revision', 'la agencia envía a revisión un borrador o una pieza con cambios');
+ok(S.transicionContenido('en_revision', 'publicar', 'agencia').error && S.transicionContenido('aprobado', 'publicar', 'agencia').estado === 'publicado', 'solo se publica lo aprobado');
+ok(S.transicionContenido('en_revision', 'aprobar', 'cliente').estado === 'aprobado' && S.transicionContenido('en_revision', 'cambios', 'cliente').estado === 'cambios', 'el cliente aprueba o pide cambios a lo que está en revisión');
+ok(S.transicionContenido('borrador', 'aprobar', 'cliente').error && S.transicionContenido('aprobado', 'aprobar', 'cliente').error, 'no aprueba un borrador ni dos veces');
+ok(S.transicionContenido('borrador', 'enviar', 'cliente').error, 'el cliente no puede mandar a revisión');
+ok(S.editableContenido('borrador') && S.editableContenido('cambios') && !S.editableContenido('en_revision') && !S.editableContenido('aprobado'), 'el texto no cambia por debajo mientras se revisa o después de aprobado');
+
+const dc = { ...datos,
+  contenidos: [
+    { id: 'c-bor', titulo: 'Guía de barrios', tipo: 'articulo', fecha: '2026-11-03', estado: 'borrador', cuerpo: 'SECRETO DEL BORRADOR' },
+    { id: 'c-rev', titulo: 'Arriendo en el norte', tipo: 'articulo', fecha: '2026-10-20', estado: 'en_revision', cuerpo: 'Párrafo uno.\n\nPárrafo <b>dos</b>.', version: 2 },
+    { id: 'c-apr', titulo: 'Landing', tipo: 'landing', fecha: null, estado: 'aprobado', aprobado_por: 'Marilia', aprobado_at: '2026-10-15T10:00:00Z' }],
+  comentarios: [{ contenido_id: 'c-rev', autor_tipo: 'cliente', autor_nombre: 'Marilia', accion: 'cambios', texto: 'Cambia el título', creado_at: '2026-10-16T10:00:00Z', version: 1 }] };
+const lista = P.panelSeo(dc, { seccion: 'contenido', vistaCliente: true });
+ok(lista.includes('Planeado') && lista.includes('Para revisar') && lista.includes('esperando tu revisión'), 'el cliente ve «Planeado» y lo que tiene para revisar');
+ok(!lista.includes('SECRETO'), 'la lista nunca muestra el texto');
+ok(P.panelSeo(dc, { seccion: 'contenido', vistaCliente: false }).includes('Esperando al cliente'), 'la agencia ve sus propias etiquetas');
+let det = P.panelSeo(dc, { contenido: 'c-bor', vistaCliente: true, formulario: true });
+ok(!det.includes('SECRETO') && !det.includes('data-form-contenido'), 'un borrador: el cliente no ve el texto ni puede responder');
+det = P.panelSeo(dc, { contenido: 'c-rev', vistaCliente: true, formulario: true, nombre: 'Marilia' });
+ok(det.includes('data-accion="aprobar"') && det.includes('data-accion="cambios"') && det.includes('value="Marilia"'), 'en revisión: aprobar, pedir cambios, con su nombre recordado');
+ok(det.includes('<p>Párrafo uno.</p>') && det.includes('&lt;b&gt;dos&lt;/b&gt;') && det.includes('pidió cambios') && det.includes('v1'), 'texto en párrafos y escapado; la conversación dice qué pidió y en qué versión');
+det = P.panelSeo(dc, { contenido: 'c-apr', vistaCliente: true, formulario: true });
+ok(det.includes('Aprobado por Marilia') && !det.includes('data-accion="aprobar"') && det.includes('data-accion="comentario"'), 'aprobada: dice quién aprobó; solo se puede comentar');
+ok(!P.panelSeo(dc, { contenido: 'c-rev', vistaCliente: false }).includes('data-form-contenido'), 'en la app no sale el formulario del cliente');
+
+console.log('\nFase 2: la revisión del cliente, ejecutada (fetch simulado)');
+{
+  const pub = (await import('../api/seo-publico.js')).default;
+  const antes = globalThis.fetch;
+  const estado = { enlace: { id: 'e1', proyecto_id: 'p1', revocado_at: null }, pieza: { id: '11111111-1111-4111-8111-111111111111', proyecto_id: 'p1', estado: 'en_revision', titulo: 'Arriendo', version: 2, creado_por: 'user_ase' }, recientes: 0, patchVacio: false };
+  const escrito = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url), m = init.method || 'GET';
+    const res = (b, st = 200) => new Response(b === null ? null : JSON.stringify(b), { status: st });
+    if (m !== 'GET') escrito.push(m + ' ' + u.replace('https://sb.test/rest/v1', '') + ' ' + (init.body || '').slice(0, 160));
+    if (u.includes('/seo_enlaces?token=')) return res(estado.enlace ? [estado.enlace] : []);
+    if (u.includes('/seo_contenidos?id=') && m === 'GET') return res(u.includes('id=eq.' + estado.pieza.id) && u.includes('proyecto_id=eq.p1') ? [estado.pieza] : []);
+    if (u.includes('/seo_contenido_comentarios?') && m === 'GET') return res(Array(estado.recientes).fill({ id: 1 }));
+    if (u.includes('/seo_contenidos?id=') && m === 'PATCH') return res(estado.patchVacio ? [] : [{ id: 'x' }]);
+    if (u.includes('/seo_proyectos?')) return res([{ id: 'p1', user_id: 'user_dueno', nombre: 'Certain' }]);
+    if (u.includes('/team_members?')) return res([{ member_user_id: 'user_ase', member_name: 'Laura', member_email: 'laura@x.com' }]);
+    if (u.includes('/users?')) return res([{ name: 'Dueña', email: 'duena@x.com' }]);
+    if (u.includes('/push_subs?')) return res([]);
+    return res([]);
+  };
+  try {
+    const enviar = (b) => pub(new Request('https://app.acuarius.app/api/seo-publico', { method: 'POST', body: JSON.stringify({ t: 'a'.repeat(32), contenido_id: estado.pieza.id, ...b }) }));
+    let r = await enviar({ accion: 'aprobar', nombre: '' });
+    ok(r.status === 400 && /tu nombre/.test((await r.json()).error), 'sin nombre no se acepta');
+    r = await enviar({ accion: 'cambios', nombre: 'Marilia', texto: '' });
+    ok(r.status === 400, 'pedir cambios exige decir cuáles');
+    escrito.length = 0;
+    r = await enviar({ accion: 'aprobar', nombre: 'Marilia' });
+    const d = await r.json();
+    ok(r.status === 200 && d.estado === 'aprobado', 'aprobar: queda aprobada', d);
+    ok(escrito.some(x => x.startsWith('PATCH /seo_contenidos?id=') && x.includes('estado=eq.en_revision') && x.includes('"aprobado_por":"Marilia"')), 'el cambio de estado solo aplica si sigue en revisión, y guarda quién aprobó');
+    ok(escrito.some(x => x.startsWith('POST /seo_contenido_comentarios') && x.includes('"accion":"aprobado"') && x.includes('"version":2')), 'queda en la conversación, con la versión aprobada');
+    estado.patchVacio = true;
+    r = await enviar({ accion: 'cambios', nombre: 'Otra', texto: 'x' });
+    ok(r.status === 409, 'si otra persona ya respondió, no se pisa su decisión');
+    estado.patchVacio = false;
+    estado.pieza.estado = 'borrador';
+    r = await enviar({ accion: 'comentario', nombre: 'Marilia', texto: 'hola' });
+    ok(r.status === 409, 'no se comenta un borrador');
+    estado.pieza.estado = 'aprobado'; estado.recientes = 20;
+    r = await enviar({ accion: 'comentario', nombre: 'Marilia', texto: 'hola' });
+    ok(r.status === 429, 'tope de mensajes por hora');
+    estado.recientes = 0;
+    r = await pub(new Request('https://app.acuarius.app/api/seo-publico', { method: 'POST', body: JSON.stringify({ t: 'a'.repeat(32), contenido_id: '22222222-2222-4222-8222-222222222222', accion: 'comentario', nombre: 'X', texto: 'y' }) }));
+    ok(r.status === 404, 'una pieza de otro proyecto no se puede tocar con este enlace');
+    estado.enlace.revocado_at = '2026-10-01';
+    r = await enviar({ accion: 'comentario', nombre: 'Marilia', texto: 'hola' });
+    ok(r.status === 410, 'con el enlace desactivado no se puede responder');
+  } catch (e) { ok(false, 'la revisión del cliente no revienta al ejecutarse', e.stack); }
+  finally { globalThis.fetch = antes; }
+}
+
+console.log('\nFase 2: lo que carga el enlace (fetch simulado)');
+{
+  const { cargarProyecto } = await import('../api/_seo-datos.js');
+  const antes = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    const res = (b) => new Response(JSON.stringify(b), { status: 200 });
+    if (u.includes('/seo_proyectos?')) return res([{ id: 'p', user_id: 'u', client_id: 'c', nombre: 'N', dominio: 'd.com', correo_cliente: 'cli@x.com' }]);
+    if (u.includes('/seo_contenidos?')) return res([{ id: 'b', estado: 'borrador', cuerpo: 'SECRETO', enlace_doc: 'https://doc' }, { id: 'r', estado: 'en_revision', cuerpo: 'Visible' }]);
+    if (u.includes('/seo_contenido_comentarios?')) return res([{ contenido_id: 'b', texto: 'interno' }, { contenido_id: 'r', texto: 'ok' }]);
+    return res([]);
+  };
+  try {
+    const d = await cargarProyecto('p', { publico: true });
+    ok(!d.proyecto.correo_cliente && !d.proyecto.user_id, 'el enlace no expone el correo del cliente ni la cuenta');
+    ok(d.contenidos.find(c => c.id === 'b').cuerpo === null && d.contenidos.find(c => c.id === 'b').enlace_doc === null && d.contenidos.find(c => c.id === 'r').cuerpo === 'Visible', 'un borrador viaja sin texto ni documento');
+    ok(d.comentarios.length === 1 && d.comentarios[0].contenido_id === 'r', 'ni los comentarios de un borrador');
+    const a = await cargarProyecto('p');
+    ok(a.contenidos.find(c => c.id === 'b').cuerpo === 'SECRETO' && a.proyecto.correo_cliente === 'cli@x.com', 'la app sí ve todo');
+  } catch (e) { ok(false, 'cargarProyecto no revienta', e.message); }
+  finally { globalThis.fetch = antes; }
+}
+
 console.log('\nLo demás');
 const cron = (await import('../api/cron-seo.js')).default;
 ok((await cron(new Request('https://x/api/cron-seo'))).status === 401, 'el cron sin secreto → 401');

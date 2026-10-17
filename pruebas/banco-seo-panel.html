@@ -17,8 +17,8 @@
 import { panelSeo } from '/public/seo-panel.js';
 const datos = await (await fetch('/pruebas/.seo-datos-tmp.json')).json();
 const doc = document.getElementById('doc');
-let seccion = new URLSearchParams(location.search).get('s') || 'resumen';
-const pintar = () => { doc.innerHTML = panelSeo(datos, { seccion, agencia: datos.agencia }); };
-doc.addEventListener('click', e => { const b = e.target.closest('[data-seccion]'); if (b) { seccion = b.dataset.seccion; pintar(); } });
+let seccion = new URLSearchParams(location.search).get('s') || 'resumen', contenido = new URLSearchParams(location.search).get('c');
+const pintar = () => { doc.innerHTML = panelSeo(datos, { seccion, contenido, agencia: datos.agencia, vistaCliente: true, formulario: true }); };
+doc.addEventListener('click', e => { const p = e.target.closest('[data-contenido]'); if (p) { contenido = p.dataset.contenido; pintar(); return; } const b = e.target.closest('[data-seccion]'); if (b) { seccion = b.dataset.seccion; contenido = null; pintar(); } });
 pintar();
 </script></body></html>

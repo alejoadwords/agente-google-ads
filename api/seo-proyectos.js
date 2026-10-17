@@ -16,7 +16,9 @@ import { registrarError } from './_registro-errores.js';
 import { estadoSeo } from './_cupo-seo.js';
 import { cargarProyecto, todas } from './_seo-datos.js';
 import { medirPosiciones, medirGeo, motoresActivos, planDe } from './_seo-medir.js';
-import { dominio, accionesIniciales, hoyCO, MAX_KEYWORDS, MAX_PREGUNTAS, MAX_COMPETIDORES, CATEGORIAS, ESTADOS } from './_seo.js';
+import { dominio, accionesIniciales, hoyCO, MAX_KEYWORDS, MAX_PREGUNTAS, MAX_COMPETIDORES, CATEGORIAS, ESTADOS,
+  TIPOS_CONTENIDO, transicionContenido, editableContenido } from './_seo.js';
+import { avisarClienteRevision } from './_seo-avisos.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -73,6 +75,13 @@ async function manejar(req) {
 
   const url = new URL(req.url);
   if (req.method === 'GET') {
+    const versionesDe = url.searchParams.get('versiones');
+    if (versionesDe) {
+      const c = await hijoPropio('seo_contenidos', versionesDe);
+      if (!c) return json({ error: 'Esa pieza no existe.' }, 404);
+      const versiones = await sb(`/seo_contenido_versiones?contenido_id=eq.${c.id}&select=version,titulo,cuerpo,enlace_doc,creado_at&order=version.desc`) || [];
+      return json({ versiones });
+    }
     const id = url.searchParams.get('id');
     if (id) {
       const p = await proyectoPropio(id);
@@ -128,6 +137,12 @@ async function manejar(req) {
     if (b.marca !== undefined) c.marca = txt(b.marca, 120) || null;
     if (b.pais !== undefined) c.pais = txt(b.pais, 4) || 'co';
     if (b.inicio !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(b.inicio)) c.inicio = b.inicio;
+    if (b.nombre_cliente !== undefined) c.nombre_cliente = txt(b.nombre_cliente, 120) || null;
+    if (b.correo_cliente !== undefined) {
+      const m = txt(b.correo_cliente, 200).toLowerCase();
+      if (m && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m)) return json({ error: 'Ese correo del cliente no es válido.' }, 400);
+      c.correo_cliente = m || null;
+    }
     if (b.competidores !== undefined) c.competidores = [...new Set((b.competidores || []).map(dominio).filter(d => d && d !== p.dominio))].slice(0, MAX_COMPETIDORES);
     if (b.dominio !== undefined) {
       const dom = dominio(b.dominio);
@@ -264,6 +279,84 @@ async function manejar(req) {
     const r = await medirGeo(p, { actorId: quien.actorId, presupuestoMs: 18000 });
     if (r.error) return json({ error: r.error }, 503);
     return json({ ok: true, ...r });
+  }
+
+  // ── Calendario de contenido (fase 2) ──────────────────────────────────────
+  if (a === 'contenido_guardar') {
+    const campos = {};
+    if (b.fecha !== undefined) campos.fecha = /^\d{4}-\d{2}-\d{2}$/.test(b.fecha || '') ? b.fecha : null;
+    if (b.tipo !== undefined) campos.tipo = TIPOS_CONTENIDO.includes(b.tipo) ? b.tipo : 'otro';
+    if (b.keyword !== undefined) campos.keyword = txt(b.keyword, 150) || null;
+    const textos = {};
+    if (b.titulo !== undefined) { textos.titulo = txt(b.titulo, 300); if (!textos.titulo) return json({ error: 'Ponle un título a la pieza.' }, 400); }
+    if (b.cuerpo !== undefined) textos.cuerpo = txt(b.cuerpo, 60000) || null;
+    if (b.enlace_doc !== undefined) {
+      const u = txt(b.enlace_doc, 1000);
+      if (u && !/^https?:\/\//i.test(u)) return json({ error: 'El enlace del documento debe empezar por https://' }, 400);
+      textos.enlace_doc = u || null;
+    }
+    if (b.id) {
+      const c = await hijoPropio('seo_contenidos', b.id);
+      if (!c) return json({ error: 'Esa pieza no existe.' }, 404);
+      if (b.cluster_id !== undefined) {
+        if (!b.cluster_id) campos.cluster_id = null;
+        else { const cl = await hijoPropio('seo_clusters', b.cluster_id); if (!cl || cl.proyecto_id !== c.proyecto_id) return json({ error: 'Ese clúster no existe.' }, 404); campos.cluster_id = cl.id; }
+      }
+      // Lo que el cliente revisa o ya aprobó no cambia por debajo.
+      const cambiaTexto = Object.entries(textos).some(([k, v]) => (c[k] ?? null) !== (v ?? null));
+      if (cambiaTexto && !editableContenido(c.estado)) return json({ error: 'Esta pieza está en revisión o aprobada: vuélvela a borrador para editar el texto.', bloqueada: true }, 409);
+      await sb(`/seo_contenidos?id=eq.${c.id}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ ...campos, ...textos, actualizado_at: ahora() }) });
+      return json({ ok: true, id: c.id });
+    }
+    if (!p) return json({ error: 'Ese proyecto no existe o no es de tu cuenta.' }, 404);
+    if (!textos.titulo) return json({ error: 'Ponle un título a la pieza.' }, 400);
+    if (b.cluster_id) { const cl = await hijoPropio('seo_clusters', b.cluster_id); campos.cluster_id = cl && cl.proyecto_id === p.id ? cl.id : null; }
+    const [c] = await sb('/seo_contenidos', { method: 'POST', prefer: 'return=representation', body: JSON.stringify({
+      proyecto_id: p.id, ...campos, ...textos, tipo: campos.tipo || 'articulo', creado_por: quien.actorId }) });
+    return json({ ok: true, id: c.id });
+  }
+  if (['contenido_enviar', 'contenido_publicar', 'contenido_borrador'].includes(a)) {
+    const c = await hijoPropio('seo_contenidos', b.id);
+    if (!c) return json({ error: 'Esa pieza no existe.' }, 404);
+    const accion = { contenido_enviar: 'enviar', contenido_publicar: 'publicar', contenido_borrador: 'borrador' }[a];
+    const t = transicionContenido(c.estado, accion, 'agencia');
+    if (t.error) return json({ error: t.error }, 409);
+    const cambios = { estado: t.estado, actualizado_at: ahora() };
+    if (accion === 'enviar') {
+      if (!c.cuerpo && !c.enlace_doc) return json({ error: 'Escribe el contenido o pega el enlace del documento antes de mandarlo a revisar.' }, 400);
+      cambios.version = (c.version || 0) + 1; cambios.enviado_at = ahora(); cambios.aprobado_at = null; cambios.aprobado_por = null;
+      // La versión que se manda queda guardada: lo aprobado es esto, no lo que se edite después.
+      await sb('/seo_contenido_versiones?on_conflict=contenido_id,version', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+        body: JSON.stringify({ contenido_id: c.id, version: cambios.version, titulo: c.titulo, cuerpo: c.cuerpo, enlace_doc: c.enlace_doc, creado_por: quien.actorId }) });
+    }
+    if (accion === 'publicar') {
+      const u = txt(b.url_publicada, 1000);
+      if (u && !/^https?:\/\//i.test(u)) return json({ error: 'La URL publicada debe empezar por https://' }, 400);
+      cambios.url_publicada = u || null; cambios.publicado_at = ahora();
+    }
+    await sb(`/seo_contenidos?id=eq.${c.id}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify(cambios) });
+    let aviso = null;
+    if (accion === 'enviar') {
+      const [pr] = await sb(`/seo_proyectos?id=eq.${c.proyecto_id}&select=*&limit=1`) || [];
+      const [en] = await sb(`/seo_enlaces?proyecto_id=eq.${c.proyecto_id}&revocado_at=is.null&select=token&order=creado_at.desc&limit=1`) || [];
+      aviso = await avisarClienteRevision({ proyecto: pr, contenido: { ...c, ...cambios }, token: en?.token });
+    }
+    return json({ ok: true, estado: t.estado, aviso });
+  }
+  if (a === 'contenido_comentar') {
+    const c = await hijoPropio('seo_contenidos', b.id);
+    if (!c) return json({ error: 'Esa pieza no existe.' }, 404);
+    const texto = txt(b.texto, 4000);
+    if (!texto) return json({ error: 'Escribe el comentario.' }, 400);
+    await sb('/seo_contenido_comentarios', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify({
+      contenido_id: c.id, version: c.version || null, autor_tipo: 'agencia', autor_nombre: quien.nombre || null, autor_id: quien.actorId, accion: 'comentario', texto }) });
+    return json({ ok: true });
+  }
+  if (a === 'contenido_borrar') {
+    const c = await hijoPropio('seo_contenidos', b.id);
+    if (!c) return json({ error: 'Esa pieza no existe.' }, 404);
+    await sb(`/seo_contenidos?id=eq.${c.id}`, { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ borrado_at: ahora() }) });
+    return json({ ok: true });
   }
 
   // ── Enlace público ────────────────────────────────────────────────────────

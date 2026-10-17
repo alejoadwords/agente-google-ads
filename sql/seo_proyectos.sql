@@ -134,3 +134,62 @@ alter table seo_geo_preguntas enable row level security;
 alter table seo_geo_resultados enable row level security;
 alter table seo_acciones enable row level security;
 alter table seo_enlaces enable row level security;
+
+-- ── Fase 2 (17-10-2026): calendario de contenido con revisión del cliente ──
+-- La agencia sube la pieza y la manda a revisión; el cliente, desde su enlace
+-- /seo/<código>, la aprueba o pide cambios con una nota. Cada envío a revisión
+-- guarda una versión: queda constancia de QUÉ se aprobó.
+alter table seo_proyectos add column if not exists correo_cliente text;   -- a quién avisar cuando hay algo para revisar
+alter table seo_proyectos add column if not exists nombre_cliente text;
+
+create table if not exists seo_contenidos (
+  id uuid primary key default gen_random_uuid(),
+  proyecto_id uuid not null references seo_proyectos(id) on delete cascade,
+  cluster_id uuid references seo_clusters(id) on delete set null,
+  titulo text not null,
+  tipo text not null default 'articulo',       -- articulo | pagina | landing | post | video | otro
+  keyword text,
+  fecha date,                                   -- publicación prevista
+  estado text not null default 'borrador',      -- borrador | en_revision | cambios | aprobado | publicado
+  cuerpo text,                                  -- el contenido o el brief
+  enlace_doc text,                              -- Google Doc u otro enlace
+  url_publicada text,
+  version int not null default 0,               -- versiones enviadas a revisión
+  enviado_at timestamptz,
+  aprobado_at timestamptz,
+  aprobado_por text,                            -- nombre que escribió el cliente
+  publicado_at timestamptz,
+  creado_por text,
+  creado_at timestamptz not null default now(),
+  actualizado_at timestamptz not null default now(),
+  borrado_at timestamptz
+);
+create index if not exists seo_contenidos_proyecto on seo_contenidos (proyecto_id, fecha) where borrado_at is null;
+
+create table if not exists seo_contenido_versiones (
+  id bigserial primary key,
+  contenido_id uuid not null references seo_contenidos(id) on delete cascade,
+  version int not null,
+  titulo text, cuerpo text, enlace_doc text,
+  creado_por text,
+  creado_at timestamptz not null default now(),
+  unique (contenido_id, version)
+);
+
+create table if not exists seo_contenido_comentarios (
+  id bigserial primary key,
+  contenido_id uuid not null references seo_contenidos(id) on delete cascade,
+  version int,
+  autor_tipo text not null,                     -- cliente | agencia
+  autor_nombre text,
+  autor_id text,                                -- usuario de Acuarius (agencia)
+  enlace_id uuid,                               -- desde qué enlace escribió el cliente
+  accion text not null default 'comentario',    -- comentario | cambios | aprobado
+  texto text,
+  creado_at timestamptz not null default now()
+);
+create index if not exists seo_contenido_comentarios_c on seo_contenido_comentarios (contenido_id, creado_at);
+
+alter table seo_contenidos enable row level security;
+alter table seo_contenido_versiones enable row level security;
+alter table seo_contenido_comentarios enable row level security;

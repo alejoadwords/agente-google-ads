@@ -10,6 +10,7 @@ export const SECCIONES = [
   ['resumen', 'Resumen'],
   ['posiciones', 'Posiciones'],
   ['geo', 'Presencia en IAs'],
+  ['contenido', 'Contenido'],
   ['cronograma', 'Cronograma'],
   ['competencia', 'Competencia'],
 ];
@@ -20,6 +21,16 @@ export const CATEGORIAS = {
 };
 export const PAISES = { co: 'Colombia', mx: 'México', ar: 'Argentina', cl: 'Chile', pe: 'Perú', ec: 'Ecuador', es: 'España', us: 'Estados Unidos' };
 const ESTADO = { pendiente: 'Pendiente', en_curso: 'En curso', hecha: 'Hecha' };
+export const TIPOS = { articulo: 'Artículo', pagina: 'Página', landing: 'Landing', post: 'Post', video: 'Video', otro: 'Otro' };
+// Cómo ve el cliente cada estado: un borrador es «Planeado» (sabe que viene,
+// no ve el texto todavía).
+export const ESTADOS_CONTENIDO = {
+  borrador: { agencia: 'Borrador', cliente: 'Planeado' },
+  en_revision: { agencia: 'Esperando al cliente', cliente: 'Para revisar' },
+  cambios: { agencia: 'Cambios pedidos', cliente: 'Cambios pedidos' },
+  aprobado: { agencia: 'Aprobado', cliente: 'Aprobado' },
+  publicado: { agencia: 'Publicado', cliente: 'Publicado' },
+};
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 export function esc(t) {
@@ -188,6 +199,10 @@ function seccionResumen(datos, series) {
     ${tarjeta('Posición promedio', r.promedio ?? '—', r.suben || r.bajan ? `${r.suben} suben · ${r.bajan} bajan en el último mes` : '')}
     ${tarjeta('Presencia en IAs', g ? g.tasa + '%' : '—', g ? `${marca} aparece en ${g.menciones} de ${g.total} respuestas (${nombreMes(g.periodo)})` : 'Aún sin medir')}
     ${tarjeta('Acciones realizadas', hechas, todas.length ? `de ${todas.length} en el plan · mes ${meses.length} de trabajo` : '')}
+    ${(datos.contenidos || []).length ? (() => {
+      const cs = datos.contenidos, rev = cs.filter(c => c.estado === 'en_revision').length;
+      return tarjeta('Contenido', cs.filter(c => c.estado === 'publicado').length + ' publicadas', (rev ? rev + ' esperando tu revisión · ' : '') + cs.length + ' en el calendario', rev ? 'sd-pendiente' : '');
+    })() : ''}
   </div>`;
   const grupos = porCluster(datos, series).filter(gr => gr.keywords.length);
   if (grupos.length) {
@@ -281,10 +296,81 @@ function seccionCompetencia(datos, series) {
     c.map(x => `<tr><td>${esc(x.dominio)}</td><td>${x.apariciones} keywords</td><td>${x.ganan}</td></tr>`).join('') + '</tbody></table></div>';
 }
 
+// ── Calendario de contenido (fase 2) ────────────────────────────────────────
+const etiquetaEstado = (estado, cliente) => ESTADOS_CONTENIDO[estado]?.[cliente ? 'cliente' : 'agencia'] || estado;
+
+function seccionContenido(datos, series, { vistaCliente = false } = {}) {
+  const lista = datos.contenidos || [];
+  if (!lista.length) return '<p class="sd-vacio">Todavía no hay contenido en el calendario.</p>';
+  const porRevisar = lista.filter(c => c.estado === 'en_revision').length;
+  const clusters = Object.fromEntries((datos.clusters || []).map(c => [c.id, c.nombre]));
+  const grupos = {};
+  for (const c of lista) (grupos[c.fecha ? c.fecha.slice(0, 7) : 'sin-fecha'] ||= []).push(c);
+  const cuenta = (e) => lista.filter(c => c.estado === e).length;
+  const titular = vistaCliente
+    ? [(porRevisar === 1 ? 'Hay una pieza esperando tu revisión' : 'Hay ' + porRevisar + ' piezas esperando tu revisión'), 'Ábrela, léela y apruébala o pide cambios con una nota.']
+    : [(porRevisar === 1 ? 'Una pieza está esperando la revisión del cliente' : porRevisar + ' piezas están esperando la revisión del cliente'), 'Te avisamos al celular y al correo cuando responda.'];
+  let h = (porRevisar ? `<div class="sd-geo-titular"><div class="sd-geo-cifra">${porRevisar}</div><div><strong>${titular[0]}.</strong><div class="sd-nota">${titular[1]}</div></div></div>` : '') +
+    `<div class="sd-tarjetas">${tarjeta('En el calendario', lista.length)}${tarjeta('Aprobadas', cuenta('aprobado') + cuenta('publicado'))}${tarjeta('Publicadas', cuenta('publicado'))}${tarjeta('Con cambios pedidos', cuenta('cambios'))}</div>`;
+  for (const mes of Object.keys(grupos).sort()) {
+    h += `<h3 class="sd-h3">${mes === 'sin-fecha' ? 'Sin fecha' : nombreMes(mes)}</h3><div class="sd-piezas">` + grupos[mes].map(c => `
+      <button class="sd-pieza sd-pieza-${esc(c.estado)}" data-contenido="${esc(c.id)}">
+        <span class="sd-pieza-estado">${esc(etiquetaEstado(c.estado, vistaCliente))}</span>
+        <span class="sd-pieza-t">${esc(c.titulo)}</span>
+        <span class="sd-tenue">${esc(TIPOS[c.tipo] || c.tipo)}${c.fecha ? ' · ' + fechaCorta(c.fecha) : ''}${c.keyword ? ' · «' + esc(c.keyword) + '»' : ''}${c.cluster_id && clusters[c.cluster_id] ? ' · ' + esc(clusters[c.cluster_id]) : ''}</span>
+      </button>`).join('') + '</div>';
+  }
+  return h;
+}
+
+// El detalle de una pieza: su texto, la conversación y —en el enlace del
+// cliente— los botones para aprobar o pedir cambios. `formulario` lo decide
+// quien dibuja: la página pública lo pide; la app no (allí responde la agencia).
+export function detalleContenido(datos, id, { vistaCliente = false, formulario = false, nombre = '' } = {}) {
+  const c = (datos.contenidos || []).find(x => x.id === id);
+  if (!c) return '<p class="sd-vacio">Esa pieza ya no está en el calendario.</p>';
+  const comentarios = (datos.comentarios || []).filter(x => x.contenido_id === id);
+  const oculto = vistaCliente && c.estado === 'borrador';
+  const accionTxt = { aprobado: 'aprobó', cambios: 'pidió cambios', comentario: '' };
+  let h = `<button class="sd-volver" data-seccion="contenido">← Calendario</button>
+    <div class="sd-pieza-cab"><span class="sd-pieza-estado sd-pieza-${esc(c.estado)}">${esc(etiquetaEstado(c.estado, vistaCliente))}</span>
+    <h3 class="sd-pieza-titulo">${esc(c.titulo)}</h3>
+    <div class="sd-tenue">${esc(TIPOS[c.tipo] || c.tipo)}${c.fecha ? ' · publicación prevista: ' + fechaCorta(c.fecha) : ''}${c.keyword ? ' · keyword: «' + esc(c.keyword) + '»' : ''}${c.version ? ' · versión ' + c.version : ''}</div>
+    ${c.aprobado_por ? `<div class="sd-sube">Aprobado por ${esc(c.aprobado_por)}${c.aprobado_at ? ' el ' + fechaCorta(String(c.aprobado_at).slice(0, 10)) : ''}</div>` : ''}
+    ${c.url_publicada ? `<a class="sd-boton" href="${esc(c.url_publicada)}" target="_blank" rel="noopener">Ver publicado</a>` : ''}</div>`;
+  if (oculto) h += '<p class="sd-nota">Esta pieza está planeada. Te la enviaremos para revisar cuando esté lista.</p>';
+  else {
+    if (c.enlace_doc) h += `<a class="sd-boton" href="${esc(c.enlace_doc)}" target="_blank" rel="noopener">Abrir el documento</a>`;
+    if (c.cuerpo) h += `<div class="sd-pieza-cuerpo">${esc(c.cuerpo).split(/\n{2,}/).map(par => '<p>' + par.replace(/\n/g, '<br>') + '</p>').join('')}</div>`;
+  }
+  if (comentarios.length) {
+    h += '<h3 class="sd-h3">Conversación</h3><ul class="sd-hilo">' + comentarios.map(x => `<li class="sd-msj sd-msj-${esc(x.autor_tipo)}">
+      <div class="sd-msj-cab"><strong>${esc(x.autor_nombre || (x.autor_tipo === 'agencia' ? 'Tu agencia' : 'Cliente'))}</strong>
+      ${accionTxt[x.accion] ? `<span class="${x.accion === 'aprobado' ? 'sd-sube' : 'sd-baja'}">${accionTxt[x.accion]}</span>` : ''}
+      <span class="sd-tenue">${fechaCorta(String(x.creado_at).slice(0, 10))}${x.version ? ' · v' + x.version : ''}</span></div>
+      ${x.texto ? `<div>${esc(x.texto).replace(/\n/g, '<br>')}</div>` : ''}</li>`).join('') + '</ul>';
+  }
+  if (formulario && !oculto) {
+    const revisando = c.estado === 'en_revision';
+    h += `<div class="sd-form" data-form-contenido="${esc(c.id)}">
+      <h3 class="sd-h3">${revisando ? 'Tu revisión' : 'Escribe a tu agencia'}</h3>
+      <label>Tu nombre<input class="sd-input" name="nombre" value="${esc(nombre)}" maxlength="80" placeholder="Para que sepan quién respondió"></label>
+      <label>${revisando ? 'Comentarios o cambios (opcional para aprobar)' : 'Mensaje'}<textarea class="sd-input" name="texto" rows="4" maxlength="4000"></textarea></label>
+      <div class="sd-form-botones">${revisando
+        ? '<button class="sd-boton sd-boton-pri" data-accion="aprobar">Aprobar</button><button class="sd-boton" data-accion="cambios">Pedir cambios</button>'
+        : ''}<button class="sd-boton" data-accion="comentario">${revisando ? 'Solo comentar' : 'Enviar'}</button></div>
+      <div class="sd-form-estado" aria-live="polite"></div></div>`;
+  }
+  return h;
+}
+
 // ── Entrada ─────────────────────────────────────────────────────────────────
-export function panelSeo(datos, { seccion = 'resumen', agencia = null } = {}) {
+export function panelSeo(datos, { seccion = 'resumen', agencia = null, contenido = null, vistaCliente = true, formulario = false, nombre = '' } = {}) {
   const series = seriesDeKeywords(datos);
-  const cuerpo = { resumen: seccionResumen, posiciones: seccionPosiciones, geo: seccionGeo, cronograma: seccionCronograma, competencia: seccionCompetencia }[seccion] || seccionResumen;
+  const cuerpo = contenido
+    ? () => detalleContenido(datos, contenido, { vistaCliente, formulario, nombre })
+    : ({ resumen: seccionResumen, posiciones: seccionPosiciones, geo: seccionGeo, contenido: (d, s) => seccionContenido(d, s, { vistaCliente }), cronograma: seccionCronograma, competencia: seccionCompetencia }[seccion] || seccionResumen);
+  if (contenido) seccion = 'contenido';
   return `<div class="seo-doc">
     <header class="sd-cab"><div><div class="sd-cab-t">${esc(datos.proyecto.nombre)}</div><div class="sd-tenue">${esc(datos.proyecto.dominio)}${agencia ? ' · Preparado por ' + esc(agencia) : ''}</div></div></header>
     <nav class="sd-tabs">${SECCIONES.map(([k, t]) => `<button class="sd-tab${k === seccion ? ' act' : ''}" data-seccion="${k}">${t}</button>`).join('')}</nav>

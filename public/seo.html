@@ -39,25 +39,66 @@ import { panelSeo, esc } from '/seo-panel.js';
 const doc = document.getElementById('doc');
 const m = location.pathname.match(/^\/seo\/([a-f0-9]{32})$/);
 const t = m ? m[1] : new URLSearchParams(location.search).get('t');
-let datos = null, seccion = 'resumen';
+let datos = null, seccion = 'resumen', contenido = null;
 try { seccion = sessionStorage.getItem('seo-seccion') || 'resumen'; } catch {}
+// El correo de «tienes algo para revisar» trae ?c=<pieza>: se abre directo.
+const pedida = new URLSearchParams(location.search).get('c');
+if (pedida && /^[0-9a-f-]{36}$/i.test(pedida)) { contenido = pedida; seccion = 'contenido'; }
+const nombreGuardado = () => { try { return localStorage.getItem('seo-nombre') || ''; } catch { return ''; } };
 
 function pintar() {
-  doc.innerHTML = panelSeo(datos, { seccion, agencia: datos.agencia });
+  doc.innerHTML = panelSeo(datos, { seccion, contenido, agencia: datos.agencia, vistaCliente: true, formulario: true, nombre: nombreGuardado() });
   if (datos.proyecto?.nombre) document.title = 'Reporte SEO · ' + datos.proyecto.nombre;
 }
-doc.addEventListener('click', (e) => {
+doc.addEventListener('click', async (e) => {
+  if (!datos) return;
+  const pieza = e.target.closest('[data-contenido]');
+  if (pieza) { contenido = pieza.dataset.contenido; seccion = 'contenido'; pintar(); doc.scrollIntoView({ block: 'start' }); return; }
+  const accion = e.target.closest('[data-accion]');
+  if (accion) return responder(accion);
   const b = e.target.closest('[data-seccion]');
-  if (!b || !datos) return;
-  seccion = b.dataset.seccion;
+  if (!b) return;
+  seccion = b.dataset.seccion; contenido = null;
   try { sessionStorage.setItem('seo-seccion', seccion); } catch {}
   pintar();
 });
+
+// La revisión del cliente: aprobar, pedir cambios o comentar.
+async function responder(boton) {
+  const form = boton.closest('[data-form-contenido]');
+  const estado = form.querySelector('.sd-form-estado');
+  const nombre = form.querySelector('[name=nombre]').value.trim();
+  const texto = form.querySelector('[name=texto]').value.trim();
+  const accion = boton.dataset.accion;
+  estado.className = 'sd-form-estado';
+  if (!nombre) { estado.textContent = 'Escribe tu nombre: así tu agencia sabe quién revisó.'; estado.classList.add('sd-mal-txt'); return; }
+  if (accion !== 'aprobar' && !texto) { estado.textContent = accion === 'cambios' ? 'Cuéntale a tu agencia qué hay que cambiar.' : 'Escribe tu mensaje.'; estado.classList.add('sd-mal-txt'); return; }
+  try { localStorage.setItem('seo-nombre', nombre); } catch {}
+  form.querySelectorAll('button').forEach(x => { x.disabled = true; });
+  estado.textContent = 'Enviando…';
+  try {
+    const r = await fetch('/api/seo-publico', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ t, contenido_id: form.dataset.formContenido, accion, nombre, texto }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'No pudimos guardar tu respuesta.');
+    await cargar();
+    const nuevo = doc.querySelector('.sd-form-estado') || doc.querySelector('.sd-pieza-cab');
+    const msj = accion === 'aprobar' ? '¡Listo! Quedó aprobada y tu agencia ya recibió el aviso.' : accion === 'cambios' ? 'Listo: tu agencia recibió los cambios que pediste.' : 'Mensaje enviado a tu agencia.';
+    if (nuevo) { const p = document.createElement('div'); p.className = 'sd-form-estado sd-bien-txt'; p.textContent = msj; nuevo.after(p); }
+  } catch (err) {
+    form.querySelectorAll('button').forEach(x => { x.disabled = false; });
+    estado.textContent = err.message; estado.classList.add('sd-mal-txt');
+  }
+}
 
 // Fallar a la vista: un enlace mal copiado, revocado o una caída se dicen
 // con palabras, nunca una página en blanco.
 (async () => {
   if (!t) { doc.innerHTML = '<div class="estado"><b>Este enlace no está completo</b>Revisa que lo hayas copiado entero.</div>'; return; }
+  await cargar();
+})();
+
+async function cargar() {
   try {
     const r = await fetch('/api/seo-publico?t=' + encodeURIComponent(t), { cache: 'no-store' });
     const d = await r.json().catch(() => ({}));
@@ -67,7 +108,7 @@ doc.addEventListener('click', (e) => {
   } catch {
     doc.innerHTML = '<div class="estado"><b>No pudimos abrir el reporte</b>Revisa tu conexión e intenta de nuevo.</div>';
   }
-})();
+}
 </script>
 </body>
 </html>

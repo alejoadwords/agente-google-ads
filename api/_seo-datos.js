@@ -29,7 +29,7 @@ export async function todas(ruta, tramo = 1000) {
   return out;
 }
 
-const CAMPOS_PROYECTO = 'id,user_id,client_id,nombre,dominio,marca,pais,idioma,competidores,inicio,creado_at,actualizado_at';
+const CAMPOS_PROYECTO = 'id,user_id,client_id,nombre,dominio,marca,pais,idioma,competidores,inicio,correo_cliente,nombre_cliente,creado_at,actualizado_at';
 
 export async function cargarProyecto(id, { publico = false } = {}) {
   const [p] = await una(`/seo_proyectos?id=eq.${id}&archivado_at=is.null&select=${CAMPOS_PROYECTO}&limit=1`);
@@ -48,7 +48,19 @@ export async function cargarProyecto(id, { publico = false } = {}) {
   // Los 5 primeros de Google solo de la última medición (la competencia de hoy).
   const ultima = posiciones.length ? posiciones[posiciones.length - 1].fecha : null;
   const top = ultima ? await todas(`/seo_posiciones?proyecto_id=eq.${id}&fecha=eq.${ultima}&select=keyword_id,top`) : [];
+  // Calendario de contenido (fase 2). Un borrador es trabajo interno: el
+  // cliente ve que está planeado (título, fecha, tipo), no su texto.
+  const contenidos = await una(`/seo_contenidos?proyecto_id=eq.${id}&borrado_at=is.null` +
+    `&select=id,cluster_id,titulo,tipo,keyword,fecha,estado,cuerpo,enlace_doc,url_publicada,version,enviado_at,aprobado_at,aprobado_por,publicado_at,actualizado_at&order=fecha.asc.nullslast,creado_at.asc`);
+  const ids = contenidos.map(c => c.id);
+  const comentarios = ids.length ? await todas(`/seo_contenido_comentarios?contenido_id=in.(${ids.join(',')})` +
+    `&select=id,contenido_id,version,autor_tipo,autor_nombre,accion,texto,creado_at&order=creado_at.asc`) : [];
   const proyecto = { ...p };
-  if (publico) { delete proyecto.user_id; delete proyecto.client_id; }
-  return { proyecto, clusters, keywords, posiciones, top, preguntas, geo, acciones, ultimaMedicion: ultima };
+  if (publico) {
+    delete proyecto.user_id; delete proyecto.client_id; delete proyecto.correo_cliente;
+    for (const c of contenidos) if (c.estado === 'borrador') { c.cuerpo = null; c.enlace_doc = null; }
+  }
+  const visibles = new Set(contenidos.filter(c => !publico || c.estado !== 'borrador').map(c => c.id));
+  return { proyecto, clusters, keywords, posiciones, top, preguntas, geo, acciones, ultimaMedicion: ultima,
+    contenidos, comentarios: comentarios.filter(x => visibles.has(x.contenido_id)) };
 }

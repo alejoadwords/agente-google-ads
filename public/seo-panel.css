@@ -20,6 +20,7 @@
 .sd-tarjetas{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:18px}
 .sd-tarjeta{background:var(--sd-panel);border:1.5px solid var(--sd-borde);border-radius:var(--sd-r);padding:12px 14px}
 .sd-tarjeta.sd-bien{border-color:var(--sd-bien);background:var(--sd-bien-bg)}
+.sd-tarjeta.sd-pendiente{border-color:var(--sd-azul);background:var(--sd-azul-lt)}
 .sd-tarjeta.sd-mal{border-color:var(--sd-mal);background:var(--sd-mal-bg)}
 .sd-tarjeta-t{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--sd-tenue)}
 .sd-tarjeta-v{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:2px 0}
@@ -70,6 +71,35 @@
 .sd-accion-t{font-weight:700}
 .sd-accion-d{font-size:12px;color:var(--sd-tenue);margin-top:2px}
 .sd-cat{font-size:10.5px;font-weight:700;color:var(--sd-tenue2);margin-left:4px}
+.sd-piezas{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.sd-pieza{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:12px 14px;border:1.5px solid var(--sd-borde);border-radius:var(--sd-r);background:var(--sd-panel);font-family:inherit;font-size:12px;color:var(--sd-texto);cursor:pointer}
+.sd-pieza:hover{border-color:var(--sd-azul-md)}
+.sd-pieza-t{font-size:13.5px;font-weight:800;line-height:1.35}
+.sd-pieza-estado{display:inline-block;padding:2px 9px;border-radius:999px;font-size:10.5px;font-weight:800;background:var(--sd-borde);color:var(--sd-tenue)}
+.sd-pieza-en_revision{border-color:var(--sd-azul)}
+.sd-pieza-en_revision .sd-pieza-estado,.sd-pieza-estado.sd-pieza-en_revision{background:var(--sd-azul);color:var(--sd-panel)}
+.sd-pieza-cambios .sd-pieza-estado,.sd-pieza-estado.sd-pieza-cambios{background:var(--sd-mal-bg);color:var(--sd-mal)}
+.sd-pieza-aprobado .sd-pieza-estado,.sd-pieza-estado.sd-pieza-aprobado,.sd-pieza-publicado .sd-pieza-estado,.sd-pieza-estado.sd-pieza-publicado{background:var(--sd-bien-bg);color:var(--sd-bien)}
+.sd-volver{background:none;border:none;padding:0;margin-bottom:10px;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--sd-azul);cursor:pointer}
+.sd-pieza-cab{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-bottom:12px}
+.sd-pieza-titulo{font-size:19px;font-weight:800;letter-spacing:-.01em;margin:4px 0 0}
+.sd-pieza-cuerpo{margin-top:12px;padding:16px 18px;border:1.5px solid var(--sd-borde);border-radius:var(--sd-r);font-size:14px;line-height:1.65;max-width:760px}
+.sd-pieza-cuerpo p{margin:0 0 10px}
+.sd-boton{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;border:1.5px solid var(--sd-borde);background:var(--sd-panel);font-family:inherit;font-size:13px;font-weight:700;color:var(--sd-texto);text-decoration:none;cursor:pointer;margin:4px 6px 0 0}
+.sd-boton:hover{border-color:var(--sd-azul-md)}
+.sd-boton-pri{background:var(--sd-azul);border-color:var(--sd-azul);color:var(--sd-panel)}
+.sd-boton:disabled{opacity:.55;cursor:default}
+.sd-hilo{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;max-width:760px}
+.sd-msj{padding:10px 12px;border-radius:var(--sd-r);border:1.5px solid var(--sd-borde);font-size:13px}
+.sd-msj-cliente{background:var(--sd-azul-lt);border-color:transparent}
+.sd-msj-cab{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:3px;font-size:12px}
+.sd-form{margin-top:8px;max-width:760px;display:flex;flex-direction:column;gap:10px}
+.sd-form label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:var(--sd-tenue)}
+.sd-input{font-family:inherit;font-size:14px;padding:10px 12px;border:1.5px solid var(--sd-borde);border-radius:10px;background:var(--sd-panel);color:var(--sd-texto);resize:vertical}
+.sd-input:focus{outline:none;border-color:var(--sd-azul)}
+.sd-form-estado{font-size:12.5px;font-weight:700}
+.sd-form-estado.sd-mal-txt{color:var(--sd-mal)}
+.sd-form-estado.sd-bien-txt{color:var(--sd-bien)}
 @media (max-width:600px){
   .sd-geo-titular{flex-direction:column;align-items:flex-start}
   .sd-tarjeta-v{font-size:22px}

@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-17-seo-contenido-con-aprobacion",
+      "fecha": "2026-10-17",
+      "tipo": "nuevo",
+      "titulo": "Tu cliente aprueba el contenido desde su reporte SEO",
+      "texto": "El Proyecto SEO ahora tiene calendario de contenido. Sube cada artículo o página —el texto o el enlace a un Google Doc—, con su keyword, su clúster y la fecha prevista, y mándalo a revisión. Tu cliente lo lee desde su enlace, sin crear cuenta, y lo aprueba o pide cambios con una nota; a ti te llega el aviso al celular y al correo, y a él un correo cuando hay algo para revisar. Cada envío guarda una versión, así queda claro qué se aprobó.",
+      "accion": {
+        "texto": "Abrir Proyecto SEO",
+        "ir": "/proyecto-seo"
+      }
+    },
+    {
       "id": "2026-10-17-proyecto-seo-completo",
       "fecha": "2026-10-17",
       "tipo": "nuevo",

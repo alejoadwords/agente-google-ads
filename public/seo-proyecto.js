@@ -10,8 +10,9 @@
 // Se carga después de app.js: openSeoProject, seoImportKeywords y
 // seoImportGeoQueries de aquí reemplazan a las de allí.
 
-const SEO = { lista: null, cupo: null, motores: [], datos: null, enlaces: [], tab: 'cliente', seccion: 'resumen', alcance: undefined, panel: null, ocupado: false };
-const SEO_TABS = [['cliente', 'Lo que ve tu cliente'], ['keywords', 'Clústeres y keywords'], ['geo', 'Preguntas para las IAs'], ['cronograma', 'Cronograma'], ['ajustes', 'Ajustes y enlace']];
+const SEO = { lista: null, cupo: null, motores: [], datos: null, enlaces: [], tab: 'cliente', seccion: 'resumen', alcance: undefined, panel: null, ocupado: false, pieza: null, piezaCliente: null };
+const SEO_TABS = [['cliente', 'Lo que ve tu cliente'], ['keywords', 'Clústeres y keywords'], ['geo', 'Preguntas para las IAs'], ['contenido', 'Contenido'], ['cronograma', 'Cronograma'], ['ajustes', 'Ajustes y enlace']];
+const SEO_TIPOS = [['articulo', 'Artículo'], ['pagina', 'Página'], ['landing', 'Landing'], ['post', 'Post'], ['video', 'Video'], ['otro', 'Otro']];
 const SEO_PAISES = [['co', 'Colombia'], ['mx', 'México'], ['ar', 'Argentina'], ['cl', 'Chile'], ['pe', 'Perú'], ['ec', 'Ecuador'], ['es', 'España'], ['us', 'Estados Unidos']];
 const SEO_CATEGORIAS = [['onpage', 'On-page'], ['tecnico', 'Técnico'], ['contenido', 'Contenido'], ['enlaces', 'Enlaces'], ['local', 'SEO local'], ['geo', 'IAs (GEO)'], ['analitica', 'Analítica'], ['otro', 'Otro']];
 const SEO_ESTADOS = [['pendiente', 'Pendiente'], ['en_curso', 'En curso'], ['hecha', 'Hecha']];
@@ -106,6 +107,8 @@ function seoFormProyecto(editar) {
     '<label>Marca (como la nombraría una IA)<input class="auto-input" id="seo-f-marca" value="' + esc(p?.marca || '') + '" placeholder="Ej: Certain & Pezzano"></label>' +
     '<label>País de las búsquedas<button type="button" class="dd-btn" id="seo-f-pais" onclick="seoElegirPais(this)">' + esc((SEO_PAISES.find(x => x[0] === _seoForm.pais) || [])[1] || 'Colombia') + '</button></label>' +
     '<label>Inicio del trabajo<input class="auto-input" type="date" id="seo-f-inicio" value="' + esc(p?.inicio || new Date().toISOString().slice(0, 10)) + '"></label>' +
+    '<label>Nombre de tu cliente (opcional)<input class="auto-input" id="seo-f-ncli" value="' + esc(p?.nombre_cliente || '') + '" placeholder="Ej: Marilia"></label>' +
+    '<label>Correo para avisarle que hay algo para revisar<input class="auto-input" id="seo-f-ccli" type="email" value="' + esc(p?.correo_cliente || '') + '" placeholder="cliente@empresa.com"></label>' +
     '<label class="seo-adm-ancho">Competidores (un dominio por línea)<textarea class="auto-input" id="seo-f-comp" rows="3" placeholder="competidor1.com&#10;competidor2.com">' + esc((p?.competidores || []).join('\n')) + '</textarea></label>' +
     (p ? '' : '<label class="seo-adm-check seo-adm-ancho"><input type="checkbox" id="seo-f-plantilla" checked> Agregar al cronograma la configuración on-page inicial (14 tareas)</label>') +
     '</div><div class="seo-adm-botones"><button class="btn-pri" id="seo-f-guardar" onclick="seoGuardarProyecto(' + (p ? 'true' : 'false') + ')">' + (p ? 'Guardar cambios' : 'Crear proyecto') + '</button></div></div>';
@@ -124,6 +127,7 @@ async function seoGuardarProyecto(editar) {
   const cuerpo = {
     nombre: v('seo-f-nombre'), dominio: v('seo-f-dominio'), marca: v('seo-f-marca'), pais: _seoForm.pais,
     inicio: v('seo-f-inicio'), competidores: v('seo-f-comp').split(/\n+/).map(x => x.trim()).filter(Boolean),
+    nombre_cliente: v('seo-f-ncli'), correo_cliente: v('seo-f-ccli'),
   };
   if (!cuerpo.dominio) { showToast('Escribe el dominio del sitio', 'error'); return; }
   const btn = document.getElementById('seo-f-guardar');
@@ -135,6 +139,7 @@ async function seoGuardarProyecto(editar) {
       await seoAbrirProyecto(SEO.datos.proyecto.id);
     } else {
       const d = await seoPost({ accion: 'crear', client_id: seoAlcance(), ...cuerpo, plantilla: !!document.getElementById('seo-f-plantilla')?.checked });
+      if (cuerpo.nombre_cliente || cuerpo.correo_cliente) await seoPost({ accion: 'editar', id: d.proyecto.id, nombre_cliente: cuerpo.nombre_cliente, correo_cliente: cuerpo.correo_cliente });
       showToast('Proyecto creado');
       SEO.lista = null;
       SEO.tab = 'keywords';
@@ -181,7 +186,7 @@ function seoPintarProyecto() {
   seoPintarTab();
 }
 
-function seoTabAdm(k) { SEO.tab = k; seoPintarProyecto(); }
+function seoTabAdm(k) { SEO.tab = k; SEO.pieza = null; SEO.piezaCliente = null; seoPintarProyecto(); }
 
 function seoPintarTab() {
   const c = document.getElementById('seo-adm-cuerpo');
@@ -189,10 +194,12 @@ function seoPintarTab() {
   const t = SEO.tab;
   if (t === 'cliente') {
     c.innerHTML = '<p class="seo-adm-nota">' + icn('eye', 12) + ' Esto es exactamente lo que ve tu cliente en su enlace (las acciones marcadas como internas no le aparecen).</p>' +
-      SEO.panel.panelSeo(SEO.datos, { seccion: SEO.seccion });
-    c.querySelectorAll('[data-seccion]').forEach(b => b.addEventListener('click', () => { SEO.seccion = b.dataset.seccion; seoPintarTab(); }));
+      SEO.panel.panelSeo(SEO.datos, { seccion: SEO.seccion, contenido: SEO.piezaCliente, vistaCliente: true });
+    c.querySelectorAll('[data-seccion]').forEach(b => b.addEventListener('click', () => { SEO.seccion = b.dataset.seccion; SEO.piezaCliente = null; seoPintarTab(); }));
+    c.querySelectorAll('[data-contenido]').forEach(b => b.addEventListener('click', () => { SEO.piezaCliente = b.dataset.contenido; seoPintarTab(); }));
     return;
   }
+  if (t === 'contenido') return SEO.pieza ? seoPintarPieza(c) : seoPintarContenido(c);
   if (t === 'keywords') return seoPintarKeywords(c);
   if (t === 'geo') return seoPintarPreguntas(c);
   if (t === 'cronograma') return seoPintarCronograma(c);
@@ -389,6 +396,132 @@ async function seoPlantillaInicial(btn) {
   btn.disabled = true;
   try { const r = await seoPost({ accion: 'plantilla_inicial', proyecto_id: SEO.datos.proyecto.id }); showToast(r.agregadas + ' tareas agregadas'); await seoRecargar(); }
   catch (e) { btn.disabled = false; showToast(e.message, 'error'); }
+}
+
+// ── Calendario de contenido (fase 2) ────────────────────────────────────────
+// La agencia sube la pieza y la manda a revisión; el cliente la aprueba o pide
+// cambios desde su enlace. Cada envío guarda una versión.
+function seoPintarContenido(c) {
+  const d = SEO.datos;
+  const p = d.proyecto;
+  const sinEnlace = !SEO.enlaces.length;
+  let h = '<p class="seo-adm-nota">Sube cada pieza (el texto o el enlace a un Google Doc) y mándala a revisión. Tu cliente la aprueba o pide cambios desde su enlace' +
+    (p.correo_cliente ? ', y le llega un correo a ' + esc(p.correo_cliente) : '') + '.</p>' +
+    (sinEnlace ? '<div class="seo-adm-caja">' + icn('alert', 13) + ' Para que tu cliente pueda revisar, crea su enlace (botón «Enlace del cliente»).</div>' : '') +
+    (!p.correo_cliente ? '<p class="seo-adm-cupo">Sin correo del cliente: no le llegará aviso cuando haya algo para revisar. Agrégalo en Ajustes › Editar.</p>' : '') +
+    '<div class="seo-adm-botones"><button class="btn-pri sm" onclick="seoFormPieza()">' + icn('plus', 12) + ' Nueva pieza</button></div><div id="seo-adm-form"></div>';
+  h += (d.contenidos || []).length
+    ? SEO.panel.panelSeo(d, { seccion: 'contenido', vistaCliente: false }).replace(/<header[\s\S]*?<\/nav>/, '')
+    : emptyAgua('calendar', 'El calendario está vacío', 'Planea los artículos y páginas del mes. Puedes empezar solo con el título y la fecha: tu cliente los verá como «Planeado».');
+  c.innerHTML = h;
+  c.querySelectorAll('[data-contenido]').forEach(b => b.addEventListener('click', () => { SEO.pieza = b.dataset.contenido; seoPintarTab(); }));
+}
+
+let _seoPieza = {};
+function seoFormPieza(id) {
+  const c = id ? SEO.datos.contenidos.find(x => x.id === id) : null;
+  const editable = !c || c.estado === 'borrador' || c.estado === 'cambios';
+  _seoPieza = { tipo: c?.tipo || 'articulo', cluster: c?.cluster_id || '' };
+  const nombreDe = (lista, k) => (lista.find(x => x[0] === k) || [])[1] || k;
+  const clusters = [['', 'Sin clúster'], ...SEO.datos.clusters.map(x => [x.id, x.nombre])];
+  const destino = id ? 'seo-adm-pieza-form' : 'seo-adm-form';
+  document.getElementById(destino).innerHTML = '<div class="seo-adm-caja"><div class="seo-adm-form">' +
+    '<label class="seo-adm-ancho">Título<input class="auto-input" id="seo-p-titulo" value="' + esc(c?.titulo || '') + '"' + (editable ? '' : ' disabled') + ' placeholder="Ej: Cómo elegir barrio para arrendar en Barranquilla"></label>' +
+    '<label>Tipo<button type="button" class="dd-btn" onclick="seoElegirPieza(this, SEO_TIPOS, \'tipo\')">' + esc(nombreDe(SEO_TIPOS, _seoPieza.tipo)) + '</button></label>' +
+    '<label>Clúster<button type="button" class="dd-btn" onclick="seoElegirPieza(this, [[\'\', \'Sin clúster\'], ...SEO.datos.clusters.map(x => [x.id, x.nombre])], \'cluster\')">' + esc(nombreDe(clusters, _seoPieza.cluster)) + '</button></label>' +
+    '<label>Keyword principal<input class="auto-input" id="seo-p-kw" value="' + esc(c?.keyword || '') + '"></label>' +
+    '<label>Publicación prevista<input class="auto-input" type="date" id="seo-p-fecha" value="' + esc(c?.fecha || '') + '"></label>' +
+    '<label class="seo-adm-ancho">Enlace al documento (opcional)<input class="auto-input" id="seo-p-doc" value="' + esc(c?.enlace_doc || '') + '"' + (editable ? '' : ' disabled') + ' placeholder="https://docs.google.com/…"></label>' +
+    '<label class="seo-adm-ancho">Contenido o brief<textarea class="auto-input" id="seo-p-cuerpo" rows="12"' + (editable ? '' : ' disabled') + '>' + esc(c?.cuerpo || '') + '</textarea></label>' +
+    (editable ? '' : '<p class="seo-adm-sub seo-adm-ancho">El texto no se puede cambiar mientras el cliente lo revisa o después de aprobado. Vuélvela a borrador para editarlo.</p>') +
+    '</div><div class="seo-adm-botones"><button class="btn-pri sm" onclick="seoGuardarPieza(' + (c ? '\'' + esc(c.id) + '\'' : 'null') + ', this)">Guardar</button>' +
+    '<button class="btn-ghost sm" onclick="document.getElementById(\'' + destino + '\').innerHTML=\'\'">Cancelar</button></div></div>';
+  document.getElementById(destino).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function seoElegirPieza(btn, lista, campo) {
+  ddAbrir(btn, lista.map(([id, name]) => ({ id, name })), _seoPieza[campo], (id) => { _seoPieza[campo] = id; btn.textContent = (lista.find(x => x[0] === id) || [])[1] || id; });
+}
+
+async function seoGuardarPieza(id, btn) {
+  const v = (x) => (document.getElementById(x)?.value || '').trim();
+  const c = id ? SEO.datos.contenidos.find(x => x.id === id) : null;
+  const editable = !c || c.estado === 'borrador' || c.estado === 'cambios';
+  if (editable && !v('seo-p-titulo')) { showToast('Ponle un título a la pieza', 'error'); return; }
+  const cuerpo = { accion: 'contenido_guardar', proyecto_id: SEO.datos.proyecto.id, id, tipo: _seoPieza.tipo, cluster_id: _seoPieza.cluster || null, keyword: v('seo-p-kw'), fecha: v('seo-p-fecha') };
+  if (editable) Object.assign(cuerpo, { titulo: v('seo-p-titulo'), enlace_doc: v('seo-p-doc'), cuerpo: document.getElementById('seo-p-cuerpo').value });
+  btn.disabled = true;
+  try {
+    const r = await seoPost(cuerpo);
+    showToast('Pieza guardada');
+    SEO.pieza = r.id;
+    await seoRecargar();
+  } catch (e) { btn.disabled = false; showToast(e.message, 'error'); }
+}
+
+const SEO_ESTADO_PIEZA = { borrador: 'Borrador', en_revision: 'Esperando al cliente', cambios: 'Cambios pedidos', aprobado: 'Aprobado', publicado: 'Publicado' };
+function seoPintarPieza(cont) {
+  const c = SEO.datos.contenidos.find(x => x.id === SEO.pieza);
+  if (!c) { SEO.pieza = null; return seoPintarContenido(cont); }
+  const botones = [];
+  if (c.estado === 'borrador' || c.estado === 'cambios') botones.push('<button class="btn-pri sm" onclick="seoAccionPieza(\'contenido_enviar\', this)">' + icn('send', 12) + ' Enviar a revisión</button>');
+  if (c.estado === 'aprobado') botones.push('<button class="btn-pri sm" onclick="seoPublicarPieza(this)">' + icn('check', 12) + ' Marcar como publicada</button>');
+  if (c.estado !== 'borrador') botones.push('<button class="btn-ghost sm" onclick="seoAccionPieza(\'contenido_borrador\', this)">Volver a borrador</button>');
+  botones.push('<button class="btn-ghost sm" onclick="seoFormPieza(\'' + esc(c.id) + '\')">' + icn('edit', 12) + ' Editar</button>');
+  if (c.version) botones.push('<button class="btn-ghost sm" onclick="seoVersiones(this)">Versiones (' + c.version + ')</button>');
+  botones.push('<button class="btn-ghost sm" onclick="seoBorrarPieza()">Quitar</button>');
+  cont.innerHTML = '<div class="seo-adm-botones">' + botones.join('') + '</div><div id="seo-adm-pieza-form"></div><div id="seo-adm-versiones"></div>' +
+    SEO.panel.panelSeo(SEO.datos, { contenido: c.id, vistaCliente: false }).replace(/<header[\s\S]*?<\/nav>/, '') +
+    '<div class="seo-adm-caja"><div class="seo-adm-form"><label class="seo-adm-ancho">Responderle al cliente<textarea class="auto-input" id="seo-p-resp" rows="3" placeholder="Lo verá en su enlace, en la conversación de esta pieza"></textarea></label></div>' +
+    '<div class="seo-adm-botones"><button class="btn-pri sm" onclick="seoComentarPieza(this)">' + icn('chat', 12) + ' Responder</button></div></div>';
+  cont.querySelectorAll('[data-seccion]').forEach(b => b.addEventListener('click', () => { SEO.pieza = null; seoPintarTab(); }));
+}
+
+async function seoAccionPieza(accion, btn) {
+  btn.disabled = true;
+  try {
+    const r = await seoPost({ accion, id: SEO.pieza });
+    if (accion === 'contenido_enviar') {
+      const a = r.aviso || {};
+      showToast(a.enviado ? 'Enviada a revisión: le llegó un correo a tu cliente' : 'Enviada a revisión' + (a.motivo ? ' (sin aviso por correo: ' + a.motivo + ')' : ''), a.enviado ? undefined : 'error');
+    } else showToast('Listo');
+    await seoRecargar();
+  } catch (e) { btn.disabled = false; showToast(e.message, 'error'); }
+}
+
+function seoPublicarPieza() {
+  document.getElementById('seo-adm-pieza-form').innerHTML = '<div class="seo-adm-caja"><div class="seo-adm-form"><label class="seo-adm-ancho">URL donde quedó publicada (opcional)<input class="auto-input" id="seo-p-url" placeholder="https://…"></label></div>' +
+    '<div class="seo-adm-botones"><button class="btn-pri sm" onclick="seoConfirmarPublicada(this)">Marcar como publicada</button></div></div>';
+  document.getElementById('seo-p-url').focus();
+}
+async function seoConfirmarPublicada(btn) {
+  btn.disabled = true;
+  try { await seoPost({ accion: 'contenido_publicar', id: SEO.pieza, url_publicada: document.getElementById('seo-p-url').value.trim() }); showToast('Marcada como publicada'); await seoRecargar(); }
+  catch (e) { btn.disabled = false; showToast(e.message, 'error'); }
+}
+
+async function seoComentarPieza(btn) {
+  const texto = document.getElementById('seo-p-resp').value.trim();
+  if (!texto) { showToast('Escribe la respuesta', 'error'); return; }
+  btn.disabled = true;
+  try { await seoPost({ accion: 'contenido_comentar', id: SEO.pieza, texto }); showToast('Respuesta enviada'); await seoRecargar(); }
+  catch (e) { btn.disabled = false; showToast(e.message, 'error'); }
+}
+
+async function seoVersiones(btn) {
+  btn.disabled = true;
+  try {
+    const d = await seoGet('versiones=' + encodeURIComponent(SEO.pieza));
+    document.getElementById('seo-adm-versiones').innerHTML = '<div class="seo-adm-caja"><strong>Lo que se envió a revisión, versión por versión</strong>' +
+      d.versiones.map(v => '<details><summary>Versión ' + v.version + ' · ' + esc(String(v.creado_at).slice(0, 10)) + ' · ' + esc(v.titulo || '') + '</summary>' +
+        (v.enlace_doc ? '<p class="seo-adm-sub">Documento: ' + esc(v.enlace_doc) + '</p>' : '') + '<div class="seo-adm-version">' + esc(v.cuerpo || '').replace(/\n/g, '<br>') + '</div></details>').join('') + '</div>';
+  } catch (e) { showToast(e.message, 'error'); } finally { btn.disabled = false; }
+}
+
+async function seoBorrarPieza() {
+  const c = SEO.datos.contenidos.find(x => x.id === SEO.pieza);
+  if (!(await confirmarAguaP({ titulo: 'Quitar esta pieza', texto: '«' + (c?.titulo || '') + '»\n\nDesaparece del calendario, también del enlace del cliente.', confirmar: 'Quitar', peligro: true }))) return;
+  try { await seoPost({ accion: 'contenido_borrar', id: SEO.pieza }); SEO.pieza = null; await seoRecargar(); } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ── Medir ahora ─────────────────────────────────────────────────────────────

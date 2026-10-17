@@ -141,6 +141,17 @@ async function preguntarA(motor, pregunta, pais) {
   return { texto: d.choices?.[0]?.message?.content || '', citas, costo: tarifa('perplexity', d.usage?.prompt_tokens, d.usage?.completion_tokens), tin: d.usage?.prompt_tokens, tout: d.usage?.completion_tokens };
 }
 
+// Un «límite de velocidad» (Perplexity lo da con varias preguntas seguidas) no
+// es un fallo de la pregunta: se espera un poco y se reintenta una vez.
+async function preguntarConEspera(motor, pregunta, pais) {
+  try { return await preguntarA(motor, pregunta, pais); }
+  catch (e) {
+    if (!/rate limit|too many|429/i.test(String(e.message || e))) throw e;
+    await new Promise(r => setTimeout(r, 2500));
+    return preguntarA(motor, pregunta, pais);
+  }
+}
+
 // Lo que falta del periodo: cada (pregunta × motor × corrida) sin resultado,
 // o con un error de hace más de 6 horas (se reintenta una vez pasado el bache).
 export function pendientesGeo(preguntas, motores, existentes, ahora = Date.now()) {
@@ -174,7 +185,7 @@ export async function medirGeo(proyecto, { actorId = null, presupuestoMs = 15000
     const tanda = cola.slice(i, Math.min(i + 8, caben));
     const res = await Promise.all(tanda.map(async (t) => {
       try {
-        const a = await preguntarA(t.motor, t.pregunta.pregunta, proyecto.pais);
+        const a = await preguntarConEspera(t.motor, t.pregunta.pregunta, proyecto.pais);
         const l = leerRespuesta(a.texto, { dominio: proyecto.dominio, marca: proyecto.marca, competidores: proyecto.competidores || [] }, a.citas);
         return { ok: true, uso: { ok: true, detalle: t.motor, costo: a.costo, tokensIn: a.tin, tokensOut: a.tout },
           fila: { proyecto_id: proyecto.id, pregunta_id: t.pregunta.id, periodo, motor: t.motor, corrida: t.corrida,
