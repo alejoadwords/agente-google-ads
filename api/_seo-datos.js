@@ -29,6 +29,30 @@ export async function todas(ruta, tramo = 1000) {
   return out;
 }
 
+// Leads del CRM que llegaron por la web de este proyecto, AGREGADOS (por mes,
+// canal, origen y página de entrada): nunca nombres ni contactos, porque esto
+// también viaja al enlace del cliente. El canal lo pone api/_origen.js al
+// entrar el lead (desde el 17-10-2026).
+const igualSitio = (a, b) => { const x = String(a || '').replace(/^www\./, ''), y = String(b || '').replace(/^www\./, ''); return !!x && !!y && (x === y || x.endsWith('.' + y) || y.endsWith('.' + x)); };
+async function leadsDelSitio(p) {
+  const desde = new Date(Date.now() - 400 * 86400000).toISOString();
+  const base = String(p.dominio || '').split('.').slice(-2).join('.');
+  if (!base) return [];
+  const filas = await todas(`/leads?user_id=eq.${encodeURIComponent(p.user_id)}&deleted_at=is.null&created_at=gte.${desde}` +
+    `&custom_fields->>Sitio=ilike.*${encodeURIComponent(base)}&select=created_at,stage,value,custom_fields`);
+  const grupos = {};
+  for (const l of filas) {
+    const cf = l.custom_fields || {};
+    if (!igualSitio(cf['Sitio'], p.dominio)) continue;
+    const mes = new Date(Date.parse(l.created_at) - 5 * 3600 * 1000).toISOString().slice(0, 7);
+    const k = [mes, cf['Canal de origen'] || 'Sin dato', cf['Origen'] || '', cf['Página de entrada'] || ''].join('|');
+    const g = (grupos[k] ||= { mes, canal: cf['Canal de origen'] || 'Sin dato', origen: cf['Origen'] || '', pagina: cf['Página de entrada'] || '', leads: 0, ganados: 0, valor: 0 });
+    g.leads++;
+    if (l.stage === 'ganado') { g.ganados++; g.valor += Number(l.value) || 0; }
+  }
+  return Object.values(grupos);
+}
+
 const CAMPOS_PROYECTO = 'id,user_id,client_id,nombre,dominio,marca,pais,idioma,competidores,inicio,correo_cliente,nombre_cliente,creado_at,actualizado_at,' +
   'gsc_propiedad,ga4_propiedad,gsc_estado,ga4_estado,gsc_error,ga4_error,gsc_sincronizado_at,ga4_sincronizado_at';
 
@@ -74,7 +98,8 @@ export async function cargarProyecto(id, { publico = false } = {}) {
     // Tres meses: el que se reporta, el anterior (para comparar) y el en curso.
     p.ga4_propiedad ? todas(`/seo_ga4_detalle?proyecto_id=eq.${id}&mes=in.(${mesPrevio},${mesAnterior},${mesActual})&select=mes,tipo,fuente,valor,valor2,sesiones,comprometidas,duracion,conversiones,usuarios,nuevos,vistas,interaccion_seg&order=sesiones.desc`) : [],
   ]);
-  const trafico = { gscDias, gscConsultas, gscPaginas, ga4Dias, ga4Ia, ga4Detalle, mesActual, mesAnterior };
+  const leadsWeb = await leadsDelSitio(p).catch(() => []);
+  const trafico = { gscDias, gscConsultas, gscPaginas, ga4Dias, ga4Ia, ga4Detalle, mesActual, mesAnterior, leadsWeb };
   const proyecto = { ...p };
   if (publico) {
     delete proyecto.user_id; delete proyecto.client_id; delete proyecto.correo_cliente;

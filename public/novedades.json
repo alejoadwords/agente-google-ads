@@ -2,6 +2,17 @@
   "_leeme": "Novedades que se muestran a los usuarios al entrar. La primera de la lista es la más reciente. Cada entrada necesita id (aaaa-mm-dd-slug, único y ordenable), fecha, tipo (nuevo|mejora|arreglo), titulo y texto. 'accion' es opcional: {texto, ir} donde 'ir' es un comando que entiende novIr() en app.js.",
   "novedades": [
     {
+      "id": "2026-10-17-origen-de-los-leads",
+      "fecha": "2026-10-17",
+      "tipo": "nuevo",
+      "titulo": "Cada lead de tu web dice de dónde vino: Google, una IA, un anuncio o redes",
+      "texto": "Los leads que llegan por los formularios de tu sitio (con el conector de Acuarius) y por tus páginas de aterrizaje ahora guardan su canal de origen: buscadores (Google, Bing…), asistentes de IA (ChatGPT, Perplexity, Gemini…), Google Ads, Meta Ads, redes sociales, correo, otro sitio o directo, junto con la página por la que entraron. Lo ves en la ficha de cada lead, y el reporte SEO suma los leads y las ventas que trajeron los buscadores y las IAs. No tienes que cambiar nada en tu web: el conector se actualiza solo.",
+      "accion": {
+        "texto": "Abrir Proyecto SEO",
+        "ir": "/proyecto-seo"
+      }
+    },
+    {
       "id": "2026-10-17-seo-trafico",
       "fecha": "2026-10-17",
       "tipo": "nuevo",

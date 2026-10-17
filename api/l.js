@@ -137,6 +137,16 @@ ${ga ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${ga}"></
   // Los formularios entran por /api/form-public, la misma puerta que los
   // formularios normales: deduplica, dispara automatizaciones y filtra bots.
   // No se abre una vía nueva solo para las landings.
+  // De dónde llegó esta visita: la landing ES la página de entrada, así que
+  // basta con lo que se ve al cargar (parámetros y página anterior). Se
+  // clasifica en el servidor (api/_origen.js).
+  var origen = { _url: location.href.slice(0, 500) };
+  try {
+    if (document.referrer) origen._ref = document.referrer.slice(0, 300);
+    var qs = new URLSearchParams(location.search);
+    qs.forEach(function (v, k) { if (/^(utm_|gclid|wbraid|gbraid|fbclid|ttclid|msclkid|campaignid|adgroupid)/i.test(k) && v) origen[k] = v.slice(0, 200); });
+  } catch (e) {}
+
   var forms = cont.querySelectorAll('form');
   for (var i = 0; i < forms.length; i++) (function (f) {
     f.addEventListener('submit', function (e) {
@@ -152,6 +162,8 @@ ${ga ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${ga}"></
         if (!c.name || c.type === 'submit') continue;
         datos[c.name] = c.type === 'checkbox' ? (c.checked ? 'sí' : 'no') : c.value;
       }
+      datos._origen = origen;
+      datos._page = location.href;
 
       fetch('/api/form-public?token=' + encodeURIComponent(token), {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos),

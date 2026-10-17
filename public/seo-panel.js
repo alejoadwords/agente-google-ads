@@ -199,6 +199,8 @@ function seccionResumen(datos, series) {
   let h = `<div class="sd-tarjetas">
     ${tr.hayGsc && tr.cerrado ? tarjeta('Clics desde Google', num(tr.cerrado.clics), nombreMes(tr.cerrado.mes) + (tr.previo ? ' · ' + delta(tr.cerrado.clics, tr.previo.clics) : ''), '', 'trafico') : ''}
     ${tr.hayGa4 && tr.cerrado ? tarjeta('Visitas desde buscadores', num(tr.cerrado.organicas), nombreMes(tr.cerrado.mes) + (tr.previo ? ' · ' + delta(tr.cerrado.organicas, tr.previo.organicas) : ''), '', 'trafico') : ''}
+    ${(() => { const lw = (datos.trafico || {}).leadsWeb || []; if (!lw.length) return ''; const rl = resumenLeads(datos, null);
+      return tarjeta('Leads desde buscadores e IAs', num(rl.buscadores.leads + rl.ia.leads), (rl.buscadores.ganados + rl.ia.ganados ? num(rl.buscadores.ganados + rl.ia.ganados) + ' ventas · ' : '') + 'desde el ' + fechaCorta(CAPTURA_DESDE), 'sd-pendiente', 'trafico'); })()}
     ${tr.hayGa4 && tr.cerrado && tr.cerrado.ia ? tarjeta('Visitas desde IAs', num(tr.cerrado.ia), nombreMes(tr.cerrado.mes), 'sd-pendiente', 'geo') : ''}
     ${tarjeta('Keywords en seguimiento', r.total, r.medidas ? `${r.enTop100} aparecen en los 100 primeros de Google` : 'Aún sin medir', '', 'posiciones')}
     ${tarjeta('En la primera página', r.enTop10, r.enTop3 ? `${r.enTop3} en los 3 primeros puestos` : 'Top 10 de Google', '', 'posiciones')}
@@ -384,7 +386,7 @@ function barrasValor(puntos) {
 
 function seccionTrafico(datos) {
   const r = resumenTrafico(datos);
-  if (!r.hayGsc && !r.hayGa4) return '<p class="sd-vacio">El tráfico aparece aquí cuando se conectan Google Search Console y Google Analytics.</p>';
+  if (!r.hayGsc && !r.hayGa4) return '<p class="sd-vacio">El tráfico aparece aquí cuando se conectan Google Search Console y Google Analytics.</p>' + (((datos.trafico || {}).leadsWeb || []).length ? seccionLeads(datos) : '');
   const { cerrado, actual } = mesesDeTrafico(datos);
   const c = r.cerrado, p = r.previo;
   let h = `<p class="sd-nota">Cifras de ${cerrado ? nombreMes(cerrado) : 'el último mes'}, comparadas con el mes anterior.${r.actual ? ` En ${nombreMes(actual)} (en curso): ${r.hayGsc ? num(r.actual.clics) + ' clics desde Google' : ''}${r.hayGsc && r.hayGa4 ? ' · ' : ''}${r.hayGa4 ? num(r.actual.sesiones) + ' visitas' : ''}.` : ''}</p><div class="sd-tarjetas">`;
@@ -402,6 +404,7 @@ function seccionTrafico(datos) {
   const meses = r.serie.filter(x => x.mes !== actual);
   if (r.hayGsc && meses.length > 1) h += '<h3 class="sd-h3">Clics desde Google, mes a mes</h3>' + barrasValor(meses.map(x => ({ etiqueta: nombreMes(x.mes).slice(0, 3), valor: x.clics })));
   if (r.hayGa4 && meses.length > 1) h += '<h3 class="sd-h3">Visitas desde buscadores, mes a mes</h3>' + barrasValor(meses.map(x => ({ etiqueta: nombreMes(x.mes).slice(0, 3), valor: x.organicas })));
+  h += seccionLeads(datos);
   h += seccionCalidad(datos);
   h += seccionOrigenes(datos);
   h += seccionEntradasOrganicas(datos);
@@ -505,6 +508,42 @@ function seccionCalidad(datos) {
     '</tbody></table></div>';
 }
 
+// ── Leads y ventas del CRM por canal (capturados desde el 17-10-2026) ──
+export const CAPTURA_DESDE = '2026-10-17';
+export function resumenLeads(datos, mes) {
+  const filas = ((datos.trafico || {}).leadsWeb || []).filter(x => !mes || x.mes === mes);
+  const porCanal = {};
+  for (const f of filas) { const c = (porCanal[f.canal] ||= { canal: f.canal, leads: 0, ganados: 0, valor: 0 }); c.leads += f.leads; c.ganados += f.ganados; c.valor += f.valor; }
+  const de = (c) => porCanal[c] || { canal: c, leads: 0, ganados: 0, valor: 0 };
+  return { total: filas.reduce((a, f) => a + f.leads, 0), buscadores: de('Buscadores'), ia: de('IA'), canales: Object.values(porCanal).sort((a, b) => b.leads - a.leads), filas };
+}
+const plata = (v) => '$' + Math.round(v || 0).toLocaleString('es-CO');
+
+function seccionLeads(datos) {
+  const todas = (datos.trafico || {}).leadsWeb || [];
+  const { cerrado, actual } = mesesDeTrafico(datos);
+  const mes = todas.some(x => x.mes === cerrado) ? cerrado : actual;
+  const r = resumenLeads(datos, mes);
+  let h = `<h3 class="sd-h3">Leads y ventas que trajo la web (${nombreMes(mes)})</h3>`;
+  if (!todas.length) {
+    return h + `<div class="sd-aviso">Desde el ${fechaCorta(CAPTURA_DESDE)} cada lead que llega por los formularios del sitio guarda de dónde vino: Google, una IA, un anuncio, redes… Aquí se verán los leads y las ventas que trae el SEO en cuanto entren los primeros.</div>`;
+  }
+  h += '<div class="sd-tarjetas">' +
+    tarjeta('Leads desde buscadores', num(r.buscadores.leads), r.buscadores.ganados ? `${num(r.buscadores.ganados)} ventas · ${plata(r.buscadores.valor)}` : 'Sin ventas aún') +
+    tarjeta('Leads desde IAs', num(r.ia.leads), r.ia.ganados ? `${num(r.ia.ganados)} ventas · ${plata(r.ia.valor)}` : 'Sin ventas aún', r.ia.leads ? 'sd-pendiente' : '') +
+    tarjeta('Leads de la web', num(r.total), 'Todos los canales') + '</div>';
+  h += `<div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Canal</th><th>Leads</th><th>Ventas</th><th>Valor vendido</th></tr></thead><tbody>` +
+    r.canales.map(c => `<tr><td>${esc(c.canal)}</td><td>${num(c.leads)}</td><td>${num(c.ganados)}</td><td>${c.valor ? plata(c.valor) : '—'}</td></tr>`).join('') + '</tbody></table></div>';
+  const porPagina = {};
+  for (const f of r.filas.filter(x => x.canal === 'Buscadores' || x.canal === 'IA')) { const x = (porPagina[f.pagina || '(sin dato)'] ||= { leads: 0, ganados: 0, origenes: {} }); x.leads += f.leads; x.ganados += f.ganados; x.origenes[f.origen] = (x.origenes[f.origen] || 0) + f.leads; }
+  const paginas = Object.entries(porPagina).sort((a, b) => b[1].leads - a[1].leads).slice(0, 10);
+  if (paginas.length) {
+    h += `<h3 class="sd-h3">Páginas que convierten las visitas de buscadores e IAs en leads</h3><div class="sd-tabla-envoltura"><table class="sd-tabla"><thead><tr><th>Página de entrada</th><th>De dónde</th><th>Leads</th><th>Ventas</th></tr></thead><tbody>` +
+      paginas.map(([pg, x]) => `<tr><td class="sd-url">${esc(pg)}</td><td>${Object.entries(x.origenes).map(([o, n]) => esc(o) + ' ' + num(n)).join(', ')}</td><td>${num(x.leads)}</td><td>${num(x.ganados)}</td></tr>`).join('') + '</tbody></table></div>';
+  }
+  return h + `<p class="sd-nota">Cuenta los leads que entraron por los formularios de ${esc(datos.proyecto.dominio)} desde el ${fechaCorta(CAPTURA_DESDE)}, con el canal de la primera página que vieron en esa visita. Una venta es un lead marcado como ganado en el CRM.</p>`;
+}
+
 function seccionEntradasOrganicas(datos) {
   const { mes, filas } = detalleDe(datos, 'entrada_org');
   if (!filas.length) return '';
@@ -540,6 +579,10 @@ function traficoIA(datos) {
   // Sin el mes en curso: a medias parecería una caída.
   const serie = Object.entries(porMes).filter(([m]) => m !== actual).sort().slice(-12);
   if (serie.length > 1) h += barrasValor(serie.map(([m, v]) => ({ etiqueta: nombreMes(m).slice(0, 3), valor: v })));
+  const lia = resumenLeads(datos, null).ia;
+  if (((datos.trafico || {}).leadsWeb || []).length) {
+    h += `<p class="sd-nota"><strong>${num(lia.leads)} ${lia.leads === 1 ? 'lead llegó' : 'leads llegaron'} desde una IA</strong> desde el ${fechaCorta(CAPTURA_DESDE)}${lia.ganados ? `, con ${num(lia.ganados)} ventas por ${plata(lia.valor)}` : ''}.</p>`;
+  }
   // Qué se sabe de esas visitas.
   const ent = detalleDe(datos, 'entrada_ia'), refs = detalleDe(datos, 'referente_ia'), paises = detalleDe(datos, 'pais_ia');
   if (ent.filas.length) {

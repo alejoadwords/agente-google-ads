@@ -71,7 +71,7 @@ console.log('\nY el servidor lo pone donde el reporte lo ve\n');
   chk('y también los parámetros de la propia URL del envío',
       /u\.searchParams\.entries\(\)/.test(fp));
   chk('todo eso acaba en campos propios, no en la nota',
-      /const camposPropios = \(referencia \|\| Object\.keys\(pauta\)\.length\)/.test(fp));
+      /const camposPropios = \(referencia \|\| Object\.keys\(pauta\)\.length \|\| Object\.keys\(deOrigen\)\.length\)/.test(fp));
 
   // El nexo: los nombres tienen que coincidir EXACTAMENTE con lo que cuenta
   // el reporte. Si alguien renombra uno de los dos lados, vuelve el «0 de 182».

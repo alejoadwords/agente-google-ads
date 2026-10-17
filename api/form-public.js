@@ -6,6 +6,7 @@
 //                sin crear nada). Acepta JSON y form-urlencoded.
 export const config = { runtime: 'edge' };
 
+import { origenDelCuerpo, camposDeOrigen } from './_origen.js';
 import { intakeLead, pick, camposDePauta } from './_lead-intake.js';
 import { decidirDestino, desanidarCorchetes, rotulo, esRuido, paginaCorta, campana } from './_reglas-destino.js';
 import { registrarError } from './_registro-errores.js';
@@ -171,8 +172,16 @@ export default async function handler(req, contexto) {
   } catch {}
   const pauta = camposDePauta({ ...desdeUrl, ...orig, ...body });
 
-  const camposPropios = (referencia || Object.keys(pauta).length)
-    ? { ...(referencia ? { referencia: referencia.slice(0, 120) } : {}), ...pauta }
+  // El canal de origen (buscadores, IA, anuncios, redes, directo…): lo que el
+  // navegador vio al entrar. Sin `_origen` (formulario incrustado sin f.js) se
+  // usa lo poco que haya: la página del envío.
+  const o = origenDelCuerpo(body);
+  if (!o.url && page) o.url = String(page);
+  if (!o.ref && body && body._ref) o.ref = String(body._ref);
+  const deOrigen = camposDeOrigen(o);
+
+  const camposPropios = (referencia || Object.keys(pauta).length || Object.keys(deOrigen).length)
+    ? { ...(referencia ? { referencia: referencia.slice(0, 120) } : {}), ...deOrigen, ...pauta }
     : null;
 
   // El trabajo de verdad, en una sola promesa que se pueda cronometrar.

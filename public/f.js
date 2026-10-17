@@ -39,6 +39,12 @@
                 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
                 'campaignid', 'adgroupid', 'creative', 'keyword', 'matchtype'];
 
+  // Desde el 17-10-2026 se guarda SIEMPRE en la primera página de la visita,
+  // no solo cuando la URL trae parámetros de anuncio: quien llega desde Google
+  // orgánico, ChatGPT o Instagram no trae ninguno, y su único rastro es la
+  // página de la que venía (`_ref`). Sin esto esos leads entraban sin origen y
+  // el SEO no podía mostrar los leads que trajo. La clasificación la hace el
+  // servidor (api/_origen.js).
   function origen() {
     var guardado = null;
     try { guardado = JSON.parse(sessionStorage.getItem(LLAVE) || 'null'); } catch (e) {}
@@ -52,7 +58,6 @@
         if (v) hay[PARAMS[i]] = v.slice(0, 200);
       }
     } catch (e) {}
-    if (!Object.keys(hay).length) return guardado || null;
 
     hay._url = location.href.slice(0, 500);
     if (document.referrer) hay._ref = document.referrer.slice(0, 300);
